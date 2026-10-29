@@ -77,6 +77,9 @@ export class HubIdentityResolver {
       if (user.name !== external.name || user.org_code !== external.org_code) {
         await repositories.users.updateProfile(user.id, { name: external.name, org_code: external.org_code });
       }
+      if (external.account !== null) {
+        await repositories.users.updateAccount(user.id, external.account);
+      }
       await repositories.identityLinks.touchLastSeen(link.id, now);
       return { id: user.id, emp_id: user.emp_id, name: external.name, org_code: external.org_code };
     }
@@ -89,7 +92,7 @@ export class HubIdentityResolver {
     }
 
     const user: UserIdentity = { id: uuidv7(), emp_id: external.emp_id, name: external.name, org_code: external.org_code };
-    await repositories.users.insert(user);
+    await repositories.users.insert(user, external.account);
     await repositories.identityLinks.insert({
       id: uuidv7(),
       provider: external.provider,
@@ -112,10 +115,13 @@ function isRetryableApplyFailure(error: unknown): boolean {
 }
 
 function assertTrustedExternalIdentity(external: ExternalCompanyIdentity): void {
-  const fields: Array<keyof ExternalCompanyIdentity> = ["provider", "subject", "emp_id", "name", "org_code"];
+  const fields: Array<Exclude<keyof ExternalCompanyIdentity, "account">> = ["provider", "subject", "emp_id", "name", "org_code"];
   for (const field of fields) {
     if (typeof external[field] !== "string" || external[field].length === 0) {
       throw new IdentityError(`Trusted company identity field ${field} must be a non-empty string.`);
     }
+  }
+  if (external.account !== null && (typeof external.account !== "string" || external.account.length === 0)) {
+    throw new IdentityError("Trusted company identity field account must be null or a non-empty string.");
   }
 }

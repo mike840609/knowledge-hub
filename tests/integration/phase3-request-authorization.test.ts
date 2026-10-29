@@ -88,6 +88,15 @@ async function finish(snapshotId: string) {
 }
 
 describe("Phase 3 real request adapters with a trusted test session reader", () => {
+  it("persists the trusted company account through the request bootstrap", async () => {
+    const { caller } = await services.establishTrustedCaller();
+    const [row] = await pool.query<{ account: string | null }[]>(
+      "SELECT account FROM users WHERE id = ?",
+      [caller.identity.id],
+    );
+    expect(row.account).toBe("owner-account");
+  });
+
   it("keeps the last successful sync visible beyond twenty newer failed attempts", async () => {
     const {workspace}=await team();
     const response=await createThroughRoute(workspace.id);
