@@ -23,6 +23,7 @@ import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } 
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { MAX_MARKDOWN_BYTES, markdownBytes } from "@/lib/markdown-limits";
 import { downloadMarkdown } from "@/lib/download-markdown";
+import { buildRecoveryMarkdown } from "@/lib/recovery-markdown";
 import { DraftSizeHint } from "./draft-size-hint";
 import { DocumentBreadcrumb, type DocumentBreadcrumbSegment } from "./document-breadcrumb";
 import type { MarkdownEditor } from "./editor/editor-core";
@@ -671,7 +672,10 @@ export function DocumentComposer({
             </span>}
             <DraftSizeHint bytes={draftBytes} />
             {(draftStatus === "too-large" || draftStatus === "too-large-unstored" || draftBytes > MAX_MARKDOWN_BYTES) && (
-              <Button type="button" variant="link" onClick={() => downloadMarkdown(title || "draft", markdown)}>Download draft</Button>
+              <><Button type="button" variant="link" onClick={async () => {
+                const output = await buildRecoveryMarkdown({ title: resolved.title || title, markdown, metadata: metadataTitle === undefined ? {} : { title: metadataTitle } });
+                downloadMarkdown(output.title, output.markdown, { recovery: output.recovery });
+              }}>Download draft</Button>{resolved.title ? <span>Keep the .kh-recovery.md filename ending when uploading this draft.</span> : null}</>
             )}
           </div>
         </header>

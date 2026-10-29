@@ -1,6 +1,33 @@
 import { test, expect } from "./fixtures/test";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { parseGenericMarkdownText } from "../../src/modules/sources/adapters/generic-markdown-folder-adapter";
 
 test.skip(process.env.KM_TEAM_WORKSPACES_ENABLED !== "false", "Runs with the personal-only rollout.");
+
+test("an archived draft downloads its original metadata and exact independent title", async ({ page }) => {
+  const navigation = await (await page.request.get("/api/workspaces")).json();
+  const workspaceId = navigation.items[0].id;
+  const created = await page.request.post(`/api/workspaces/${workspaceId}/documents`, {
+    data: { filename: "original.md", markdown: "---\ntitle: 42\nowner: team\n---\n\nOriginal body" },
+  });
+  expect(created.status()).toBe(201);
+  const document = await created.json();
+  const draft = await page.request.put(`/api/workspaces/${workspaceId}/personal`, {
+    data: { key: `draft:${document.documentId}`, value: { title: "Project / Notes", markdown: "Unsaved body", baseRevisionId: document.revisionId }, version: 0 },
+  });
+  expect(draft.ok()).toBe(true);
+  expect((await page.request.post(`/api/documents/${document.documentId}/archive`)).ok()).toBe(true);
+  await page.goto(`/w/${workspaceId}/knowledge/drafts/${document.sourceId}/${document.documentId}`);
+  const pendingDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download draft" }).click();
+  const download = await pendingDownload;
+  const text = await readFile((await download.path())!, "utf8");
+  const parsed = parseGenericMarkdownText({ sourcePath: download.suggestedFilename(), text, sourceFileHash: createHash("sha256").update(text).digest("hex") });
+  expect(parsed.resolvedTitle).toBe("Project / Notes");
+  expect(parsed.metadata).toEqual({ title: 42, owner: "team" });
+  expect(parsed.markdown).toBe("Unsaved body");
+});
 
 test("a draft survives archiving and can be restored from Home", { tag: "@smoke-personal" }, async ({ page }) => {
   await page.goto("/");
