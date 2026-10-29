@@ -284,6 +284,7 @@ KM_E2E_PERSONAL_ONLY=true npm run test:e2e -- personal-workspace.spec.ts
 | 文件評論 | [規格](docs/superpowers/specs/2026-10-09-shared-personal-document-inline-review-design.md) | [計畫](docs/superpowers/plans/2026-10-09-shared-personal-document-inline-review.md) | 有效連結可免登入閱讀評論、登入後留言、擁有者管理與同步錨點；公司環境另行驗證後啟用。 |
 | 擁有者的留言側欄 | [規格](docs/superpowers/specs/2026-10-12-owner-comments-rail-design.md) | — | 擁有者的留言顯示在對應段落右側、取代大綱的位置；文件區太窄時改用抽屜。 |
 | 已儲存的分享 | [規格](docs/superpowers/specs/2026-10-12-saved-shares-design.md) | [計畫](docs/superpowers/plans/2026-10-12-saved-shares.md) | 保存別人分享的文章連結，可跨裝置使用；與最愛分開，閱讀權限仍由原分享連結控制。 |
+| 資料夾分享 | [規格](docs/superpowers/specs/2026-10-29-folder-share-link-design.md) | [計畫](docs/superpowers/plans/2026-10-29-folder-share-link.md) | 以單一可到期、可撤銷的連結分享個人空間資料夾的即時內容：閱讀頁旁有目錄樹，資料夾內的連結可跟隨，其餘顯示為文字；評論、儲存與擁有者收件匣的行為與文件連結相同。 |
 | 閱讀頁 callout | [規格](docs/superpowers/specs/2026-10-12-reader-callouts-design.md) | — | `> [!NOTE]` 與 GitHub 另外四種類型在閱讀頁和分享頁顯示成 callout；儲存的 Markdown 不變。 |
 | 閱讀頁 HTML 子集 | [規格](docs/superpowers/specs/2026-10-12-reader-html-subset-design.md) | — | 閱讀頁和分享頁認得七個不帶屬性的 HTML 標籤；其餘照原樣顯示成文字，使用者寫的 HTML 一律不直接輸出。 |
 | Content-Security-Policy | [規格](docs/superpowers/specs/2026-10-12-content-security-policy-design.md) | — | 每個頁面的 script 都要帶該次回應的 nonce 才能執行；不允許 inline script 與事件處理器。 |
