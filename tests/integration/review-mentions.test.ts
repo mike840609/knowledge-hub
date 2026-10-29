@@ -387,3 +387,49 @@ describe("mentions in the Inbox", () => {
     expect(mentionsOf(await f.service.listActivityForOwner(callers(f).alice, { createdAt: at(100), id: randomUUID() }))).toEqual([]);
   });
 });
+
+describe("mention candidates", () => {
+  const empOf = async (id: string) => String((await pool.query("SELECT emp_id FROM users WHERE id=?", [id]))[0].emp_id);
+
+  it("a signed-in reader on a live link finds people, with nameEn and no org", async () => {
+    const f = await fixture();
+    const tag = randomUUID().slice(0, 8);
+    await pool.query("UPDATE users SET name_en=? WHERE id=?", [`Alice ${tag}`, f.alice]);
+    const { candidates } = await f.service.searchMentionCandidates(f.reader, { query: `  alice ${tag} `, token: f.token });
+    expect(candidates).toEqual([{ id: f.alice, name: "Alice", nameEn: `Alice ${tag}`, empId: await empOf(f.alice) }]);
+  });
+
+  it("returns at most ten rows", async () => {
+    const f = await fixture();
+    const many = await f.service.searchMentionCandidates(f.reader, { query: "o", token: f.token });
+    expect(many.candidates.length).toBeLessThanOrEqual(10);
+    expect(many.candidates.length).toBeGreaterThan(0);
+  });
+
+  it("an empty or blank query is []", async () => {
+    const f = await fixture();
+    expect(await f.service.searchMentionCandidates(f.reader, { query: "   ", token: f.token })).toEqual({ candidates: [] });
+    expect(await f.service.searchMentionCandidates(f.reader, { query: "", token: f.token })).toEqual({ candidates: [] });
+  });
+
+  it("a revoked or unknown token is not found and reveals no rows", async () => {
+    const f = await fixture();
+    await expect(f.service.searchMentionCandidates(f.reader, { query: "Alice", token: randomUUID() })).rejects.toMatchObject({ name: "ShareLinkNotFoundError" });
+    await f.shares.revoke(f.owner, f.linkId);
+    await expect(f.service.searchMentionCandidates(f.reader, { query: "Alice", token: f.token })).rejects.toMatchObject({ name: "ShareLinkNotFoundError" });
+  });
+
+  it("the owner searches by documentId; a non-owner is not found", async () => {
+    const f = await fixture();
+    const emp = await empOf(f.alice);
+    const found = await f.service.searchMentionCandidates(f.owner, { query: emp, documentId: f.documentId });
+    expect(found.candidates.map(c => c.id)).toEqual([f.alice]);
+    await expect(f.service.searchMentionCandidates(f.reader, { query: emp, documentId: f.documentId })).rejects.toMatchObject({ name: "ShareLinkNotFoundError" });
+  });
+
+  it("exactly one of token and documentId", async () => {
+    const f = await fixture();
+    await expect(f.service.searchMentionCandidates(f.owner, { query: "a" })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    await expect(f.service.searchMentionCandidates(f.owner, { query: "a", token: f.token, documentId: f.documentId })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+  });
+});

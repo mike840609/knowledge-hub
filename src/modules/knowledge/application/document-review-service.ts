@@ -4,7 +4,7 @@ import { DomainError } from "@/shared/domain/errors";
 import { isUuid, uuidv7 } from "@/shared/ids/uuidv7";
 import { evaluateShareLinkValidity, isShareToken, ShareLinkNotFoundError } from "../domain/document-share-link";
 import { REVIEW_LIMITS, isRetractedThread, projectOwnerThread, projectReviewerThread, projectReviewComment, validateReviewBody, validateReviewIdempotencyKey, type ReviewThread, type ReviewComment, type ReviewAnchor, type ReviewStatus, type ReviewVisibility, type ReviewThreadView, type OwnerReviewThreadView, type CreateReviewThreadInput, type CreateOwnerReviewThreadInput, type ReplyReviewInput, type ReplyOwnerReviewInput } from "../domain/document-review";
-import { MENTION_PREFIX, normalizeMentions, type ReviewMention } from "../domain/review-mention";
+import { MENTION_LIMIT, MENTION_PREFIX, normalizeMentions, type ReviewMention } from "../domain/review-mention";
 import { createReviewAnchorRelocator, validateReviewAnchor } from "../domain/review-anchor";
 import { projectShareCommentNotification, EXCERPT_LIMIT, type ShareCommentNotificationView } from "../domain/share-comment-event";
 import { orderFollowedDiscussions, summarizeFollowedThread, type FollowedDiscussionView } from "../domain/review-follow";
@@ -128,6 +128,18 @@ export class DocumentReviewService {
       if (input.following) await r.reviewFollows.follow({ threadId: input.threadId, userId: caller.identity.id, shareLinkId: s.link.id, at: this.clock() });
       else await r.reviewFollows.unfollow(input.threadId, caller.identity.id, this.clock());
       return { following: input.following };
+    });
+  }
+  /** People to @-mention, for a caller who could write a comment on this document now: a live link, or the owner. Reads only. */
+  async searchMentionCandidates(caller: CallerContext, input: { query: string; token?: string; documentId?: string }) {
+    if ((input.token === undefined) === (input.documentId === undefined)) fail("INVALID_REQUEST", "Provide a share link or a document.");
+    return this.uow.run(async r => {
+      if (input.token !== undefined) await this.linkScope(r, input.token, false);
+      else await this.ownerScope(r, caller, input.documentId!, false);
+      const query = input.query.trim().slice(0, 200);
+      if (!query) return { candidates: [] };
+      const found = await r.users.searchExisting(query, MENTION_LIMIT);
+      return { candidates: found.map(u => ({ id: u.id, name: u.name, nameEn: u.nameEn, empId: u.emp_id })) };
     });
   }
   /** The reader has looked at a discussion: its follow, if any, is seen and their mentions in it are read. */
