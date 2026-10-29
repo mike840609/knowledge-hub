@@ -773,7 +773,8 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-share-folder { --kh-tree-rail: 16rem; }
 @media (min-width: 640px) {
   .kh-share-folder-body { padding-inline-start: var(--kh-tree-rail); }
-  .kh-share-folder { --kh-outline-room: calc((100vw - var(--kh-tree-rail) - theme("maxWidth.reading")) / 2); }
+  /* Two classes: the plain `.kh-share-page` room below is declared later and would otherwise win. */
+  .kh-share-page.kh-share-folder { --kh-outline-room: calc((100vw - var(--kh-tree-rail) - theme("maxWidth.reading")) / 2); }
 }
 @media (min-width: 82rem) and (max-width: 97.99rem) {
   .kh-share-folder .kh-share-outline-rail { display: none; }
