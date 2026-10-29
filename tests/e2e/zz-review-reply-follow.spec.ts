@@ -23,11 +23,16 @@ test("a reader's Inbox brings the owner's reply back to the discussion on the sh
   await page.goto(`${viewer}/`);
   await expect(page).toHaveURL(/\/w\/[^/]+\//);
   const workspaceId = new URL(page.url()).pathname.split("/")[2];
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${viewer}/w/${workspaceId}/inbox`);
   // Other tests' discussions reach this reader's Inbox too: this one is known by where it leads.
   const entry = page.getByRole("list", { name: "Inbox discussions" }).locator(`a[href="/s/${token}?thread=${thread.id}"]`);
   await expect(entry).toContainText("Owner answer");
+  // Beside the list, through the link: the discussion is read in the Inbox, then opened in place.
   await entry.click();
+  const selected = page.getByRole("region", { name: "Selected discussion" });
+  await expect(selected.getByText("Owner answer", { exact: true })).toBeVisible();
+  await selected.getByRole("link", { name: "Open document" }).click();
   await expect(page).toHaveURL(new RegExp(`/s/${token}\\?thread=${thread.id}`));
   const card = page.locator(`[data-review-thread="${thread.id}"]`);
   await expect(card).toHaveAttribute("data-active", "");

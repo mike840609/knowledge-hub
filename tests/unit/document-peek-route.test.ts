@@ -467,3 +467,19 @@ it("falls back to closed header facts when explorer and shell are unavailable", 
   expect(body.canShare).toBe(false);
   expect(body.status).toBe("ACTIVE");
 });
+
+it("?brief reads the document, archived too, without the header's facts", async () => {
+  injected.getDocument.mockResolvedValue({
+    documentId: "d1", sourceId: "s1", workspaceId: "w1", status: "ARCHIVED",
+    currentRevision: { id: "r1", title: "Guide", markdown: "Body.", createdAt: CREATED_AT },
+  });
+  injected.getSource.mockResolvedValue({ id: "s1", status: "ACTIVE", ownership: "HUB_MANAGED" });
+  injected.getDocumentLinks.mockRejectedValue(new Error("no links"));
+  const response = await GET(new Request("http://hub.test/api/documents/d1/peek?brief"), { params: Promise.resolve({ documentId: "d1" }) });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ title: "Guide", markdown: "Body.", revisionId: "r1", status: "ARCHIVED", sourceStatus: "ACTIVE", linkView: null });
+  expect(injected.getDocument).toHaveBeenCalledWith(injected.caller, "d1", { includeArchived: true });
+  expect(injected.getSource).toHaveBeenCalledWith(injected.caller, "s1", { includeArchived: true });
+  expect(injected.getKnowledgeExplorerModel).not.toHaveBeenCalled();
+  expect(injected.getWorkspaceShellModel).not.toHaveBeenCalled();
+});
