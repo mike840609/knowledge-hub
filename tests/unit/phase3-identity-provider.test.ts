@@ -191,6 +191,20 @@ describe("Company SSO identity provider claims", () => {
     ).rejects.toBeInstanceOf(AuthUnavailableError);
   });
 
+  it("fails closed when the company account exceeds the stored column limit", async () => {
+    const reader = trackingReader({
+      subject: "sub-long-account",
+      emp_id: "E1008",
+      account: "a".repeat(129),
+      name: "Long Account",
+      org_code: "RD",
+      externalGroupIds: [],
+    });
+    await expect(
+      new CompanySsoIdentityProvider(reader, { provider: "company-sso", teamCreateGroupIds: [] }).getCurrentClaims(),
+    ).rejects.toBeInstanceOf(AuthUnavailableError);
+  });
+
   it("rejects an unconfigured provider name instead of issuing claims", async () => {
     const reader = trackingReader({ subject: "sub-x", emp_id: "E1006", account: "acct-1006", name: "X", org_code: "RD", externalGroupIds: [] });
     expect(() => new CompanySsoIdentityProvider(reader, { provider: "", teamCreateGroupIds: [] })).toThrow(IdentityError);

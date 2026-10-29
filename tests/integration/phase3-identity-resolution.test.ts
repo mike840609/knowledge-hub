@@ -16,6 +16,7 @@ import {
   IdentityLinkRequiredError,
 } from "@/modules/identity/domain/identity-errors";
 import type { ExternalCompanyIdentity } from "@/modules/identity/domain/external-company-identity";
+import { IdentityError } from "@/modules/knowledge/domain/errors";
 import { DomainError } from "@/shared/domain/errors";
 import { isUuid, uuidv7 } from "@/shared/ids/uuidv7";
 
@@ -225,6 +226,20 @@ describe("Hub runtime identity resolution", () => {
 
     const [row] = await pool.query<{ account: string | null }[]>("SELECT account FROM users WHERE id = ?", [hubUserId]);
     expect(row.account).toBe(account);
+  });
+
+  it("rejects an overlong account before writing a user or link", async () => {
+    const tag = uuidv7();
+    const provider = "company-sso";
+    const subject = `subject-acc-long-${tag}`;
+    const empId = `EMP-ACC-LONG-${tag}`;
+
+    await expect(
+      resolver.resolve(claims(provider, subject, empId, "Long Account", "RD", "a".repeat(129))),
+    ).rejects.toBeInstanceOf(IdentityError);
+
+    expect(await countUsersByEmp(empId)).toBe(0);
+    expect(await countLinks(provider, subject)).toBe(0);
   });
 
   it("F. concurrent identical first-login converges to one user and one link", async () => {

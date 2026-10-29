@@ -121,7 +121,10 @@ function assertTrustedExternalIdentity(external: ExternalCompanyIdentity): void 
       throw new IdentityError(`Trusted company identity field ${field} must be a non-empty string.`);
     }
   }
-  if (external.account !== null && (typeof external.account !== "string" || external.account.length === 0)) {
-    throw new IdentityError("Trusted company identity field account must be null or a non-empty string.");
+  if (
+    external.account !== null &&
+    (typeof external.account !== "string" || external.account.length === 0 || external.account.length > 128)
+  ) {
+    throw new IdentityError("Trusted company identity field account must be null or a non-empty string of at most 128 characters.");
   }
 }

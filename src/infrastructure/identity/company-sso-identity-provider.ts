@@ -32,6 +32,11 @@ export class CompanySsoIdentityProvider implements IdentityProvider {
     assertSessionField(session.subject, "subject");
     assertSessionField(session.emp_id, "emp_id");
     assertSessionField(session.account, "account");
+    if (session.account.length > 128) {
+      throw new AuthUnavailableError({
+        cause: new IdentityError("Company SSO session field account exceeds the 128-character limit."),
+      });
+    }
     assertSessionField(session.name, "name");
     assertSessionField(session.org_code, "org_code");
     const validatedExternalGroupIds = dedupeGroups(session.externalGroupIds);
