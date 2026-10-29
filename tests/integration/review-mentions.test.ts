@@ -261,3 +261,129 @@ describe("writing a mention", () => {
     expect(await mentions(commentId)).toEqual(before);
   });
 });
+
+describe("mentions in the Inbox", () => {
+  type F = Awaited<ReturnType<typeof fixture>>;
+  const callers = (f: F) => ({ alice: f.aliceCaller, carol: callerFromIdentity({ id: f.carol, emp_id: "", name: "Carol", org_code: "MENTION" }) });
+  /** Bob writes a thread at t=10 naming Alice; returns its ids. */
+  const mentionAlice = async (f: F) => {
+    f.setTime(10);
+    const thread = await f.service.createForLink(f.reader, { token: f.token, expectedRevisionId: f.revisionId, anchor: f.anchor, body: "Alice, please check this passage", idempotencyKey: randomUUID(), mentions: [f.alice] });
+    const commentId = String((await pool.query("SELECT id FROM document_review_comments WHERE thread_id=? ORDER BY created_at, id LIMIT 1", [thread.id]))[0].id);
+    return { threadId: thread.id as string, commentId };
+  };
+  const mentionsOf = (list: { notifications: Array<{ kind?: string }> }) => list.notifications.filter(n => n.kind === "MENTION");
+  const unread = async (f: F) => mentionsOf(await f.service.listUnreadForOwner(callers(f).alice));
+  const activity = async (f: F) => mentionsOf(await f.service.listActivityForOwner(callers(f).alice));
+  const count = async (f: F) => (await f.service.countUnreadForOwner(callers(f).alice)).count;
+  const expectDead = (entry: Record<string, unknown>, commentId: string) => {
+    expect(entry).toMatchObject({ id: `mention:${commentId}`, kind: "MENTION", linkAvailable: false, documentTitle: "", authorName: undefined, excerpt: "", workspaceId: "", documentId: "", sourceId: "", threadId: "" });
+    expect(entry.token).toBeUndefined();
+    expect(entry.readAt).toEqual(entry.createdAt);
+  };
+
+  it("lists the mention for the person named, with its link, title, author and words; no one else sees it", async () => {
+    const f = await fixture();
+    const { threadId, commentId } = await mentionAlice(f);
+    expect(await unread(f)).toEqual([{
+      id: `mention:${commentId}`, kind: "MENTION", workspaceId: "", documentId: "", sourceId: "", documentTitle: "Review",
+      threadId, commentId, authorName: "Bob", excerpt: "Alice, please check this passage", createdAt: at(10), readAt: null,
+      threadStatus: "OPEN", token: f.token, linkAvailable: true,
+    }]);
+    expect(await count(f)).toBe(1);
+    expect(mentionsOf(await f.service.listUnreadForOwner(callers(f).carol))).toEqual([]);
+    expect((await f.service.countUnreadForOwner(callers(f).carol)).count).toBe(0);
+  });
+
+  it("a revoked link leaves an entry naming nothing, not counted", async () => {
+    const f = await fixture();
+    const { commentId } = await mentionAlice(f);
+    await f.shares.revoke(f.owner, f.linkId);
+    expect(await unread(f)).toEqual([]);
+    expect(await count(f)).toBe(0);
+    const [entry] = await activity(f);
+    expectDead(entry as Record<string, unknown>, commentId);
+  });
+
+  it("a comment the owner hid is the same: not counted, names nothing", async () => {
+    const f = await fixture();
+    const { threadId, commentId } = await mentionAlice(f);
+    await f.service.setVisibility(f.owner, { documentId: f.documentId, threadId, commentId, visibility: "HIDDEN", reason: "off topic" });
+    expect(await unread(f)).toEqual([]);
+    expect(await count(f)).toBe(0);
+    expectDead((await activity(f))[0] as Record<string, unknown>, commentId);
+  });
+
+  it("a comment its writer deleted is the same", async () => {
+    const f = await fixture();
+    const { threadId } = await f.startThread();
+    f.setTime(10);
+    const reply = await f.service.replyForLink(f.reader, { token: f.token, threadId, body: "Alice?", idempotencyKey: randomUUID(), mentions: [f.alice] });
+    expect(await count(f)).toBe(1);
+    await f.service.deleteForLink(f.reader, { token: f.token, threadId, commentId: reply.id });
+    expect(await unread(f)).toEqual([]);
+    expect(await count(f)).toBe(0);
+    expectDead((await activity(f))[0] as Record<string, unknown>, reply.id);
+  });
+
+  it("a reply that names a follower appears once, as the mention", async () => {
+    const f = await fixture();
+    const { threadId } = await f.startThread();
+    f.setTime(5);
+    await f.service.replyForLink(f.aliceCaller, { token: f.token, threadId, body: "Alice follows", idempotencyKey: randomUUID() });
+    f.setTime(10);
+    const reply = await f.service.replyForLink(f.reader, { token: f.token, threadId, body: "Alice, answered", idempotencyKey: randomUUID(), mentions: [f.alice] });
+    const listed = (await f.service.listUnreadForOwner(f.aliceCaller)).notifications;
+    expect(listed.map(n => [n.kind, n.id])).toEqual([["MENTION", `mention:${reply.id}`]]);
+    expect(await count(f)).toBe(1);
+    // A later reply without a mention is a follow unread again.
+    f.setTime(20);
+    await f.service.replyForLink(f.reader, { token: f.token, threadId, body: "And more", idempotencyKey: randomUUID() });
+    expect((await f.service.listUnreadForOwner(f.aliceCaller)).notifications.map(n => n.kind).sort()).toEqual(["FOLLOW", "MENTION"]);
+    expect(await count(f)).toBe(2);
+  });
+
+  it("marks one mention read, only for its own reader", async () => {
+    const f = await fixture();
+    const { commentId } = await mentionAlice(f);
+    await f.service.markEventRead(callers(f).carol, `mention:${commentId}`);
+    expect(await count(f)).toBe(1);
+    await f.service.markEventRead(callers(f).alice, "mention:not-a-uuid");
+    expect(await count(f)).toBe(1);
+    f.setTime(30);
+    await f.service.markEventRead(callers(f).alice, `mention:${commentId}`);
+    expect(await count(f)).toBe(0);
+    expect(await unread(f)).toEqual([]);
+    expect((await activity(f))[0]).toMatchObject({ id: `mention:${commentId}`, linkAvailable: true, readAt: at(30) });
+  });
+
+  it("mark all read covers mentions", async () => {
+    const f = await fixture();
+    await mentionAlice(f);
+    await mentionAlice(f);
+    expect(await count(f)).toBe(2);
+    await f.service.markAllActivityRead(callers(f).alice);
+    expect(await count(f)).toBe(0);
+  });
+
+  it("arriving on the thread marks the caller's mentions there read, following or not", async () => {
+    const f = await fixture();
+    const first = await mentionAlice(f);
+    const second = await mentionAlice(f);
+    await f.service.unfollowOwn(callers(f).alice, first.threadId);
+    await f.service.markSeenForLink(callers(f).alice, { token: f.token, threadId: first.threadId });
+    expect((await unread(f)).map(n => (n as { id: string }).id)).toEqual([`mention:${second.commentId}`]);
+    // A thread that does not open marks nothing.
+    await expect(f.service.markSeenForLink(callers(f).alice, { token: f.token, threadId: randomUUID() })).rejects.toThrow();
+    expect(await count(f)).toBe(1);
+  });
+
+  it("Activity's first page carries mentions read and unread; a later page none", async () => {
+    const f = await fixture();
+    const a = await mentionAlice(f);
+    const b = await mentionAlice(f);
+    await f.service.markEventRead(callers(f).alice, `mention:${a.commentId}`);
+    expect((await activity(f)).map(n => (n as { id: string }).id).sort()).toEqual([`mention:${a.commentId}`, `mention:${b.commentId}`].sort());
+    expect(mentionsOf(await f.service.listActivityForOwner(callers(f).alice, { createdAt: at(100), id: randomUUID() }))).toEqual([]);
+  });
+});

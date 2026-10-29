@@ -13,8 +13,9 @@ export type ShareCommentNotificationView = {
    * OWNER: a comment on the caller's shared document. FOLLOW: replies in a discussion the caller
    * follows, one entry per discussion; it carries no Workspace or document id, only the link's
    * token while that link opens (`linkAvailable`), and `replyCount` replies not yet seen.
+   * MENTION: one comment naming the caller, carried like FOLLOW (token, `linkAvailable`, no Workspace or document id).
    */
-  kind?: "OWNER" | "FOLLOW"; token?: string; replyCount?: number; linkAvailable?: boolean;
+  kind?: "OWNER" | "FOLLOW" | "MENTION"; token?: string; replyCount?: number; linkAvailable?: boolean;
 };
 export const EXCERPT_LIMIT = 80;
 export function projectShareCommentNotification(input: {
