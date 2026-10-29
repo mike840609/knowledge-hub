@@ -34,20 +34,22 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
     // predicates remain inside the query so pagination never mixes scopes.
     const state = `CASE WHEN l.revoked_at IS NOT NULL THEN 'revoked'
       WHEN l.expires_at <= ? THEN 'expired'
-      WHEN d.status <> 'ACTIVE' OR s.status <> 'ACTIVE' OR w.lifecycle_state <> 'ACTIVE' OR m.user_id IS NULL THEN 'unavailable'
+      WHEN COALESCE(d.status, f.status) <> 'ACTIVE' OR s.status <> 'ACTIVE' OR w.lifecycle_state <> 'ACTIVE' OR m.user_id IS NULL THEN 'unavailable'
       ELSE 'active' END`;
     const rows = await this.connection.query<DbRow[]>(
       `SET STATEMENT max_statement_time=5 FOR SELECT scoped.*
        FROM (
-         SELECT l.*, d.source_id, r.title, s.name AS source_name, ${state} AS link_status
+         SELECT l.*, s.id AS source_id, COALESCE(r.title, f.name) AS title, s.name AS source_name, ${state} AS link_status
          FROM document_share_links l
-         JOIN knowledge_documents d ON d.id = l.document_id
-         JOIN knowledge_revisions r ON r.id = d.current_revision_id
-         JOIN knowledge_sources s ON s.id = d.source_id
+         LEFT JOIN knowledge_documents d ON d.id = l.document_id
+         LEFT JOIN knowledge_tree_nodes f ON f.id = l.folder_node_id AND f.node_type = 'FOLDER'
+         LEFT JOIN knowledge_revisions r ON r.id = d.current_revision_id
+         JOIN knowledge_sources s ON s.id = COALESCE(d.source_id, f.source_id)
          JOIN workspaces w ON w.id = s.workspace_id
          LEFT JOIN workspace_memberships m ON m.workspace_id = w.id AND m.user_id = l.created_by
          WHERE s.workspace_id = ? AND l.created_by = ? AND w.workspace_type = 'PERSONAL' AND w.personal_owner_user_id = ?
-           AND (? = '' OR r.title COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '!' OR l.label COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '!')
+           AND (r.id IS NOT NULL OR f.id IS NOT NULL)
+           AND (? = '' OR COALESCE(r.title, f.name) COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '!' OR l.label COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '!')
        ) scoped
        WHERE (? = 'all' OR scoped.link_status = ?)
        ORDER BY scoped.created_at DESC, scoped.id DESC LIMIT ? OFFSET ?`,
@@ -55,7 +57,8 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
     );
     const totals = await this.viewTotals(rows.map(row => String(row.id)));
     return rows.map(row => ({
-      id: String(row.id), documentId: String(row.document_id), sourceId: String(row.source_id), title: String(row.title), sourceName: String(row.source_name),
+      id: String(row.id), kind: row.folder_node_id === null ? "DOCUMENT" : "FOLDER",
+      documentId: row.document_id === null ? null : String(row.document_id), folderNodeId: row.folder_node_id === null ? null : String(row.folder_node_id), sourceId: String(row.source_id), title: String(row.title), sourceName: String(row.source_name),
       label: row.label === null ? null : String(row.label), path: shareLinkPath(String(row.token)), status: String(row.link_status) as ManagedShareLink["status"],
       createdAt: asDate(row.created_at), expiresAt: asDate(row.expires_at), revokedAt: asNullableDate(row.revoked_at), totalViews: totals.get(String(row.id))?.totalViews ?? 0, lastViewedAt: totals.get(String(row.id))?.lastViewedAt ?? null,
     }));

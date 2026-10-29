@@ -18,17 +18,20 @@ export class MariaDbSavedShareRepository implements SavedShareRepository {
   async findSnapshotByToken(token: string): Promise<SavedShareSnapshot | null> {
     // READ COMMITTED supplies one consistent view for this statement. All grant
     // inputs and captured metadata must come from that view, not later reads.
-    const rows = await this.connection.query<DbRow[]>(`SELECT l.*,d.status AS document_status,s.status AS source_status,
+    // A folder link has no document: its target is the folder node, whose status and name stand in for the document's.
+    const rows = await this.connection.query<DbRow[]>(`SELECT l.*,COALESCE(d.status,f.status) AS document_status,s.status AS source_status,
       w.lifecycle_state AS workspace_lifecycle,w.personal_owner_user_id AS workspace_owner,m.user_id AS creator_membership,m.role AS creator_role,
-      r.title,u.name AS creator_name
-      FROM document_share_links l JOIN knowledge_documents d ON d.id=l.document_id
-      JOIN knowledge_sources s ON s.id=d.source_id JOIN workspaces w ON w.id=s.workspace_id
+      COALESCE(r.title,f.name) AS title,u.name AS creator_name
+      FROM document_share_links l LEFT JOIN knowledge_documents d ON d.id=l.document_id
+      LEFT JOIN knowledge_tree_nodes f ON f.id=l.folder_node_id AND f.node_type='FOLDER'
+      JOIN knowledge_sources s ON s.id=COALESCE(d.source_id,f.source_id) JOIN workspaces w ON w.id=s.workspace_id
       LEFT JOIN workspace_memberships m ON m.workspace_id=w.id AND m.user_id=l.created_by
       LEFT JOIN knowledge_revisions r ON r.id=d.current_revision_id AND r.document_id=d.id
       LEFT JOIN users u ON u.id=l.created_by WHERE l.token=?`,[token]);
     const row=rows[0];if(!row)return null;
+    const target:SavedShareSnapshot["link"]["target"]=row.folder_node_id===null?{kind:"DOCUMENT",documentId:String(row.document_id)}:{kind:"FOLDER",folderNodeId:String(row.folder_node_id)};
     return {
-      link:{id:String(row.id),target:{kind:"DOCUMENT",documentId:String(row.document_id)},token:String(row.token),label:row.label===null?null:String(row.label),createdBy:String(row.created_by),createdAt:asDate(row.created_at),expiresAt:asDate(row.expires_at),revokedBy:row.revoked_by===null?null:String(row.revoked_by),revokedAt:asNullableDate(row.revoked_at)},
+      link:{id:String(row.id),target,token:String(row.token),label:row.label===null?null:String(row.label),createdBy:String(row.created_by),createdAt:asDate(row.created_at),expiresAt:asDate(row.expires_at),revokedBy:row.revoked_by===null?null:String(row.revoked_by),revokedAt:asNullableDate(row.revoked_at)},
       validity:{documentStatus:String(row.document_status) as SavedShareSnapshot["validity"]["documentStatus"],sourceStatus:String(row.source_status) as SavedShareSnapshot["validity"]["sourceStatus"],workspaceOwnerUserId:row.workspace_owner===null?null:String(row.workspace_owner),workspaceLifecycle:row.workspace_lifecycle===null?null:String(row.workspace_lifecycle) as SavedShareSnapshot["validity"]["workspaceLifecycle"],creatorDirectRole:row.creator_membership===null?undefined:row.creator_role===null?null:String(row.creator_role) as SavedShareSnapshot["validity"]["creatorDirectRole"]},
       title:row.title===null?null:String(row.title),sharedByName:row.creator_name===null?null:String(row.creator_name),
     };
@@ -59,6 +62,7 @@ export class MariaDbSavedShareRepository implements SavedShareRepository {
     const rows = await this.connection.query<DbRow[]>(`SET STATEMENT max_statement_time=5 FOR
       SELECT safe.* FROM (
         SELECT b.id,b.saved_at,b.saved_title AS saved_search_title,b.saved_shared_by_name AS saved_search_creator_name,
+          CASE WHEN live.folder_node_id IS NOT NULL THEN 'FOLDER' ELSE 'DOCUMENT' END AS kind,
           CASE WHEN live.available=1 THEN live.title ELSE b.saved_title END AS title,
           CASE WHEN live.available=1 THEN live.creator_name ELSE b.saved_shared_by_name END AS creator_name,
           CASE WHEN live.available=1 THEN live.expires_at ELSE b.saved_expires_at END AS expires_at,
@@ -66,13 +70,14 @@ export class MariaDbSavedShareRepository implements SavedShareRepository {
           CASE WHEN live.available=1 THEN live.token ELSE NULL END AS token,
           CASE WHEN live.available=1 THEN 'available' WHEN b.saved_expires_at<=? THEN 'expired' ELSE 'unavailable' END AS state
         FROM saved_document_shares b JOIN (
-          SELECT l.*,r.title,r.created_at AS revision_at,u.name AS creator_name,
-            (l.revoked_at IS NULL AND l.expires_at>? AND d.status='ACTIVE' AND s.status='ACTIVE'
+          SELECT l.*,COALESCE(r.title,f.name) AS title,r.created_at AS revision_at,u.name AS creator_name,
+            (l.revoked_at IS NULL AND l.expires_at>? AND COALESCE(d.status,f.status)='ACTIVE' AND s.status='ACTIVE'
              AND w.lifecycle_state='ACTIVE' AND w.personal_owner_user_id=l.created_by AND m.user_id IS NOT NULL
-             AND (m.role IS NULL OR m.role IN (${READ_ROLES})) AND r.id IS NOT NULL AND u.id IS NOT NULL) AS available
+             AND (m.role IS NULL OR m.role IN (${READ_ROLES})) AND (r.id IS NOT NULL OR f.id IS NOT NULL) AND u.id IS NOT NULL) AS available
           FROM document_share_links l LEFT JOIN knowledge_documents d ON d.id=l.document_id
+          LEFT JOIN knowledge_tree_nodes f ON f.id=l.folder_node_id AND f.node_type='FOLDER'
           LEFT JOIN knowledge_revisions r ON r.id=d.current_revision_id
-          LEFT JOIN knowledge_sources s ON s.id=d.source_id LEFT JOIN workspaces w ON w.id=s.workspace_id
+          LEFT JOIN knowledge_sources s ON s.id=COALESCE(d.source_id,f.source_id) LEFT JOIN workspaces w ON w.id=s.workspace_id
           LEFT JOIN workspace_memberships m ON m.workspace_id=w.id AND m.user_id=l.created_by
           LEFT JOIN users u ON u.id=l.created_by
         ) live ON live.id=b.share_link_id WHERE b.user_id=? AND b.removed_at IS NULL
@@ -80,6 +85,6 @@ export class MariaDbSavedShareRepository implements SavedShareRepository {
       AND (?='all' OR (?='available' AND safe.state='available') OR (?='unavailable' AND safe.state<>'available'))
       ORDER BY safe.saved_at DESC,safe.id DESC LIMIT ? OFFSET ?`,
       [now,now,userId,query.q,toLikePattern(query.q),toLikePattern(query.q),toLikePattern(query.q),toLikePattern(query.q),query.status,query.status,query.status,limit,offset]);
-    return rows.map(row => ({ id:String(row.id),title:String(row.title),sharedByName:String(row.creator_name),savedAt:asDate(row.saved_at),expiresAt:asDate(row.expires_at),updatedAt:asNullableDate(row.revision_at),status:String(row.state) as SavedShareView["status"],path:row.token ? shareLinkPath(String(row.token)) : null }));
+    return rows.map(row => ({ id:String(row.id),kind:String(row.kind) as SavedShareView["kind"],title:String(row.title),sharedByName:String(row.creator_name),savedAt:asDate(row.saved_at),expiresAt:asDate(row.expires_at),updatedAt:asNullableDate(row.revision_at),status:String(row.state) as SavedShareView["status"],path:row.token ? shareLinkPath(String(row.token)) : null }));
   }
 }
