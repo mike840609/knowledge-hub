@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PublicationService } from "@/modules/sources/application/publication-service";
 import { reconcileContribution } from "@/modules/sources/application/publication-reconciler";
+import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
 import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
@@ -409,6 +410,91 @@ describe("publication service: join", () => {
       folderNodeId: otherAnnTree.folderNodeId,
       acknowledgeLowOverlap: true,
     })).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+  });
+
+  it("warns about and acknowledges a Hub-only origin folder", async () => {
+    const hub = new HubKnowledgeCommandServiceImpl(fixture.uow);
+    const mikeFolder = await hub.createFolder(fixture.mike, {
+      sourceId: fixture.mikeHubSourceId, parentId: null, name: unique("Hub Mike Folder"),
+    });
+    await hub.createDocument(fixture.mike, {
+      sourceId: fixture.mikeHubSourceId, parentId: mikeFolder.treeNodeId,
+      title: "Hub Mike", markdown: "hub mike", metadata: {},
+    });
+    const published = await service.publish(fixture.mike, {
+      teamWorkspaceId: fixture.teamWorkspaceId,
+      name: unique("Hub Only Publication"),
+      origin: { kind: "FOLDER", folderNodeId: mikeFolder.treeNodeId },
+    });
+    expect(published.report.created).toBe(1);
+
+    const annFolder = await hub.createFolder(fixture.ann, {
+      sourceId: fixture.annHubSourceId, parentId: null, name: unique("Hub Ann Folder"),
+    });
+    await hub.createDocument(fixture.ann, {
+      sourceId: fixture.annHubSourceId, parentId: annFolder.treeNodeId,
+      title: "Hub Ann", markdown: "hub ann", metadata: {},
+    });
+
+    const preview = await service.preview(fixture.ann, {
+      teamWorkspaceId: fixture.teamWorkspaceId,
+      name: unique("Hub Only Preview"),
+      origin: { kind: "FOLDER", folderNodeId: annFolder.treeNodeId },
+    });
+    expect(preview.joinSuggestion).toBeNull();
+    expect(preview.lowOverlapWarning).toBe(true);
+
+    await expect(service.join(fixture.ann, {
+      publicationId: published.publicationId,
+      folderNodeId: annFolder.treeNodeId,
+    })).rejects.toMatchObject({ code: "PUBLICATION_JOIN_LOW_OVERLAP" });
+
+    const joined = await service.join(fixture.ann, {
+      publicationId: published.publicationId,
+      folderNodeId: annFolder.treeNodeId,
+      acknowledgeLowOverlap: true,
+    });
+    expect(joined.report.created).toBe(1);
+  });
+
+  it("returns the same contribution for concurrent duplicate joins", async () => {
+    const mikeTree = await createFolderTree(fixture.mike, unique("duplicate-join-mike"), [
+      { relative: "a.md", title: "Duplicate Mike A", markdown: "mike" },
+    ]);
+    const published = await service.publish(fixture.mike, {
+      teamWorkspaceId: fixture.teamWorkspaceId,
+      name: unique("Duplicate Join Publication"),
+      origin: { kind: "FOLDER", folderNodeId: mikeTree.folderNodeId },
+    });
+    const annTree = await createFolderTree(fixture.ann, unique("duplicate-join-ann"), [
+      { relative: "a.md", title: "Duplicate Ann A", markdown: "ann" },
+    ]);
+
+    const outcomes = await Promise.allSettled([
+      service.join(fixture.ann, {
+        publicationId: published.publicationId,
+        folderNodeId: annTree.folderNodeId,
+      }),
+      service.join(fixture.ann, {
+        publicationId: published.publicationId,
+        folderNodeId: annTree.folderNodeId,
+      }),
+    ]);
+
+    expect(outcomes.map((outcome) => outcome.status)).toEqual(["fulfilled", "fulfilled"]);
+    const contributionIds = outcomes.map((outcome) =>
+      (outcome as PromiseFulfilledResult<{ contributionId: string }>).value.contributionId);
+    expect(contributionIds[0]).toBe(contributionIds[1]);
+
+    const contributions = await fixture.uow.run((repositories) =>
+      repositories.publications.listContributions(published.publicationId));
+    expect(contributions.filter((contribution) => contribution.userId === fixture.ann.identity.id))
+      .toHaveLength(1);
+    expect(contributions.find((contribution) => contribution.userId === fixture.ann.identity.id)?.id)
+      .toBe(contributionIds[0]);
+    const bindings = await fixture.uow.run((repositories) =>
+      repositories.publications.listBindings(contributionIds[0]));
+    expect(bindings).toHaveLength(1);
   });
 
   it("requires an explicit acknowledgement for a low-overlap folder", async () => {

@@ -80,14 +80,15 @@ export class PublicationService {
       }
 
       const originPaths = originals.flatMap((original) => (original.path === null ? [] : [original.path]));
+      // An origin with no synced paths still has overlap 0 against every folder
+      // candidate, which is exactly what join enforces, so preview must report
+      // the same warning instead of hiding the candidate.
       let best: PublishPreview["joinSuggestion"] = null;
-      if (originPaths.length > 0) {
-        for (const publication of publications) {
-          if (publication.kind !== "FOLDER") continue;
-          const overlap = publicationOverlap(originPaths, await activeSyncedPaths(repositories, publication.id));
-          if (best === null || overlap > best.overlap) {
-            best = { publicationId: publication.id, name: publication.name, overlap };
-          }
+      for (const publication of publications) {
+        if (publication.kind !== "FOLDER") continue;
+        const overlap = publicationOverlap(originPaths, await activeSyncedPaths(repositories, publication.id));
+        if (best === null || overlap > best.overlap) {
+          best = { publicationId: publication.id, name: publication.name, overlap };
         }
       }
 
@@ -95,7 +96,6 @@ export class PublicationService {
         nameTaken,
         refusedOriginals,
         joinSuggestion: best !== null && best.overlap >= 0.5 ? best : null,
-        // No synced paths means there is nothing to compare, so no warning.
         lowOverlapWarning: best !== null && best.overlap < 0.5,
       };
     });
@@ -206,77 +206,88 @@ export class PublicationService {
     caller: CallerContext,
     input: { publicationId: string; folderNodeId: string; acknowledgeLowOverlap?: boolean },
   ): Promise<{ contributionId: string; report: ReconcileReport }> {
-    return this.uow.run(async (repositories) => {
-      const routed = await repositories.publications.findById(input.publicationId);
-      if (!routed) throw new NotFoundError("Publication was not found.");
-      if (routed.kind !== "FOLDER") {
-        throw new ValidationError("Only folder publications can be joined.");
-      }
-
-      const source = await repositories.sources.lockById(routed.sourceId);
-      if (!source || source.sourceType !== "PUBLICATION") {
-        throw new NotFoundError("Publication source was not found.");
-      }
-      const publication = await repositories.publications.findBySourceId(source.id);
-      if (
-        !publication
-        || publication.id !== input.publicationId
-        || publication.status !== "ACTIVE"
-        || source.status !== "ACTIVE"
-      ) {
-        throw new SourceArchivedError("This publication is archived.");
-      }
-
-      await requireActiveTeamWithSourceManage(repositories, caller, publication.teamWorkspaceId);
-      const folder = await requireOwnedFolder(repositories, caller, input.folderNodeId);
-      const contributions = await repositories.publications.listContributions(publication.id);
-      const existing = contributions.find((candidate) => candidate.userId === caller.identity.id);
-
-      if (existing) {
-        if (existing.origin.kind !== "FOLDER" || existing.origin.folderNodeId !== folder.id) {
-          throw new ValidationError(
-            "You already joined this publication from another folder; leave it before joining from a different one.");
+    try {
+      return await this.uow.run(async (repositories) => {
+        const routed = await repositories.publications.findById(input.publicationId);
+        if (!routed) throw new NotFoundError("Publication was not found.");
+        if (routed.kind !== "FOLDER") {
+          throw new ValidationError("Only folder publications can be joined.");
         }
-        // Re-joining the same origin reuses the contribution and never rebinds
-        // it to a different folder.
+
+        const source = await repositories.sources.lockById(routed.sourceId);
+        if (!source || source.sourceType !== "PUBLICATION") {
+          throw new NotFoundError("Publication source was not found.");
+        }
+        const publication = await repositories.publications.findBySourceId(source.id);
+        if (
+          !publication
+          || publication.id !== input.publicationId
+          || publication.status !== "ACTIVE"
+          || source.status !== "ACTIVE"
+        ) {
+          throw new SourceArchivedError("This publication is archived.");
+        }
+
+        await requireActiveTeamWithSourceManage(repositories, caller, publication.teamWorkspaceId);
+        const folder = await requireOwnedFolder(repositories, caller, input.folderNodeId);
+        const contributions = await repositories.publications.listContributions(publication.id);
+        const existing = contributions.find((candidate) => candidate.userId === caller.identity.id);
+
+        if (existing) {
+          if (existing.origin.kind !== "FOLDER" || existing.origin.folderNodeId !== folder.id) {
+            throw new ValidationError(
+              "You already joined this publication from another folder; leave it before joining from a different one.");
+          }
+          // Re-joining the same origin reuses the contribution and never rebinds
+          // it to a different folder.
+          const reconciled = await reconcileContribution(repositories, {
+            publicationId: publication.id,
+            contributionId: existing.id,
+            judge: { kind: "CALLER", caller },
+            now: new Date(),
+          });
+          return { contributionId: existing.id, report: reconciled.report };
+        }
+
+        const originPaths = (await loadFolderOriginals(repositories, folder))
+          .flatMap((original) => (original.path === null ? [] : [original.path]));
+        const overlap = publicationOverlap(originPaths, await activeSyncedPaths(repositories, publication.id));
+        if (overlap < 0.5 && input.acknowledgeLowOverlap !== true) {
+          throw publicationError(
+            "PUBLICATION_JOIN_LOW_OVERLAP",
+            "This folder overlaps little with the publication; confirm joining it anyway.",
+            { overlap },
+          );
+        }
+
+        const contribution: Contribution = {
+          id: uuidv7(),
+          publicationId: publication.id,
+          userId: caller.identity.id,
+          origin: { kind: "FOLDER", folderNodeId: folder.id },
+          leftAt: null,
+          rightsFrozenAt: null,
+          pendingCatchUp: false,
+        };
+        await repositories.publications.insertContribution(contribution);
         const reconciled = await reconcileContribution(repositories, {
           publicationId: publication.id,
-          contributionId: existing.id,
+          contributionId: contribution.id,
           judge: { kind: "CALLER", caller },
           now: new Date(),
         });
-        return { contributionId: existing.id, report: reconciled.report };
-      }
-
-      const originPaths = (await loadFolderOriginals(repositories, folder))
-        .flatMap((original) => (original.path === null ? [] : [original.path]));
-      const overlap = publicationOverlap(originPaths, await activeSyncedPaths(repositories, publication.id));
-      if (overlap < 0.5 && input.acknowledgeLowOverlap !== true) {
-        throw publicationError(
-          "PUBLICATION_JOIN_LOW_OVERLAP",
-          "This folder overlaps little with the publication; confirm joining it anyway.",
-          { overlap },
-        );
-      }
-
-      const contribution: Contribution = {
-        id: uuidv7(),
-        publicationId: publication.id,
-        userId: caller.identity.id,
-        origin: { kind: "FOLDER", folderNodeId: folder.id },
-        leftAt: null,
-        rightsFrozenAt: null,
-        pendingCatchUp: false,
-      };
-      await repositories.publications.insertContribution(contribution);
-      const reconciled = await reconcileContribution(repositories, {
-        publicationId: publication.id,
-        contributionId: contribution.id,
-        judge: { kind: "CALLER", caller },
-        now: new Date(),
+        return { contributionId: contribution.id, report: reconciled.report };
       });
-      return { contributionId: contribution.id, report: reconciled.report };
-    });
+    } catch (error) {
+      if (isIntegrityViolation(error)) {
+        // Two concurrent joins can both pass the read above; the unique
+        // (publication, user) key decides. Re-read in a fresh transaction (the
+        // failed one rolled back) and return the winner's contribution.
+        const reused = await reuseRacedJoin(this.uow, caller, input);
+        if (reused !== null) return reused;
+      }
+      throw error;
+    }
   }
 
   /** Marks only the caller's contribution as left; bindings and copies keep their claims. */
@@ -337,6 +348,41 @@ export class PublicationService {
       return reconciled.report;
     });
   }
+}
+
+/**
+ * A concurrent duplicate join lost the unique (publication, user) key. The
+ * failed transaction is gone; re-read in a fresh one and reuse the winner's
+ * contribution when it is the same origin, reconciling it as a normal repeat
+ * join would. Anything else keeps the original failure.
+ */
+async function reuseRacedJoin(
+  uow: SourceUnitOfWork,
+  caller: CallerContext,
+  input: { publicationId: string; folderNodeId: string; acknowledgeLowOverlap?: boolean },
+): Promise<{ contributionId: string; report: ReconcileReport } | null> {
+  return uow.run(async (repositories) => {
+    const publication = await repositories.publications.findById(input.publicationId);
+    if (!publication || publication.kind !== "FOLDER" || publication.status !== "ACTIVE") return null;
+    await requireActiveTeamWithSourceManage(repositories, caller, publication.teamWorkspaceId);
+    const folder = await requireOwnedFolder(repositories, caller, input.folderNodeId);
+
+    const contributions = await repositories.publications.listContributions(publication.id);
+    const existing = contributions.find((candidate) => candidate.userId === caller.identity.id);
+    if (!existing) return null;
+    if (existing.origin.kind !== "FOLDER" || existing.origin.folderNodeId !== folder.id) {
+      throw new ValidationError(
+        "You already joined this publication from another folder; leave it before joining from a different one.");
+    }
+
+    const reconciled = await reconcileContribution(repositories, {
+      publicationId: publication.id,
+      contributionId: existing.id,
+      judge: { kind: "CALLER", caller },
+      now: new Date(),
+    });
+    return { contributionId: existing.id, report: reconciled.report };
+  });
 }
 
 async function requireActiveTeamWithSourceManage(
