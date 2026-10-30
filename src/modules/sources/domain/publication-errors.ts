@@ -1,4 +1,5 @@
 import { DomainError } from "@/shared/domain/errors";
+import { WorkspaceAccessDeniedError } from "@/modules/workspaces/domain/errors";
 
 /**
  * Publication failures that later tasks turn into a 409-style answer. They are
@@ -29,4 +30,18 @@ export function publicationError(
   details?: Record<string, unknown>,
 ): PublicationError {
   return new PublicationError(code, message, details);
+}
+
+/**
+ * A proven team member who lacks `source.manage`, as opposed to someone the
+ * team is hidden from. The code stays `WORKSPACE_ACCESS_DENIED` for existing
+ * callers, but the HTTP edge can answer 403 for this class and keep a
+ * non-member's 404: membership was already established by the service, never
+ * by the route.
+ */
+export class PublicationAccessDeniedError extends WorkspaceAccessDeniedError {
+  constructor(message = "Publishing to a team requires source.manage.") {
+    super(message);
+    this.name = "PublicationAccessDeniedError";
+  }
 }

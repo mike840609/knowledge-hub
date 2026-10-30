@@ -10,6 +10,8 @@ import {
 import type { KnowledgeTreeNode } from "@/modules/knowledge/domain/tree-node";
 import { evaluateWorkspaceCapabilities } from "@/modules/workspaces/application/workspace-authorization";
 import { WorkspaceAccessDeniedError, WorkspaceNotFoundError } from "@/modules/workspaces/domain/errors";
+import type { Workspace } from "@/modules/workspaces/domain/workspace";
+import type { WorkspaceCapability } from "@/modules/workspaces/domain/workspace-capability";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import {
   normalizePublicationName,
@@ -21,7 +23,7 @@ import {
   type PublishOrigin,
   type ReconcileReport,
 } from "../domain/publication";
-import { publicationError } from "../domain/publication-errors";
+import { publicationError, PublicationAccessDeniedError } from "../domain/publication-errors";
 import type { SourceRepositories, SourceUnitOfWork } from "../ports/unit-of-work";
 import { reconcileContribution } from "./publication-reconciler";
 
@@ -30,6 +32,25 @@ export type PublishPreview = {
   refusedOriginals: { documentId: string; publicationName: string }[];
   joinSuggestion: { publicationId: string; name: string; overlap: number } | null;
   lowOverlapWarning: boolean;
+};
+
+/**
+ * The safe team-facing view of a publication. It carries only the publication
+ * metadata, its creator's display name and the caller's own contribution —
+ * never another contributor's personal origin IDs or report.
+ */
+export type PublicationListItem = {
+  publication: Publication;
+  creatorName: string;
+  updatedAt: Date;
+  canJoin: boolean;
+  canManage: boolean;
+  ownContribution: Pick<Contribution, "id" | "leftAt" | "rightsFrozenAt" | "pendingCatchUp"> | null;
+};
+
+export type PublicationStatus = {
+  pending: boolean;
+  report: ReconcileReport | null;
 };
 
 /** The plan's user-facing wording for a duplicate active publication name. */
@@ -97,6 +118,92 @@ export class PublicationService {
         refusedOriginals,
         joinSuggestion: best !== null && best.overlap >= 0.5 ? best : null,
         lowOverlapWarning: best !== null && best.overlap < 0.5,
+      };
+    });
+  }
+
+  /**
+   * The team's publications as the caller may read them. Access to the team is
+   * judged again for this read (a non-member is not found), and the caller's
+   * own contribution is read through `listByContributor` so no other
+   * contributor's origin or report is loaded at all.
+   */
+  async list(
+    caller: CallerContext,
+    teamId: string,
+    includeArchived = false,
+  ): Promise<PublicationListItem[]> {
+    return this.uow.run(async (repositories) => {
+      const workspace = await repositories.workspaces.findById(teamId);
+      if (!workspace || workspace.workspaceType !== "TEAM") throw new WorkspaceNotFoundError();
+      const capabilities = await evaluateWorkspaceCapabilities(repositories, caller, teamId);
+      if (!capabilities.has("document.read")) throw new WorkspaceNotFoundError();
+
+      const publications = await repositories.publications.listByTeam(teamId, includeArchived);
+      if (publications.length === 0) return [];
+
+      const sources = await repositories.sources.findByWorkspaceId(teamId, { includeArchived: true });
+      const sourceById = new Map(sources.map((source) => [source.id, source]));
+      const listed = new Set(publications.map((publication) => publication.id));
+      const ownContributions = await repositories.publications.listByContributor(caller.identity.id);
+      const ownByPublication = new Map(
+        ownContributions
+          .filter((contribution) => listed.has(contribution.publicationId))
+          .map((contribution) => [contribution.publicationId, contribution]),
+      );
+      const creators = await repositories.users.findByIds(
+        [...new Set(publications.map((publication) => publication.creatorUserId))]);
+      const creatorNameById = new Map(creators.map((user) => [user.id, user.name]));
+
+      const items: PublicationListItem[] = [];
+      for (const publication of publications) {
+        const source = sourceById.get(publication.sourceId);
+        if (!source) continue;
+        const own = ownByPublication.get(publication.id) ?? null;
+        items.push({
+          publication,
+          creatorName: creatorNameById.get(publication.creatorUserId) ?? "",
+          updatedAt: source.updatedAt,
+          canJoin: canJoinPublication(workspace, capabilities, publication, own),
+          canManage: canManagePublication(workspace, capabilities, publication, own, caller.identity.id),
+          ownContribution: own === null ? null : {
+            id: own.id,
+            leftAt: own.leftAt,
+            rightsFrozenAt: own.rightsFrozenAt,
+            pendingCatchUp: own.pendingCatchUp,
+          },
+        });
+      }
+      return items;
+    });
+  }
+
+  /**
+   * The caller's own contribution state for one publication. The team is
+   * re-judged first, then only the caller's contribution and its saved report
+   * are read; a member who never contributed gets the same not-found as an
+   * outsider.
+   */
+  async status(caller: CallerContext, publicationId: string): Promise<PublicationStatus> {
+    return this.uow.run(async (repositories) => {
+      const publication = await repositories.publications.findById(publicationId);
+      if (!publication) throw new NotFoundError("Publication was not found.");
+      const workspace = await repositories.workspaces.findById(publication.teamWorkspaceId);
+      if (!workspace || workspace.workspaceType !== "TEAM") {
+        throw new NotFoundError("Publication was not found.");
+      }
+      const capabilities = await evaluateWorkspaceCapabilities(
+        repositories, caller, publication.teamWorkspaceId);
+      if (!capabilities.has("document.read")) throw new NotFoundError("Publication was not found.");
+
+      const own = (await repositories.publications.listByContributor(caller.identity.id))
+        .find((contribution) => contribution.publicationId === publicationId);
+      if (!own) throw new NotFoundError("You are not a contributor to this publication.");
+
+      const report = await repositories.publications.findReport(own.id);
+      return {
+        pending: own.pendingCatchUp || reportHasPendingWork(report),
+        report,
       };
     });
   }
@@ -568,9 +675,55 @@ async function requireActiveTeamWithSourceManage(
     throw new WorkspaceAccessDeniedError("Publishing requires an active team workspace.");
   }
   const capabilities = await evaluateWorkspaceCapabilities(repositories, caller, teamWorkspaceId);
+  // A caller with no read grant is not a member of this team: hide it exactly
+  // as a missing team is hidden. A member who can read but not publish is a
+  // 403 at the HTTP edge, without disclosing anything to a non-member.
+  if (!capabilities.has("document.read")) throw new WorkspaceNotFoundError();
   if (!capabilities.has("source.manage")) {
-    throw new WorkspaceAccessDeniedError("Publishing to a team requires source.manage.");
+    throw new PublicationAccessDeniedError("Publishing to a team requires source.manage.");
   }
+}
+
+function canJoinPublication(
+  workspace: Workspace,
+  capabilities: ReadonlySet<WorkspaceCapability>,
+  publication: Publication,
+  own: Contribution | null,
+): boolean {
+  return publication.status === "ACTIVE"
+    && publication.kind === "FOLDER"
+    && workspace.lifecycleState === "ACTIVE"
+    && capabilities.has("source.manage")
+    && own === null;
+}
+
+function canManagePublication(
+  workspace: Workspace,
+  capabilities: ReadonlySet<WorkspaceCapability>,
+  publication: Publication,
+  own: Contribution | null,
+  callerId: string,
+): boolean {
+  // Mirrors `requirePublicationLifecycleRights`: an admin's effective rights
+  // survive an archived team; a creator needs an active team and their own
+  // non-left contribution.
+  if (capabilities.has("membership.manage_basic")) return true;
+  return workspace.lifecycleState === "ACTIVE"
+    && capabilities.has("source.manage")
+    && publication.creatorUserId === callerId
+    && own !== null
+    && own.leftAt === null;
+}
+
+/**
+ * A saved report still has work to do when it recorded an original that could
+ * not be claimed or a path that stayed reserved. `MAINTAINED_BY_OTHER` is a
+ * stable ownership fact, not pending work.
+ */
+function reportHasPendingWork(report: ReconcileReport | null): boolean {
+  return report !== null
+    && report.notices.some((notice) =>
+      notice.code === "ORIGINAL_ALREADY_PUBLISHED" || notice.code === "PATH_RESERVED");
 }
 
 async function requirePublicationLifecycleRights(

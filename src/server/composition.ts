@@ -12,6 +12,7 @@ import { AgentContextService } from "@/modules/knowledge/application/agent-conte
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { GetImportScopeService } from "@/modules/sources/application/get-import-scope";
 import { drainPublicationEvents } from "@/modules/sources/application/publication-drain";
+import { PublicationService } from "@/modules/sources/application/publication-service";
 import {GetSourceHealthService} from "@/modules/sources/application/get-source-health";
 import { ListFolderUpdatesService } from "@/modules/personal/application/list-folder-updates";
 import { GetSyncRunDetailService } from "@/modules/sources/application/get-sync-run-detail";
@@ -117,6 +118,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   const teams = new TeamWorkspaceService(unitOfWork);
   const governance = new TeamGovernanceService(unitOfWork);
   const workspaces = new WorkspaceQueryService(unitOfWork);
+  const publications = new PublicationService(unitOfWork);
   const search = new KnowledgeSearchService(unitOfWork, workspaces);
   const resolver = new HubIdentityResolver(unitOfWork);
   const personalWorkspaces = new PersonalWorkspaceService(unitOfWork);
@@ -177,7 +179,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   return {
     personalProfile: new PersonalProfileService(unitOfWork),
     agentContext: new AgentContextService(unitOfWork),
-    importScope: new GetImportScopeService(unitOfWork), sourceHealth:new GetSourceHealthService(unitOfWork), folderUpdates:new ListFolderUpdatesService(unitOfWork), syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, personal, personalPreferences, feedbackReports, workspaceAdmin, teams, governance, reviewReadAvailable: true, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, savedShares, reviews, sources, workspaces, search, imports };
+    importScope: new GetImportScopeService(unitOfWork), sourceHealth:new GetSourceHealthService(unitOfWork), folderUpdates:new ListFolderUpdatesService(unitOfWork), syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, personal, personalPreferences, feedbackReports, workspaceAdmin, teams, governance, reviewReadAvailable: true, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, savedShares, reviews, sources, workspaces, publications, search, imports };
 }
 
 export function applicationServices() {
