@@ -139,8 +139,14 @@ test("comments stay compact until a reply is requested on desktop and mobile", a
   await expect(thread.getByRole("textbox")).toHaveCount(0);
   await expect(page.getByText("Current passage", { exact: true })).toHaveCount(0);
   await expect(page.getByText("0/3,000 characters", { exact: true })).toHaveCount(0);
+  // The remark starts on its author's name, past the avatar, not on the card's edge; previewed and open alike.
+  const remark = thread.getByText("Could we add a short example here?");
+  const offName = async (target: typeof remark) => Math.abs((await thread.locator("li").first().locator("p").first().boundingBox())!.x - (await target.boundingBox())!.x);
+  await expect.poll(() => offName(remark)).toBeLessThan(1);
   await thread.getByRole("button", { name: "Reply", exact: true }).click();
   await expect(thread.getByRole("textbox", { name: "Reply" })).toBeFocused();
+  await expect.poll(() => offName(remark)).toBeLessThan(1);
+  await expect.poll(() => offName(thread.getByRole("textbox", { name: "Reply" }))).toBeLessThan(1);
   await thread.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(thread.getByRole("textbox")).toHaveCount(0);
   await page.screenshot({ path: "/tmp/document-review-refined-desktop.png", fullPage: true });
