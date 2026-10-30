@@ -18,8 +18,8 @@ Run the rollout in this order; steps 5 and 6 are the part that is easy to forget
 2. Set `KM_TEAM_WORKSPACES_ENABLED=true` and restart.
 3. Run the catch-up once, from the same database and environment (next section).
 4. Read its summary line. `failed=<n>` exits 1: inspect the failure, fix it, and rerun; the command is idempotent.
-5. Every contributor reported `pending` (group-only members, removed or demoted members, contributors of an archived team) must now save or sync once from their own My Space. Those two requests run as them, judge their groups, and reconcile their documents. Until then their team documents keep the 「等待同步」 label.
-6. Confirm the team tree no longer shows 「等待同步」 for those documents, and that `GET /api/publications/:id/status` reports `pending: false` for the contributor.
+5. Every contributor reported `pending` (group-only members, removed or demoted members, contributors of an archived team) must now save or sync once from their own My Space, so the request is judged as them. The result depends on their current rights: a contributor who still holds `source.manage` is reconciled and their copies update; a removed or demoted contributor fails that check and becomes rights-frozen (「不再更新」), so the copy stays readable but does not reconcile. Until that request, the copies keep the 「等待同步」 label.
+6. Confirm the expected end state. For a group-only contributor who still holds `source.manage`, the team tree no longer shows 「等待同步」 and `GET /api/publications/:id/status` normally reports `pending: false`; it stays true only while the saved report still names work such as an original already published elsewhere or a reserved path. For a removed or demoted contributor, the expected state is the rights-frozen label instead; `pending: false` is not a success criterion for them, and a saved report may keep pending work.
 
 `make db-catch-up-publications` and `GET /api/publications/:id/status` are the two operators' read points; neither writes anything while the flag is off.
 
@@ -34,7 +34,7 @@ make db-catch-up-publications
 
 - With the flag off, the script prints `skipped` and writes nothing.
 - With the flag on, it first drains pending events, then scans **every** publication contribution (not only ones with an event), because moves, archives and source lifecycle changes can otherwise be missed.
-- Direct members with `source.manage` are reconciled. Contributors whose rights can only be judged by their own request — group-only members, removed or demoted members — are marked **pending catch-up**, never frozen. They must save or sync once after the flag is back on; that request judges their own groups and reconciles their documents.
+- Direct members with `source.manage` are reconciled. Contributors whose rights can only be judged by their own request — group-only members, removed or demoted members — are marked **pending catch-up**, not frozen by the caller-less run. They must save or sync once after the flag is back on; that request judges their own groups. It reconciles only a contributor who still holds `source.manage`; a removed or demoted contributor is frozen at that point and the copy stays readable under 「不再更新」.
 - Voluntary leave, rights-based freezes, and unpublished or admin-archived publications are preserved and never revived by catch-up.
 - The output is `applied=<n> pending=<n> skipped=<n> failed=<n>`. It exits 1 if any contribution failed and 0 otherwise, and it is safe to rerun.
 
@@ -45,11 +45,15 @@ A contributor's state explains what an operator should expect and what clears it
 | State | In the team | Cleared by |
 | --- | --- | --- |
 | Active | Documents update from the contributor's originals. | — |
-| Pending catch-up (「等待同步」) | The copy stays readable but is behind. Catch-up could not judge this person's rights without their own request. | That contributor's next save or sync; it reconciles their current originals, placement and lifecycle, not just one revision. |
+| Pending catch-up (「等待同步」) | The copy stays readable but is behind. Catch-up could not judge this person's rights without their own request. | That contributor's next save or sync. With `source.manage` it reconciles current originals, placement and lifecycle (not just one revision); without the right the state becomes rights-frozen instead. |
 | Rights-frozen (「不再更新」) | Documents stay readable and labelled; nobody else may update them. | The same contributor's later successful save or sync. |
 | Left (「不再更新」) | Documents stay readable and frozen; the contribution is recorded as voluntary. | Only that contributor's explicit 「繼續更新」; ordinary saves and catch-up never revive it. |
 
 `pending` is not a freeze and a freeze is not a leave. Catch-up preserves all three, plus admin-archived and unpublished publications, and never restores any of them implicitly.
+
+## Known limits
+
+- A Folder Sync source's root has no tree node. The import places its documents directly under the source, so My Space offers 「發佈到團隊」 for a folder inside a synced source, not for the source root itself. Publishing the whole synced source is a design follow-up; the service still accepts any owned folder node it is given.
 
 ## Unpublish, restore and rename
 

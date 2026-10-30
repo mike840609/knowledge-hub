@@ -20,8 +20,8 @@
 2. 設定 `KM_TEAM_WORKSPACES_ENABLED=true` 並重啟。
 3. 以同一個資料庫與環境執行一次 catch-up（下一節）。
 4. 讀取 summary 行。`failed=<n>` 會 exit 1：先檢查失敗原因、修正後重跑；指令可安全重複執行。
-5. 被標成 `pending` 的 contributor（group-only、被移除或降級、已封存 team 的 contributor）必須各自從自己的 My Space 儲存或同步一次。這兩個請求以本人身分判斷 groups 並 reconcile 文件；在那之前，他們的團隊文件維持「等待同步」標示。
-6. 確認團隊樹上這些文件不再顯示「等待同步」，且對該 contributor 讀 `GET /api/publications/:id/status` 時 `pending: false`。
+5. 被標成 `pending` 的 contributor（group-only、被移除或降級、已封存 team 的 contributor）必須各自從自己的 My Space 儲存或同步一次，讓請求以本人身分判斷。結果取決於當下權限：仍持有 `source.manage` 者會被 reconcile，副本恢復更新；被移除或降級者會在此時 rights-frozen（「不再更新」），副本仍可讀但不會 reconcile。在該請求之前，副本維持「等待同步」。
+6. 確認預期結果。仍持有 `source.manage` 的 group-only contributor：團隊樹不再顯示「等待同步」，且 `GET /api/publications/:id/status` 通常回 `pending: false`；若儲存的 report 仍列出待處理項目（例如原稿已在別處發佈、路徑被保留），它會維持 true。被移除或降級者：預期狀態是「不再更新」的 rights-frozen，`pending: false` 不是他們的成功條件，已儲存的 report 也可能仍有 pending 工作。
 
 `make db-catch-up-publications` 與 `GET /api/publications/:id/status` 是維運的兩個讀取點；旗標關閉時兩者都不寫入。
 
@@ -36,7 +36,7 @@ make db-catch-up-publications
 
 - 旗標關閉時，腳本明確輸出 `skipped`，不寫入任何資料。
 - 旗標開啟時，先清空 pending 事件，再掃描**所有** publication contribution（不是只有帶事件的），否則移動、封存和 source lifecycle 變更可能被漏掉。
-- 具備 `source.manage` 的 direct member 會被 reconcile。只能由本人請求判斷權限的 contributor（group-only、被移除或降級）會標成 **pending catch-up**，不會被 freeze。他們必須在旗標重新開啟後儲存或同步一次；該請求會用他們自己的 groups 判斷權限並 reconcile 文件。
+- 具備 `source.manage` 的 direct member 會被 reconcile。只能由本人請求判斷權限的 contributor（group-only、被移除或降級）會標成 **pending catch-up**，無 caller 的執行不會直接 freeze。他們必須在旗標重新開啟後儲存或同步一次；該請求會用他們自己的 groups 判斷。只有仍持有 `source.manage` 者會被 reconcile；被移除或降級者會在此時 freeze，副本維持可讀並標示「不再更新」。
 - 自願離開、因權限被 freeze、以及已 unpublish 或被 admin 封存的 publication 都會保留，catch-up 不會自動恢復。
 - 輸出為 `applied=<n> pending=<n> skipped=<n> failed=<n>`。有任何 contribution 失敗時 exit 1，否則 exit 0，且可安全重跑。
 
@@ -47,11 +47,15 @@ Contributor 的狀態決定維運要期待什麼、以及由什麼解除：
 | 狀態 | 團隊中的樣子 | 解除方式 |
 | --- | --- | --- |
 | Active | 文件會從該 contributor 的原稿更新。 | — |
-| Pending catch-up（「等待同步」） | 副本仍可閱讀，但落後。catch-up 無法在不取得本人請求的情況下判斷其權限。 | 該 contributor 下一次儲存或同步；會 reconcile 當下的原稿、位置與生命週期，不只單一 revision。 |
+| Pending catch-up（「等待同步」） | 副本仍可閱讀，但落後。catch-up 無法在不取得本人請求的情況下判斷其權限。 | 該 contributor 下一次儲存或同步。持有 `source.manage` 時會 reconcile 當下原稿、位置與生命週期（不只單一 revision）；沒有權限時改為 rights-frozen。 |
 | Rights-frozen（「不再更新」） | 文件仍可讀並加註；其他人不能更新。 | 同一位 contributor 之後成功的儲存或同步。 |
 | Left（「不再更新」） | 文件仍可讀且凍結；contribution 記錄為自願離開。 | 只有該 contributor 明確按「繼續更新」；一般儲存與 catch-up 都不會恢復。 |
 
 `pending` 不是 freeze，freeze 也不是 leave。catch-up 會保留這三種狀態，也會保留 admin 封存與已 unpublish 的 publication，且不會隱含地還原其中任何一種。
+
+## 已知限制
+
+- Folder Sync source 的 root 沒有 tree node。匯入會把文件直接放在 source 之下，因此 My Space 只對 synced source 內的資料夾提供「發佈到團隊」，不對 source root 本身提供。發佈整個 synced source 屬於設計後續；服務端仍接受任何傳入的自有 folder node。
 
 ## Unpublish、restore 與 rename
 

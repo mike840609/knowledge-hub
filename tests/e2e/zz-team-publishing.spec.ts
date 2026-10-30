@@ -320,8 +320,13 @@ test.describe("team space publishing", () => {
     });
     await expect.poll(async () => (await peek(ann, referenceDocumentId)).status).toBe("ARCHIVED");
 
-    // Re-adding the same path (a new original id after delete plus add) reattaches
-    // the same team document, so its thread and id survive.
+    // Re-adding the same file restores the same archived original: the fixture
+    // keeps its `knowledge_id`, so the import reconciler matches the archived
+    // entry by external identity and restores that entry/document. This proves
+    // "removed file, then restored original"; the different-original reattach
+    // branch is covered by tests/integration/publication-reconcile.test.ts
+    // ("re-attaches the same copy for a same-sync delete plus add"). Either way
+    // the same team document and its thread survive.
     await syncFolder(mike, {
       workspaceId: mikePersonalId, sourceId: mikeSourceId, sourceName: MIKE_FOLDER, fixture: "team-hcm-v4",
     });

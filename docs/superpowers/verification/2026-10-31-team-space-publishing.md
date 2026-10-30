@@ -25,6 +25,8 @@ Environment: macOS, Node v24.6.0, Playwright 1.63.0 with the installed Chromium,
 
 `make verify` initially failed only `tests/unit/e2e-smoke-selection.test.ts`, whose catalog pins the approved Team smoke flows; the seven new approved flows are now declared there. Nothing product-side was corrected by that change.
 
+All recorded gates ran on the final product behaviour and the final e2e assertions. The commits after the gate runs change only this record, the operations documentation and one e2e comment; no product or test behaviour differs from what was run.
+
 ## End-to-end cases
 
 `tests/e2e/zz-team-publishing.spec.ts`, tagged `@smoke-team`, serial because they are one workflow. Mike is the fixed `owner` persona, Ann the fixed `editor` persona, and a second `admin` persona is granted OWNER so the last-owner rule cannot block the removal case. User ids are never accepted from the browser.
@@ -33,7 +35,7 @@ Environment: macOS, Node v24.6.0, Playwright 1.63.0 with the installed Chromium,
 2. **Read, discuss, Inbox.** Ann sees the publication, reads `hcm/guide.md`, and starts a discussion from the paragraph control. Mike's personal Inbox shows the comment under “HCM Guide”; the entry opens the team document with its thread (team href, not a share token), and the comment is visible there.
 3. **Creator update.** Mike syncs `team-hcm-v2`. Polling `/api/documents/:id/peek?brief` as Ann shows “Revised in My Space.”, and her reload renders it. No team-side write was made.
 4. **Join without overwrite.** Ann syncs her own copy (newer `guide.md`, a new `ann-notes.md`) and joins from her `hcm` folder. The join report creates exactly one document (her new path) and returns two `MAINTAINED_BY_OTHER` notices naming Mike; Mike's guide is unchanged. Her next sync preview shows 「由 Phase3 owner 維護，你的版本不會更新團隊」, the Apply response carries the same notice, the team guide still shows Mike's text, and Ann's own copy updates.
-5. **Archived-path reattach.** Ann discusses `hcm/reference.md`. Mike removes the file (team copy ARCHIVED), then re-adds the same path with a new original (delete plus add). The same team document becomes ACTIVE again with its discussion, and the team tree shows it under Mike.
+5. **Archived-path reattach.** Ann discusses `hcm/reference.md`. Mike removes the file (team copy ARCHIVED), then re-adds the same file. The fixture keeps `knowledge_id: team-hcm-reference`, so the import reconciler matches the archived entry by external identity and restores the same original and document; the team copy becomes ACTIVE again under the same document id with its discussion, and the team tree shows it under Mike. This is the “removed, then restored original” branch. The different-original branch — delete plus add producing a new original — is not reached by this browser case and is covered in `tests/integration/publication-reconcile.test.ts` (“re-attaches the same copy for a same-sync delete plus add”).
 6. **Removal.** Admin removes Mike. His Inbox attention list no longer offers the entry; All activity keeps two opaque rows titled “A team discussion” with “This discussion is no longer available.”, no title, no comment text, no link and no Mark read action. Re-adding him as a member restores access, isolating the next case from lost membership.
 7. **Unpublish is sticky.** Mike unpublishes through the publication menu and its confirmation. The publication is ARCHIVED, the active list is empty, and the team entry disappears. He then syncs `team-hcm-v5`; after a scheduling window the publication is still ARCHIVED, the active list is still empty, its source is still ARCHIVED, and the team tree still has no entry. (Unpublish archives the publication source; the copied document rows keep their own lifecycle, and visibility is derived from the source.)
 
@@ -47,7 +49,7 @@ Environment: macOS, Node v24.6.0, Playwright 1.63.0 with the installed Chromium,
 
 ## Flag and rollout
 
-`KM_TEAM_WORKSPACES_ENABLED` remains default off; this task changes no default and adds no dependency. With the flag off, publication routes answer 404 and team spaces stay closed. The operational order is in `docs/operations/team-workspaces-availability.md` (and the zh-TW companion): deploy, enable and restart, run `make db-catch-up-publications`, then have each reported `pending` contributor save or sync once; confirm 「等待同步」 clears and `GET /api/publications/:id/status` reports `pending: false`. Unpublish/restore/rename conflict behavior and stickiness are documented alongside it.
+`KM_TEAM_WORKSPACES_ENABLED` remains default off; this task changes no default and adds no dependency. With the flag off, publication routes answer 404 and team spaces stay closed. The operational order is in `docs/operations/team-workspaces-availability.md` (and the zh-TW companion): deploy, enable and restart, run `make db-catch-up-publications`, then have each reported `pending` contributor save or sync once. That request reconciles a contributor who still holds `source.manage` and freezes one who was removed or demoted; the doc states the expected end state for each. Unpublish/restore/rename conflict behavior and stickiness are documented alongside it, as is the Folder Sync source-root publishing limit.
 
 ## Unresolved limits
 
