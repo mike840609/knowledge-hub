@@ -193,11 +193,13 @@ describe("publication review scope", () => {
     });
     const memberView = await service.queryForOwner(fixture.ann, doc.documentId);
     expect(JSON.stringify(memberView)).not.toContain("HIDDEN TEAM SECRET");
+    if (memberView.canModerate) throw new Error("expected the member projection");
     expect(memberView.threads[0].comments.find(comment => comment.id === annComment.id)?.body).not.toBe("HIDDEN TEAM SECRET");
 
     // The creator reads the moderator projection, which still names the body.
     const creatorView = await service.queryForOwner(fixture.mike, doc.documentId);
     expect(creatorView).toMatchObject({ canModerate: true });
+    if (!creatorView.canModerate) throw new Error("expected the owner projection");
     expect(creatorView.threads[0]).toMatchObject({ visibility: "VISIBLE" });
     expect(JSON.stringify(creatorView)).toContain("HIDDEN TEAM SECRET");
 
@@ -215,8 +217,7 @@ describe("publication review scope", () => {
     await service.editForOwner(fixture.ann, { documentId: doc.documentId, threadId: thread.id, commentId: own.id, body: "Ann revised" });
     await service.deleteForOwner(fixture.ann, { documentId: doc.documentId, threadId: thread.id, commentId: own.id });
 
-    // An ADMIN may hide a whole discussion; an ordinary member may only resolve it.
-    await service.setResolution(fixture.ann, { documentId: doc.documentId, threadId: thread.id, status: "RESOLVED" });
+    // An ADMIN may hide a whole discussion; an ordinary member may not.
     await expect(service.setVisibility(fixture.ann, { documentId: doc.documentId, threadId: thread.id, visibility: "HIDDEN" }))
       .rejects.toMatchObject({ code: "SHARE_LINK_NOT_FOUND" });
     await service.setVisibility(adminCaller, { documentId: doc.documentId, threadId: thread.id, visibility: "HIDDEN", reason: "admin" });
@@ -286,6 +287,173 @@ describe("publication review scope", () => {
     expect(await eventsOf(annDoc.documentId)).toMatchObject([
       { recipient_user_id: fixture.ann.identity.id, origin_share_link_id: null },
     ]);
+  });
+
+  it("lets only the creator and admins resolve or reopen a discussion", async () => {
+    const doc = await publishedDocument({});
+    const adminCaller = await addMember(fixture.teamWorkspaceId, identity("ResolveAdmin"), "ADMIN");
+    const thread = await service.createForOwner(fixture.mike, {
+      documentId: doc.documentId,
+      expectedRevisionId: doc.revisionId,
+      anchor: doc.anchor,
+      body: "Creator opens",
+      idempotencyKey: randomUUID(),
+    });
+
+    await expect(service.setResolution(fixture.ann, { documentId: doc.documentId, threadId: thread.id, status: "RESOLVED" }))
+      .rejects.toMatchObject({ code: "SHARE_LINK_NOT_FOUND" });
+    await service.setResolution(fixture.mike, { documentId: doc.documentId, threadId: thread.id, status: "RESOLVED" });
+    expect((await service.queryForOwner(fixture.ann, doc.documentId)).threads[0]).toMatchObject({ status: "RESOLVED" });
+
+    await expect(service.setResolution(fixture.ann, { documentId: doc.documentId, threadId: thread.id, status: "OPEN" }))
+      .rejects.toMatchObject({ code: "SHARE_LINK_NOT_FOUND" });
+    await service.setResolution(adminCaller, { documentId: doc.documentId, threadId: thread.id, status: "OPEN" });
+    expect((await service.queryForOwner(fixture.ann, doc.documentId)).threads[0]).toMatchObject({ status: "OPEN" });
+
+    // A hidden discussion is still moderation: a member cannot resolve it, an admin can.
+    await service.setVisibility(fixture.mike, { documentId: doc.documentId, threadId: thread.id, visibility: "HIDDEN", reason: "moderated" });
+    await expect(service.setResolution(fixture.ann, { documentId: doc.documentId, threadId: thread.id, status: "RESOLVED" }))
+      .rejects.toMatchObject({ code: "SHARE_LINK_NOT_FOUND" });
+    await service.setResolution(adminCaller, { documentId: doc.documentId, threadId: thread.id, status: "RESOLVED" });
+  });
+
+  it("serves no team discussion for an archived document or an archived publication source", async () => {
+    const doc = await publishedDocument({});
+    const thread = await service.createForOwner(fixture.mike, {
+      documentId: doc.documentId,
+      expectedRevisionId: doc.revisionId,
+      anchor: doc.anchor,
+      body: "ARCHIVED TEAM SECRET",
+      idempotencyKey: randomUUID(),
+    });
+    await fixture.pool.query(
+      "UPDATE knowledge_documents SET status = 'ARCHIVED', archived_by = ?, archived_at = ? WHERE id = ?",
+      [fixture.mike.identity.id, new Date(), doc.documentId],
+    );
+
+    const attempts = [
+      () => service.queryForOwner(fixture.ann, doc.documentId),
+      () => service.markThreadRead(fixture.mike, doc.documentId, thread.id),
+      () => service.setVisibility(fixture.mike, { documentId: doc.documentId, threadId: thread.id, visibility: "HIDDEN" }),
+    ];
+    for (const attempt of attempts) {
+      const failure = await attempt().catch((error: unknown) => error);
+      expect(failure).toMatchObject({ code: "SHARE_LINK_NOT_FOUND" });
+      expect(JSON.stringify(failure)).not.toContain("ARCHIVED TEAM SECRET");
+    }
+
+    // An unpublished (source-archived) publication is gone from review too.
+    const unpublished = await publishedDocument({});
+    await fixture.pool.query(
+      "UPDATE knowledge_sources SET status = 'ARCHIVED', archived_by = ?, archived_at = ? WHERE id = ?",
+      [fixture.mike.identity.id, new Date(), unpublished.publication.sourceId],
+    );
+    await expect(service.queryForOwner(fixture.mike, unpublished.documentId)).rejects.toMatchObject({ code: "SHARE_LINK_NOT_FOUND" });
+  });
+
+  it("closes team discussion without the team flag while personal review still works", async () => {
+    const closed = new DocumentReviewService(fixture.uow, undefined, () => true, () => false);
+    const doc = await publishedDocument({});
+    await expect(closed.queryForOwner(fixture.ann, doc.documentId)).rejects.toMatchObject({ code: "SHARE_LINK_NOT_FOUND" });
+    await expect(closed.createForOwner(fixture.ann, {
+      documentId: doc.documentId,
+      expectedRevisionId: doc.revisionId,
+      anchor: doc.anchor,
+      body: "A closed team must not take comments",
+      idempotencyKey: randomUUID(),
+    })).rejects.toMatchObject({ code: "SHARE_LINK_NOT_FOUND" });
+
+    const personal = await fixture.createHubOriginal(fixture.mike, "Personal review", MARKDOWN);
+    const thread = await closed.createForOwner(fixture.mike, {
+      documentId: personal.documentId,
+      expectedRevisionId: personal.revisionId,
+      anchor: anchorOf(),
+      body: "Personal still works",
+      idempotencyKey: randomUUID(),
+    });
+    expect((await closed.queryForOwner(fixture.mike, personal.documentId)).threads.map(view => view.id)).toEqual([thread.id]);
+  });
+
+  it("rechecks direct membership and validated groups on every read and restores with access", async () => {
+    const memberIdentity = identity("MembershipRecheck");
+    const member = await addMember(fixture.teamWorkspaceId, memberIdentity, "EDITOR");
+    const doc = await publishedDocument({});
+    const thread = await service.createForOwner(member, {
+      documentId: doc.documentId,
+      expectedRevisionId: doc.revisionId,
+      anchor: doc.anchor,
+      body: "MEMBER SECRET",
+      idempotencyKey: randomUUID(),
+    });
+    expect((await service.queryForOwner(member, doc.documentId)).threads.map(view => view.id)).toEqual([thread.id]);
+
+    await fixture.uow.run((repositories) => repositories.workspaceMemberships.remove(fixture.teamWorkspaceId, memberIdentity.id));
+    const lost = await service.queryForOwner(member, doc.documentId).catch((error: unknown) => error);
+    expect(lost).toMatchObject({ code: "SHARE_LINK_NOT_FOUND" });
+    expect(JSON.stringify(lost)).not.toContain("MEMBER SECRET");
+    await expect(service.markDocumentRead(member, doc.documentId)).rejects.toMatchObject({ code: "SHARE_LINK_NOT_FOUND" });
+
+    await addMember(fixture.teamWorkspaceId, memberIdentity, "EDITOR");
+    const regained = await service.queryForOwner(member, doc.documentId);
+    expect(regained.threads.map(view => view.id)).toEqual([thread.id]);
+
+    // A group-only member is judged by the caller's own validated groups on each request.
+    const groupDoc = await publishedDocument({ teamId: fixture.groupTeamWorkspaceId });
+    const groupThread = await service.createForOwner(fixture.ann, {
+      documentId: groupDoc.documentId,
+      expectedRevisionId: groupDoc.revisionId,
+      anchor: groupDoc.anchor,
+      body: "GROUP SECRET",
+      idempotencyKey: randomUUID(),
+    });
+    expect((await service.queryForOwner(fixture.ann, groupDoc.documentId)).threads.map(view => view.id)).toEqual([groupThread.id]);
+    const withoutGroups = { ...fixture.ann, validatedExternalGroupIds: [] };
+    const revoked = await service.queryForOwner(withoutGroups, groupDoc.documentId).catch((error: unknown) => error);
+    expect(revoked).toMatchObject({ code: "SHARE_LINK_NOT_FOUND" });
+    expect(JSON.stringify(revoked)).not.toContain("GROUP SECRET");
+    expect(JSON.stringify(revoked)).not.toContain(groupDoc.title);
+    expect((await service.queryForOwner(fixture.ann, groupDoc.documentId)).threads.map(view => view.id)).toEqual([groupThread.id]);
+  });
+
+  it("returns the member projection without moderation fields and the owner projection with them", async () => {
+    const doc = await publishedDocument({});
+    const adminCaller = await addMember(fixture.teamWorkspaceId, identity("ShapeAdmin"), "ADMIN");
+    const thread = await service.createForOwner(fixture.mike, {
+      documentId: doc.documentId,
+      expectedRevisionId: doc.revisionId,
+      anchor: doc.anchor,
+      body: "Owner opening",
+      idempotencyKey: randomUUID(),
+    });
+    await service.replyForOwner(fixture.ann, {
+      documentId: doc.documentId,
+      threadId: thread.id,
+      body: "Member answer",
+      idempotencyKey: randomUUID(),
+    });
+
+    const member = await service.queryForOwner(fixture.ann, doc.documentId);
+    if (member.canModerate) throw new Error("expected the member projection");
+    expect(member.canModerate).toBe(false);
+    expect(Object.keys(member.threads[0]).sort()).toEqual(["comments", "createdAt", "currentAnchor", "id", "status", "updatedAt"]);
+    for (const key of ["visibility", "createdBy", "hiddenBy", "hiddenAt", "hiddenReason", "resolvedBy", "resolvedAt", "originalAnchor"]) {
+      expect(member.threads[0]).not.toHaveProperty(key);
+    }
+    for (const key of ["authorUserId", "hiddenBy", "hiddenAt", "hiddenReason"]) {
+      expect(member.threads[0].comments[0]).not.toHaveProperty(key);
+    }
+
+    for (const [view, expected] of [[await service.queryForOwner(fixture.mike, doc.documentId), true], [await service.queryForOwner(adminCaller, doc.documentId), true]] as const) {
+      expect(view.canModerate).toBe(expected);
+      if (!view.canModerate) throw new Error("expected the owner projection");
+      expect(Object.keys(view.threads[0]).sort()).toEqual([
+        "comments", "createdAt", "createdBy", "currentAnchor", "documentId", "hiddenAt", "hiddenBy",
+        "hiddenReason", "id", "originalAnchor", "resolvedAt", "resolvedBy", "status", "updatedAt", "visibility",
+      ]);
+      for (const key of ["authorUserId", "hiddenBy", "hiddenAt", "hiddenReason"]) {
+        expect(view.threads[0].comments[0]).toHaveProperty(key);
+      }
+    }
   });
 });
 

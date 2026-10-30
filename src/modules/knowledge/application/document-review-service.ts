@@ -36,6 +36,11 @@ type LocatedScope = { document:KnowledgeDocument; source:SourcePolicy; workspace
  * is judged separately from membership.
  */
 type ReviewScope = LocatedScope & { ownerUserId:string; canModerate:boolean; team:boolean };
+type DiscussionQueryBase = { revisionId:string|null; writesEnabled:boolean; callerUserId:string; ownerUserId:string };
+/** The owner route answers one of two explicit projections; `canModerate` discriminates them. */
+export type DiscussionQueryView =
+  | (DiscussionQueryBase & { canModerate:true; threads:OwnerReviewThreadView[] })
+  | (DiscussionQueryBase & { canModerate:false; threads:ReviewThreadView[] });
 export class DocumentReviewService {
   constructor(
     private readonly uow:KnowledgeUnitOfWork,
@@ -53,14 +58,19 @@ export class DocumentReviewService {
   async queryForLink(caller:CallerContext | null,token:string,documentId?:string) {
     return this.uow.run(async r => { const s=await this.linkScope(r,token,false,documentId); return {threads:await this.withFollowing(r,s,caller,await this.views(r,s.document.id,false,caller?.identity.id)),revisionId:s.document.currentRevisionId,writesEnabled:!!caller && this.writesEnabled(),callerUserId:caller?.identity.id ?? null}; });
   }
-  async queryForOwner(caller:CallerContext,documentId:string) {
+  /**
+   * The owner query keeps its route and JSON keys. A moderator (the personal
+   * owner, the team creator or an admin) receives the moderator projection; an
+   * ordinary team member receives the member projection, which carries no
+   * moderation metadata. `canModerate` says which one the caller got.
+   */
+  async queryForOwner(caller:CallerContext,documentId:string):Promise<DiscussionQueryView> {
     return this.uow.run(async r => {
       const s=await this.documentScope(r,caller,documentId,false);
-      return {
-        threads:await this.discussionViews(r,documentId,s.canModerate,caller.identity.id),
-        revisionId:s.document.currentRevisionId,writesEnabled:this.writesEnabled(),callerUserId:caller.identity.id,
-        ownerUserId:s.ownerUserId,canModerate:s.canModerate,
-      };
+      const base={revisionId:s.document.currentRevisionId,writesEnabled:this.writesEnabled(),callerUserId:caller.identity.id,ownerUserId:s.ownerUserId};
+      return s.canModerate
+        ? {...base,canModerate:true as const,threads:await this.views(r,documentId,true,caller.identity.id)}
+        : {...base,canModerate:false as const,threads:await this.views(r,documentId,false,caller.identity.id)};
     });
   }
   /** Only events owned by the caller are selected at the repository boundary. */
@@ -477,14 +487,6 @@ export class DocumentReviewService {
       if(mentions.length) view.mentions=mentions;
     }
   }
-  /** A moderator reads the projection that names hidden bodies; everyone else reads the member one. */
-  private discussionViews(r:KnowledgeRepositories,documentId:string,moderate:boolean,callerUserId?:string):Promise<OwnerReviewThreadView[]> {
-    return moderate
-      ? this.views(r,documentId,true,callerUserId)
-      // A member's projection omits moderation metadata at runtime; the payload keeps its shape
-      // and `canModerate` tells the reader which projection it received.
-      : this.views(r,documentId,false,callerUserId) as unknown as Promise<OwnerReviewThreadView[]>;
-  }
   private views(r:KnowledgeRepositories,documentId:string,owner:true,callerUserId?:string):Promise<OwnerReviewThreadView[]>;
   private views(r:KnowledgeRepositories,documentId:string,owner:false,callerUserId?:string):Promise<ReviewThreadView[]>;
   private async views(r:KnowledgeRepositories,documentId:string,owner:boolean,callerUserId?:string):Promise<ReviewThreadView[]|OwnerReviewThreadView[]> {
@@ -562,7 +564,10 @@ export class DocumentReviewService {
    * `team` marks the scope so writes know not to follow or hand over a link.
    */
   private async teamScope(r:KnowledgeRepositories,caller:CallerContext,s:LocatedScope):Promise<ReviewScope> {
-    if(!this.teamsEnabled() || s.workspace.workspaceType!=="TEAM" || s.workspace.lifecycleState!=="ACTIVE" || s.source.sourceType!=="PUBLICATION") throw new ShareLinkNotFoundError();
+    // An archived document or an unpublished/archived Source is gone from the team for review too:
+    // no discussion body, anchor quote or moderation acts on it, not even for its creator.
+    if(!this.teamsEnabled() || s.workspace.workspaceType!=="TEAM" || s.workspace.lifecycleState!=="ACTIVE"
+      || s.source.sourceType!=="PUBLICATION" || s.document.status!=="ACTIVE" || s.source.status!=="ACTIVE") throw new ShareLinkNotFoundError();
     const publication=await r.sourcePolicy.findPublicationDocument(s.document.id);
     if(!publication) throw new ShareLinkNotFoundError();
     const capabilities=await evaluateWorkspaceCapabilities({workspaceMemberships:r.workspaceMemberships,groupMappings:r.groupMappings},caller,s.workspace.id);
@@ -633,7 +638,10 @@ export class DocumentReviewService {
     return this.uow.run(async r => {
       const s=await this.documentScope(r,caller,input.documentId);
       // A team member who is neither the creator nor an admin reads the member projection back.
-      return this.create(r,caller,s,null,request,input,async()=>(await this.discussionViews(r,s.document.id,s.canModerate,caller.identity.id)));
+      const views=async():Promise<ReviewThreadView[]>=>s.canModerate
+        ? await this.views(r,s.document.id,true,caller.identity.id)
+        : await this.views(r,s.document.id,false,caller.identity.id);
+      return this.create(r,caller,s,null,request,input,views);
     });
   }
   private creation(input:Pick<CreateReviewThreadInput,"expectedRevisionId"|"anchor"|"body"|"idempotencyKey">) {
@@ -787,7 +795,14 @@ export class DocumentReviewService {
   }
   async setResolution(caller:CallerContext,input:{documentId:string;threadId:string;status:ReviewStatus}) {
     if(!["OPEN","RESOLVED"].includes(input.status)) fail("INVALID_REQUEST","Invalid discussion status.");
-    await this.uow.run(async r=>{const s=await this.documentScope(r,caller,input.documentId);this.active(s);const t=await r.reviewThreads.lockById(input.threadId);if(!t||t.documentId!==s.document.id) throw new ShareLinkNotFoundError();if(t.status===input.status)return;
+    await this.uow.run(async r=>{
+      const s=await this.documentScope(r,caller,input.documentId);
+      // Resolution is moderation, like hiding: the team's creator/admin, or the personal owner.
+      // A member's writes are comments, replies and mentions only.
+      if(!s.canModerate) throw new ShareLinkNotFoundError();
+      this.active(s);
+      const t=await r.reviewThreads.lockById(input.threadId);if(!t||t.documentId!==s.document.id) throw new ShareLinkNotFoundError();
+      if(t.status===input.status)return;
       if(input.status==="OPEN"&&t.visibility==="VISIBLE"&&await r.reviewThreads.countVisibleOpenByCreator(s.document.id,t.createdBy)>=REVIEW_LIMITS.visibleOpenPerCreator) fail("CAPACITY_EXCEEDED","The visible discussion limit was reached.");
       await r.reviewThreads.setResolution(t.id,input.status,caller.identity.id,this.clock());await this.audit(r,caller,s.workspace.id,s.document.id,t.id,"DOCUMENT_REVIEW_RESOLUTION_CHANGED",undefined,input.status);});
   }
