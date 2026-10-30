@@ -95,9 +95,10 @@ Preview 是固定的 staged snapshot。阻擋性診斷必須先處理；若來�
 ### 前置需求
 
 - Node.js **20.19.0 以上、25 以下**；[`.node-version`](.node-version) 指定 24.19.0。
-- npm（使用 repository 內的 `package-lock.json`）。
+- npm（使用 repository 內的 `package-lock.json`）。CI、Vercel 與部署以 npm 為準。
+- 選用：pnpm 12 可供本機安裝使用，讓多個 Git worktree 共用同一個 pnpm store。見[選用：本機 pnpm](#選用本機-pnpm)。
 - Docker 與 Docker Compose v2（需支援 `up --wait`），用來執行 MariaDB 10.11。
-- `make` 與 Git。沒有 `make` 時可使用下方 npm 步驟。
+- `make` 與 Git。沒有 `make` 時可使用下方 npm 步驟（或選用 pnpm 步驟）。
 
 ```bash
 git clone https://github.com/mike840609/knowledge-hub.git
@@ -120,6 +121,46 @@ npm run db:migrate
 npm run db:seed
 npm run dev
 ```
+
+### 選用：本機 pnpm
+
+npm 仍是 canonical：CI、Vercel 與部署使用 `npm ci` 和 `package-lock.json`。pnpm 12 可在本機作為安裝加速器，主要用於在多個 Git worktree 間重用同一個 pnpm store；它不是部署流程的一部分。請先安裝 pnpm 12（macOS 可用 `brew install pnpm`；已安裝者用 `brew upgrade pnpm`，或 `npm install -g pnpm@12`）並確認 `pnpm -v` 回報 12.x，再以 `pnpm import` + `pnpm install` 取代[不使用 make](#不使用-make)中的 `npm ci`；資料庫、migration 與 seed 步驟不變。`make bootstrap` 與 `npm ci` 會安裝 npm 的 layout；若執行了其中一個，請先移除 `node_modules` 與 `.next`，再重新執行 `pnpm install`。
+
+建立本機的 `pnpm-workspace.yaml`（每個 worktree 都需要自己的一份；下方的 exclude 檔則是共用的）：
+
+```yaml
+packageImportMethod: clone-or-copy
+publicHoistPattern:
+  - '*'
+allowBuilds:
+  esbuild: true
+  fsevents: true
+  unrs-resolver: true
+```
+
+`publicHoistPattern` 對應此 repository 目前依賴的 root hoisting。`packageImportMethod: clone-or-copy` 是必要的：若省略，pnpm 可能從共用 store hardlink 套件，`patch-package` 就會修改該 store，影響所有使用它的專案。下方的 `pnpm store status` 說明只在這個設定成立時有效。請不要把這個檔案和 `pnpm-lock.yaml` 提交進 Git，例如：
+
+```bash
+exclude="$(git rev-parse --path-format=absolute --git-common-dir)/info/exclude"
+for entry in '/pnpm-lock.yaml' '/pnpm-workspace.yaml'; do
+  grep -qxF "$entry" "$exclude" || printf '%s\n' "$entry" >> "$exclude"
+done
+```
+
+完整本機流程如下（第一行是從 npm layout 切換；全新 clone 無害）：
+
+```bash
+rm -rf node_modules .next   # pnpm 與 npm 的 layout 不能互換
+pnpm import                 # 從 package-lock.json 產生 pnpm-lock.yaml
+pnpm install                # 執行相同的 postinstall（patch-package）
+cp .env.example .env        # 首次設定；已有 .env 時請保留並檢查內容
+docker compose up -d --wait mariadb
+pnpm run db:migrate
+pnpm run db:seed
+pnpm run dev
+```
+
+若要切回 npm，執行 `rm -rf node_modules .next && npm ci`。`pnpm import` 會保留 npm 解析的版本；`patches/next+15.5.25.patch` 仍在使用時，`next` 要維持 15.5.25。若檔案系統支援 clone/reflink（APFS、Btrfs），worktree 之間也會共用磁碟區塊；若只能 copy，pnpm 會退回複製，節省空間會縮小。`package-lock.json` 變更後要重新執行 `pnpm import`。不要對 `pnpm install` 加上 `--ignore-scripts`：它會同時跳過依賴的 build scripts 與套用 Next.js patch 的 `postinstall`。若已經加了，請重新執行不帶旗標的 `pnpm install`；`pnpm exec patch-package` 只會還原 patch，不會補跑被跳過的依賴 build。若 pnpm 回報 `ERR_PNPM_IGNORED_BUILDS`，確認該套件確實需要 build script 後，把它加入 `allowBuilds`。`pnpm store status` 可能會在已套用 patch 的安裝中回報 `next` 被修改；在 `clone-or-copy` 下，共用的 store 本身沒有被改動。
 
 ### 第一次使用
 
@@ -262,7 +303,7 @@ KM_E2E_PERSONAL_ONLY=true npm run test:e2e -- personal-workspace.spec.ts
 
 ### Next.js patch
 
-`npm ci` 的 postinstall 會使用 `patch-package` 套用 [`patches/next+15.5.25.patch`](patches/next+15.5.25.patch)，修正內附 React（`19.2.0-canary-0bdb9206-20250818`）的兩個問題：一是頁面導覽時遺失 render ping；二是另一個導覽仍在載入時，若有 redirect 或其他錯誤在 render 中送達（例如「Browse documents」還在轉址時就點了另一份文件），React 的錯誤復原會把 Next 的 `Router` 只 render 一半就 commit，下一次 render 拋出 React #310（Rendered more hooks than during the previous render），整頁變成「Application error」。此修正即 [facebook/react#36911](https://github.com/facebook/react/pull/36911) 的那一個條件，套用於四個 `react-dom` client 與 profiling build。請勿跳過 install scripts；若已使用 `--ignore-scripts`，補跑 `npx patch-package`。
+`npm ci`（或 `pnpm install`）的 postinstall 會使用 `patch-package` 套用 [`patches/next+15.5.25.patch`](patches/next+15.5.25.patch)，修正內附 React（`19.2.0-canary-0bdb9206-20250818`）的兩個問題：一是頁面導覽時遺失 render ping；二是另一個導覽仍在載入時，若有 redirect 或其他錯誤在 render 中送達（例如「Browse documents」還在轉址時就點了另一份文件），React 的錯誤復原會把 Next 的 `Router` 只 render 一半就 commit，下一次 render 拋出 React #310（Rendered more hooks than during the previous render），整頁變成「Application error」。此修正即 [facebook/react#36911](https://github.com/facebook/react/pull/36911) 的那一個條件，套用於四個 `react-dom` client 與 profiling build。請勿跳過 install scripts；若已使用 `--ignore-scripts`，請重新執行不帶旗標的安裝。若只要還原 patch，pnpm layout 使用 `pnpm exec patch-package`，npm layout 使用 `npx patch-package`。
 
 第二個修正已對照 #36911 的上游 diff；[vercel/next.js#95368](https://github.com/vercel/next.js/pull/95368) 將它帶進 Next canary（React `ec0fca31-20260701`）。這兩個 PR 引用的 issue（vercel/next.js#63121、#78396，facebook/react#33580）只讀過摘要，未在此重現。`next/dist/compiled/react-dom-experimental` 的 experimental React 未修補：只有在 `next.config.ts` 啟用 experimental React 功能時才會載入，本專案沒有啟用。
 

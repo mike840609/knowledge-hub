@@ -39,6 +39,57 @@ CI (`.github/workflows/phase2-dev-gate.yml`) runs four jobs on every PR to
 `main`: `unit` (which also runs typecheck and lint), `build`, `integration`
 and `e2e`. `make verify` covers everything except the two DB-backed jobs.
 
+### Package manager
+
+npm and `package-lock.json` are canonical. CI, Vercel, and deployment use npm; do not
+replace the lockfile or add pnpm-only fields to `package.json`.
+
+pnpm 12 is an optional local accelerator, mainly for reusing one dependency store across
+Git worktrees. Install it with `brew install pnpm`, or `brew upgrade pnpm` if already
+installed; or `npm install -g pnpm@12`. Confirm `pnpm -v` reports 12.x. Each worktree needs
+its own untracked `pnpm-workspace.yaml`:
+
+```yaml
+packageImportMethod: clone-or-copy
+publicHoistPattern:
+  - '*'
+allowBuilds:
+  esbuild: true
+  fsevents: true
+  unrs-resolver: true
+```
+
+Keep it and `pnpm-lock.yaml` out of Git through the shared exclude file:
+
+```bash
+exclude="$(git rev-parse --path-format=absolute --git-common-dir)/info/exclude"
+for entry in '/pnpm-lock.yaml' '/pnpm-workspace.yaml'; do
+  grep -qxF "$entry" "$exclude" || printf '%s\n' "$entry" >> "$exclude"
+done
+```
+
+Then, from a clean layout:
+
+```bash
+rm -rf node_modules .next   # pnpm and npm layouts are not interchangeable
+pnpm import                 # package-lock.json → pnpm-lock.yaml; rerun after dependency changes
+pnpm install                # postinstall still applies patches/next+15.5.25.patch
+```
+
+To switch back to npm, run `rm -rf node_modules .next && npm ci`. Keep `next` at
+15.5.25 while the version-bound patch is in use.
+
+`packageImportMethod: clone-or-copy` is required: without it pnpm may hardlink from the
+shared store and `patch-package` would modify that store for every project on the machine.
+Do not commit pnpm files, edit `package.json`/`package-lock.json` for pnpm, switch the
+postinstall away from `patch-package`, or pass `--ignore-scripts` to `pnpm install`. If
+`--ignore-scripts` was used, rerun `pnpm install` without it; `pnpm exec patch-package`
+restores only the patch, not the skipped dependency builds. `publicHoistPattern` exists
+because the repository imports `mdast-util-to-hast`, `mdast-util-gfm`, and
+`@next/eslint-plugin-next` without declaring them; declaring them is the durable fix.
+`pnpm store status` may report `next` as modified while the installed copy is patched;
+with `clone-or-copy`, the shared store itself is unchanged.
+
 ## Architecture
 
 A Next.js modular monolith over MariaDB, layered so that the web app is one

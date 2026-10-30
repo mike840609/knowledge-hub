@@ -26,6 +26,9 @@ vercel link          # 或在 Vercel dashboard 匯入 mike840609/knowledge-hub
 ```
 
 - Framework preset：**Next.js**。Root directory：repository 根目錄。Production branch：`main`。
+- Package manager：維持 **npm**。`vercel.json` 固定 `installCommand: npm ci`；README 的
+  本機 pnpm 流程不適用於 deployment。請勿把 Vercel project 改成 pnpm，也不要提交
+  `pnpm-lock.yaml`。
 - Project → Settings → General → **Node.js Version**：選 **22.x** 或 **24.x**。`package.json` 的 `engines.node` 維持 `>=20.19.0 <25`，由平台設定決定實際版本。
 - Preview deployment 由 `vercel.json` 的 `ignoreCommand` 跳過；不需要 preview 環境變數。
 

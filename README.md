@@ -97,9 +97,10 @@ A preview is a fixed staged snapshot. Resolve blocking diagnostics before applyi
 ### Prerequisites
 
 - Node.js **20.19.0 or later, below 25**. [`.node-version`](.node-version) specifies 24.19.0.
-- npm, using the repository's `package-lock.json`.
+- npm, using the repository's `package-lock.json`. This is the canonical package manager for CI, Vercel, and deployment.
+- Optional: pnpm 12 for local installs, to reuse one pnpm store across Git worktrees. See [Optional: local pnpm](#optional-local-pnpm).
 - Docker and Docker Compose v2 with support for `up --wait`, to run MariaDB 10.11.
-- `make` and Git. If `make` is unavailable, use the npm steps below.
+- `make` and Git. If `make` is unavailable, use the npm steps below (or the optional pnpm steps).
 
 ```bash
 git clone https://github.com/mike840609/knowledge-hub.git
@@ -122,6 +123,46 @@ npm run db:migrate
 npm run db:seed
 npm run dev
 ```
+
+### Optional: local pnpm
+
+npm remains canonical: CI, Vercel, and deployment use `npm ci` and `package-lock.json`. pnpm 12 can be used locally as an install accelerator, mainly to reuse one pnpm store across Git worktrees. It is not part of the deployment workflow. Install pnpm 12 first (`brew install pnpm`, or `brew upgrade pnpm` if it is already installed; or `npm install -g pnpm@12`) and confirm `pnpm -v` reports 12.x, then use `pnpm import` + `pnpm install` in place of the `npm ci` line in [Without make](#without-make). The database, migration, and seed steps are unchanged. `make bootstrap` and `npm ci` install the npm layout; if you run either, remove `node_modules` and `.next` before rerunning `pnpm install`.
+
+Create a local `pnpm-workspace.yaml` (each worktree needs its own copy; the exclude file below is shared):
+
+```yaml
+packageImportMethod: clone-or-copy
+publicHoistPattern:
+  - '*'
+allowBuilds:
+  esbuild: true
+  fsevents: true
+  unrs-resolver: true
+```
+
+`publicHoistPattern` matches the root hoisting this repository currently relies on. `packageImportMethod: clone-or-copy` is required: without it pnpm may hardlink packages from the shared store, and `patch-package` would then modify that store for every project that uses it. The `pnpm store status` note below only holds with this setting. Keep this file and `pnpm-lock.yaml` out of Git, for example:
+
+```bash
+exclude="$(git rev-parse --path-format=absolute --git-common-dir)/info/exclude"
+for entry in '/pnpm-lock.yaml' '/pnpm-workspace.yaml'; do
+  grep -qxF "$entry" "$exclude" || printf '%s\n' "$entry" >> "$exclude"
+done
+```
+
+The full local sequence is (the first line switches from an npm layout; it is harmless on a fresh clone):
+
+```bash
+rm -rf node_modules .next   # pnpm and npm layouts are not interchangeable
+pnpm import                 # derive pnpm-lock.yaml from package-lock.json
+pnpm install                # runs the same postinstall (patch-package)
+cp .env.example .env        # first setup only; preserve and review an existing .env
+docker compose up -d --wait mariadb
+pnpm run db:migrate
+pnpm run db:seed
+pnpm run dev
+```
+
+To switch back to npm, run `rm -rf node_modules .next && npm ci`. `pnpm import` preserves the npm-resolved graph; keep `next` at 15.5.25 while `patches/next+15.5.25.patch` is in use. On filesystems with clone/reflink support (APFS, Btrfs), worktrees also share disk blocks; on copy-only filesystems pnpm falls back to copies and the disk saving shrinks. Run `pnpm import` again whenever `package-lock.json` changes. Do not pass `--ignore-scripts` to `pnpm install`: it skips both the dependency build scripts and the `postinstall` that applies the Next.js patch. If you already did, rerun `pnpm install` without the flag; `pnpm exec patch-package` restores only the patch, not the skipped dependency builds. If pnpm reports `ERR_PNPM_IGNORED_BUILDS`, add the named package to `allowBuilds` after confirming it is expected. `pnpm store status` may report `next` as modified while the installed copy is patched; with `clone-or-copy`, the shared store itself is not changed.
 
 ### Your first workflow
 
@@ -264,7 +305,7 @@ The test runner manages its own mode and required servers rather than inheriting
 
 ### Next.js patch
 
-The `npm ci` postinstall step uses `patch-package` to apply [`patches/next+15.5.25.patch`](patches/next+15.5.25.patch). It fixes two bugs in Next.js's bundled React (`19.2.0-canary-0bdb9206-20250818`). The first is lost render pings during page navigation. The second makes the page crash with "Application error" (React #310, "Rendered more hooks than during the previous render", thrown from Next's `Router`) when a redirect or other error lands during render while another navigation is still loading. An example is clicking a document while "Browse documents" is still redirecting. Without the fix, React's error recovery commits the Router half-rendered; the patch adds the one condition from [facebook/react#36911](https://github.com/facebook/react/pull/36911) to the four `react-dom` client and profiling builds. Keep install scripts enabled; if you installed with `--ignore-scripts`, run `npx patch-package` afterward.
+The `npm ci` (or `pnpm install`) postinstall step uses `patch-package` to apply [`patches/next+15.5.25.patch`](patches/next+15.5.25.patch). It fixes two bugs in Next.js's bundled React (`19.2.0-canary-0bdb9206-20250818`). The first is lost render pings during page navigation. The second makes the page crash with "Application error" (React #310, "Rendered more hooks than during the previous render", thrown from Next's `Router`) when a redirect or other error lands during render while another navigation is still loading. An example is clicking a document while "Browse documents" is still redirecting. Without the fix, React's error recovery commits the Router half-rendered; the patch adds the one condition from [facebook/react#36911](https://github.com/facebook/react/pull/36911) to the four `react-dom` client and profiling builds. Keep install scripts enabled; if you installed with `--ignore-scripts`, rerun the install without the flag. To restore only the patch, use `pnpm exec patch-package` on a pnpm layout or `npx patch-package` on an npm layout.
 
 The second fix was checked against the upstream diff of #36911, and [vercel/next.js#95368](https://github.com/vercel/next.js/pull/95368) brings it into Next canary (React `ec0fca31-20260701`). The issues those PRs reference (vercel/next.js#63121 and #78396, facebook/react#33580) were read only as summaries and were not reproduced here. The `experimental` React channel under `next/dist/compiled/react-dom-experimental` is unpatched: it is only loaded when experimental React features are enabled in `next.config.ts`, which this project does not do.
 
