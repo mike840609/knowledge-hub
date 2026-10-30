@@ -159,7 +159,7 @@ export class FinalizeFolderImportService {
       const named = await resolveImportPreviewNames(repositories, preview);
       const stored = await repositories.importSnapshots.findById(snapshotId);
       const publicationNotices = stored
-        ? await publicationNoticesForSnapshot(repositories, caller, stored)
+        ? await publicationNoticesForSnapshot(repositories, caller, stored).catch(() => [])
         : [];
       return { ...named, publicationNotices };
     });

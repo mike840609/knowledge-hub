@@ -51,7 +51,12 @@ import { HubIdentityResolver } from "@/modules/identity/application/hub-identity
 import { establishTrustedCaller as establishTrustedCallerWith } from "@/server/trusted-caller";
 import { importRuntimeConfig } from "@/server/import-config";
 import { createIdentityProvider } from "@/server/identity-provider-factory";
-import { schedulePublicationDrain, withPostCommitDrain } from "./publication-post-commit";
+import {
+  HUB_PERSONAL_WRITE_METHODS,
+  SOURCE_PERSONAL_WRITE_METHODS,
+  schedulePublicationDrain,
+  withPostCommitDrain,
+} from "./publication-post-commit";
 import { closeDatabasePool, getDatabasePool } from "./database-pool";
 
 let services: ReturnType<typeof buildApplicationServices> | undefined;
@@ -91,17 +96,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   };
   const hub = withPostCommitDrain(
     new HubKnowledgeCommandServiceImpl(unitOfWork),
-    [
-      "createDocument",
-      "createRevision",
-      "duplicateDocument",
-      "moveTreeNode",
-      "renameFolder",
-      "archiveDocument",
-      "restoreDocument",
-      "archiveFolder",
-      "restoreFolder",
-    ],
+    HUB_PERSONAL_WRITE_METHODS,
     scheduleAfterPersonalWrite,
   );
   const queries = new KnowledgeQueryServiceImpl(unitOfWork);
@@ -115,7 +110,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   const shares = new DocumentShareService(unitOfWork, new RandomShareTokenIssuer());
   const sources = withPostCommitDrain(
     new SourceApplicationService(unitOfWork),
-    ["applyKnownEntry", "archiveKnownEntry"],
+    SOURCE_PERSONAL_WRITE_METHODS,
     scheduleAfterPersonalWrite,
   );
   const workspaceAdmin = new WorkspaceAdminService(unitOfWork);

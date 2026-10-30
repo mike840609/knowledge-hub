@@ -13,6 +13,31 @@ export type PublicationDrainResult = {
 export type PublicationDrain = (caller: CallerContext) => Promise<unknown>;
 export type AfterScheduler = (task: () => Promise<void>) => void;
 
+/** Hub mutations that can write a personal original (or its placement). */
+export const HUB_PERSONAL_WRITE_METHODS = [
+  "createDocument",
+  "createRevision",
+  "duplicateDocument",
+  "moveTreeNode",
+  "renameFolder",
+  "archiveDocument",
+  "restoreDocument",
+  "archiveFolder",
+  "restoreFolder",
+] as const;
+
+/**
+ * Source mutations that can write personal originals or record a SOURCE event.
+ * Archive/restore of a personal source must drain too: the event targets every
+ * original below it.
+ */
+export const SOURCE_PERSONAL_WRITE_METHODS = [
+  "applyKnownEntry",
+  "archiveKnownEntry",
+  "archiveSource",
+  "restoreSource",
+] as const;
+
 type ScheduleOptions = {
   /** Defaults to the deployment flag; tests inject their own. */
   enabled?: () => boolean;

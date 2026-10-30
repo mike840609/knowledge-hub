@@ -67,7 +67,13 @@ export type RightsJudge = { kind: "CALLER"; caller: CallerContext } | { kind: "N
 
 export type PublicationNotice = {
   publicationId: string;
-  originalDocumentId: string;
+  /**
+   * Reconciliation notices always name the original. Display-only preview
+   * notices for a plan-created document have no id yet and name `sourcePath`
+   * instead.
+   */
+  originalDocumentId?: string;
+  sourcePath?: string;
   code: "MAINTAINED_BY_OTHER" | "PATH_RESERVED" | "ORIGINAL_ALREADY_PUBLISHED";
   maintainerUserId?: string;
   existingPublicationName?: string;

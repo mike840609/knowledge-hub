@@ -1,6 +1,9 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { evaluateWorkspaceCapabilities } from "@/modules/workspaces/application/workspace-authorization";
-import type { CanonicalImportState, FolderImportPlan } from "../domain/import-plan";
+import type {
+  CanonicalDocumentLocation,
+  FolderImportPlan,
+} from "../domain/import-plan";
 import type { ImportSnapshot } from "../domain/import-snapshot";
 import {
   relativePublicationPath,
@@ -9,22 +12,24 @@ import {
 } from "../domain/publication";
 import type { SourceRepositories } from "../ports/unit-of-work";
 
-/** One existing original as it will look after the import plan is applied. */
+/**
+ * One original as it will look after the import plan is applied. A newly added
+ * document has no id yet, so only its final source path is known.
+ */
 export type ProposedOriginal = {
-  documentId: string;
+  documentId?: string;
   sourcePath: string | null;
   active: boolean;
 };
 
 /**
  * The import plan's proposed final originals. The persisted plan names the
- * document ids for moves/restores/archives; new documents have no id yet, so
- * they only appear once the apply has created them. Using this instead of just
- * the current rows is what makes a rename into another maintainer's path show
- * the notice before the sync runs.
+ * document ids for moves/restores/archives; plan-created documents contribute
+ * their final path so a new file landing on another maintainer's path can still
+ * be reported before it exists.
  */
 export function proposedOriginalsFromPlan(
-  current: CanonicalImportState,
+  current: { documents: readonly CanonicalDocumentLocation[] },
   plan: FolderImportPlan,
 ): ProposedOriginal[] {
   const byDocumentId = new Map<string, ProposedOriginal>();
@@ -53,39 +58,53 @@ export function proposedOriginalsFromPlan(
     if (original) original.active = false;
   }
 
-  return [...byDocumentId.values()].sort((left, right) =>
-    left.documentId.localeCompare(right.documentId));
+  const originals = [...byDocumentId.values()];
+  const finalPaths = new Set(originals.filter((original) => original.active).map((original) => original.sourcePath));
+  for (const create of plan.documents.create) {
+    // After Apply the created document is already in `current`; do not report
+    // the same final path twice.
+    if (finalPaths.has(create.sourcePath)) continue;
+    finalPaths.add(create.sourcePath);
+    originals.push({ sourcePath: create.sourcePath, active: true });
+  }
+
+  return originals.sort((left, right) =>
+    (left.documentId ?? left.sourcePath ?? "").localeCompare(right.documentId ?? right.sourcePath ?? ""));
 }
 
 function notice(
   publicationId: string,
-  originalDocumentId: string,
   code: PublicationNotice["code"],
-  maintainerUserId?: string,
+  extra: {
+    originalDocumentId?: string;
+    sourcePath?: string;
+    maintainerUserId?: string;
+  } = {},
 ): PublicationNotice {
   return {
     publicationId,
-    originalDocumentId,
     code,
-    ...(maintainerUserId === undefined ? {} : { maintainerUserId }),
+    ...(extra.originalDocumentId === undefined ? {} : { originalDocumentId: extra.originalDocumentId }),
+    ...(extra.sourcePath === undefined ? {} : { sourcePath: extra.sourcePath }),
+    ...(extra.maintainerUserId === undefined ? {} : { maintainerUserId: extra.maintainerUserId }),
   };
 }
 
-type Membership = { relativePath: string | null };
+type ContributionScope =
+  | { kind: "DOCUMENT"; documentId: string }
+  | { kind: "FOLDER"; rootPath: string };
 
 /**
- * Whether one proposed original belongs to a contribution, and its
- * publication-relative path. A folder contribution is a source-path prefix
- * question; a document contribution is exactly its one document.
+ * The one folder/document a contribution publishes. The folder and its root
+ * entry are resolved once per contribution, not once per original.
  */
-async function membershipOf(
+async function contributionScope(
   repositories: SourceRepositories,
   contribution: Contribution,
   sourceId: string,
-  original: ProposedOriginal,
-): Promise<Membership | null> {
+): Promise<ContributionScope | null> {
   if (contribution.origin.kind === "DOCUMENT") {
-    return contribution.origin.documentId === original.documentId ? { relativePath: null } : null;
+    return { kind: "DOCUMENT", documentId: contribution.origin.documentId };
   }
   const folder = await repositories.tree.findById(contribution.origin.folderNodeId);
   if (
@@ -98,7 +117,19 @@ async function membershipOf(
   }
   const rootEntry = await repositories.entries.findByTreeNodeId(folder.id);
   if (!rootEntry) return null;
-  const relativePath = relativePublicationPath(original.sourcePath, rootEntry.sourcePath);
+  return { kind: "FOLDER", rootPath: rootEntry.sourcePath };
+}
+
+/** `null` means the original is outside this contribution. */
+function relativePathOf(
+  scope: ContributionScope,
+  original: ProposedOriginal,
+): { relativePath: string | null } | null {
+  if (scope.kind === "DOCUMENT") {
+    return original.documentId === scope.documentId ? { relativePath: null } : null;
+  }
+  if (original.sourcePath === null) return null;
+  const relativePath = relativePublicationPath(original.sourcePath, scope.rootPath);
   return relativePath === null ? null : { relativePath };
 }
 
@@ -125,7 +156,7 @@ export async function collectPublicationNotices(
   const notices: PublicationNotice[] = [];
   const seen = new Set<string>();
   const push = (value: PublicationNotice): void => {
-    const key = `${value.publicationId}:${value.originalDocumentId}:${value.code}`;
+    const key = `${value.publicationId}:${value.originalDocumentId ?? value.sourcePath ?? ""}:${value.code}`;
     if (seen.has(key)) return;
     seen.add(key);
     notices.push(value);
@@ -153,6 +184,8 @@ export async function collectPublicationNotices(
     // A contributor who lost access to the team gets no publication details.
     if (!capabilities.has("document.read")) continue;
 
+    const scope = await contributionScope(repositories, contribution, input.sourceId);
+    if (!scope) continue;
     const documents = await repositories.publications.listDocuments(publication.id);
     const teamContributions = await repositories.publications.listContributions(publication.id);
     const maintainerOf = new Map(
@@ -165,38 +198,32 @@ export async function collectPublicationNotices(
 
     for (const original of input.originals) {
       if (!original.active) continue;
-      const membership = await membershipOf(
-        repositories,
-        contribution,
-        input.sourceId,
-        original,
-      );
+      const membership = relativePathOf(scope, original);
       if (!membership) continue;
 
-      const boundTeamDocumentId = teamDocumentByOriginal.get(original.documentId);
+      const boundTeamDocumentId = original.documentId === undefined
+        ? undefined
+        : teamDocumentByOriginal.get(original.documentId);
       const bound = boundTeamDocumentId === undefined
         ? undefined
         : documents.find((document) => document.teamDocumentId === boundTeamDocumentId);
 
       if (bound && bound.creatorContributionId !== contribution.id) {
-        push(notice(
-          publication.id,
-          original.documentId,
-          "MAINTAINED_BY_OTHER",
-          maintainerOf.get(bound.creatorContributionId),
-        ));
+        push(notice(publication.id, "MAINTAINED_BY_OTHER", {
+          originalDocumentId: original.documentId,
+          maintainerUserId: maintainerOf.get(bound.creatorContributionId),
+        }));
         continue;
       }
 
       if (!bound && membership.relativePath !== null) {
         const holder = documents.find((document) => document.sourcePath === membership.relativePath);
         if (holder && holder.creatorContributionId !== contribution.id) {
-          push(notice(
-            publication.id,
-            original.documentId,
-            "MAINTAINED_BY_OTHER",
-            maintainerOf.get(holder.creatorContributionId),
-          ));
+          push(notice(publication.id, "MAINTAINED_BY_OTHER", {
+            originalDocumentId: original.documentId,
+            sourcePath: original.sourcePath ?? undefined,
+            maintainerUserId: maintainerOf.get(holder.creatorContributionId),
+          }));
         }
         continue;
       }
@@ -216,7 +243,9 @@ export async function collectPublicationNotices(
           && holder.creatorContributionId === contribution.id
           && holder.status === "ARCHIVED";
         if (holder && !reattachable) {
-          push(notice(publication.id, original.documentId, "PATH_RESERVED"));
+          push(notice(publication.id, "PATH_RESERVED", {
+            originalDocumentId: original.documentId,
+          }));
         }
       }
     }
@@ -224,14 +253,37 @@ export async function collectPublicationNotices(
 
   return notices.sort((left, right) =>
     left.publicationId.localeCompare(right.publicationId)
-    || left.originalDocumentId.localeCompare(right.originalDocumentId)
+    || (left.originalDocumentId ?? left.sourcePath ?? "").localeCompare(
+      right.originalDocumentId ?? right.sourcePath ?? "",
+    )
     || left.code.localeCompare(right.code));
 }
 
 /**
- * Notices for a persisted snapshot plan. When called after Apply, `current` is
- * the final state, so applying the plan to it again is idempotent and includes
- * documents the plan created.
+ * Notices for a plan plus a state the caller already holds (Apply's `before`
+ * snapshot). No canonical document bodies are read here.
+ */
+export async function publicationNoticesForPlan(
+  repositories: SourceRepositories,
+  caller: CallerContext,
+  input: {
+    sourceId: string;
+    current: { documents: readonly CanonicalDocumentLocation[] };
+    plan: FolderImportPlan;
+    includePathReserved?: boolean;
+  },
+): Promise<PublicationNotice[]> {
+  if (input.plan.summary.blockers > 0) return [];
+  return collectPublicationNotices(repositories, caller, {
+    sourceId: input.sourceId,
+    originals: proposedOriginalsFromPlan(input.current, input.plan),
+    includePathReserved: input.includePathReserved,
+  });
+}
+
+/**
+ * Notices for a persisted snapshot plan using a light identity/path/lifecycle
+ * query. Preview and finalize never load revision bodies for this.
  */
 export async function publicationNoticesForSnapshot(
   repositories: SourceRepositories,
@@ -246,17 +298,20 @@ export async function publicationNoticesForSnapshot(
   ) {
     return [];
   }
-  let current: CanonicalImportState;
+  let current: { documents: readonly CanonicalDocumentLocation[] };
   try {
-    current = await repositories.importCanonicalState.load(snapshot.sourceId);
+    current = {
+      documents: await repositories.importCanonicalState.listDocumentLocations(snapshot.sourceId),
+    };
   } catch {
     // A preview whose canonical state cannot be read is already a blocking
     // preview; publication notices must not turn it into a failed request.
     return [];
   }
-  return collectPublicationNotices(repositories, caller, {
+  return publicationNoticesForPlan(repositories, caller, {
     sourceId: snapshot.sourceId,
-    originals: proposedOriginalsFromPlan(current, snapshot.plan),
+    current,
+    plan: snapshot.plan,
     includePathReserved: options.includePathReserved,
   });
 }

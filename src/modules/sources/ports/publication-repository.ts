@@ -71,8 +71,17 @@ export interface PublicationRepository {
   /**
    * Pending deliveries in event order. `publicationId` is joined from the
    * contribution so a drain can reconcile without a second lookup per row.
+   * `respectBackoff` skips deliveries deferred by a worker (`next_attempt_at`),
+   * but never hides them from the contributor's own caller-scoped retry.
    */
-  listPendingEvents(userId?: string, limit?: number): Promise<{ eventId: string; contributionId: string; publicationId: string }[]>;
+  listPendingEvents(
+    userId?: string,
+    limit?: number,
+    now?: Date,
+    respectBackoff?: boolean,
+  ): Promise<{ eventId: string; contributionId: string; publicationId: string }[]>;
+  /** Keeps a worker's unprocessable delivery out of the next bounded head window. */
+  deferDelivery(eventId: string, contributionId: string, nextAttemptAt: Date): Promise<void>;
   /** Marks one target done; the root event is consumed only when none remain. */
   completeDelivery(eventId: string, contributionId: string, outcome: "APPLIED" | "SKIPPED"): Promise<void>;
   saveReport(contributionId: string, report: ReconcileReport): Promise<void>;

@@ -406,6 +406,8 @@ export class MariaDbPublicationRepository implements PublicationRepository {
   async listPendingEvents(
     userId?: string,
     limit = DEFAULT_EVENT_LIMIT,
+    now = new Date(),
+    respectBackoff = true,
   ): Promise<{ eventId: string; contributionId: string; publicationId: string }[]> {
     const rows = await this.connection.query<DbRow[]>(
       `SELECT d.event_id, d.contribution_id, c.publication_id
@@ -413,9 +415,14 @@ export class MariaDbPublicationRepository implements PublicationRepository {
        JOIN publication_events e ON e.id = d.event_id
        JOIN publication_contributors c ON c.id = d.contribution_id
        WHERE d.processed_at IS NULL AND e.consumed_at IS NULL${userId === undefined ? "" : " AND c.user_id = ?"}
+         ${respectBackoff ? "AND (d.next_attempt_at IS NULL OR d.next_attempt_at <= ?)" : ""}
        ORDER BY e.created_at, d.event_id, d.contribution_id
        LIMIT ?`,
-      userId === undefined ? [limit] : [userId, limit],
+      [
+        ...(userId === undefined ? [] : [userId]),
+        ...(respectBackoff ? [now] : []),
+        limit,
+      ],
     );
     return rows.map((row) => ({
       eventId: String(row.event_id),
@@ -424,13 +431,26 @@ export class MariaDbPublicationRepository implements PublicationRepository {
     }));
   }
 
+  async deferDelivery(
+    eventId: string,
+    contributionId: string,
+    nextAttemptAt: Date,
+  ): Promise<void> {
+    await this.connection.query(
+      `UPDATE publication_event_deliveries SET next_attempt_at = ?
+       WHERE event_id = ? AND contribution_id = ? AND processed_at IS NULL`,
+      [nextAttemptAt, eventId, contributionId],
+    );
+  }
+
   async completeDelivery(
     eventId: string,
     contributionId: string,
     outcome: "APPLIED" | "SKIPPED",
   ): Promise<void> {
     await this.connection.query(
-      `UPDATE publication_event_deliveries SET processed_at = CURRENT_TIMESTAMP(6), outcome = ?
+      `UPDATE publication_event_deliveries
+       SET processed_at = CURRENT_TIMESTAMP(6), outcome = ?, next_attempt_at = NULL
        WHERE event_id = ? AND contribution_id = ? AND processed_at IS NULL`,
       [outcome, eventId, contributionId],
     );

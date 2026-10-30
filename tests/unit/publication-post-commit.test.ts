@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import {
+  HUB_PERSONAL_WRITE_METHODS,
+  SOURCE_PERSONAL_WRITE_METHODS,
   schedulePublicationDrain,
   withPostCommitDrain,
 } from "@/server/publication-post-commit";
@@ -105,6 +107,40 @@ describe("schedulePublicationDrain", () => {
       drain: async () => ({ applied: 0, pending: 0, frozen: 0, failed: 0 }),
     })).not.toThrow();
     expect(error).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("wrapped mutator lists", () => {
+  it("includes source archive/restore, which records a SOURCE event", () => {
+    expect(SOURCE_PERSONAL_WRITE_METHODS).toEqual(expect.arrayContaining([
+      "applyKnownEntry",
+      "archiveKnownEntry",
+      "archiveSource",
+      "restoreSource",
+    ]));
+    expect(HUB_PERSONAL_WRITE_METHODS).toEqual(expect.arrayContaining([
+      "createDocument",
+      "createRevision",
+      "duplicateDocument",
+      "moveTreeNode",
+      "renameFolder",
+      "archiveDocument",
+      "restoreDocument",
+      "archiveFolder",
+      "restoreFolder",
+    ]));
+  });
+
+  it("schedules a source archive just like a known-entry write", async () => {
+    const schedule = vi.fn();
+    const target = {
+      async archiveSource(caller: CallerContext): Promise<void> {
+        void caller;
+      },
+    };
+    const wrapped = withPostCommitDrain(target, SOURCE_PERSONAL_WRITE_METHODS, schedule);
+    await wrapped.archiveSource(caller());
+    expect(schedule).toHaveBeenCalledTimes(1);
   });
 });
 

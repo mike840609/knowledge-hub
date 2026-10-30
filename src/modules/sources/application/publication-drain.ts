@@ -52,18 +52,41 @@ function groupByContribution(rows: readonly PendingDelivery[]): ContributionBatc
  * transaction. A reconcile failure rolls back both the team writes and the
  * delivery marks, so the root event stays unconsumed and retryable.
  */
+async function deferBatch(
+  uow: SourceUnitOfWork,
+  batch: ContributionBatch,
+  nextAttemptAt: Date,
+): Promise<void> {
+  try {
+    await uow.run(async (repositories) => {
+      for (const row of batch.rows) {
+        await repositories.publications.deferDelivery(
+          row.eventId,
+          row.contributionId,
+          nextAttemptAt,
+        );
+      }
+    });
+  } catch {
+    // The rows stay pending; the next run retries them.
+  }
+}
+
 async function deliverContribution(
   uow: SourceUnitOfWork,
   batch: ContributionBatch,
   judge: RightsJudge,
+  now: Date,
+  retryDelayMs: number,
 ): Promise<ReconcileState | "FAILED"> {
+  const nextAttemptAt = new Date(now.getTime() + retryDelayMs);
   try {
     return await uow.run(async (repositories) => {
       const reconciled = await reconcileContribution(repositories, {
         publicationId: batch.publicationId,
         contributionId: batch.contributionId,
         judge,
-        now: new Date(),
+        now,
       });
       const outcome = reconciled.state === "APPLIED"
         ? "APPLIED"
@@ -78,6 +101,17 @@ async function deliverContribution(
             outcome,
           );
         }
+      } else if (judge.kind === "NO_CALLER") {
+        // A worker cannot judge group-derived rights and must not clear a
+        // freeze, so keep these rows out of its next bounded head window. The
+        // contributor's own caller-scoped drain ignores this backoff.
+        for (const row of batch.rows) {
+          await repositories.publications.deferDelivery(
+            row.eventId,
+            row.contributionId,
+            nextAttemptAt,
+          );
+        }
       }
       return reconciled.state;
     });
@@ -86,6 +120,7 @@ async function deliverContribution(
       "Publication drain failed for one contribution.",
       error instanceof Error ? error.name : "UnknownError",
     );
+    if (judge.kind === "NO_CALLER") await deferBatch(uow, batch, nextAttemptAt);
     return "FAILED";
   }
 }
@@ -105,26 +140,41 @@ async function deliverContribution(
  */
 export async function drainPublicationEvents(
   uow: SourceUnitOfWork,
-  input: { judge: RightsJudge; limit?: number },
+  input: {
+    judge: RightsJudge;
+    limit?: number;
+    /** Injectable clock for deterministic backoff in tests. */
+    now?: () => Date;
+    /** How long a worker leaves an unprocessable delivery out of its head window. */
+    retryDelayMs?: number;
+  },
 ): Promise<PublicationDrainSummary> {
   const summary: PublicationDrainSummary = { applied: 0, pending: 0, frozen: 0, failed: 0 };
   const batchSize = Math.max(1, Math.trunc(input.limit ?? DEFAULT_BATCH));
   const userId = input.judge.kind === "CALLER" ? input.judge.caller.identity.id : undefined;
+  const clock = input.now ?? (() => new Date());
+  const retryDelayMs = input.retryDelayMs ?? 60_000;
 
   await uow.run((repositories) => repositories.publications.prepareDeliveries(batchSize));
 
   let remaining = batchSize;
   const attempted = new Set<string>();
   while (remaining > 0) {
+    const now = clock();
     const rows = await uow.run((repositories) =>
-      repositories.publications.listPendingEvents(userId, remaining));
+      repositories.publications.listPendingEvents(
+        userId,
+        remaining,
+        now,
+        input.judge.kind === "NO_CALLER",
+      ));
     const fresh = rows.filter((row) => !attempted.has(deliveryKey(row)));
     if (fresh.length === 0) break;
     for (const row of fresh) attempted.add(deliveryKey(row));
     remaining -= fresh.length;
 
     for (const batch of groupByContribution(fresh)) {
-      const state = await deliverContribution(uow, batch, input.judge);
+      const state = await deliverContribution(uow, batch, input.judge, now, retryDelayMs);
       const count = batch.rows.length;
       if (state === "APPLIED") summary.applied += count;
       else if (state === "PENDING") summary.pending += count;

@@ -31,7 +31,7 @@ export class GetFolderImportPreviewService {
         // A stale plan no longer describes the proposed final originals.
         if(source && source.syncVersion!==snapshot.basedOnVersion)return {...preview,publicationNotices:[],state:"STALE"};
       }
-      const publicationNotices=await publicationNoticesForSnapshot(repositories, caller, snapshot);
+      const publicationNotices=await publicationNoticesForSnapshot(repositories, caller, snapshot).catch(()=>[]);
       return {...preview,publicationNotices,safety:snapshot.plan ? await safetyForPlan(repositories,snapshot.sourceId,snapshot.plan):undefined};
     });
   }

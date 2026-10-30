@@ -556,9 +556,10 @@ function allOriginalsRefused(
 ): boolean {
   if (originals.length === 0 || report.created !== 0) return false;
   const refused = new Set(
-    report.notices
-      .filter((notice) => notice.code === "ORIGINAL_ALREADY_PUBLISHED")
-      .map((notice) => notice.originalDocumentId),
+    report.notices.flatMap((notice) =>
+      notice.code === "ORIGINAL_ALREADY_PUBLISHED" && notice.originalDocumentId !== undefined
+        ? [notice.originalDocumentId]
+        : []),
   );
   return originals.every((original) => refused.has(original.documentId));
 }

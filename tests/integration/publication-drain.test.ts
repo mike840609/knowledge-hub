@@ -108,6 +108,36 @@ function failingUow(base: SourceUnitOfWork, options: FailureOptions): SourceUnit
   };
 }
 
+/** The import must commit even when the display-only notice lookup throws. */
+function noticeFailingUow(base: SourceUnitOfWork): SourceUnitOfWork {
+  return {
+    async run<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
+      return base.run(async (repositories) => {
+        const publications = new Proxy(repositories.publications, {
+          get(target, property, receiver) {
+            if (property === "listByContributor") {
+              return async () => {
+                throw new Error("injected notice lookup failure");
+              };
+            }
+            return Reflect.get(target, property, receiver);
+          },
+        });
+        const wrapped = new Proxy(repositories, {
+          get(target, property, receiver) {
+            return property === "publications"
+              ? publications
+              : Reflect.get(target, property, receiver);
+          },
+        });
+        return work(wrapped);
+      });
+    },
+    runWithCreatorQuotaLock: (creatorId, timeoutSeconds, work) =>
+      base.runWithCreatorQuotaLock(creatorId, timeoutSeconds, work),
+  };
+}
+
 async function folderWithDocuments(
   caller: CallerContext,
   folderPath: string,
@@ -184,12 +214,18 @@ function noticesOf(value: { publicationNotices?: PublicationNotice[] } | null): 
 
 function hasNotice(
   notices: readonly PublicationNotice[],
-  expected: Pick<PublicationNotice, "code" | "originalDocumentId" | "publicationId"> & { maintainerUserId?: string },
+  expected: Pick<PublicationNotice, "code" | "publicationId"> & {
+    originalDocumentId?: string;
+    sourcePath?: string;
+    maintainerUserId?: string;
+  },
 ): boolean {
   return notices.some((notice) =>
     notice.code === expected.code
-    && notice.originalDocumentId === expected.originalDocumentId
     && notice.publicationId === expected.publicationId
+    && (expected.originalDocumentId === undefined
+      || notice.originalDocumentId === expected.originalDocumentId)
+    && (expected.sourcePath === undefined || notice.sourcePath === expected.sourcePath)
     && (expected.maintainerUserId === undefined || notice.maintainerUserId === expected.maintainerUserId));
 }
 
@@ -448,6 +484,61 @@ describe("publication drain", () => {
     expect((await eventRows(frozen.documents["f.md"].documentId))[0].consumed_at).toBeNull();
   });
 
+  it("backs off permanently pending worker rows so a bounded run reaches a later applicable delivery", async () => {
+    const path = `backoff-${uuidv7()}`;
+    const pendingFolders: string[] = [];
+    for (let index = 0; index < 3; index += 1) {
+      const pending = await folderWithDocuments(fixture.ann, `${path}/pending-${index}`, [
+        { name: `g${index}.md`, text: `# Group ${index}\n\npending\n` },
+      ]);
+      pendingFolders.push(pending.folderNodeId);
+      await publishFolder(
+        fixture.ann,
+        fixture.groupTeamWorkspaceId,
+        `Backoff pending ${index} ${path}`,
+        pending.folderNodeId,
+      );
+    }
+    const applicable = await folderWithDocuments(fixture.mike, `${path}/applicable`, [
+      { name: "a.md", text: "# Applicable\n\napply\n" },
+    ]);
+    pendingFolders.push(applicable.folderNodeId);
+    const applicablePublication = await publishFolder(
+      fixture.mike,
+      fixture.teamWorkspaceId,
+      `Backoff applicable ${path}`,
+      applicable.folderNodeId,
+    );
+
+    // Only the document events matter; the folder events would add unrelated
+    // deliveries to the head window.
+    await fixture.pool.query(
+      `DELETE FROM publication_events WHERE tree_node_id IN (${pendingFolders.map(() => "?").join(", ")})`,
+      pendingFolders,
+    );
+    await fixture.uow.run((repositories) => repositories.publications.prepareDeliveries(100));
+
+    const clock = new Date();
+    const now = () => new Date(clock.getTime());
+    const first = await drainPublicationEvents(fixture.uow, {
+      judge: { kind: "NO_CALLER" },
+      limit: 2,
+      now,
+      retryDelayMs: 60_000,
+    });
+    expect(first.pending).toBe(2);
+    expect(await publicationDocuments(applicablePublication.publication.id)).toHaveLength(0);
+
+    const second = await drainPublicationEvents(fixture.uow, {
+      judge: { kind: "NO_CALLER" },
+      limit: 2,
+      now,
+      retryDelayMs: 60_000,
+    });
+    expect(second.applied).toBeGreaterThanOrEqual(1);
+    expect(await publicationDocuments(applicablePublication.publication.id)).toHaveLength(1);
+  });
+
   it("lets the contributor's own drain clear a pending catch-up and a rights freeze", async () => {
     const path = `caller-recover-${uuidv7()}`;
     const { folderNodeId } = await folderWithDocuments(fixture.mike, path, [
@@ -697,7 +788,10 @@ describe("publication notices in import preview and result", () => {
       maintainerUserId: fixture.mike.identity.id,
     })).toBe(true);
 
-    const applied = await services.apply.apply(fixture.ann, snapshotId);
+    const applied = await services.apply.apply(fixture.ann, snapshotId, {
+      planHash: preview.planHash ?? "",
+      sourceName: preview.sourceName ?? "",
+    });
     if (applied.kind !== "APPLIED") throw new Error("expected APPLIED");
     expect(hasNotice(noticesOf(applied), {
       code: "MAINTAINED_BY_OTHER",
@@ -762,7 +856,11 @@ describe("publication notices in import preview and result", () => {
       path: `${root}/a.md`,
       text: "---\nknowledge_id: ann-b\n---\n# B\n\nann v2\n",
     }]);
-    const applied = await importServices().apply.apply(fixture.ann, snapshotId);
+    const preview = await importServices().preview.get(fixture.ann, snapshotId);
+    const applied = await importServices().apply.apply(fixture.ann, snapshotId, {
+      planHash: preview.planHash ?? "",
+      sourceName: preview.sourceName ?? "",
+    });
     if (applied.kind !== "APPLIED") throw new Error("expected APPLIED");
     expect(hasNotice(noticesOf(applied), {
       code: "PATH_RESERVED",
@@ -789,5 +887,109 @@ describe("publication notices in import preview and result", () => {
     const current = await fixture.uow.run((repositories) =>
       repositories.revisions.findCurrent(annTeamDocument?.teamDocumentId ?? ""));
     expect(current?.markdown).toContain("ann v2");
+  });
+
+  it("keeps each notice scoped to the publication that actually holds the path", async () => {
+    const root = `scope-${uuidv7()}`;
+    const mikeA = await folderWithDocuments(fixture.mike, root, [
+      { name: "a.md", text: "# A\n\nmike\n" },
+    ]);
+    const publicationA = await publishFolder(
+      fixture.mike, fixture.teamWorkspaceId, `Scope A ${root}`, mikeA.folderNodeId);
+    const mikeB = await folderWithDocuments(fixture.mike, root, [
+      { name: "b.md", text: "# B\n\nmike\n" },
+    ]);
+    const publicationB = await publishFolder(
+      fixture.mike, fixture.groupTeamWorkspaceId, `Scope B ${root}`, mikeB.folderNodeId);
+    await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+
+    const annFolder = await fixture.createFolder(fixture.ann, root, "scope");
+    const publicationService = new PublicationService(fixture.uow);
+    await publicationService.join(fixture.ann, {
+      publicationId: publicationA.publication.id,
+      folderNodeId: annFolder.treeNodeId,
+      acknowledgeLowOverlap: true,
+    });
+    await publicationService.join(fixture.ann, {
+      publicationId: publicationB.publication.id,
+      folderNodeId: annFolder.treeNodeId,
+      acknowledgeLowOverlap: true,
+    });
+
+    const snapshotId = await readyResync(fixture.ann, fixture.annFolderSourceId, root, [
+      { path: `${root}/a.md`, text: "# A\n\nann\n" },
+      { path: `${root}/b.md`, text: "# B\n\nann\n" },
+    ]);
+    const preview = await importServices().preview.get(fixture.ann, snapshotId);
+    const notices = noticesOf(preview).filter((notice) => notice.code === "MAINTAINED_BY_OTHER");
+    expect(hasNotice(notices, {
+      code: "MAINTAINED_BY_OTHER",
+      publicationId: publicationA.publication.id,
+      sourcePath: `${root}/a.md`,
+      maintainerUserId: fixture.mike.identity.id,
+    })).toBe(true);
+    expect(hasNotice(notices, {
+      code: "MAINTAINED_BY_OTHER",
+      publicationId: publicationB.publication.id,
+      sourcePath: `${root}/b.md`,
+      maintainerUserId: fixture.mike.identity.id,
+    })).toBe(true);
+    expect(notices.filter((notice) => notice.publicationId === publicationA.publication.id)).toHaveLength(1);
+    expect(notices.filter((notice) => notice.publicationId === publicationB.publication.id)).toHaveLength(1);
+  });
+
+  it("warns for a brand-new file on another contributor's path and still applies when notices fail", async () => {
+    const root = `newfile-${uuidv7()}`;
+    const mike = await folderWithDocuments(fixture.mike, root, [
+      { name: "a.md", text: "# A\n\nmike\n" },
+    ]);
+    const publication = await publishFolder(
+      fixture.mike, fixture.teamWorkspaceId, `New file ${root}`, mike.folderNodeId);
+    await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+
+    const annFolder = await fixture.createFolder(fixture.ann, root, "newfile");
+    await new PublicationService(fixture.uow).join(fixture.ann, {
+      publicationId: publication.publication.id,
+      folderNodeId: annFolder.treeNodeId,
+      acknowledgeLowOverlap: true,
+    });
+    const snapshotId = await readyResync(fixture.ann, fixture.annFolderSourceId, root, [{
+      path: `${root}/a.md`,
+      text: "# New\n\nann\n",
+    }]);
+    const preview = await importServices().preview.get(fixture.ann, snapshotId);
+    const previewNotice = noticesOf(preview).find((notice) =>
+      notice.code === "MAINTAINED_BY_OTHER"
+      && notice.publicationId === publication.publication.id
+      && notice.sourcePath === `${root}/a.md`);
+    expect(previewNotice).toBeDefined();
+    expect(previewNotice?.originalDocumentId).toBeUndefined();
+    expect(previewNotice?.maintainerUserId).toBe(fixture.mike.identity.id);
+
+    // Display-only notices fail open for preview and finalize too.
+    const safePreview = await new GetFolderImportPreviewService(noticeFailingUow(fixture.uow))
+      .get(fixture.ann, snapshotId);
+    expect(noticesOf(safePreview)).toEqual([]);
+    const safeFinalize = await new FinalizeFolderImportService(
+      noticeFailingUow(fixture.uow),
+      { limits: DEFAULT_IMPORT_LIMITS },
+    ).finalize(fixture.ann, snapshotId);
+    expect(noticesOf(safeFinalize)).toEqual([]);
+
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const applied = await new ApplyFolderImportService(noticeFailingUow(fixture.uow))
+      .apply(fixture.ann, snapshotId, {
+        planHash: preview.planHash ?? "",
+        sourceName: preview.sourceName ?? "",
+      });
+    expect(applied.kind).toBe("APPLIED");
+    if (applied.kind !== "APPLIED") throw new Error("expected APPLIED");
+    expect(noticesOf(applied)).toEqual([]);
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+
+    const entry = await fixture.uow.run((repositories) =>
+      repositories.entries.findBySourcePath(fixture.annFolderSourceId, `${root}/a.md`));
+    expect(entry?.documentId).toBeTruthy();
   });
 });
