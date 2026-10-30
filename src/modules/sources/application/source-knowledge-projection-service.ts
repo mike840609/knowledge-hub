@@ -11,6 +11,7 @@ import {
   InvalidSourceMappingError,
   RevisionConflictError,
   SourceEntryConflictError,
+  SourceReadOnlyError,
   TreeCycleError,
   TreeNodeNotFoundError,
   ValidationError,
@@ -112,6 +113,9 @@ async function requireBoundSource(
   // this connection under the Source X-lock. Only the cheap in-memory
   // workspaceId equality check repeats per command (no DB, no new locks).
   if (hints?.boundPolicy) {
+    if (hints.boundPolicy.sourceType === "PUBLICATION") {
+      throw new SourceReadOnlyError("Publication content is written only by the publication mechanism.");
+    }
     if (hints.boundPolicy.workspaceId !== bound.workspaceId || hints.boundPolicy.id !== bound.id) {
       throw new InvalidSourceMappingError("Bound source workspace changed during projection.");
     }

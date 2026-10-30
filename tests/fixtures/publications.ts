@@ -5,6 +5,7 @@ import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
+import type { KnowledgeMetadata } from "@/modules/knowledge/domain/content";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import { bindSourceProjection } from "@/modules/sources/application/source-knowledge-projection-service";
 import { ensureDefaultHubSource } from "@/modules/sources/application/ensure-default-hub-source";
@@ -135,7 +136,7 @@ export async function createPublicationFixture() {
   /** A synced original at `sourcePath`, written through the source projection. */
   async function createSyncedOriginal(
     caller: CallerContext,
-    input: { parentId: string | null; sourcePath: string; title: string; markdown: string },
+    input: { parentId: string | null; sourcePath: string; title: string; markdown: string; metadata?: KnowledgeMetadata },
   ) {
     return uow.run(async (repositories) => {
       const sourceId = folderSourceOf(caller);
@@ -147,7 +148,7 @@ export async function createPublicationFixture() {
         parentId: input.parentId,
         title: input.title,
         markdown: input.markdown,
-        metadata: {},
+        metadata: input.metadata ?? {},
         mapping: { sourceEntryId: uuidv7(), externalId: null, sourcePath: input.sourcePath },
       });
     });

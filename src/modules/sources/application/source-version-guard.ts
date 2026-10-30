@@ -2,7 +2,7 @@ import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-i
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
-import { IntegrityViolationError, VersionConflictError, SourceNotFoundError, NotFoundError, SourceEntryConflictError, ValidationError } from "@/modules/knowledge/domain/errors";
+import { IntegrityViolationError, VersionConflictError, SourceNotFoundError, NotFoundError, SourceEntryConflictError, SourceReadOnlyError, ValidationError } from "@/modules/knowledge/domain/errors";
 import { MAX_FOLDER_NAME_LENGTH } from "@/modules/knowledge/domain/tree-rules";
 import type { ContentInput } from "@/modules/knowledge/domain/content";
 import { fingerprintRevisionContent } from "@/modules/knowledge/domain/content";
@@ -62,6 +62,17 @@ function normalizedSourceName(value: string): string {
     throw new ValidationError(`Source name must be between 1 and ${MAX_FOLDER_NAME_LENGTH} characters.`);
   }
   return trimmed;
+}
+
+/**
+ * Source lifecycle and rename belong to the publication mechanism for a
+ * publication source (unpublish/restore/rename have their own rules and
+ * callers). The generic commands refuse it outright.
+ */
+function requireOrdinarySource(source: { sourceType: string }): void {
+  if (source.sourceType === "PUBLICATION") {
+    throw new SourceReadOnlyError("Publication sources are archived, restored and renamed by the publication lifecycle.");
+  }
 }
 
 export class SourceApplicationService implements SourceLifecycleCommands {
@@ -165,6 +176,7 @@ export class SourceApplicationService implements SourceLifecycleCommands {
       await syncCallerIdentity(repositories.users, caller);
       const source = await repositories.sources.lockById(sourceId);
       if (!source) throw new SourceNotFoundError();
+      requireOrdinarySource(source);
       await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
       if (source.name === next) return;
       await repositories.sources.updateName(sourceId, next, caller.identity.id);
@@ -180,6 +192,7 @@ export class SourceApplicationService implements SourceLifecycleCommands {
       await syncCallerIdentity(repositories.users, caller);
       const source = await repositories.sources.lockById(sourceId);
       if (!source) throw new SourceNotFoundError();
+      requireOrdinarySource(source);
       await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
       if (source.status === status) return;
       await repositories.sources.updateStatus(sourceId, status, caller.identity.id);
