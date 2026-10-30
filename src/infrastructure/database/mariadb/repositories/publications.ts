@@ -129,6 +129,16 @@ export class MariaDbPublicationRepository implements PublicationRepository {
     return rows.map(mapContribution);
   }
 
+  async listAllContributions(): Promise<{ publicationId: string; contributionId: string }[]> {
+    const rows = await this.connection.query<DbRow[]>(
+      "SELECT id, publication_id FROM publication_contributors ORDER BY created_at, id",
+    );
+    return rows.map((row) => ({
+      publicationId: String(row.publication_id),
+      contributionId: String(row.id),
+    }));
+  }
+
   async insertContribution(contribution: Contribution): Promise<void> {
     const now = new Date();
     await this.connection.query(

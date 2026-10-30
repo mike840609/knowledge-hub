@@ -348,6 +348,125 @@ export class PublicationService {
       return reconciled.report;
     });
   }
+
+  /**
+   * Archives the whole publication source (joiners included), freeing its name
+   * and every original claim. Documents, threads, path reservations and
+   * bindings stay; only the source lifecycle gates their visibility, and the
+   * reconciler refuses to revive an archived publication.
+   */
+  async unpublish(caller: CallerContext, publicationId: string): Promise<void> {
+    await this.uow.run(async (repositories) => {
+      const publication = await this.lockPublication(repositories, publicationId);
+      const contributions = await repositories.publications.listContributions(publication.id);
+      await requirePublicationLifecycleRights(repositories, caller, publication, contributions);
+      if (publication.status === "ARCHIVED") return;
+      await repositories.publications.setPublicationStatus(
+        publication.id, "ARCHIVED", caller.identity.id);
+    });
+  }
+
+  /**
+   * Re-claims the publication name and every original, then reconciles each
+   * non-left contributor under the caller-less rule: a direct grant applies,
+   * everything else waits for that contributor's own request. A conflict rolls
+   * back the whole restore instead of leaving a half-active publication.
+   */
+  async restore(caller: CallerContext, publicationId: string): Promise<void> {
+    await this.uow.run(async (repositories) => {
+      const publication = await this.lockPublication(repositories, publicationId);
+      const contributions = await repositories.publications.listContributions(publication.id);
+      await requirePublicationLifecycleRights(repositories, caller, publication, contributions);
+      if (publication.status === "ACTIVE") return;
+
+      // Name first: it is the cheapest conflict and names the outcome the
+      // person sees. The generated unique key still decides a race.
+      if (await activeNameTaken(repositories, publication.teamWorkspaceId, publication.name)) {
+        throw nameTaken();
+      }
+      for (const contribution of contributions) {
+        for (const binding of await repositories.publications.listBindings(contribution.id)) {
+          const claim = await repositories.publications.findClaim(
+            binding.originalDocumentId, publication.teamWorkspaceId, publication.id);
+          if (claim) throw originalTaken(binding.originalDocumentId, claim.publicationName);
+        }
+      }
+
+      try {
+        await repositories.publications.setPublicationStatus(
+          publication.id, "ACTIVE", caller.identity.id);
+      } catch (error) {
+        // The generated active-name key lost a race the read above could not
+        // see; the repository already names an original-claim race.
+        if (isIntegrityViolation(error)) throw nameTaken();
+        throw error;
+      }
+
+      // The restorer cannot judge anyone else's group-derived rights, so every
+      // contribution is reconciled with NO_CALLER: direct grants apply,
+      // group-only/removed contributors become pending, and an existing rights
+      // freeze is never cleared.
+      for (const contribution of contributions) {
+        if (contribution.leftAt !== null) continue;
+        await reconcileContribution(repositories, {
+          publicationId: publication.id,
+          contributionId: contribution.id,
+          judge: { kind: "NO_CALLER" },
+          now: new Date(),
+        });
+      }
+    });
+  }
+
+  /**
+   * Renames only the publication source's canonical name (no revision). The
+   * generic source rename refuses publication sources, so this is the one
+   * entry point with its creator/admin rules and active-name uniqueness.
+   */
+  async rename(caller: CallerContext, publicationId: string, name: string): Promise<void> {
+    const next = normalizePublicationName(name);
+    await this.uow.run(async (repositories) => {
+      const publication = await this.lockPublication(repositories, publicationId);
+      const contributions = await repositories.publications.listContributions(publication.id);
+      await requirePublicationLifecycleRights(repositories, caller, publication, contributions);
+      if (publication.name === next) return;
+      if (
+        publication.status === "ACTIVE"
+        && await activeNameTaken(repositories, publication.teamWorkspaceId, next)
+      ) {
+        throw nameTaken();
+      }
+      try {
+        await repositories.sources.updateName(publication.sourceId, next, caller.identity.id);
+      } catch (error) {
+        // Another active publication took the name between the read and the
+        // write; the generated key is the final judge.
+        if (isIntegrityViolation(error)) throw nameTaken();
+        throw error;
+      }
+    });
+  }
+
+  /**
+   * Reads a publication under its source lock and returns the current row. A
+   * lifecycle command must never act on the pre-lock routing read.
+   */
+  private async lockPublication(
+    repositories: SourceRepositories,
+    publicationId: string,
+  ): Promise<Publication> {
+    const routed = await repositories.publications.findById(publicationId);
+    if (!routed) throw new NotFoundError("Publication was not found.");
+    const source = await repositories.sources.lockById(routed.sourceId);
+    if (!source || source.sourceType !== "PUBLICATION") {
+      throw new NotFoundError("Publication source was not found.");
+    }
+    const publication = await repositories.publications.findBySourceId(source.id);
+    if (!publication || publication.id !== publicationId) {
+      throw new NotFoundError("Publication was not found.");
+    }
+    return publication;
+  }
 }
 
 /**
@@ -398,6 +517,34 @@ async function requireActiveTeamWithSourceManage(
   const capabilities = await evaluateWorkspaceCapabilities(repositories, caller, teamWorkspaceId);
   if (!capabilities.has("source.manage")) {
     throw new WorkspaceAccessDeniedError("Publishing to a team requires source.manage.");
+  }
+}
+
+async function requirePublicationLifecycleRights(
+  repositories: SourceRepositories,
+  caller: CallerContext,
+  publication: Publication,
+  contributions: readonly Contribution[],
+): Promise<void> {
+  const workspace = await repositories.workspaces.findById(publication.teamWorkspaceId);
+  if (!workspace || workspace.workspaceType !== "TEAM") throw new WorkspaceNotFoundError();
+  const capabilities = await evaluateWorkspaceCapabilities(
+    repositories, caller, publication.teamWorkspaceId);
+  // Admin rights are effective rights: OWNER/ADMIN directly or through a
+  // validated group. They survive the creator leaving.
+  if (capabilities.has("membership.manage_basic")) return;
+
+  const own = contributions.find((contribution) => contribution.userId === caller.identity.id);
+  const isCreator = caller.identity.id === publication.creatorUserId
+    && own !== undefined
+    && own.leftAt === null;
+  if (
+    workspace.lifecycleState !== "ACTIVE"
+    || !capabilities.has("source.manage")
+    || !isCreator
+  ) {
+    throw new WorkspaceAccessDeniedError(
+      "Unpublishing, restoring or renaming this publication requires its creator or a team admin.");
   }
 }
 

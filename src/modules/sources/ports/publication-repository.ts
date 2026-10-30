@@ -20,6 +20,12 @@ export interface PublicationRepository {
   insert(publication: Publication): Promise<void>;
   listContributions(publicationId: string): Promise<Contribution[]>;
   listByContributor(userId: string): Promise<Contribution[]>;
+  /**
+   * Every contribution with its publication, for the caller-less catch-up
+   * repair script. Reconciliation itself decides lifecycle and rights; this
+   * read must not pre-filter so left/archived rows are visibly skipped.
+   */
+  listAllContributions(): Promise<{ publicationId: string; contributionId: string }[]>;
   insertContribution(contribution: Contribution): Promise<void>;
   setContributionState(
     id: string,

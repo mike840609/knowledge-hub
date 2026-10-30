@@ -40,6 +40,10 @@ db-migrate: db-up ## Apply schema migrations to the dev database.
 db-reindex-links: db-up ## Index document links (backfill after migration 012, or repair). Idempotent.
 	npm run db:reindex-document-links
 
+.PHONY: db-catch-up-publications
+db-catch-up-publications: db-up ## Reconcile Team publications after reopening Team workspaces. Idempotent.
+	npm run db:catch-up-publications
+
 .PHONY: db-report-escaped-wikilinks
 db-report-escaped-wikilinks: db-up ## List documents that may have lost wikilinks to the old editor (read-only; changes nothing).
 	npm run db:report-escaped-wikilinks
