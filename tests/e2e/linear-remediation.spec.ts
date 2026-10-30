@@ -61,8 +61,8 @@ test('reader and composer keep their column and expose commands during long scro
   // Scrolling pins the breadcrumb line — location › title, and its actions — to the top of the reading column.
   const regionBox = (await region.boundingBox())!;
   const restingY = (await breadcrumb.boundingBox())!.y;
-  // Its lower edge fades the content in only while it is pinned; at rest there is nothing under it.
-  const pinnedLine = region.locator('.lg\\:kh-fade-below');
+  // The reader's pinned toolbar has no overlay extending over the document text.
+  const pinnedLine = breadcrumb.locator('xpath=../..');
   await expect(pinnedLine).not.toHaveAttribute('data-pinned');
   await region.evaluate(el => { el.scrollTop = 1500; });
   await expect(breadcrumb).toBeInViewport();
@@ -72,8 +72,8 @@ test('reader and composer keep their column and expose commands during long scro
   const details = region.getByRole('button', { name: 'Details', exact: true });
   await expect(details).toBeInViewport();
   await expect(pinnedLine).toHaveAttribute('data-pinned', 'true');
-  await expect.poll(() => pinnedLine.evaluate(el => getComputedStyle(el, '::after').opacity)).toBe('1');
-  expect(await pinnedLine.evaluate(el => getComputedStyle(el, '::after').pointerEvents)).toBe('none');
+  expect(await pinnedLine.evaluate(el => getComputedStyle(el, '::after').content)).toBe('none');
+
   await page.screenshot({ path: info.outputPath('reader-scrolled.png') });
   await page.screenshot({ path: info.outputPath('reader-scrolled-edge.png'), clip: { x: regionBox.x, y: regionBox.y, width: 1000, height: 160 } });
   await details.click();
@@ -99,8 +99,8 @@ test('reader and composer keep their column and expose commands during long scro
   const source = await showMarkdown(form);
   await source.fill(longMarkdown + '\n\nExtra line');
   await region.evaluate(el => { el.scrollTop = el.scrollHeight; });
-  // The composer's pinned command line fades the scrolled document in, as the reader's does; not at rest.
-  const commands = pinnedLine;
+  // The composer's command line stays pinned while scrolling and releases at the top.
+  const commands = form.getByRole('navigation', { name: 'Breadcrumb' }).locator('xpath=../..');
   await expect(commands).toHaveAttribute('data-pinned', 'true');
   await region.evaluate(el => { el.scrollTop = 0; });
   await expect(commands).not.toHaveAttribute('data-pinned');
