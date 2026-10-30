@@ -6,6 +6,7 @@ import { usersAccountMigration } from "./027-users-account";
 import { folderShareLinksMigration } from "./028-folder-share-links";
 import { reviewCommentMentionsMigration } from "./029-review-comment-mentions";
 import { teamPublicationsMigration } from "./030-team-publications";
+import { shareCommentEventContextMigration } from "./031-share-comment-event-context";
 import { shareCommentEventsMigration } from "./022-share-comment-events";
 import { reviewCommentEditDeleteMigration } from "./021-review-comment-edit-delete";
 import { feedbackReportsMigration } from "./020-feedback-reports";
@@ -60,4 +61,5 @@ export const migrations = [
   folderShareLinksMigration,
   reviewCommentMentionsMigration,
   teamPublicationsMigration,
+  shareCommentEventContextMigration,
 ] as const;

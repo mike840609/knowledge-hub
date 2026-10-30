@@ -447,6 +447,37 @@ describe("publication event progress", () => {
     expect(done.consumed_at).not.toBeNull();
   });
 
+  it("advances past events that already have deliveries when the window is full", async () => {
+    const original = await fixture.createHubOriginal(fixture.mike, "Window source", "window");
+    const publication = await fixture.createPublication({
+      name: "Window Publication",
+      kind: "DOCUMENT",
+      creator: fixture.mike,
+      origin: { kind: "DOCUMENT", documentId: original.documentId },
+    });
+    for (let index = 0; index < 3; index += 1) {
+      await fixture.uow.run((repositories) => repositories.publicationEvents.record({
+        documentId: original.documentId,
+        treeNodeId: null,
+        kind: "REVISION",
+        revisionId: original.revisionId,
+        at: new Date(Date.now() + index),
+      }));
+    }
+    for (let index = 0; index < 3; index += 1) {
+      await fixture.uow.run((repositories) => repositories.publications.prepareDeliveries(1));
+    }
+    const deliveries = await fixture.pool.query<{ event_id: string }[]>(
+      `SELECT DISTINCT d.event_id FROM publication_event_deliveries d
+       JOIN publication_events e ON e.id = d.event_id
+       WHERE e.document_id = ?`,
+      [original.documentId],
+    );
+    expect(deliveries).toHaveLength(3);
+    const pending = await fixture.uow.run((repositories) => repositories.publications.listPendingEvents(undefined, 100));
+    expect(pending.filter((row) => row.contributionId === publication.contributionId)).toHaveLength(3);
+  });
+
   it("completes an event with no affected contribution instead of leaving it pending forever", async () => {
     const unrelated = await fixture.createHubOriginal(fixture.mike, "No publication", "unrelated");
     await fixture.uow.run(async (repositories) => {
@@ -502,24 +533,84 @@ describe("nullable link fields", () => {
       revisionId: await fixture.revisionIdOf(original.documentId),
       authorId: fixture.mike.identity.id,
     });
+    // A team comment event carries its recipient instead of a link.
+    await fixture.uow.run((repositories) => repositories.shareCommentEvents.insert({
+      id: uuidv7(), workspaceId: fixture.mikePersonalWorkspaceId,
+      documentId: original.documentId, threadId: discussion.threadId, commentId: discussion.commentId,
+      originShareLinkId: null, createdByUserId: fixture.mike.identity.id, mentionedUserId: null,
+      recipientUserId: fixture.ann.identity.id, createdAt: new Date(), readAt: null,
+    }));
 
-    await fixture.uow.run(async (repositories) => {
-      await repositories.shareCommentEvents.insert({
+    const publication = await fixture.createPublication({
+      name: "Mention Publication",
+      kind: "DOCUMENT",
+      creator: fixture.mike,
+      origin: { kind: "DOCUMENT", documentId: original.documentId },
+    });
+    const teamDocument = await fixture.createTeamDocument({
+      publication,
+      creatorContributionId: publication.contributionId,
+      originalDocumentId: original.documentId,
+      sourcePath: null,
+    });
+    const teamDiscussion = await fixture.createDiscussion({
+      workspaceId: fixture.teamWorkspaceId,
+      documentId: teamDocument.teamDocumentId,
+      revisionId: await fixture.revisionIdOf(teamDocument.teamDocumentId),
+      authorId: fixture.mike.identity.id,
+    });
+    await fixture.uow.run((repositories) => repositories.reviewMentions.insertMany([{
+      commentId: teamDiscussion.commentId, mentionedUserId: fixture.ann.identity.id,
+      shareLinkId: null, createdAt: new Date(), readAt: null,
+    }]));
+
+    const events = await fixture.uow.run((repositories) => repositories.shareCommentEvents.listRecentByRecipient(fixture.mike.identity.id, undefined, 10));
+    expect(events[0].originShareLinkId).toBeNull();
+    expect(events[0].recipientUserId).toBe(fixture.ann.identity.id);
+    const mentions = await fixture.uow.run((repositories) => repositories.reviewMentions.listRecentByRecipient(fixture.ann.identity.id, 10));
+    expect(mentions[0].shareLinkId).toBeNull();
+  });
+
+  it("rejects the anonymous both-NULL comment event", async () => {
+    const original = await fixture.createHubOriginal(fixture.mike, "Anonymous source", "anonymous");
+    const discussion = await fixture.createDiscussion({
+      workspaceId: fixture.mikePersonalWorkspaceId,
+      documentId: original.documentId,
+      revisionId: await fixture.revisionIdOf(original.documentId),
+      authorId: fixture.mike.identity.id,
+    });
+    await expect(
+      fixture.uow.run((repositories) => repositories.shareCommentEvents.insert({
         id: uuidv7(), workspaceId: fixture.mikePersonalWorkspaceId,
         documentId: original.documentId, threadId: discussion.threadId, commentId: discussion.commentId,
         originShareLinkId: null, createdByUserId: fixture.mike.identity.id, mentionedUserId: null,
         recipientUserId: null, createdAt: new Date(), readAt: null,
-      });
-      await repositories.reviewMentions.insertMany([{
+      })),
+    ).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+
+    await expect(
+      fixture.pool.query(
+        `INSERT INTO share_comment_events
+           (id, workspace_id, document_id, thread_id, comment_id, origin_share_link_id, created_by_user_id, mentioned_user_id, recipient_user_id, created_at, read_at)
+         VALUES (?, ?, ?, ?, ?, NULL, ?, NULL, NULL, ?, NULL)`,
+        [uuidv7(), fixture.mikePersonalWorkspaceId, original.documentId, discussion.threadId, discussion.commentId, fixture.mike.identity.id, new Date()],
+      ),
+    ).rejects.toMatchObject({ errno: 4025 });
+  });
+
+  it("rejects a link-less mention outside a team publication", async () => {
+    const original = await fixture.createHubOriginal(fixture.mike, "Personal mention source", "personal");
+    const discussion = await fixture.createDiscussion({
+      workspaceId: fixture.mikePersonalWorkspaceId,
+      documentId: original.documentId,
+      revisionId: await fixture.revisionIdOf(original.documentId),
+      authorId: fixture.mike.identity.id,
+    });
+    await expect(
+      fixture.uow.run((repositories) => repositories.reviewMentions.insertMany([{
         commentId: discussion.commentId, mentionedUserId: fixture.ann.identity.id,
         shareLinkId: null, createdAt: new Date(), readAt: null,
-      }]);
-    });
-
-    const events = await fixture.uow.run((repositories) => repositories.shareCommentEvents.listRecentByRecipient(fixture.mike.identity.id, undefined, 10));
-    expect(events[0].originShareLinkId).toBeNull();
-    expect(events[0].recipientUserId).toBeNull();
-    const mentions = await fixture.uow.run((repositories) => repositories.reviewMentions.listRecentByRecipient(fixture.ann.identity.id, 10));
-    expect(mentions[0].shareLinkId).toBeNull();
+      }])),
+    ).rejects.toMatchObject({ code: "INVALID_REQUEST" });
   });
 });

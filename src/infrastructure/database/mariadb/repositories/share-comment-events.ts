@@ -1,3 +1,4 @@
+import { DomainError } from "@/shared/domain/errors";
 import { asDate, asNullableDate, asNullableString, type DbRow, type QueryConnection } from "./shared";
 import type { ShareCommentEvent } from "@/modules/knowledge/domain/share-comment-event";
 import type { ShareCommentEventRepository, ShareDocumentUnreadCount } from "@/modules/knowledge/ports/share-comment-event-repository";
@@ -14,6 +15,12 @@ function map(row: DbRow): ShareCommentEvent {
 export class MariaDbShareCommentEventsRepository implements ShareCommentEventRepository {
   constructor(private readonly connection: QueryConnection) {}
   async insert(event: ShareCommentEvent): Promise<void> {
+    if ((event.originShareLinkId === null) === (event.recipientUserId == null)) {
+      throw new DomainError(
+        "INVALID_REQUEST",
+        "A comment event needs exactly one of a share link or a team recipient; it is never anonymous.",
+      );
+    }
     await this.connection.query(
       "INSERT INTO share_comment_events (id,workspace_id,document_id,thread_id,comment_id,origin_share_link_id,created_by_user_id,mentioned_user_id,recipient_user_id,created_at,read_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
       [event.id, event.workspaceId, event.documentId, event.threadId, event.commentId, event.originShareLinkId, event.createdByUserId, event.mentionedUserId, event.recipientUserId ?? null, event.createdAt, event.readAt],

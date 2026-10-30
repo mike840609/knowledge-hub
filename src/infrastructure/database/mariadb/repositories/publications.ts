@@ -322,9 +322,12 @@ export class MariaDbPublicationRepository implements PublicationRepository {
 
   async prepareDeliveries(limit: number): Promise<void> {
     const events = await this.connection.query<DbRow[]>(
-      `SELECT id, document_id, tree_node_id, source_id
-       FROM publication_events WHERE consumed_at IS NULL
-       ORDER BY created_at, id LIMIT ?`,
+      `SELECT e.id, e.document_id, e.tree_node_id, e.source_id
+       FROM publication_events e
+       WHERE e.consumed_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM publication_event_deliveries d WHERE d.event_id = e.id)
+       ORDER BY e.created_at, e.id
+       LIMIT ? FOR UPDATE SKIP LOCKED`,
       [limit],
     );
     for (const event of events) {

@@ -1,3 +1,4 @@
+import { DomainError } from "@/shared/domain/errors";
 import { asDate, asNullableString, type DbRow, type QueryConnection } from "./shared";
 import type { ReviewMention } from "@/modules/knowledge/domain/review-mention";
 import type { ReviewMentionRepository } from "@/modules/knowledge/ports/review-mention-repository";
@@ -9,6 +10,21 @@ export class MariaDbReviewMentionsRepository implements ReviewMentionRepository 
   constructor(private readonly connection: QueryConnection) {}
   async insertMany(rows: ReviewMention[]): Promise<void> {
     for (const row of rows) {
+      if (row.shareLinkId === null) {
+        // A link-less mention is the team-publication shape only. Any other
+        // document would make it an anonymous grant, which never exists.
+        const team = await this.connection.query<DbRow[]>(
+          `SELECT 1 FROM document_review_comments c
+           JOIN document_review_threads t ON t.id = c.thread_id
+           JOIN knowledge_documents d ON d.id = t.document_id
+           JOIN knowledge_sources s ON s.id = d.source_id
+           WHERE c.id = ? AND s.source_type = 'PUBLICATION'`,
+          [row.commentId],
+        );
+        if (team.length === 0) {
+          throw new DomainError("INVALID_REQUEST", "A mention without a share link requires a team publication discussion.");
+        }
+      }
       await this.connection.query(
         "INSERT INTO review_comment_mentions (comment_id,mentioned_user_id,share_link_id,created_at,read_at) VALUES (?,?,?,?,?)",
         [row.commentId, row.mentionedUserId, row.shareLinkId, row.createdAt, row.readAt],
