@@ -5,7 +5,7 @@ export interface UserRepository {
   upsertIdentity(identity: UserIdentity): Promise<void>;
   findById(id: string): Promise<UserIdentity | null>;
   /** Batched identity lookup for read-path labels. Unknown ids are omitted. */
-  findByIds(ids: readonly string[]): Promise<UserIdentity[]>;
+  findByIds(ids: readonly string[]): Promise<Array<UserIdentity & { nameEn: string | null }>>;
   findByEmpId(empId: string): Promise<UserIdentity | null>;
   /**
    * Insert a new Hub-owned user. Callers must supply a Hub-generated UUIDv7

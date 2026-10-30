@@ -1,4 +1,5 @@
 import { ValidationError } from "./errors";
+import type { MentionedPerson } from "./review-mention";
 export const REVIEW_LIMITS = Object.freeze({ body:3000, quote:512, context:64, visibleThreads:200, visibleOpenPerCreator:20, replies:100, hourlyWrites:30 });
 export type ReviewStatus = "OPEN" | "RESOLVED";
 export type ReviewVisibility = "VISIBLE" | "HIDDEN";
@@ -13,7 +14,7 @@ export type ReviewComment = HiddenMetadata & { id:string; threadId:string; autho
  * ID: a link holder is outside the Workspace, and the public page adds no identifier that reaches
  * past its one document (share-link spec §6.1). The thread and comment IDs are the review's own.
  */
-export type ReviewCommentView = { id:string; threadId:string; authorName?:string; body:string; visibility:ReviewVisibility; createdAt:Date; editedAt:Date|null; deleted:boolean; /** The caller wrote it. Said as a fact about the caller, so no author ID is handed out. */ own:boolean };
+export type ReviewCommentView = { id:string; threadId:string; authorName?:string; body:string; visibility:ReviewVisibility; createdAt:Date; editedAt:Date|null; deleted:boolean; /** The caller wrote it. Said as a fact about the caller, so no author ID is handed out. */ own:boolean; /** Present only on a comment whose body is shown, and only for people its body names now; no user ID. */ mentions?:MentionedPerson[] };
 export type ReviewThreadView = { id:string; status:ReviewStatus; createdAt:Date; updatedAt:Date; currentAnchor:CurrentAnchorProjection; comments:ReviewCommentView[]; /** A signed-in reader, not the owner, follows it. Absent for anyone else. */ following?:boolean };
 /** What the document's owner reads in My Space: the same threads, with who and what moderation needs. */
 export type OwnerReviewThreadView = ReviewThreadView & { documentId:string; createdBy:string; visibility:ReviewVisibility; hiddenBy:string|null; hiddenAt:Date|null; hiddenReason:string|null; originalAnchor:ReviewAnchor; resolvedBy:string|null; resolvedAt:Date|null; comments:(ReviewCommentView & { authorUserId:string; hiddenBy:string|null; hiddenAt:Date|null; hiddenReason:string|null })[] };

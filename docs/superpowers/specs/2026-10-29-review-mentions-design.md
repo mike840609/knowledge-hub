@@ -1,5 +1,7 @@
 # `@` mentions in discussions
 
+Amended by `2026-10-30-review-mention-highlight-design.md`.
+
 ## Intent and agreed product direction
 
 A discussion today reaches only the people already in it: the document's owner
@@ -262,7 +264,8 @@ behave through them, as built:
 Email or push; mentions in the document body (Markdown); mentioning groups or
 `@all`; mentioning in edits; owner-visible mention audit; a "request access"
 flow; chips that re-render when a user is renamed (the body is plain text);
-matching `account`.
+matching `account`. (Amended by `2026-10-30-review-mention-highlight-design.md`:
+a mention is now highlighted, without re-rendering the body.)
 
 ## Testing
 

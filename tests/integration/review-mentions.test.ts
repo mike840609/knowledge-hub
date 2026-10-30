@@ -484,3 +484,85 @@ describe("mention candidates", () => {
     await expect(f.service.searchMentionCandidates(f.owner, { query: "a", token: f.token, documentId: f.documentId })).rejects.toMatchObject({ name: "ShareLinkNotFoundError" });
   });
 });
+
+describe("mentioned people on the discussion", () => {
+  type F = Awaited<ReturnType<typeof fixture>>;
+  const empId = async (id: string) => String((await pool.query("SELECT emp_id FROM users WHERE id=?", [id]))[0].emp_id);
+  const setUser = (column: "name" | "name_en", value: string | null, id: string) => pool.query(`UPDATE users SET ${column}=? WHERE id=?`, [value, id]);
+  /** Bob starts the thread; Carol replies `@Alice @Bob look`, naming both. Alice has an English name, Bob none. */
+  const mentionBoth = async (f: F) => {
+    await setUser("name_en", "Alice Wang", f.alice);
+    const carol = callerFromIdentity({ id: f.carol, emp_id: await empId(f.carol), name: "Carol", org_code: "MENTION" });
+    const { threadId, commentId: rootId } = await f.startThread();
+    const reply = await f.service.replyForLink(carol, { token: f.token, threadId, body: "@Alice @Bob look", idempotencyKey: randomUUID(), mentions: [f.alice, f.bob] });
+    return { carol, threadId, rootId, commentId: reply.id as string };
+  };
+  type Comment = { id: string; body: string; mentions?: unknown[] };
+  const commentOf = (threads: Array<{ comments: Comment[] }>, commentId: string) => threads.flatMap(t => t.comments).find(c => c.id === commentId)!;
+  const onLink = async (f: F, commentId: string) => commentOf((await f.service.queryForLink(null, f.token)).threads, commentId);
+  const onOwner = async (f: F, commentId: string) => commentOf((await f.service.queryForOwner(f.owner, f.documentId)).threads, commentId);
+  const sorted = (people: unknown[] | undefined) => [...(people ?? []) as { empId: string }[]].sort((a, b) => a.empId.localeCompare(b.empId));
+  const both = async (f: F, aliceEn: string | null = "Alice Wang") => sorted([
+    { name: "Alice", nameEn: aliceEn, empId: await empId(f.alice) },
+    { name: "Bob", nameEn: null, empId: await empId(f.bob) },
+  ]);
+
+  it("a link reader without a caller sees who a comment mentions", async () => {
+    const f = await fixture();
+    const { rootId, commentId } = await mentionBoth(f);
+    const comment = await onLink(f, commentId);
+    expect(sorted(comment.mentions)).toEqual(await both(f));
+    expect(JSON.stringify(comment.mentions)).not.toContain(f.alice);
+    expect(((await onLink(f, rootId)).mentions ?? []).length).toBe(0);
+  });
+
+  it("reads the person as they are now", async () => {
+    const f = await fixture();
+    const { commentId } = await mentionBoth(f);
+    await setUser("name_en", "Alice Lin", f.alice);
+    expect(sorted((await onLink(f, commentId)).mentions)).toEqual(await both(f, "Alice Lin"));
+  });
+
+  it("a renamed person is no longer highlighted", async () => {
+    const f = await fixture();
+    const { commentId } = await mentionBoth(f);
+    await setUser("name", "Alicia", f.alice);
+    const comment = await onLink(f, commentId);
+    expect(comment.body).toBe("@Alice @Bob look");
+    expect(comment.mentions).toEqual([{ name: "Bob", nameEn: null, empId: await empId(f.bob) }]);
+  });
+
+  it("a mention edited out of the body is not sent", async () => {
+    const f = await fixture();
+    const { carol, threadId, commentId } = await mentionBoth(f);
+    await f.service.editForLink(carol, { token: f.token, threadId, commentId, body: "@Bob look" });
+    expect((await onLink(f, commentId)).mentions).toEqual([{ name: "Bob", nameEn: null, empId: await empId(f.bob) }]);
+  });
+
+  it("a hidden comment carries none to a reviewer but does to the owner", async () => {
+    const f = await fixture();
+    const { threadId, commentId } = await mentionBoth(f);
+    await f.service.setVisibility(f.owner, { documentId: f.documentId, threadId, commentId, visibility: "HIDDEN", reason: "off topic" });
+    expect(((await onLink(f, commentId)).mentions ?? []).length).toBe(0);
+    expect(sorted((await onOwner(f, commentId)).mentions)).toEqual(await both(f));
+  });
+
+  it("a deleted comment carries none", async () => {
+    const f = await fixture();
+    const { carol, threadId, commentId } = await mentionBoth(f);
+    await f.service.deleteForLink(carol, { token: f.token, threadId, commentId });
+    expect(((await onLink(f, commentId)).mentions ?? []).length).toBe(0);
+    expect(((await onOwner(f, commentId)).mentions ?? []).length).toBe(0);
+  });
+
+  it("listMentionedUsersByComments reads the rows of exactly the comments asked for", async () => {
+    const f = await fixture();
+    const a = await f.startThread(), b = await f.startThread();
+    const row = (commentId: string, user: string) => ({ commentId, mentionedUserId: user, shareLinkId: f.linkId, createdAt: at(1), readAt: null });
+    await f.uow.run(r => r.reviewMentions.insertMany([row(a.commentId, f.alice), row(a.commentId, f.carol), row(b.commentId, f.alice)]));
+    expect(await f.uow.run(r => r.reviewMentions.listMentionedUsersByComments([]))).toEqual([]);
+    const listed = await f.uow.run(r => r.reviewMentions.listMentionedUsersByComments([a.commentId, b.commentId, randomUUID()]));
+    const key = (x: { commentId: string; mentionedUserId: string }) => `${x.commentId}/${x.mentionedUserId}`;
+    expect(listed.map(key).sort()).toEqual([key({ commentId: a.commentId, mentionedUserId: f.alice }), key({ commentId: a.commentId, mentionedUserId: f.carol }), key({ commentId: b.commentId, mentionedUserId: f.alice })].sort());
+  });
+});

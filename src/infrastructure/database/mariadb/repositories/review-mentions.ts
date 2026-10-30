@@ -33,6 +33,12 @@ export class MariaDbReviewMentionsRepository implements ReviewMentionRepository 
       [userId, ...threadIds]);
     return rows.map(toMention);
   }
+  async listMentionedUsersByComments(commentIds: readonly string[]): Promise<{ commentId: string; mentionedUserId: string }[]> {
+    if (commentIds.length === 0) return [];
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT comment_id, mentioned_user_id FROM review_comment_mentions WHERE comment_id IN (${commentIds.map(() => "?").join(",")})`, [...commentIds]);
+    return rows.map(row => ({ commentId: String(row.comment_id), mentionedUserId: String(row.mentioned_user_id) }));
+  }
   async markRead(userId: string, commentId: string, at: Date): Promise<void> {
     await this.connection.query("UPDATE review_comment_mentions SET read_at=? WHERE mentioned_user_id=? AND comment_id=? AND read_at IS NULL", [at, userId, commentId]);
   }
