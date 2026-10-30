@@ -18,6 +18,8 @@ export type CatchUpResult = ({ status: "RAN" } & CatchUpSummary) | { status: "SK
 type CatchUpOptions = {
   /** Defaults to console.log; tests pass a collector. */
   log?: (line: string) => void;
+  /** Test seam for a forced per-contribution failure; production uses the reconciler. */
+  reconcile?: typeof reconcileContribution;
 };
 
 /**
@@ -45,6 +47,7 @@ export async function catchUpPublications(
   }
 
   const uow = new MariaDbUnitOfWork(pool);
+  const reconcile = options.reconcile ?? reconcileContribution;
 
   // 1. Consume pending events. A deferred (group-only) delivery stays pending
   // for that contributor's own request and drops out of the next window.
@@ -66,7 +69,7 @@ export async function catchUpPublications(
   const summary: CatchUpSummary = { applied: 0, pending: 0, skipped: 0, failed: 0 };
   for (const { publicationId, contributionId } of contributions) {
     try {
-      const reconciled = await uow.run((repositories) => reconcileContribution(repositories, {
+      const reconciled = await uow.run((repositories) => reconcile(repositories, {
         publicationId,
         contributionId,
         judge: { kind: "NO_CALLER" },
@@ -93,6 +96,15 @@ export async function catchUpPublications(
   return { status: "RAN", ...summary };
 }
 
+/** The CLI's exit contract: 1 when any contribution failed, 0 otherwise. */
+export async function catchUpExitCode(
+  pool: Pool,
+  options: CatchUpOptions = {},
+): Promise<number> {
+  const result = await catchUpPublications(pool, options);
+  return result.status === "RAN" && result.failed > 0 ? 1 : 0;
+}
+
 const HELP = `Usage: npx tsx scripts/db/catch-up-publications.ts [--target dev|test|e2e]
 
 Reconciles every Team publication after KM_TEAM_WORKSPACES_ENABLED has been
@@ -115,8 +127,8 @@ async function main(): Promise<void> {
   }
   const pool = createDatabasePool(databaseConfig(target));
   try {
-    const result = await catchUpPublications(pool);
-    if (result.status === "RAN" && result.failed > 0) process.exitCode = 1;
+    const exitCode = await catchUpExitCode(pool);
+    if (exitCode !== 0) process.exitCode = exitCode;
   } finally {
     await pool.end();
   }

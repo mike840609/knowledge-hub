@@ -2,11 +2,12 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { Pool } from "mariadb";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { drainPublicationEvents } from "@/modules/sources/application/publication-drain";
+import { reconcileContribution } from "@/modules/sources/application/publication-reconciler";
 import { PublicationService } from "@/modules/sources/application/publication-service";
 import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
 import { bindSourceProjection } from "@/modules/sources/application/source-knowledge-projection-service";
 import { updateSourceLocator } from "@/modules/sources/application/source-entry-mapping-service";
-import { catchUpPublications } from "../../scripts/db/catch-up-publications";
+import { catchUpExitCode, catchUpPublications } from "../../scripts/db/catch-up-publications";
 import { createPublicationFixture, type PublicationFixture } from "../fixtures/publications";
 
 let fixture: PublicationFixture;
@@ -37,6 +38,13 @@ async function runCatchUp() {
   const lines: string[] = [];
   const result = await catchUpPublications(fixture.pool, { log: (line) => lines.push(line) });
   return { result, output: lines.join("\n") };
+}
+
+function summaryLineOf(output: string): string {
+  return output
+    .split("\n")
+    .filter((line) => line.startsWith("Publication catch-up:"))
+    .at(-1) ?? "";
 }
 
 async function createFolderTree(
@@ -408,5 +416,83 @@ describe("publication catch-up: flag on", () => {
     expect(await currentTitle(annDocument!.teamDocumentId)).toBe("Group Ann C v2");
     const resumed = await contributionOf(published.publicationId, fixture.ann.identity.id);
     expect(resumed?.pendingCatchUp).toBe(false);
+  });
+
+  it("reconciles from current state even when every event was already consumed", async () => {
+    const tree = await createFolderTree(fixture.mike, unique("catchup-state-only"), [
+      { relative: "a.md", title: "State Only A", markdown: "one" },
+    ]);
+    const published = await service.publish(fixture.mike, {
+      teamWorkspaceId: fixture.teamWorkspaceId,
+      name: unique("Catch-up State Only Publication"),
+      origin: { kind: "FOLDER", folderNodeId: tree.folderNodeId },
+    });
+    const [teamDocument] = await listDocuments(published.publicationId);
+
+    await reviseOriginal(fixture.mike, tree.documents[0], "State Only A v2", "two");
+    // Simulate lost/consumed events: the event scan has nothing left pending,
+    // so only the contribution scan can notice the revision.
+    await fixture.pool.query(
+      "UPDATE publication_events SET consumed_at = CURRENT_TIMESTAMP(6) WHERE consumed_at IS NULL AND document_id = ?",
+      [tree.documents[0].documentId],
+    );
+    const pendingEvents = await fixture.pool.query<{ n: unknown }[]>(
+      `SELECT COUNT(*) AS n FROM publication_events
+       WHERE consumed_at IS NULL AND document_id = ?`,
+      [tree.documents[0].documentId],
+    );
+    expect(Number(pendingEvents[0]?.n ?? 0)).toBe(0);
+
+    setFlag(true);
+    const { result, output } = await runCatchUp();
+    expect(result.status).toBe("RAN");
+    if (result.status !== "RAN") throw new Error("catch-up did not run");
+
+    expect(await currentTitle(teamDocument.teamDocumentId)).toBe("State Only A v2");
+    expect(result.failed).toBe(0);
+    expect(result.applied).toBeGreaterThanOrEqual(1);
+    expect(summaryLineOf(output)).toMatch(
+      /^Publication catch-up: applied=\d+ pending=\d+ skipped=\d+ failed=\d+$/,
+    );
+    expect(summaryLineOf(output)).toContain(`failed=${result.failed}`);
+  });
+
+  it("exits 1 when a contribution fails and prints the summary line exactly", async () => {
+    const tree = await createFolderTree(fixture.mike, unique("catchup-failure"), [
+      { relative: "a.md", title: "Failure A", markdown: "a" },
+    ]);
+    await service.publish(fixture.mike, {
+      teamWorkspaceId: fixture.teamWorkspaceId,
+      name: unique("Catch-up Failure Publication"),
+      origin: { kind: "FOLDER", folderNodeId: tree.folderNodeId },
+    });
+    const [target] = await fixture.uow.run((repositories) =>
+      repositories.publications.listAllContributions());
+    const lines: string[] = [];
+    const forcedFailure = (
+      repositories: Parameters<typeof reconcileContribution>[0],
+      input: Parameters<typeof reconcileContribution>[1],
+    ) => input.contributionId === target.contributionId
+      ? Promise.reject(new Error("injected catch-up failure"))
+      : reconcileContribution(repositories, input);
+
+    setFlag(true);
+    const result = await catchUpPublications(fixture.pool, {
+      log: (line) => lines.push(line),
+      reconcile: forcedFailure,
+    });
+    expect(result.status).toBe("RAN");
+    if (result.status !== "RAN") throw new Error("catch-up did not run");
+    expect(result.failed).toBe(1);
+    expect(lines.at(-1)).toBe(
+      `Publication catch-up: applied=${result.applied} pending=${result.pending} `
+      + `skipped=${result.skipped} failed=${result.failed}`,
+    );
+
+    const exitCode = await catchUpExitCode(fixture.pool, {
+      log: () => {},
+      reconcile: forcedFailure,
+    });
+    expect(exitCode).toBe(1);
   });
 });
