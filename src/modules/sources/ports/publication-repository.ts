@@ -32,6 +32,8 @@ export interface PublicationRepository {
     state: Pick<Contribution, "leftAt" | "rightsFrozenAt" | "pendingCatchUp">,
   ): Promise<void>;
   listDocuments(publicationId: string): Promise<PublicationDocument[]>;
+  /** The publication-side metadata of one team document, joined to its creator's contribution. */
+  findDocument(teamDocumentId: string): Promise<{ creatorUserId: string; publicationId: string; sourcePath: string | null } | null>;
   listBindings(contributionId: string): Promise<DocumentBinding[]>;
   bind(binding: DocumentBinding): Promise<void>;
   /**

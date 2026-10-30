@@ -5,7 +5,7 @@ import { cache } from "react";
 import { DocumentReviewService } from "@/modules/knowledge/application/document-review-service";
 import { AuthUnavailableError } from "@/modules/identity/domain/identity-session-errors";
 import { DomainError } from "@/shared/domain/errors";
-import { reviewWritesEnabled } from "./config";
+import { reviewWritesEnabled, teamWorkspacesEnabled } from "./config";
 import { PersonalPreferencesService } from "@/modules/personal/application/personal-preferences-service";
 import { PersonalProfileService } from "@/modules/personal/application/personal-profile-service";
 import { AgentContextService } from "@/modules/knowledge/application/agent-context-service";
@@ -104,7 +104,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   const documentReadProgress = new DocumentReadProgressService(unitOfWork, queries);
   const personalPreferences = new PersonalPreferencesService(new MariaDbPersonalStore(databasePool), unitOfWork);
   const personal = new PersonalService(new MariaDbPersonalStore(databasePool), queries, unitOfWork);
-  const reviews = new DocumentReviewService(unitOfWork, undefined, reviewWritesEnabled);
+  const reviews = new DocumentReviewService(unitOfWork, undefined, reviewWritesEnabled, teamWorkspacesEnabled);
   const savedShares = new SavedShareService(unitOfWork);
   const feedbackReports = new FeedbackReportService(new MariaDbFeedbackReportStore(databasePool));
   const shares = new DocumentShareService(unitOfWork, new RandomShareTokenIssuer());

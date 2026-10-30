@@ -177,6 +177,20 @@ export class MariaDbPublicationRepository implements PublicationRepository {
     return rows.map(mapDocument);
   }
 
+  async findDocument(teamDocumentId: string): Promise<{ creatorUserId: string; publicationId: string; sourcePath: string | null } | null> {
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT pd.publication_id, pd.source_path, c.user_id
+       FROM publication_documents pd
+       JOIN publication_contributors c ON c.id = pd.creator_contribution_id
+       WHERE pd.team_document_id = ?`,
+      [teamDocumentId],
+    );
+    const row = rows[0];
+    return row
+      ? { creatorUserId: String(row.user_id), publicationId: String(row.publication_id), sourcePath: row.source_path === null ? null : String(row.source_path) }
+      : null;
+  }
+
   async listBindings(contributionId: string): Promise<DocumentBinding[]> {
     const rows = await this.connection.query<DbRow[]>(
       "SELECT * FROM publication_bindings WHERE contribution_id = ? ORDER BY original_document_id",
