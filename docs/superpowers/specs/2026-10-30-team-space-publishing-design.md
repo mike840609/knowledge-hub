@@ -119,11 +119,13 @@ A publication is a source in the Team workspace, fed from members' My Space.
   Hub documents today (knowledge graph spec §6.3). Joining and the join
   suggestion therefore matter only for synced folders, which is the repo case
   they exist for.
-- Paths are **unique among active team documents in a publication** (database
-  constraint).
+- A non-empty path is **reserved to one team document in a publication**, even
+  while that document is archived (database constraint). Matching, creation,
+  rename and move checks all honor the same reservation. Hub-written documents
+  without a `sourcePath` reserve no path.
   - A creator renames or moves an original onto a path held by another
-    creator's active document: the move is not applied to the team; the team
-    document keeps its old path; the creator's sync result says why.
+    team document, active or archived: the move is not applied to the team;
+    the team document keeps its old path; the creator's sync result says why.
   - Two contributors' new originals reach the same new path at once: the
     constraint decides; the loser is a non-creator for that path.
   - A path whose team document was archived still belongs to that document and
@@ -275,16 +277,29 @@ the current caller, so "has left" is not computed at read time.
   contributor is marked **frozen** in the publication. Their documents stay
   readable, labelled "no longer updated". Their originals are untouched. Other
   contributors still cannot update those documents.
-- A later successful update by the same contributor unfreezes them and brings
-  their documents current.
-- A contributor may leave a publication: their documents freeze the same way.
+- A later successful update by the same contributor unfreezes a contribution
+  frozen **only because of lost rights** and brings their documents current.
+- A contributor may leave a publication: their documents remain readable and
+  frozen, but voluntary leave is recorded separately from a rights-based
+  freeze. Ordinary saves, syncs and catch-up must not reactivate a contribution
+  they left, even if they still hold `source.manage`. Resuming requires an
+  explicit action by that same contributor; this does not let another member
+  join a single-document publication or take over its documents.
 - Team workspaces switched off (`KM_TEAM_WORKSPACES_ENABLED` not `true`,
   `src/server/composition.ts:128`) is **not** a loss of rights (my call): while
   off, team updates are skipped without freezing anyone. Because team documents
   may then be behind their originals, re-enabling runs a catch-up (a repair
-  script, like the link-index repair) that brings every non-frozen
-  contributor's documents current. Being behind is detectable by comparing the
-  original's current revision with the one the team document was made from.
+  script, like the link-index repair) that updates team copies for contributors
+  who are neither frozen nor voluntarily left. It reconciles the current set
+  of originals eligible for the publication, their lifecycle, their location
+  relative to the publication root, and their current revisions against the
+  team copies.
+  Newly eligible originals are matched or created; originals archived or moved
+  out while updates were off archive their team copies; moves within the folder
+  update placement and paths under the same reservation rules. Comparing
+  revision IDs alone is insufficient: moves, renames and lifecycle changes do
+  not create revisions. Catch-up preserves voluntary leave, rights-based
+  freezes and admin-archived publications, and never restores them implicitly.
 
 ## Archive and unpublish
 
