@@ -1,4 +1,6 @@
 import { MariaDbSavedShareRepository } from "./saved-shares";
+import { MariaDbPublicationRepository } from "./publications";
+import { MariaDbPublicationEventRepository } from "./publication-events";
 import { MariaDbShareCommentEventsRepository } from "./share-comment-events";
 import { MariaDbReviewFollowsRepository } from "./review-follows";
 import { MariaDbReviewMentionsRepository } from "./review-mentions";
@@ -76,5 +78,7 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
     savedShares: new MariaDbSavedShareRepository(connection),
     links: new MariaDbDocumentLinkRepository(connection),
     identityLinks: new MariaDbExternalIdentityLinkRepository(connection),
+    publications: new MariaDbPublicationRepository(connection),
+    publicationEvents: new MariaDbPublicationEventRepository(connection),
   };
 }

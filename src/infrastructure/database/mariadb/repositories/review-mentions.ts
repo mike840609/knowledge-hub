@@ -1,8 +1,8 @@
-import { asDate, type DbRow, type QueryConnection } from "./shared";
+import { asDate, asNullableString, type DbRow, type QueryConnection } from "./shared";
 import type { ReviewMention } from "@/modules/knowledge/domain/review-mention";
 import type { ReviewMentionRepository } from "@/modules/knowledge/ports/review-mention-repository";
 const toMention = (row: DbRow): ReviewMention => ({
-  commentId: String(row.comment_id), mentionedUserId: String(row.mentioned_user_id), shareLinkId: String(row.share_link_id),
+  commentId: String(row.comment_id), mentionedUserId: String(row.mentioned_user_id), shareLinkId: asNullableString(row.share_link_id),
   createdAt: asDate(row.created_at), readAt: row.read_at == null ? null : asDate(row.read_at),
 });
 export class MariaDbReviewMentionsRepository implements ReviewMentionRepository {

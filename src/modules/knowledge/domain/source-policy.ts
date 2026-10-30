@@ -1,4 +1,4 @@
-export const SOURCE_TYPES = ["FOLDER_SYNC", "FILE_UPLOAD", "HUB"] as const;
+export const SOURCE_TYPES = ["FOLDER_SYNC", "FILE_UPLOAD", "HUB", "PUBLICATION"] as const;
 export type SourceType = (typeof SOURCE_TYPES)[number];
 
 export const SOURCE_OWNERSHIPS = ["SOURCE_MANAGED", "HUB_MANAGED"] as const;

@@ -1,7 +1,9 @@
 export type ShareCommentEvent = {
   id: string; workspaceId: string; documentId: string;
-  threadId: string; commentId: string; originShareLinkId: string;
+  threadId: string; commentId: string; originShareLinkId: string | null;
   createdByUserId: string; mentionedUserId: string | null;
+  /** Team discussion addresses its recipient member directly; share-link traffic leaves this NULL. */
+  recipientUserId?: string | null;
   createdAt: Date; readAt: Date | null;
 };
 export type ShareCommentNotificationView = {

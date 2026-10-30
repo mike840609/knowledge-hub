@@ -295,7 +295,8 @@ export class DocumentReviewService {
     const threadsById = new Map((await r.reviewThreads.findByIds(threadIds)).map(thread => [thread.id, thread]));
     const commentsByThread = new Map<string, ReviewComment[]>();
     for (const comment of await r.reviewComments.listByThreads(threadIds)) commentsByThread.set(comment.threadId, [...(commentsByThread.get(comment.threadId) ?? []), comment]);
-    const links = new Map((await r.shareLinks.findByIds([...new Set(mentions.map(mention => mention.shareLinkId))])).map(link => [link.id.toLowerCase(), link]));
+    const linkIds = [...new Set(mentions.flatMap(mention => mention.shareLinkId === null ? [] : [mention.shareLinkId]))];
+    const links = new Map((await r.shareLinks.findByIds(linkIds)).map(link => [link.id.toLowerCase(), link]));
     const opens = new Map<string, boolean>();
     const judged: Array<{ mention: ReviewMention } | { mention: ReviewMention; thread: ReviewThread; comment: ReviewComment; link: DocumentShareLink }> = [];
     for (const mention of mentions) {
@@ -304,9 +305,9 @@ export class DocumentReviewService {
       const comments = found ? commentsByThread.get(found.threadId) ?? [] : [];
       const comment = comments.find(candidate => candidate.id === mention.commentId);
       if (!thread || !comment || thread.visibility === "HIDDEN" || isRetractedThread(comments) || comment.deletedAt || comment.visibility === "HIDDEN") { judged.push({ mention }); continue; }
-      const link = links.get(mention.shareLinkId.toLowerCase());
+      const link = mention.shareLinkId === null ? undefined : links.get(mention.shareLinkId.toLowerCase());
       // One judgement per link and document: a folder link reaches each document by its own chain.
-      const key = `${mention.shareLinkId}:${thread.documentId}`;
+      const key = `${mention.shareLinkId ?? ""}:${thread.documentId}`;
       if (link && !opens.has(key)) opens.set(key, await this.linkValid(r, link, thread.documentId));
       judged.push(link && opens.get(key) ? { mention, thread, comment, link } : { mention });
     }

@@ -1,12 +1,13 @@
-import { asDate, asNullableDate, type DbRow, type QueryConnection } from "./shared";
+import { asDate, asNullableDate, asNullableString, type DbRow, type QueryConnection } from "./shared";
 import type { ShareCommentEvent } from "@/modules/knowledge/domain/share-comment-event";
 import type { ShareCommentEventRepository, ShareDocumentUnreadCount } from "@/modules/knowledge/ports/share-comment-event-repository";
 function map(row: DbRow): ShareCommentEvent {
   return {
     id: String(row.id), workspaceId: String(row.workspace_id), documentId: String(row.document_id),
     threadId: String(row.thread_id), commentId: String(row.comment_id),
-    originShareLinkId: String(row.origin_share_link_id), createdByUserId: String(row.created_by_user_id),
+    originShareLinkId: asNullableString(row.origin_share_link_id), createdByUserId: String(row.created_by_user_id),
     mentionedUserId: row.mentioned_user_id === null ? null : String(row.mentioned_user_id),
+    recipientUserId: asNullableString(row.recipient_user_id),
     createdAt: asDate(row.created_at), readAt: asNullableDate(row.read_at),
   };
 }
@@ -14,8 +15,8 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
   constructor(private readonly connection: QueryConnection) {}
   async insert(event: ShareCommentEvent): Promise<void> {
     await this.connection.query(
-      "INSERT INTO share_comment_events (id,workspace_id,document_id,thread_id,comment_id,origin_share_link_id,created_by_user_id,mentioned_user_id,created_at,read_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-      [event.id, event.workspaceId, event.documentId, event.threadId, event.commentId, event.originShareLinkId, event.createdByUserId, event.mentionedUserId, event.createdAt, event.readAt],
+      "INSERT INTO share_comment_events (id,workspace_id,document_id,thread_id,comment_id,origin_share_link_id,created_by_user_id,mentioned_user_id,recipient_user_id,created_at,read_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+      [event.id, event.workspaceId, event.documentId, event.threadId, event.commentId, event.originShareLinkId, event.createdByUserId, event.mentionedUserId, event.recipientUserId ?? null, event.createdAt, event.readAt],
     );
   }
   async listUnreadByRecipient(recipientUserId: string): Promise<ShareCommentEvent[]> {

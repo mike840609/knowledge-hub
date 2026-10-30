@@ -30,6 +30,11 @@ export function asRequiredString(value: unknown, field: string): string {
   return value;
 }
 
+/** NULL stays NULL. Never `String(null)`, which would make a dead field read as the text "null". */
+export function asNullableString(value: unknown): string | null {
+  return value === null || typeof value === "undefined" ? null : String(value);
+}
+
 export function asJsonObject(value: unknown, field: string): Record<string, unknown> {
   const parsed = typeof value === "string" ? JSON.parse(value) : value;
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
