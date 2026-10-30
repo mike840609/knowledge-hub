@@ -44,6 +44,10 @@ export type DiscussionQueryView =
 /** Capabilities are read once per request per Workspace; the caller's groups are never cached across requests. */
 type CapabilityOf = (workspaceId:string)=>ReturnType<typeof evaluateWorkspaceCapabilities>;
 type RequestAccess = { capabilityOf:CapabilityOf; readable:(documentId:string)=>Promise<ReviewScope|null> };
+/** A mention as an Inbox entry either names nothing, or carries its thread, comment and reach. */
+type JudgedMention =
+  | { mention: ReviewMention }
+  | { mention: ReviewMention; thread: ReviewThread; comment: ReviewComment; link: DocumentShareLink | null; team: boolean; workspaceId: string; sourceId: string };
 export class DocumentReviewService {
   constructor(
     private readonly uow:KnowledgeUnitOfWork,
@@ -386,34 +390,37 @@ export class DocumentReviewService {
   /**
    * The given mentions (newest first, at most FOLLOW_LIMIT), each judged now: live only while its carried link opens and the
    * comment and its discussion stand visible (`projectReviewerThread`'s rules). Anything else is dead.
-   * ponytail: at most FOLLOW_LIMIT mentions, one comment lookup each; paging once readers are named more.
+   *
+   * Two phases keep access ahead of content: comment ids resolve to their threads, a link-less team
+   * mention's `document.read` is judged, and only then are comment bodies and discussion comments
+   * read. A personal mention keeps its live-link judgement, which also reads no body.
+   * ponytail: at most FOLLOW_LIMIT mentions; paging once readers are named more.
    */
-  private async judgedMentions(r: KnowledgeRepositories, mentions: readonly ReviewMention[], caller?: CallerContext, access?: RequestAccess) {
+  private async judgedMentions(r: KnowledgeRepositories, mentions: readonly ReviewMention[], caller?: CallerContext, access?: RequestAccess):Promise<JudgedMention[]> {
     if (mentions.length === 0) return [];
     const judge = access ?? (caller ? this.requestAccess(r, caller) : undefined);
-    // Comments, threads and links each come in one query; only a link's reach is judged per document.
-    const named = new Map((await r.reviewComments.findByIds(mentions.map(mention => mention.commentId))).map(comment => [comment.id, comment]));
-    const threadIds = [...new Set([...named.values()].map(comment => comment.threadId))];
+    type Pending = Extract<JudgedMention, { thread: ReviewThread }>;
+    type Slot = JudgedMention;
+
+    // Phase 1: ids only. No comment body, title or author is loaded before access is judged.
+    const located = await r.reviewComments.listThreadIdsByCommentIds(mentions.map(mention => mention.commentId));
+    const threadIdByComment = new Map(located.map(row => [row.commentId, row.threadId]));
+    const threadIds = [...new Set(located.map(row => row.threadId))];
     const threadsById = new Map((await r.reviewThreads.findByIds(threadIds)).map(thread => [thread.id, thread]));
-    const commentsByThread = new Map<string, ReviewComment[]>();
-    for (const comment of await r.reviewComments.listByThreads(threadIds)) commentsByThread.set(comment.threadId, [...(commentsByThread.get(comment.threadId) ?? []), comment]);
     const linkIds = [...new Set(mentions.flatMap(mention => mention.shareLinkId === null ? [] : [mention.shareLinkId]))];
     const links = new Map((await r.shareLinks.findByIds(linkIds)).map(link => [link.id.toLowerCase(), link]));
     const opens = new Map<string, boolean>();
-    const judged: Array<{ mention: ReviewMention } | { mention: ReviewMention; thread: ReviewThread; comment: ReviewComment; link: DocumentShareLink | null; team: boolean; workspaceId: string; sourceId: string }> = [];
+    const slots: Slot[] = [];
     for (const mention of mentions) {
-      const found = named.get(mention.commentId);
-      const thread = found ? threadsById.get(found.threadId) ?? null : null;
-      const comments = found ? commentsByThread.get(found.threadId) ?? [] : [];
-      const comment = comments.find(candidate => candidate.id === mention.commentId);
-      if (!thread || !comment || thread.visibility === "HIDDEN" || isRetractedThread(comments) || comment.deletedAt || comment.visibility === "HIDDEN") { judged.push({ mention }); continue; }
+      const thread = threadsById.get(threadIdByComment.get(mention.commentId) ?? "") ?? null;
+      if (!thread || thread.visibility === "HIDDEN") { slots.push({ mention }); continue; }
       if (mention.shareLinkId === null) {
         // A team mention carries no link: it is live only while the caller still holds
         // document.read in the publication's team, judged now as the caller (groups included).
         const team = caller && judge ? await judge.readable(thread.documentId) : null;
         const document = team ? await r.documents.findById(thread.documentId) : null;
-        judged.push(team && document
-          ? { mention, thread, comment, link: null, team: true, workspaceId: team.workspace.id, sourceId: document.sourceId }
+        slots.push(team && document
+          ? { mention, thread, link: null, team: true, workspaceId: team.workspace.id, sourceId: document.sourceId }
           : { mention });
         continue;
       }
@@ -421,9 +428,23 @@ export class DocumentReviewService {
       // One judgement per link and document: a folder link reaches each document by its own chain.
       const key = `${mention.shareLinkId}:${thread.documentId}`;
       if (link && !opens.has(key)) opens.set(key, await this.linkValid(r, link, thread.documentId));
-      judged.push(link && opens.get(key) ? { mention, thread, comment, link, team: false, workspaceId: "", sourceId: "" } : { mention });
+      slots.push(link && opens.get(key) ? { mention, thread, link, team: false, workspaceId: "", sourceId: "" } : { mention });
     }
-    return judged;
+
+    // Phase 2: only mentions that passed phase 1 have their discussion comments read.
+    const pending = slots.filter((slot): slot is Pending => "thread" in slot);
+    if (pending.length === 0) return slots;
+    const pendingThreadIds = [...new Set(pending.map(slot => slot.thread.id))];
+    const commentsByThread = new Map<string, ReviewComment[]>();
+    for (const comment of await r.reviewComments.listByThreads(pendingThreadIds)) commentsByThread.set(comment.threadId, [...(commentsByThread.get(comment.threadId) ?? []), comment]);
+    const live = new Map<string, Pending & { comment: ReviewComment }>();
+    for (const slot of pending) {
+      const comments = commentsByThread.get(slot.thread.id) ?? [];
+      const comment = comments.find(candidate => candidate.id === slot.mention.commentId);
+      if (!comment || isRetractedThread(comments) || comment.deletedAt || comment.visibility === "HIDDEN") continue;
+      live.set(slot.mention.commentId, { ...slot, comment });
+    }
+    return slots.map(slot => live.get(slot.mention.commentId) ?? { mention: slot.mention });
   }
   /**
    * One request's team judgements. Capabilities are read once per Workspace for the whole request;
