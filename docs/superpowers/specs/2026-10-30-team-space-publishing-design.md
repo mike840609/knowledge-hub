@@ -1,6 +1,6 @@
 # Team space publishing
 
-Status: design, approved in conversation 2026-10-30. Not yet planned.
+Status: design, approved in conversation 2026-10-30. Planned 2026-10-31 in `docs/superpowers/plans/2026-10-31-team-space-publishing.md`.
 
 ## Intent
 
