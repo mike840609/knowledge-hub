@@ -240,14 +240,19 @@ behave through them, as built:
 - **Candidate search and mark-seen** through a folder link name the document too
   (`documentId` beside `token`); a folder token without it, or a document token
   with it, is not found. With no `token`, `documentId` is the owner's door.
-- **An owner names only links of the document itself** (`listByDocument`). A
-  document shared only through a folder link shows "Create a share link first"
-  although a live link reaches it. Naming a folder link is refused. Accepted
-  limitation, not an oversight: listing the folder links that reach a document
-  needs a reachability read the share list does not do today.
+- **An owner may name a folder link above the document.** The composer's
+  choice (`GET /api/review-mentions/links?documentId=`) lists the links that
+  open the document now: its own links and those of each folder above it. The
+  server re-judges the chosen id with `linkValid(link, documentId)`, so a link
+  that does not reach this document, or is revoked or expired, is refused.
 - **Follow unread and mentions.** A follow's unread count leaves out only the
   comments whose mention is *live* (that entry shows them); a comment whose
   mention died still counts if the follow's own link opens.
+- **Unsent drafts keep their picks.** The people picked in a draft are kept in
+  the tab's `sessionStorage` beside it (`<draftKey>:mentions`), so a restored
+  `@name` is still a mention; Cancel and a successful send forget them.
+- **The Inbox split view offers `@`** to a signed-in reader replying to a
+  followed discussion, through that entry's token (and document, on a folder link).
 - **A dead mention is marked read** when the unread list or badge is built, so
   a document moved out of a folder and back (or a hidden thread restored) comes
   back read.

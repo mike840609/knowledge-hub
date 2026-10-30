@@ -25,7 +25,8 @@ type Link = { id: string; label: string | null; active: boolean };
 function stubFetch({ candidates = [MING, MEI], links = [] as Link[] | (() => Link[]) } = {}) {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     requests.push(url);
-    if (url.includes("/share-links")) return json({ links: typeof links === "function" ? links() : links });
+    // The server answers only the links that open now.
+    if (url.includes("/review-mentions/links")) return json({ links: (typeof links === "function" ? links() : links).filter(link => link.active).map(({ id, label }) => ({ id, label })) });
     if (url.startsWith("/api/review-mentions/candidates")) return json({ candidates });
     throw new Error(`unexpected ${url}`);
   }));
@@ -228,7 +229,7 @@ test("owner with no live link: @ says to create one and offers nobody", async ()
   expect(options()).toHaveLength(0);
   expect(requests.filter(url => url.includes("candidates"))).toEqual([]);
   // Links are loaded once, when the list first opens.
-  expect(requests).toEqual(["/api/documents/doc-1/share-links"]);
+  expect(requests).toEqual(["/api/review-mentions/links?documentId=doc-1"]);
 });
 
 test("owner's links are read on each new @: a created link is offered, a revoked one is not", async () => {
@@ -243,13 +244,13 @@ test("owner's links are read on each new @: a created link is offered, a revoked
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 200)); });
   expect(host.textContent).not.toContain(NO_LINK_HINT);
   expect(options()).toHaveLength(2);
-  expect(requests.filter(url => url.includes("/share-links"))).toHaveLength(2);
+  expect(requests.filter(url => url.includes("/review-mentions/links"))).toHaveLength(2);
   // The link is revoked while the composer is open: the next @ asks again and no longer offers it.
   links = [{ id: "link-a", label: "Team", active: false }];
   await type(textarea, "");
   await type(textarea, "@m");
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 200)); });
-  expect(requests.filter(url => url.includes("/share-links"))).toHaveLength(3);
+  expect(requests.filter(url => url.includes("/review-mentions/links"))).toHaveLength(3);
   expect(host.textContent).toContain(NO_LINK_HINT);
 });
 
@@ -311,4 +312,25 @@ test("a search that finds no one says so", async () => {
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 200)); });
   expect(host.textContent).toContain("No one found.");
   expect(options()).toHaveLength(0);
+});
+
+test("a restored draft keeps the people picked in it, and a cancelled one forgets them", async () => {
+  stubFetch();
+  const draftKey = "kh:review-draft:reply:t1";
+  sessionStorage.setItem(draftKey, "Please look @Ming Chen at this");
+  sessionStorage.setItem(`${draftKey}:mentions`, JSON.stringify([{ id: MING.id, name: "Ming Chen" }, { id: "gone", name: "Not In The Text" }]));
+  const sent: Sent[] = [];
+  render({ token: "tok" }, sent, { draftKey });
+  await submit();
+  expect(sent).toEqual([expect.objectContaining({ body: "Please look @Ming Chen at this", mentions: [MING.id] })]);
+  expect(sessionStorage.getItem(`${draftKey}:mentions`)).toBeNull();
+});
+
+test("a draft picked in is kept beside it as the writer goes on", async () => {
+  stubFetch();
+  const draftKey = "kh:review-draft:reply:t2";
+  const textarea = render({ token: "tok" }, [], { draftKey });
+  await type(textarea, "@ming");
+  key(textarea, "Enter");
+  expect(JSON.parse(sessionStorage.getItem(`${draftKey}:mentions`)!)).toEqual([{ id: MING.id, name: MING.name }]);
 });

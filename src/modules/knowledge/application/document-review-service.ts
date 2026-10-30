@@ -5,6 +5,7 @@ import { isUuid, uuidv7 } from "@/shared/ids/uuidv7";
 import { isShareToken, ShareLinkNotFoundError } from "../domain/document-share-link";
 import { REVIEW_LIMITS, isRetractedThread, projectOwnerThread, projectReviewerThread, projectReviewComment, validateReviewBody, validateReviewIdempotencyKey, type ReviewThread, type ReviewComment, type ReviewAnchor, type ReviewStatus, type ReviewVisibility, type ReviewThreadView, type OwnerReviewThreadView, type CreateReviewThreadInput, type CreateOwnerReviewThreadInput, type ReplyReviewInput, type ReplyOwnerReviewInput } from "../domain/document-review";
 import { MENTION_LIMIT, MENTION_PREFIX, normalizeMentions, type ReviewMention } from "../domain/review-mention";
+import { followForMention } from "./follow-for-mention";
 import { createReviewAnchorRelocator, validateReviewAnchor } from "../domain/review-anchor";
 import { projectShareCommentNotification, EXCERPT_LIMIT, type ShareCommentNotificationView } from "../domain/share-comment-event";
 import { orderFollowedDiscussions, summarizeFollowedThread, type FollowedDiscussionView } from "../domain/review-follow";
@@ -150,6 +151,24 @@ export class DocumentReviewService {
       return { candidates: found.map(u => ({ id: u.id, name: u.name, nameEn: u.nameEn, empId: u.emp_id })) };
     });
   }
+  /**
+   * The links an owner may hand over when mentioning on their document: those that open it now, a link of the
+   * document itself or of a folder above it. Reads only.
+   */
+  async mentionLinksForOwner(caller: CallerContext, input: { documentId: string }) {
+    if (!isUuid(input.documentId)) throw new ShareLinkNotFoundError();
+    return this.uow.run(async r => {
+      const s = await this.ownerScope(r, caller, input.documentId, false);
+      this.enabled(); this.active(s);
+      const chain = (await r.tree.listChainsByDocumentIds([s.document.id], s.document.sourceId)).get(s.document.id) ?? [];
+      const folderIds = chain.slice(1).filter(node => node.nodeType === "FOLDER").map(node => node.id);
+      const candidates = [...await r.shareLinks.listByDocument(s.document.id)];
+      for (const folderId of folderIds) candidates.push(...await r.shareLinks.listByFolder(folderId));
+      const links: Array<{ id: string; label: string | null }> = [];
+      for (const link of candidates) if (await this.linkValid(r, link, s.document.id)) links.push({ id: link.id, label: link.label });
+      return { links };
+    });
+  }
   /** The reader has looked at a discussion: its follow, if any, is seen and their mentions in it are read. */
   async markSeenForLink(caller: CallerContext, input: { token: string; documentId?: string; threadId: string }) {
     await this.uow.run(async r => {
@@ -207,7 +226,7 @@ export class DocumentReviewService {
     }
     // A comment naming the caller is its own Inbox entry; it is not counted again as a follow reply.
     // Only a live mention is that entry: a dead one shows nothing, so its comment still counts here if the follow's link opens.
-    const named = await r.reviewMentions.findByComments(userId, comments.map(comment => comment.id));
+    const named = await r.reviewMentions.findByThreads(userId, [...commentsByThread.keys()]);
     const excludeCommentIds = new Set((await this.judgedMentions(r, named)).filter(judged => "comment" in judged).map(judged => judged.mention.commentId));
     const threadIds = [...new Set(follows.map(follow => follow.threadId))];
     const threads = new Map((await r.reviewThreads.findByIds(threadIds)).map(thread => [thread.id, thread]));
@@ -269,18 +288,23 @@ export class DocumentReviewService {
    * ponytail: at most FOLLOW_LIMIT mentions, one comment lookup each; paging once readers are named more.
    */
   private async judgedMentions(r: KnowledgeRepositories, mentions: readonly ReviewMention[]) {
-    const threads = new Map<string, { thread: ReviewThread | null; comments: ReviewComment[] }>();
-    const links = new Map<string, DocumentShareLink | null>();
+    if (mentions.length === 0) return [];
+    // Comments, threads and links each come in one query; only a link's reach is judged per document.
+    const named = new Map((await r.reviewComments.findByIds(mentions.map(mention => mention.commentId))).map(comment => [comment.id, comment]));
+    const threadIds = [...new Set([...named.values()].map(comment => comment.threadId))];
+    const threadsById = new Map((await r.reviewThreads.findByIds(threadIds)).map(thread => [thread.id, thread]));
+    const commentsByThread = new Map<string, ReviewComment[]>();
+    for (const comment of await r.reviewComments.listByThreads(threadIds)) commentsByThread.set(comment.threadId, [...(commentsByThread.get(comment.threadId) ?? []), comment]);
+    const links = new Map((await r.shareLinks.findByIds([...new Set(mentions.map(mention => mention.shareLinkId))])).map(link => [link.id.toLowerCase(), link]));
     const opens = new Map<string, boolean>();
     const judged: Array<{ mention: ReviewMention } | { mention: ReviewMention; thread: ReviewThread; comment: ReviewComment; link: DocumentShareLink }> = [];
     for (const mention of mentions) {
-      const found = await r.reviewComments.findById(mention.commentId);
-      if (found && !threads.has(found.threadId)) threads.set(found.threadId, { thread: await r.reviewThreads.findById(found.threadId), comments: await r.reviewComments.listByThread(found.threadId) });
-      const { thread, comments } = found ? threads.get(found.threadId)! : { thread: null, comments: [] };
+      const found = named.get(mention.commentId);
+      const thread = found ? threadsById.get(found.threadId) ?? null : null;
+      const comments = found ? commentsByThread.get(found.threadId) ?? [] : [];
       const comment = comments.find(candidate => candidate.id === mention.commentId);
       if (!thread || !comment || thread.visibility === "HIDDEN" || isRetractedThread(comments) || comment.deletedAt || comment.visibility === "HIDDEN") { judged.push({ mention }); continue; }
-      if (!links.has(mention.shareLinkId)) links.set(mention.shareLinkId, (await r.shareLinks.findByIds([mention.shareLinkId]))[0] ?? null);
-      const link = links.get(mention.shareLinkId);
+      const link = links.get(mention.shareLinkId.toLowerCase());
       // One judgement per link and document: a folder link reaches each document by its own chain.
       const key = `${mention.shareLinkId}:${thread.documentId}`;
       if (link && !opens.has(key)) opens.set(key, await this.linkValid(r, link, thread.documentId));
@@ -525,7 +549,7 @@ export class DocumentReviewService {
     if(!mentions.ids.length) return null;
     if((await r.users.findByIds(mentions.ids)).length!==mentions.ids.length) fail("INVALID_REQUEST","Mention only people who have signed in here.");
     if(originShareLinkId!==null) return originShareLinkId;
-    const link=mentions.linkId===null?undefined:(await r.shareLinks.listByDocument(s.document.id)).find(l=>l.id.toLowerCase()===mentions.linkId);
+    const link=mentions.linkId===null?undefined:(await r.shareLinks.findByIds([mentions.linkId]))[0];
     if(!link || !await this.linkValid(r,link,s.document.id)) fail("INVALID_REQUEST","Mention someone through a live share link of this document.");
     return link.id;
   }
@@ -537,7 +561,7 @@ export class DocumentReviewService {
       const link=(await r.shareLinks.findByIds([linkId]))[0];
       return !!link && this.linkValid(r,link,s.document.id);
     };
-    for(const userId of mentions) await r.reviewFollows.followForMention({threadId:comment.threadId,userId,shareLinkId:carriedLinkId,at:this.clock(),currentLinkValid});
+    for(const userId of mentions) await followForMention(r.reviewFollows,{threadId:comment.threadId,userId,shareLinkId:carriedLinkId,at:this.clock(),currentLinkValid});
   }
   private async reply(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>,originShareLinkId:string|null,input:{threadId:string;body:string;idempotencyKey:string;mentions?:unknown;mentionLinkId?:unknown}) {
     const body=validateReviewBody(input.body),key=validateReviewIdempotencyKey(input.idempotencyKey),mentions=this.mentionRequest(caller,s,originShareLinkId,input),requestHash=hash({threadId:input.threadId,body,...mentions.hashed});

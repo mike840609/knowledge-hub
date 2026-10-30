@@ -99,7 +99,8 @@ function FollowedDiscussion({ entry }: { entry: Entry }) {
   const share = async (path: string, body: object) => { await reviewRequest(`/api/share-review/threads/${path}`, { token, documentId, ...body }); await load(); };
   return <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
     <ReviewThreadList threads={[loaded.thread]} activeThreadId={loaded.thread.id} filter="ALL" onFilterChange={() => {}} writesEnabled={loaded.writesEnabled}
-      reply={(threadId, body, idempotencyKey) => share(`${threadId}/replies`, { body, idempotencyKey })}
+      mentionScope={loaded.writesEnabled && loaded.signedIn ? (documentId ? { token, documentId } : { token }) : undefined}
+      reply={(threadId, body, idempotencyKey, mentions) => share(`${threadId}/replies`, { body, idempotencyKey, ...(mentions.length ? { mentions } : {}) })}
       follow={(threadId, following) => share(`${threadId}/follow`, { following })}
       author={loaded.signedIn ? {
         edit: (threadId, commentId, body) => share(`${threadId}/comments/${commentId}/body`, { body }),
