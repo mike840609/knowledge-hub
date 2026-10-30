@@ -21,9 +21,9 @@ export class MariaDbPublicationEventRepository implements PublicationEventReposi
     if (events.length === 0) return;
     await this.connection.query(
       `INSERT INTO publication_events (id, document_id, tree_node_id, source_id, kind, revision_id, created_at, consumed_at)
-       VALUES ${valueRows(events.length, 7)}`,
+       VALUES ${valueRows(events.length, 8)}`,
       events.flatMap((event) => [
-        uuidv7(), event.documentId, event.treeNodeId, event.sourceId ?? null, event.kind, event.revisionId ?? null, event.at,
+        uuidv7(), event.documentId, event.treeNodeId, event.sourceId ?? null, event.kind, event.revisionId ?? null, event.at, null,
       ]),
     );
   }

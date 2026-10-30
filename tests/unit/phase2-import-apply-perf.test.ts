@@ -84,6 +84,9 @@ function stubRepositories(source: KnowledgeSource) {
       },
     },
     workspaces: {
+      findById: async (id: string) => (id === source.workspaceId
+        ? { id, name: "ws", workspaceType: "TEAM" as const, lifecycleState: "ACTIVE" as const }
+        : null),
       // Apply is a writer: it takes the Workspace row shared, never exclusive.
       lockSharedById: async (id: string) => {
         counts.workspaceLockById += 1;

@@ -10,7 +10,8 @@ import { normalizeTreePosition } from "../../domain/tree-rules";
 import type { KnowledgeRepositories } from "../../ports/unit-of-work";
 import type { MoveTreeNodeInput } from "../hub-knowledge-command-service";
 import { assertActiveFolderAncestry } from "../tree-validation";
-import { renumberSiblingPositions, placeNodeAtIndex, requireHubManagedSource, requireLockedSourceNode } from "./tree-transaction";
+import { recordPersonalPublicationEvent } from "./publication-event-recording";
+import { renumberSiblingPositions, placeNodeAtIndex, requireHubManagedSourceContext, requireLockedSourceNode } from "./tree-transaction";
 
 /**
  * Hub-managed Tree move bound to an already-open canonical transaction.
@@ -31,7 +32,7 @@ export async function moveTreeNodeInTransaction(
   const newPosition = normalizeTreePosition(input.newPosition);
   const routing = await repositories.tree.findById(input.nodeId);
   if (!routing) throw new TreeNodeNotFoundError();
-  const source = await requireHubManagedSource(repositories, caller, routing.sourceId);
+  const { source, workspace } = await requireHubManagedSourceContext(repositories, caller, routing.sourceId);
   const node = await requireLockedSourceNode(repositories, source.id, input.nodeId);
   if (node.status !== "ACTIVE") throw new ValidationError("Archived tree nodes cannot be moved.");
   const previousParentId = node.parentId;
@@ -49,4 +50,9 @@ export async function moveTreeNodeInTransaction(
   if (previousParentId !== input.newParentId) {
     await renumberSiblingPositions(repositories, source.id, previousParentId, caller.identity.id);
   }
+  // The target is the node: the consumer expands it to the descendants whose
+  // team documents move with it (publishing spec, "When the team updates").
+  await recordPersonalPublicationEvent(repositories, workspace, {
+    documentId: null, treeNodeId: node.id, sourceId: null, kind: "TREE", at: new Date(),
+  });
 }
