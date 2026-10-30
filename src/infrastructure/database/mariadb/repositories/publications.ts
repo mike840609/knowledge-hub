@@ -177,6 +177,16 @@ export class MariaDbPublicationRepository implements PublicationRepository {
     return rows.map(mapDocument);
   }
 
+  async latestDocumentUpdatedAt(publicationId: string): Promise<Date | null> {
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT MAX(d.updated_at) AS latest
+       FROM publication_documents pd JOIN knowledge_documents d ON d.id = pd.team_document_id
+       WHERE pd.publication_id = ?`,
+      [publicationId],
+    );
+    return asNullableDate(rows[0]?.latest);
+  }
+
   async findDocument(teamDocumentId: string): Promise<{ creatorUserId: string; publicationId: string; sourcePath: string | null } | null> {
     const rows = await this.connection.query<DbRow[]>(
       `SELECT pd.publication_id, pd.source_path, c.user_id

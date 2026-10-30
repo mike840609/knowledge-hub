@@ -160,10 +160,11 @@ export class PublicationService {
         const source = sourceById.get(publication.sourceId);
         if (!source) continue;
         const own = ownByPublication.get(publication.id) ?? null;
+        const contentUpdatedAt = await repositories.publications.latestDocumentUpdatedAt(publication.id);
         items.push({
           publication,
           creatorName: creatorNameById.get(publication.creatorUserId) ?? "",
-          updatedAt: source.updatedAt,
+          updatedAt: contentUpdatedAt ?? source.updatedAt,
           canJoin: canJoinPublication(workspace, capabilities, publication, own),
           canManage: canManagePublication(workspace, capabilities, publication, own, caller.identity.id),
           ownContribution: own === null ? null : {
@@ -317,6 +318,9 @@ export class PublicationService {
       return await this.uow.run(async (repositories) => {
         const routed = await repositories.publications.findById(input.publicationId);
         if (!routed) throw new NotFoundError("Publication was not found.");
+        // Judge team visibility first: a non-member must not learn a
+        // publication's kind or lifecycle from the refusal it receives.
+        await requireActiveTeamWithSourceManage(repositories, caller, routed.teamWorkspaceId);
         if (routed.kind !== "FOLDER") {
           throw new ValidationError("Only folder publications can be joined.");
         }
@@ -335,7 +339,6 @@ export class PublicationService {
           throw new SourceArchivedError("This publication is archived.");
         }
 
-        await requireActiveTeamWithSourceManage(repositories, caller, publication.teamWorkspaceId);
         const folder = await requireOwnedFolder(repositories, caller, input.folderNodeId);
         const contributions = await repositories.publications.listContributions(publication.id);
         const existing = contributions.find((candidate) => candidate.userId === caller.identity.id);
@@ -402,6 +405,9 @@ export class PublicationService {
     await this.uow.run(async (repositories) => {
       const publication = await repositories.publications.findById(publicationId);
       if (!publication) throw new NotFoundError("Publication was not found.");
+      // A removed member is not told anything about the publication, and a
+      // leave on a hidden team writes nothing.
+      await requireTeamRead(repositories, caller, publication.teamWorkspaceId);
       await repositories.sources.lockById(publication.sourceId);
 
       const contributions = await repositories.publications.listContributions(publicationId);
@@ -423,6 +429,9 @@ export class PublicationService {
     return this.uow.run(async (repositories) => {
       const routed = await repositories.publications.findById(publicationId);
       if (!routed) throw new NotFoundError("Publication was not found.");
+      // Resume writes contribution state; a member who lost team read must not
+      // reach that write, exactly as status refuses to report it.
+      await requireTeamRead(repositories, caller, routed.teamWorkspaceId);
       await repositories.sources.lockById(routed.sourceId);
       const publication = await repositories.publications.findBySourceId(routed.sourceId);
       if (!publication || publication.id !== publicationId) {
@@ -642,8 +651,9 @@ async function reuseRacedJoin(
 ): Promise<{ contributionId: string; report: ReconcileReport } | null> {
   return uow.run(async (repositories) => {
     const publication = await repositories.publications.findById(input.publicationId);
-    if (!publication || publication.kind !== "FOLDER" || publication.status !== "ACTIVE") return null;
+    if (!publication) return null;
     await requireActiveTeamWithSourceManage(repositories, caller, publication.teamWorkspaceId);
+    if (publication.kind !== "FOLDER" || publication.status !== "ACTIVE") return null;
     const folder = await requireOwnedFolder(repositories, caller, input.folderNodeId);
 
     const contributions = await repositories.publications.listContributions(publication.id);
@@ -662,6 +672,17 @@ async function reuseRacedJoin(
     });
     return { contributionId: existing.id, report: reconciled.report };
   });
+}
+
+async function requireTeamRead(
+  repositories: SourceRepositories,
+  caller: CallerContext,
+  teamWorkspaceId: string,
+): Promise<void> {
+  const workspace = await repositories.workspaces.findById(teamWorkspaceId);
+  if (!workspace || workspace.workspaceType !== "TEAM") throw new WorkspaceNotFoundError();
+  const capabilities = await evaluateWorkspaceCapabilities(repositories, caller, teamWorkspaceId);
+  if (!capabilities.has("document.read")) throw new WorkspaceNotFoundError();
 }
 
 async function requireActiveTeamWithSourceManage(

@@ -1,6 +1,8 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { callerFromIdentity, type CallerContext } from "@/modules/identity/domain/caller-context";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
+import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
+import { drainPublicationEvents } from "@/modules/sources/application/publication-drain";
 import { PublicationService } from "@/modules/sources/application/publication-service";
 import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
 import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
@@ -398,6 +400,87 @@ describe("publication API: commands", () => {
   });
 });
 
+describe("publication API: access is re-judged before publication shape", () => {
+  it("hides an archived publication from a non-member before reporting it archived", async () => {
+    const teamId = await teamWithRoles("Hidden Archived Team", [
+      { user: fixture.mike, role: "OWNER" },
+    ]);
+    const tree = await createFolderTree(fixture.mike, unique("hidden-archived"), [
+      { relative: "a.md", title: "Hidden Archived A", markdown: "a" },
+    ]);
+    const published = await publishTree(
+      fixture.mike, teamId, tree, unique("Hidden Archived Publication"));
+    as(fixture.mike);
+    expect((await unpublish(request(), ofPublication(published.publicationId))).status).toBe(204);
+
+    as(outsiderCaller("Join Archived"));
+    await expectError(
+      await join(request({ folderNodeId: tree.folderNodeId }), ofPublication(published.publicationId)),
+      404,
+      "NOT_FOUND",
+    );
+  });
+
+  it("hides a document publication from a non-member before refusing its kind", async () => {
+    const teamId = await teamWithRoles("Hidden Document Team", [
+      { user: fixture.mike, role: "OWNER" },
+    ]);
+    const original = await fixture.createHubOriginal(fixture.mike, unique("Hidden Document"), "body");
+    const folder = await createFolderTree(fixture.mike, unique("hidden-document-folder"), [
+      { relative: "a.md", title: "Hidden Doc A", markdown: "a" },
+    ]);
+    as(fixture.mike);
+    const response = await publish(request({
+      teamWorkspaceId: teamId,
+      name: unique("Hidden Document Publication"),
+      origin: { kind: "DOCUMENT", documentId: original.documentId },
+    }));
+    expect(response.status).toBe(201);
+    const publicationId = (await response.json()).publicationId as string;
+
+    as(outsiderCaller("Join Document"));
+    await expectError(
+      await join(request({ folderNodeId: folder.folderNodeId }), ofPublication(publicationId)),
+      404,
+      "NOT_FOUND",
+    );
+  });
+
+  it("re-judges team read before leave and before resume writes state", async () => {
+    const teamId = await teamWithRoles("Rejudge Command Team", [
+      { user: fixture.mike, role: "OWNER" },
+      { user: fixture.ann, role: "EDITOR" },
+    ]);
+    const mikeTree = await createFolderTree(fixture.mike, unique("rejudge-mike"), [
+      { relative: "a.md", title: "Rejudge Mike A", markdown: "mike" },
+    ]);
+    const annTree = await createFolderTree(fixture.ann, unique("rejudge-ann"), [
+      { relative: "b.md", title: "Rejudge Ann B", markdown: "ann" },
+    ]);
+    const published = await publishTree(
+      fixture.mike, teamId, mikeTree, unique("Rejudge Publication"));
+
+    as(fixture.ann);
+    const joined = await join(
+      request({ folderNodeId: annTree.folderNodeId, acknowledgeLowOverlap: true }),
+      ofPublication(published.publicationId));
+    const contributionId = (await joined.json()).contributionId as string;
+    as(fixture.ann);
+    expect((await leave(request(), ofPublication(published.publicationId))).status).toBe(204);
+    let contributions = await contributionsOf(published.publicationId);
+    expect(contributions.find((entry) => entry.id === contributionId)?.leftAt).not.toBeNull();
+
+    await fixture.uow.run((repositories) =>
+      repositories.workspaceMemberships.remove(teamId, fixture.ann.identity.id));
+
+    as(fixture.ann);
+    await expectError(await resume(request(), ofPublication(published.publicationId)), 404, "NOT_FOUND");
+    await expectError(await leave(request(), ofPublication(published.publicationId)), 404, "NOT_FOUND");
+    contributions = await contributionsOf(published.publicationId);
+    expect(contributions.find((entry) => entry.id === contributionId)?.leftAt).not.toBeNull();
+  });
+});
+
 describe("publication API: safe read models", () => {
   it("lists names, update time and only the caller's contribution", async () => {
     const teamId = await teamWithRoles("Read Team", [
@@ -558,6 +641,45 @@ describe("publication API: safe read models", () => {
     as(fixture.mike);
     expect(await (await status(request(undefined, "GET"), ofPublication(published.publicationId))).json())
       .toMatchObject({ pending: false });
+  });
+
+  it("advances the list's updatedAt after a contributor sync", async () => {
+    const original = await fixture.createHubOriginal(fixture.mike, unique("Stamp Document"), "first body");
+    as(fixture.mike);
+    const published = await publish(request({
+      teamWorkspaceId: fixture.teamWorkspaceId,
+      name: unique("Stamp Publication"),
+      origin: { kind: "DOCUMENT", documentId: original.documentId },
+    }));
+    expect(published.status).toBe(201);
+    const publicationId = (await published.json()).publicationId as string;
+
+    const listedAt = async (): Promise<string> => {
+      as(fixture.mike);
+      const items = await (await list(
+        new Request("http://hub.test/api"), ofWorkspace(fixture.teamWorkspaceId))).json();
+      return (items as Array<{ publication: { id: string }; updatedAt: string }>)
+        .find((entry) => entry.publication.id === publicationId)!.updatedAt;
+    };
+    const before = await listedAt();
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const hub = new HubKnowledgeCommandServiceImpl(fixture.uow);
+    const changed = await hub.createRevision(fixture.mike, {
+      documentId: original.documentId,
+      expectedCurrentRevisionId: original.revisionId,
+      title: "Stamp Document Updated",
+      markdown: "second body",
+      metadata: {},
+    });
+    expect(changed.changed).toBe(true);
+    const drained = await drainPublicationEvents(fixture.uow, {
+      judge: { kind: "CALLER", caller: fixture.mike },
+    });
+    expect(drained.applied).toBeGreaterThan(0);
+
+    const after = await listedAt();
+    expect(new Date(after).getTime()).toBeGreaterThan(new Date(before).getTime());
   });
 
   it("hides archived publications unless asked for", async () => {
