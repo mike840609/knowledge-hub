@@ -428,20 +428,31 @@ describe("publication catch-up: flag on", () => {
       origin: { kind: "FOLDER", folderNodeId: tree.folderNodeId },
     });
     const [teamDocument] = await listDocuments(published.publicationId);
+    const contribution = await contributionOf(published.publicationId, fixture.mike.identity.id);
+    expect(contribution).toBeDefined();
 
     await reviseOriginal(fixture.mike, tree.documents[0], "State Only A v2", "two");
-    // Simulate lost/consumed events: the event scan has nothing left pending,
-    // so only the contribution scan can notice the revision.
+    // Simulate lost/consumed events globally: neither the revision event nor the
+    // origin folder's TREE event may feed the drain, so only the contribution
+    // scan can notice the revision.
     await fixture.pool.query(
-      "UPDATE publication_events SET consumed_at = CURRENT_TIMESTAMP(6) WHERE consumed_at IS NULL AND document_id = ?",
-      [tree.documents[0].documentId],
+      "UPDATE publication_events SET consumed_at = CURRENT_TIMESTAMP(6) WHERE consumed_at IS NULL",
     );
-    const pendingEvents = await fixture.pool.query<{ n: unknown }[]>(
-      `SELECT COUNT(*) AS n FROM publication_events
-       WHERE consumed_at IS NULL AND document_id = ?`,
-      [tree.documents[0].documentId],
+    const unconsumed = await fixture.pool.query<{ n: unknown }[]>(
+      "SELECT COUNT(*) AS n FROM publication_events WHERE consumed_at IS NULL",
     );
-    expect(Number(pendingEvents[0]?.n ?? 0)).toBe(0);
+    expect(Number(unconsumed[0]?.n ?? 0)).toBe(0);
+    const pendingForContribution = await fixture.pool.query<{ n: unknown }[]>(
+      `SELECT COUNT(*) AS n FROM publication_event_deliveries
+       WHERE contribution_id = ? AND processed_at IS NULL`,
+      [contribution!.id],
+    );
+    expect(Number(pendingForContribution[0]?.n ?? 0)).toBe(0);
+
+    // A drain alone has nothing to consume and leaves the team copy stale.
+    const drained = await drainPublicationEvents(fixture.uow, { judge: { kind: "NO_CALLER" } });
+    expect(drained).toMatchObject({ applied: 0, pending: 0, frozen: 0, failed: 0 });
+    expect(await currentTitle(teamDocument.teamDocumentId)).toBe("State Only A");
 
     setFlag(true);
     const { result, output } = await runCatchUp();
