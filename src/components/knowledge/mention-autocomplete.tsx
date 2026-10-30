@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Select } from "@/components/ui/select";
+import { readStored, removeStored, writeStored } from "@/components/shell/use-persisted-state";
 import { reviewRequest } from "./review-thread-list";
 
 /**
@@ -60,7 +61,19 @@ export function mentionedIds(body: string, picks: readonly MentionPick[]): strin
  * `list` under it, `linkChoice` before the form's buttons. `collect` says who the text mentions,
  * and for the owner through which live link; `reset` forgets the picks once the comment is sent.
  */
-export function useMentionAutocomplete(scope: MentionScope | undefined, body: string, setBody: (value: string) => void) {
+/** The picks kept beside an unsent draft, still valid for the text restored with it. */
+function restoredPicks(key: string | undefined, body: string): MentionPick[] {
+  if (!key) return [];
+  try {
+    const parsed: unknown = JSON.parse(readStored("session", key) ?? "[]");
+    const valid = Array.isArray(parsed) ? parsed.filter((pick): pick is MentionPick => typeof pick?.id === "string" && typeof pick?.name === "string") : [];
+    return livePicks(body, valid);
+  } catch { return []; }
+}
+
+/** `draftKey`: the picks live beside that unsent draft, so a restored `@name` is still a mention. */
+export function useMentionAutocomplete(scope: MentionScope | undefined, body: string, setBody: (value: string) => void, draftKey?: string) {
+  const picksKey = draftKey && `${draftKey}:mentions`;
   const listId = useId();
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const [caret, setCaret] = useState(0);
@@ -68,7 +81,11 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   const [found, setFound] = useState<{ query: string; candidates: Candidate[] }>();
   const [failure, setFailure] = useState<string>();
   const [active, setActive] = useState(0);
-  const [picks, setPicks] = useState<MentionPick[]>([]);
+  const [picks, setPicks] = useState<MentionPick[]>(() => restoredPicks(picksKey, body));
+  useEffect(() => {
+    if (!picksKey) return;
+    if (picks.length) writeStored("session", picksKey, JSON.stringify(picks)); else removeStored("session", picksKey);
+  }, [picks, picksKey]);
   const [links, setLinks] = useState<MentionLink[]>();
   const [linkId, setLinkId] = useState<string>();
   // A request in flight; the links are asked again on each new `@`, since one may have been created, revoked or expired.
@@ -88,10 +105,9 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   useEffect(() => {
     if (!open || !owner || linksLoading.current) return;
     linksLoading.current = true;
-    reviewRequest<{ links: Array<MentionLink & { active: boolean }> }>(`/api/documents/${encodeURIComponent(owner)}/share-links`)
+    reviewRequest<{ links: MentionLink[] }>(`/api/review-mentions/links?documentId=${encodeURIComponent(owner)}`)
       .then(result => {
-        const live = result.links.filter(link => link.active).map(({ id, label }) => ({ id, label }));
-        setLinks(live); setFailure(undefined);
+        setLinks(result.links); setFailure(undefined);
       })
       .catch(error => setFailure(error instanceof Error ? error.message : "Could not load share links."))
       .finally(() => { linksLoading.current = false; });

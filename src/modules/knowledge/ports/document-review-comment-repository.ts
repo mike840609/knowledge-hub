@@ -3,6 +3,7 @@ export interface DocumentReviewCommentRepository {
  insert(comment:ReviewComment):Promise<void>;
  findById(id:string):Promise<ReviewComment|null>;
  findByIdempotencyKey(threadId:string,authorId:string,key:string):Promise<ReviewComment|null>;
+ findByIds(ids:readonly string[]):Promise<ReviewComment[]>;
  listByThread(threadId:string):Promise<ReviewComment[]>;
  listByThreads(threadIds:string[]):Promise<ReviewComment[]>;
  countByThread(threadId:string):Promise<number>;

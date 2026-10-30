@@ -3,12 +3,12 @@ import type { ReviewFollow } from "../domain/review-follow";
 export interface ReviewFollowRepository {
   /** Follows, or follows again: `seen_at` moves to `at`, so nothing already there reads as new. */
   follow(input: { threadId: string; userId: string; shareLinkId: string; at: Date }): Promise<void>;
-  /**
-   * Follows because the user was mentioned, inside the caller's transaction, without disturbing a live follow:
-   * no row or `following=0` follows as `follow` does; an active follow keeps `seen_at`, and only moves to the
-   * new link when `currentLinkValid(its link)` is false. The callback runs only for an active follow.
-   */
-  followForMention(input: { threadId: string; userId: string; shareLinkId: string; at: Date; currentLinkValid: (shareLinkId: string) => Promise<boolean> }): Promise<void>;
+  /** Follows only when there is no row at all (`INSERT IGNORE`); true when it did. */
+  followIfAbsent(input: { threadId: string; userId: string; shareLinkId: string; at: Date }): Promise<boolean>;
+  /** The user's row, locked for the rest of the transaction; null when there is none. */
+  lockFollow(threadId: string, userId: string): Promise<{ shareLinkId: string; following: boolean } | null>;
+  /** Points an existing follow at another link, keeping `seen_at` and `following`. */
+  moveToLink(threadId: string, userId: string, shareLinkId: string, at: Date): Promise<void>;
   unfollow(threadId: string, userId: string, at: Date): Promise<void>;
   /** No row, no change: seeing a discussion does not follow it. */
   markSeen(threadId: string, userId: string, at: Date): Promise<void>;

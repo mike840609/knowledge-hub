@@ -13,6 +13,7 @@ import { ensureDefaultHubSource } from "@/modules/sources/application/ensure-def
 import { PersonalWorkspaceService } from "@/modules/workspaces/application/personal-workspace-service";
 import type { ReviewAnchor } from "@/modules/knowledge/domain/document-review";
 import { projectReviewBlocks } from "@/modules/knowledge/domain/review-anchor";
+import { followForMention } from "@/modules/knowledge/application/follow-for-mention";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 
 let pool: Pool;
@@ -63,9 +64,9 @@ describe("review comment mentions repository", () => {
     expect(listed.map(m => m.commentId)).toEqual([b.commentId, a.commentId]);
     expect(listed.every(m => m.mentionedUserId === f.alice && m.readAt === null)).toBe(true);
     expect(await f.uow.run(r => r.reviewMentions.listRecentByRecipient(f.alice, 1))).toHaveLength(1);
-    const found = await f.uow.run(r => r.reviewMentions.findByComments(f.alice, [a.commentId, randomUUID()]));
+    const found = await f.uow.run(r => r.reviewMentions.findByThreads(f.alice, [a.threadId, randomUUID()]));
     expect(found.map(m => m.commentId)).toEqual([a.commentId]);
-    expect(await f.uow.run(r => r.reviewMentions.findByComments(f.alice, []))).toEqual([]);
+    expect(await f.uow.run(r => r.reviewMentions.findByThreads(f.alice, []))).toEqual([]);
   });
 
   it("markRead touches only the caller's row", async () => {
@@ -104,7 +105,7 @@ describe("review comment mentions repository", () => {
 describe("followForMention", () => {
   const seen = at(5), mentioned = at(50);
   const follow = (f: Awaited<ReturnType<typeof fixture>>, threadId: string, shareLinkId: string, valid: (id: string) => Promise<boolean>) =>
-    f.uow.run(r => r.reviewFollows.followForMention({ threadId, userId: f.alice, shareLinkId, at: mentioned, currentLinkValid: valid }));
+    f.uow.run(r => followForMention(r.reviewFollows, { threadId, userId: f.alice, shareLinkId, at: mentioned, currentLinkValid: valid }));
   const state = async (threadId: string, userId: string) => {
     const [row] = await pool.query("SELECT share_link_id, following, seen_at FROM review_thread_follows WHERE thread_id=? AND user_id=?", [threadId, userId]);
     return { link: String(row.share_link_id), following: Number(row.following), seenAt: new Date(row.seen_at) };

@@ -6,8 +6,8 @@ export interface ReviewMentionRepository {
   listRecentByRecipient(userId: string, limit: number): Promise<ReviewMention[]>;
   /** Unread rows only, newest first; whether each may still be shown is judged live by the service. */
   listUnreadByRecipient(userId: string, limit: number): Promise<ReviewMention[]>;
-  /** The user's mention rows (read or not) on these comments. */
-  findByComments(userId: string, commentIds: readonly string[]): Promise<ReviewMention[]>;
+  /** The user's mention rows (read or not) on comments of these threads. */
+  findByThreads(userId: string, threadIds: readonly string[]): Promise<ReviewMention[]>;
   markRead(userId: string, commentId: string, at: Date): Promise<void>;
   markAllRead(userId: string, at: Date): Promise<void>;
   /** Only the user's unread mentions in comments of this thread. */

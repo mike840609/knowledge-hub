@@ -25,11 +25,12 @@ export class MariaDbReviewMentionsRepository implements ReviewMentionRepository 
       "SELECT * FROM review_comment_mentions WHERE mentioned_user_id=? AND read_at IS NULL ORDER BY created_at DESC, comment_id DESC LIMIT ?", [userId, limit]);
     return rows.map(toMention);
   }
-  async findByComments(userId: string, commentIds: readonly string[]): Promise<ReviewMention[]> {
-    if (commentIds.length === 0) return [];
+  async findByThreads(userId: string, threadIds: readonly string[]): Promise<ReviewMention[]> {
+    if (threadIds.length === 0) return [];
     const rows = await this.connection.query<DbRow[]>(
-      `SELECT * FROM review_comment_mentions WHERE mentioned_user_id=? AND comment_id IN (${commentIds.map(() => "?").join(",")})`,
-      [userId, ...commentIds]);
+      `SELECT m.* FROM review_comment_mentions m JOIN document_review_comments c ON c.id=m.comment_id
+       WHERE m.mentioned_user_id=? AND c.thread_id IN (${threadIds.map(() => "?").join(",")})`,
+      [userId, ...threadIds]);
     return rows.map(toMention);
   }
   async markRead(userId: string, commentId: string, at: Date): Promise<void> {

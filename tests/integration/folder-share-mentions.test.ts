@@ -79,11 +79,30 @@ describe("mentions through a folder link", () => {
     expect(await f.unread()).toEqual([]);
   });
 
-  it("an owner cannot hand over a folder link: the mention must name a link of the document itself", async () => {
+  it("an owner may hand over the folder link above the document, and only a live one", async () => {
     const f = await fixture();
-    await expect(f.service.createForOwner(f.owner, {
+    const documentLink = await f.shares.create(f.owner, { documentId: f.doc.documentId });
+    const offered = (await f.service.mentionLinksForOwner(f.owner, { documentId: f.doc.documentId })).links.map(link => link.id);
+    expect(offered.sort()).toEqual([f.link.id, documentLink.id].sort());
+    const write = () => f.service.createForOwner(f.owner, {
       documentId: f.doc.documentId, expectedRevisionId: f.doc.revisionId, anchor: f.anchor, body: "Look", idempotencyKey: randomUUID(),
       mentions: [f.mentionedId.id], mentionLinkId: f.link.id,
+    });
+    await write();
+    expect(await f.unread()).toEqual([expect.objectContaining({ kind: "MENTION", token: f.token, documentId: f.doc.documentId })]);
+    await f.shares.revoke(f.owner, f.link.id);
+    expect((await f.service.mentionLinksForOwner(f.owner, { documentId: f.doc.documentId })).links.map(link => link.id)).toEqual([documentLink.id]);
+    await expect(write()).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+  });
+
+  it("a folder link that does not reach the document cannot be handed over for it", async () => {
+    const f = await fixture();
+    const { treeNodeId: otherFolder } = await f.hub.createFolder(f.owner, { sourceId: f.sourceId, parentId: null, name: "Elsewhere" });
+    const otherLink = await f.shares.createForFolder(f.owner, { folderNodeId: otherFolder });
+    expect((await f.service.mentionLinksForOwner(f.owner, { documentId: f.doc.documentId })).links.map(link => link.id)).toEqual([f.link.id]);
+    await expect(f.service.createForOwner(f.owner, {
+      documentId: f.doc.documentId, expectedRevisionId: f.doc.revisionId, anchor: f.anchor, body: "Look", idempotencyKey: randomUUID(),
+      mentions: [f.mentionedId.id], mentionLinkId: otherLink.id,
     })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
   });
 

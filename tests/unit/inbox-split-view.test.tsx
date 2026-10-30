@@ -50,6 +50,7 @@ beforeEach(() => {
     }
     if (url.startsWith("/api/review-notifications/activity")) return json(init.method === "POST" ? { ok: true } : { notifications, nextCursor: null });
     if (url === "/api/share-review/threads/query") return json({ threads: threads[`token:${body.token}`] ?? [], writesEnabled: true, callerUserId: "me", revisionId: "r" });
+    if (url.startsWith("/api/review-mentions/candidates")) return json({ candidates: [] });
     const peek = url.match(/^\/api\/documents\/([^/]+)\/peek\?brief$/);
     if (peek) return json({ title: `Doc ${peek[1]}`, markdown: `Passage of ${peek[1]}.`, revisionId: "r", status: "ACTIVE", sourceStatus: "ACTIVE", linkView: null });
     const owner = url.match(/^\/api\/documents\/([^/]+)\/review-threads$/);
@@ -334,4 +335,17 @@ it("the owner panel's unread hook ignores mentions", async () => {
   await act(async () => root.render(<Probe />));
   await act(async () => {});
   expect(seen).toEqual(["t2"]);
+});
+
+it("a followed discussion's reply offers @ through its link's token", async () => {
+  notifications = [entry("f", { kind: "FOLLOW", token: "tok", linkAvailable: true, workspaceId: "", documentId: "", sourceId: "" })];
+  threads["token:tok"] = [thread("thread-f")];
+  await mount();
+  await click(row("f"));
+  await click([...pane()!.querySelectorAll("button")].find(button => button.textContent === "Reply")!);
+  const textarea = pane()!.querySelector("textarea")!;
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+  await act(async () => { setter.call(textarea, "@an"); textarea.setSelectionRange(3, 3); textarea.dispatchEvent(new Event("input", { bubbles: true })); });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 250)); });
+  expect(calls.some(call => call.url === "/api/review-mentions/candidates?query=an&token=tok")).toBe(true);
 });

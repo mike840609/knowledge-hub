@@ -47,7 +47,7 @@ export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, in
     if (value.trim() && value !== initial) writeStored("session", draftKey, value); else removeStored("session", draftKey);
   };
   const discard = () => { if (draftKey) removeStored("session", draftKey); };
-  const mention = useMentionAutocomplete(mentionScope, body, keep);
+  const mention = useMentionAutocomplete(mentionScope, body, keep, draftKey);
   useEffect(() => { if (openRequest > 0) setExpanded(true); }, [openRequest]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
