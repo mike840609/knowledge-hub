@@ -659,7 +659,6 @@ const TEAM_HIDDEN_AUTHORING: ReadonlySet<ActionId> = new Set([
   "create.import",
   "folder.new-document",
   "folder.new-folder",
-  "navigate.sources",
 ]);
 
 /** The actions one surface may show, in registry order. */

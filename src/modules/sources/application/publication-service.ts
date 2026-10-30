@@ -148,6 +148,7 @@ export class PublicationService {
     caller: CallerContext,
     teamId: string,
     includeArchived = false,
+    options: { includeDocuments?: boolean } = {},
   ): Promise<PublicationListItem[]> {
     return this.uow.run(async (repositories) => {
       const workspace = await repositories.workspaces.findById(teamId);
@@ -170,20 +171,24 @@ export class PublicationService {
       const creators = await repositories.users.findByIds(
         [...new Set(publications.map((publication) => publication.creatorUserId))]);
       const creatorNameById = new Map(creators.map((user) => [user.id, user.name]));
+      // One aggregate for the whole team, not one query per publication.
+      const contentUpdatedAt = await repositories.publications.latestDocumentUpdatedAtByTeam(teamId);
 
       const items: PublicationListItem[] = [];
       for (const publication of publications) {
         const source = sourceById.get(publication.sourceId);
         if (!source) continue;
         const own = ownByPublication.get(publication.id) ?? null;
-        const contentUpdatedAt = await repositories.publications.latestDocumentUpdatedAt(publication.id);
         items.push({
           publication,
           creatorName: creatorNameById.get(publication.creatorUserId) ?? "",
-          updatedAt: contentUpdatedAt ?? source.updatedAt,
+          updatedAt: contentUpdatedAt.get(publication.id) ?? source.updatedAt,
           canJoin: canJoinPublication(workspace, capabilities, publication, own),
           canManage: canManagePublication(workspace, capabilities, publication, own, caller.identity.id),
-          documents: await repositories.publications.listDocumentViews(publication.id),
+          // The tree needs per-document maintainers; the list endpoint does not.
+          documents: options.includeDocuments === true
+            ? await repositories.publications.listDocumentViews(publication.id)
+            : [],
           ownContribution: own === null ? null : {
             id: own.id,
             userId: own.userId,

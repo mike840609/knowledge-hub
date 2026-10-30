@@ -7,12 +7,13 @@ import { Button, buttonClasses } from "@/components/ui/button";
 import { Dialog } from "@base-ui-components/react/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MenuContent, MenuItem, MenuRoot, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
+import { MenuContent, MenuItem, MenuRoot, MenuTrigger } from "@/components/ui/menu";
 import { useToast } from "@/components/ui/toast";
 import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
 import { DialogCloseButton } from "@/components/ui/dialog-close";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { PublicationListItem } from "@/modules/sources/application/publication-service";
-import { JoinDialog, type JoinFolderOption } from "./join-dialog";
+import { JoinDialog } from "./join-dialog";
 import { PUBLICATION_COPY } from "./publication-entry-meta";
 
 async function command(url: string, body?: unknown): Promise<string | null> {
@@ -38,11 +39,9 @@ async function command(url: string, body?: unknown): Promise<string | null> {
  */
 export function PublicationMenu({
   item,
-  folders = [],
   onChanged,
 }: {
   item: PublicationListItem;
-  folders?: readonly JoinFolderOption[];
   onChanged?: () => void;
 }) {
   const router = useRouter();
@@ -50,8 +49,9 @@ export function PublicationMenu({
   const [busy, setBusy] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
+  const [confirmUnpublish, setConfirmUnpublish] = useState(false);
   const [name, setName] = useState(item.publication.name);
-  const [error, setError] = useState<string>();
+  const [renameError, setRenameError] = useState<string>();
 
   const own = item.ownContribution;
   const hasContribution = own !== null;
@@ -60,25 +60,31 @@ export function PublicationMenu({
   if (item.canJoin) actions.push({ id: "join", label: PUBLICATION_COPY.join, run: () => setJoinOpen(true) });
   if (hasContribution && left) actions.push({ id: "resume", label: PUBLICATION_COPY.resume, run: () => void change("resume", `/api/publications/${item.publication.id}/resume`) });
   if (hasContribution && !left) actions.push({ id: "leave", label: PUBLICATION_COPY.left, run: () => void change("leave", `/api/publications/${item.publication.id}/leave`) });
-  if (item.canManage && item.publication.status === "ACTIVE") actions.push({ id: "unpublish", label: PUBLICATION_COPY.unpublish, run: () => void change("unpublish", `/api/publications/${item.publication.id}/unpublish`) });
+  if (item.canManage && item.publication.status === "ACTIVE") actions.push({ id: "unpublish", label: PUBLICATION_COPY.unpublish, run: () => setConfirmUnpublish(true) });
   if (item.canManage && item.publication.status === "ARCHIVED") actions.push({ id: "restore", label: PUBLICATION_COPY.restore, run: () => void change("restore", `/api/publications/${item.publication.id}/restore`) });
-  if (item.canManage) actions.push({ id: "rename", label: PUBLICATION_COPY.rename, run: () => { setName(item.publication.name); setRenameOpen(true); } });
+  if (item.canManage) actions.push({ id: "rename", label: PUBLICATION_COPY.rename, run: () => { setName(item.publication.name); setRenameError(undefined); setRenameOpen(true); } });
 
-  async function change(id: string, url: string, body?: unknown) {
-    if (busy) return;
+  /**
+   * The menu closes before this resolves, so a refusal cannot be shown inside
+   * it. Failures go to the toast region, which outlives the menu; a rename also
+   * keeps its own inline error because its dialog stays open.
+   */
+  async function change(id: string, url: string, body?: unknown): Promise<boolean> {
+    if (busy) return false;
     setBusy(true);
-    setError(undefined);
     const failure = await command(url, body);
     setBusy(false);
     if (failure) {
-      setError(failure);
-      return;
+      toast({ message: failure, tone: "danger" });
+      if (id === "rename") setRenameError(failure);
+      return false;
     }
     if (id === "rename") setRenameOpen(false);
     if (id === "join") setJoinOpen(false);
     toast({ message: "已更新團隊發佈。" });
     onChanged?.();
     router.refresh();
+    return true;
   }
 
   if (actions.length === 0) return null;
@@ -98,8 +104,6 @@ export function PublicationMenu({
               {action.label}
             </MenuItem>
           ))}
-          {error ? <MenuSeparator /> : null}
-          {error ? <p role="alert" className="px-2 py-1 text-caption text-kh-danger">{error}</p> : null}
         </MenuContent>
       </MenuRoot>
       {item.canJoin ? (
@@ -107,7 +111,6 @@ export function PublicationMenu({
           open={joinOpen}
           onOpenChange={setJoinOpen}
           publication={{ publicationId: item.publication.id, name: item.publication.name }}
-          folders={folders}
           onJoined={() => { onChanged?.(); router.refresh(); }}
         />
       ) : null}
@@ -127,7 +130,7 @@ export function PublicationMenu({
                 發佈名稱
                 <Input autoFocus value={name} maxLength={200} required disabled={busy} onChange={(event) => setName(event.target.value)} />
               </Label>
-              {error ? <p role="alert" className="text-body text-kh-danger">{error}</p> : null}
+              {renameError ? <p role="alert" className="text-body text-kh-danger">{renameError}</p> : null}
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="secondary" disabled={busy} onClick={() => setRenameOpen(false)}>取消</Button>
                 <Button type="submit" disabled={busy || !name.trim()}>{busy ? "儲存中…" : "儲存"}</Button>
@@ -137,6 +140,15 @@ export function PublicationMenu({
           </Dialog.Popup>
         </Dialog.Portal>
       </Dialog.Root>
+      <ConfirmDialog
+        open={confirmUnpublish}
+        onOpenChange={setConfirmUnpublish}
+        title={PUBLICATION_COPY.unpublish}
+        description="這會把整個發佈（包含其他成員的文件）封存，團隊成員將無法再閱讀。只有還原能把它帶回來。"
+        confirmLabel="取消發佈"
+        cancelLabel="保留"
+        onConfirm={() => { void change("unpublish", `/api/publications/${item.publication.id}/unpublish`); }}
+      />
     </>
   );
 }

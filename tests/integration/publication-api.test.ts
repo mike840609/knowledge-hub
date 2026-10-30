@@ -18,6 +18,7 @@ vi.mock("@/server/composition", () => ({
 }));
 
 import { POST as publish } from "@/app/api/publications/route";
+import { GET as publicationOptions } from "@/app/api/publications/options/route";
 import { POST as preview } from "@/app/api/publications/preview/route";
 import { POST as join } from "@/app/api/publications/[publicationId]/join/route";
 import { POST as leave } from "@/app/api/publications/[publicationId]/leave/route";
@@ -704,6 +705,51 @@ describe("publication API: safe read models", () => {
     expect(withArchived.canManage).toBe(true);
   });
 
+  it("offers options only for teams the caller may publish to and only their own folders", async () => {
+    const directViewerTeamId = uuidv7();
+    const groupViewerTeamId = uuidv7();
+    const now = new Date();
+    await fixture.uow.run(async (repositories) => {
+      await repositories.workspaces.insert(createTeamWorkspaceInsert({
+        id: directViewerTeamId, name: unique("Viewer Team"), createdBy: fixture.mike.identity.id, now,
+      }));
+      await repositories.workspaceMemberships.insert(createDirectMembership({
+        workspaceId: directViewerTeamId, userId: fixture.ann.identity.id, role: "VIEWER", now,
+      }));
+      await repositories.workspaces.insert(createTeamWorkspaceInsert({
+        id: groupViewerTeamId, name: unique("Group Viewer Team"), createdBy: fixture.mike.identity.id, now,
+      }));
+      await repositories.groupMappings.insert({
+        id: uuidv7(), workspaceId: groupViewerTeamId,
+        externalGroupId: fixture.annExternalGroupId, role: "VIEWER",
+        createdBy: fixture.mike.identity.id, createdAt: now, updatedAt: now,
+      });
+    });
+
+    await fixture.createFolder(fixture.ann, `repos/ann-options-${unique("f")}`, "Ann Options");
+
+    as(fixture.ann);
+    const response = await publicationOptions();
+    expect(response.status).toBe(200);
+    const body = await response.json() as {
+      teams: { id: string; name: string }[];
+      folders: { folderNodeId: string; label: string; sourceId: string }[];
+    };
+    const teamIds = body.teams.map((team) => team.id);
+    // Ann is an EDITOR (source.manage) in the direct team, so it is offered.
+    expect(teamIds).toContain(fixture.teamWorkspaceId);
+    // A direct VIEWER and a group-mapped VIEWER cannot publish.
+    expect(teamIds).not.toContain(directViewerTeamId);
+    expect(teamIds).not.toContain(groupViewerTeamId);
+
+    // Only Ann's own folders, from her own Hub and synced sources; Mike's never appear.
+    const allowedSources = new Set([fixture.annFolderSourceId, fixture.annHubSourceId]);
+    expect(body.folders.length).toBeGreaterThan(0);
+    expect(body.folders.every((folder) => allowedSources.has(folder.sourceId))).toBe(true);
+    expect(body.folders.some((folder) => folder.label.includes("Ann Options"))).toBe(true);
+    expect(JSON.stringify(body.folders)).not.toContain("Mike Repo");
+  });
+
   it("answers 404 for every route while the flag is off", async () => {
     process.env.KM_TEAM_WORKSPACES_ENABLED = "false";
     const missing = uuidv7();
@@ -719,6 +765,7 @@ describe("publication API: safe read models", () => {
       rename(request({ name: "Off" }), ofPublication(missing)),
       status(request(undefined, "GET"), ofPublication(missing)),
       list(new Request("http://hub.test/api"), ofWorkspace(fixture.teamWorkspaceId)),
+      publicationOptions(),
     ];
     for (const response of await Promise.all(calls)) {
       await expectError(response, 404, "NOT_FOUND");

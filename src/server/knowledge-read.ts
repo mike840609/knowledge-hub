@@ -97,8 +97,6 @@ export type KnowledgeExplorerModel = {
   includeArchived: boolean;
   /** A Team workspace's publications, with the creator and maintainer of each copy. */
   publications: PublicationListItem[];
-  /** The caller's own folders, for joining a folder publication in the team. */
-  publicationFolders: { folderNodeId: string; label: string }[];
 };
 
 /**
@@ -152,15 +150,12 @@ const loadKnowledgeExplorerModel = cache(async (
     const collections = [{ source, tree }];
     // The team's publications are read for the tree's creator/time/maintainer labels and its
     // publication menu. A personal workspace has none, so it pays nothing for this.
+    // Only the tree needs per-document metadata; the options route is read when a
+    // join dialog opens, not on every team page load.
     const publications = workspace.type === "TEAM"
-      ? await services.publications.list(caller, workspaceId, true).catch(() => [])
+      ? await services.publications.list(caller, workspaceId, true, { includeDocuments: true }).catch(() => [])
       : [];
-    const publicationFolders = workspace.type === "TEAM"
-      ? await services.publications.options(caller)
-        .then((options) => options.folders.map(({ folderNodeId, label }) => ({ folderNodeId, label })))
-        .catch(() => [])
-      : [];
-    return { sources: ordered, source, tree, collections, includeArchived, publications, publicationFolders };
+    return { sources: ordered, source, tree, collections, includeArchived, publications };
   } catch (error) {
     if (isHiddenReadFailure(error)) return null;
     throw error;

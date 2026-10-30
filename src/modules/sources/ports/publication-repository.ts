@@ -46,6 +46,12 @@ export interface PublicationRepository {
    * the read-side "updated" for a team list.
    */
   latestDocumentUpdatedAt(publicationId: string): Promise<Date | null>;
+  /**
+   * The same content times for every active publication of one team, in one
+   * query instead of one per publication. Only publications with team
+   * documents appear; the caller falls back to the source's timestamp.
+   */
+  latestDocumentUpdatedAtByTeam(teamId: string): Promise<Map<string, Date>>;
   /** The publication-side metadata of one team document, joined to its creator's contribution. */
   findDocument(teamDocumentId: string): Promise<{ creatorUserId: string; publicationId: string; sourcePath: string | null } | null>;
   listBindings(contributionId: string): Promise<DocumentBinding[]>;

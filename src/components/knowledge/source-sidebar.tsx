@@ -13,7 +13,7 @@ import type { TreeLoadState } from "./source-tree-cache";
 import { useSidebarShortcuts } from "./use-sidebar-shortcuts";
 import { KnowledgeTree } from "./knowledge-tree";
 import { useSharedFolderIds } from "./shared-folders";
-import { SidebarGetStarted, hasNoDocuments, startActions } from "./sidebar-get-started";
+import { SidebarGetStarted, emptyWorkspaceActions, hasNoDocuments } from "./sidebar-get-started";
 import { TreeFilter } from "./tree-filter";
 import { buttonClasses } from "@/components/ui/button";
 import { Status } from "@/components/ui/status";
@@ -26,7 +26,6 @@ import { actionsFor, type ActionTarget, type FolderTarget } from "@/components/a
 import type { PublicationListItem } from "@/modules/sources/application/publication-service";
 import { PublicationEntryMeta, publicationTreeMeta } from "@/components/publications/publication-entry-meta";
 import { PublicationMenu } from "@/components/publications/publication-menu";
-import type { JoinFolderOption } from "@/components/publications/join-dialog";
 
 /** Why a synced source's documents cannot be edited here; read after the name, never part of it. */
 const READ_ONLY_DESCRIPTION = "Synced from a folder, read-only in the Hub";
@@ -44,8 +43,6 @@ export type SourceSidebarProps = {
   includeArchived: boolean;
   /** A Team workspace's publications, each one top-level source entry. */
   publications?: readonly PublicationListItem[];
-  /** The caller's own folders, for joining a folder publication. */
-  publicationFolders?: readonly JoinFolderOption[];
   /** Given where the explorer stands beside the content (desktop); the navigation menu's copy has no way to collapse. */
   onCollapse?: () => void;
 };
@@ -63,7 +60,7 @@ function withoutArchivedSubtrees(items: KnowledgeTreeItem[]): KnowledgeTreeItem[
   return items.filter((item) => !hidden(item));
 }
 
-export function SourceSidebar({ workspaceId, source, collections, sources, treeStates, ensureTree, retryTree, selectedDocumentId, includeArchived, publications = [], publicationFolders = [], onCollapse }: SourceSidebarProps) {
+export function SourceSidebar({ workspaceId, source, collections, sources, treeStates, ensureTree, retryTree, selectedDocumentId, includeArchived, publications = [], onCollapse }: SourceSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -231,7 +228,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   const createActions = actionsFor("create", actionContext);
   const createFolder = createActions.find((action) => action.id === "create.folder");
   const importAction = createActions.find((action) => action.id === "create.import");
-  const getStarted = !needle && (!ensureTree || headers.every(s => treeStates?.[s.id]?.status === "loaded")) && hasNoDocuments(collections) ? startActions(actionContext) : null;
+  const getStarted = !needle && (!ensureTree || headers.every(s => treeStates?.[s.id]?.status === "loaded")) && hasNoDocuments(collections) ? emptyWorkspaceActions(actionContext) : null;
   const addFolder = createFolder ? (
     <Tooltip label="Create folder">
       <button type="button" aria-label="Create folder" onClick={() => runAction(createFolder)} className={buttonClasses({ variant: "ghost", icon: true })}>
@@ -350,7 +347,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                   <span className="truncate">{candidate.name}</span>
                   {candidate.status === "ARCHIVED" ? <Status kind="archived" className="ml-auto text-caption font-normal text-kh-text-muted">Archived</Status> : null}
                 </button>
-                {publication ? <PublicationMenu item={publication} folders={publicationFolders} /> : null}
+                {publication ? <PublicationMenu item={publication} /> : null}
                 {isNotes && canCreate ? <div className="flex items-center">{addFolder}{addNote}</div> : null}
               </div>
               {publicationMeta ? <div className="px-2 pb-1"><PublicationEntryMeta meta={publicationMeta} /></div> : null}

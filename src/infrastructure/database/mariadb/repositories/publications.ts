@@ -210,6 +210,25 @@ export class MariaDbPublicationRepository implements PublicationRepository {
     return asNullableDate(rows[0]?.latest);
   }
 
+  async latestDocumentUpdatedAtByTeam(teamId: string): Promise<Map<string, Date>> {
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT pd.publication_id, MAX(d.updated_at) AS latest
+       FROM publication_documents pd
+       JOIN knowledge_documents d ON d.id = pd.team_document_id
+       JOIN publications p ON p.id = pd.publication_id
+       JOIN knowledge_sources s ON s.id = p.source_id
+       WHERE s.workspace_id = ?
+       GROUP BY pd.publication_id`,
+      [teamId],
+    );
+    const latest = new Map<string, Date>();
+    for (const row of rows) {
+      const value = asNullableDate(row.latest);
+      if (value) latest.set(String(row.publication_id), value);
+    }
+    return latest;
+  }
+
   async findDocument(teamDocumentId: string): Promise<{ creatorUserId: string; publicationId: string; sourcePath: string | null } | null> {
     const rows = await this.connection.query<DbRow[]>(
       `SELECT pd.publication_id, pd.source_path, c.user_id

@@ -34,7 +34,6 @@ export default async function SourceExplorerLayout({
       collections={model.collections}
       includeArchived={model.includeArchived}
       publications={model.publications}
-      publicationFolders={model.publicationFolders}
     >
       {children}
     </KnowledgeLayout>

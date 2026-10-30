@@ -105,7 +105,7 @@ export function PublicationEntryMeta({ meta }: { meta: PublicationTreeMeta }) {
       <span data-publication-creator="">{meta.creatorName}</span>
       <span aria-hidden="true">·</span>
       <span className="whitespace-nowrap">
-        <Timestamp value={meta.updatedAt} variant="short" /> 更新
+        <Timestamp value={meta.updatedAt} variant="zh-relative" /> 更新
       </span>
       {stateLabel(meta.state) ? (
         <>

@@ -36,25 +36,59 @@ export function JoinDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   publication: { publicationId: string; name: string };
-  folders: readonly JoinFolderOption[];
+  /** The caller's own folders. Absent, they are read from the options route when the dialog opens. */
+  folders?: readonly JoinFolderOption[];
   onJoined?: (result: { contributionId: string }) => void;
 }) {
-  const [folderNodeId, setFolderNodeId] = useState(folders.length === 1 ? folders[0].folderNodeId : "");
+  const [loadedFolders, setLoadedFolders] = useState<readonly JoinFolderOption[]>(folders ?? []);
+  const [folderNodeId, setFolderNodeId] = useState(folders?.length === 1 ? folders[0].folderNodeId : "");
   const [acknowledged, setAcknowledged] = useState(false);
   const [lowOverlap, setLowOverlap] = useState(false);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const submitting = useRef(false);
+  const foldersKey = folders?.map((folder) => folder.folderNodeId).join(",") ?? "";
 
   useEffect(() => {
     if (!open) return;
-    setFolderNodeId(folders.length === 1 ? folders[0].folderNodeId : "");
-    setAcknowledged(false);
     setLowOverlap(false);
+    setAcknowledged(false);
     setError(undefined);
     setBusy(false);
     submitting.current = false;
-  }, [open, publication.publicationId, folders.length]);
+    if (folders !== undefined) {
+      setLoadedFolders(folders);
+      setFolderNodeId(folders.length === 1 ? folders[0].folderNodeId : "");
+      return;
+    }
+    let current = true;
+    setLoadedFolders([]);
+    setFolderNodeId("");
+    void (async () => {
+      try {
+        const response = await fetch("/api/publications/options", { cache: "no-store" });
+        if (!response.ok) return;
+        const options = await response.json() as { folders?: JoinFolderOption[] };
+        const next = options.folders ?? [];
+        if (!current) return;
+        setLoadedFolders(next);
+        if (next.length === 1) setFolderNodeId(next[0].folderNodeId);
+      } catch {
+        // An empty picker is honest; publish/join still decides.
+      }
+    })();
+    return () => { current = false; };
+    // The folder set is fixed for the life of one opening.
+  }, [open, publication.publicationId, foldersKey]);
+
+  function chooseFolder(next: string) {
+    setFolderNodeId(next);
+    // A warning belongs to the folder it was raised for: choosing another one
+    // must not carry the acknowledgement over.
+    setLowOverlap(false);
+    setAcknowledged(false);
+    setError(undefined);
+  }
 
   async function join() {
     if (busy || submitting.current || !folderNodeId) return;
@@ -108,10 +142,10 @@ export function JoinDialog({
                 aria-label="你的資料夾"
                 value={folderNodeId}
                 disabled={busy}
-                onValueChange={setFolderNodeId}
+                onValueChange={chooseFolder}
                 options={[
-                  { value: "", label: folders.length === 0 ? "沒有可加入的資料夾" : "選擇資料夾" },
-                  ...folders.map((folder) => ({ value: folder.folderNodeId, label: folder.label })),
+                  { value: "", label: loadedFolders.length === 0 ? "沒有可加入的資料夾" : "選擇資料夾" },
+                  ...loadedFolders.map((folder) => ({ value: folder.folderNodeId, label: folder.label })),
                 ]}
               />
             </Label>

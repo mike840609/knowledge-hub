@@ -30,7 +30,6 @@ export function KnowledgeLayout({
   collections,
   includeArchived,
   publications = [],
-  publicationFolders = [],
   children,
 }: {
   workspaceId: string;
@@ -39,7 +38,6 @@ export function KnowledgeLayout({
   collections: { source: SourceView; tree: KnowledgeTreeItem[] }[];
   includeArchived: boolean;
   publications?: readonly PublicationListItem[];
-  publicationFolders?: readonly { folderNodeId: string; label: string }[];
   children: ReactNode;
 }) {
   const headers = useMemo(() => sources ?? collections.map(c => c.source), [sources, collections]);
@@ -91,7 +89,6 @@ export function KnowledgeLayout({
       retryTree={trees.retry}
       includeArchived={includeArchived}
       publications={publications}
-      publicationFolders={publicationFolders}
       onCollapse={navigation?.mobileExplorerTarget || overlayExplorer ? undefined : () => toggleExplorer(true)}
     />
   );

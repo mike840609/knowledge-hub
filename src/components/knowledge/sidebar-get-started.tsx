@@ -19,6 +19,19 @@ export function hasNoDocuments(collections: { tree: KnowledgeTreeItem[] }[]): bo
 }
 
 /**
+ * An empty workspace's start actions, or null where there is nothing to offer.
+ * A team has no authoring entry points, and an empty list is not the same as
+ * "no permission": the team empty state already says content arrives by
+ * publishing, so this must not fall through to the edit-access line.
+ */
+export function emptyWorkspaceActions(
+  context: Omit<ActionContext, "onboarding">,
+): Action[] | null {
+  const actions = startActions(context);
+  return actions.length > 0 ? actions : null;
+}
+
+/**
  * The explorer's tree when the workspace has no documents at all. An empty folder is one muted
  * line, but this is the first thing a new workspace shows, so it says how documents get here and
  * what each way leads to (frontend design language, empty states). `compact` is for the Knowledge

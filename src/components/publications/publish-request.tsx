@@ -51,7 +51,7 @@ export function PublishDialogHost() {
     return () => window.removeEventListener(PUBLISH_REQUEST_EVENT, open);
   }, [loadOptions]);
 
-  const folders: readonly JoinFolderOption[] = options?.folders ?? [];
+  const folders: readonly JoinFolderOption[] | undefined = options?.folders;
   return (
     <>
       {origin ? (

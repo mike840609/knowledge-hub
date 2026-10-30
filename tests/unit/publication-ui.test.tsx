@@ -3,6 +3,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PublishDialog, type PublishOriginOption, type PublishTeamOption } from "@/components/publications/publish-dialog";
+import { PublicationMenu } from "@/components/publications/publication-menu";
+import { formatShortTimeZhTw } from "@/lib/format-date";
 import { JoinDialog } from "@/components/publications/join-dialog";
 import {
   PUBLICATION_COPY,
@@ -20,9 +22,22 @@ import type { PublicationDocumentView, PublicationNotice } from "@/modules/sourc
 import { OwnerReviewPanel } from "@/components/knowledge/owner-review-panel";
 import type { ReviewThreadView } from "@/modules/knowledge/domain/document-review";
 
+const mocks = vi.hoisted(() => ({
+  refresh: vi.fn(),
+  push: vi.fn(),
+  toast: vi.fn(),
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: mocks.refresh, push: mocks.push }),
+}));
+vi.mock("@/components/ui/toast", () => ({ useToast: () => mocks.toast }));
+
 let root: Root;
 let container: HTMLDivElement;
 beforeEach(() => {
+  mocks.refresh.mockReset();
+  mocks.push.mockReset();
+  mocks.toast.mockReset();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("ResizeObserver", class {
     observe() {}
@@ -144,14 +159,14 @@ describe("publish dialog", () => {
 });
 
 describe("join dialog", () => {
-  const folders = [{ folderNodeId: "f1", label: "Mike Repo / docs" }];
+  const folders = [{ folderNodeId: "f1", label: "Mike Repo / docs" }, { folderNodeId: "f2", label: "Mike Repo / docs-v2" }];
 
   it("requires an acknowledgement after a low-overlap refusal", async () => {
     const fetch = fetchRoutes({
       "/join": () => jsonResponse({ error: { code: "PUBLICATION_JOIN_LOW_OVERLAP", message: "low" } }, 409),
     });
     vi.stubGlobal("fetch", fetch);
-    await act(async () => root.render(<JoinDialog open onOpenChange={() => {}} publication={{ publicationId: "p1", name: "HCM KM" }} folders={folders} />));
+    await act(async () => root.render(<JoinDialog open onOpenChange={() => {}} publication={{ publicationId: "p1", name: "HCM KM" }} folders={[folders[0]]} />));
     await settle();
     await act(async () => submitButton(PUBLICATION_COPY.join).click());
     await settle();
@@ -164,6 +179,55 @@ describe("join dialog", () => {
     await settle();
     const last = fetch.mock.calls.at(-1)!;
     expect(JSON.parse(String(last[1]?.body))).toMatchObject({ acknowledgeLowOverlap: true, folderNodeId: "f1" });
+  });
+
+  it("drops a warning and its acknowledgement when another folder is chosen", async () => {
+    const fetch = fetchRoutes({
+      "/join": () => jsonResponse({ error: { code: "PUBLICATION_JOIN_LOW_OVERLAP", message: "low" } }, 409),
+    });
+    vi.stubGlobal("fetch", fetch);
+    await act(async () => root.render(<JoinDialog open onOpenChange={() => {}} publication={{ publicationId: "p1", name: "HCM KM" }} folders={folders} />));
+    await settle();
+    async function choose(label: string) {
+      await act(async () => document.querySelector<HTMLElement>('[aria-label="你的資料夾"]')!.click());
+      await settle();
+      const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((candidate) => candidate.textContent?.includes(label));
+      if (!option) throw new Error(`No folder option ${label}`);
+      // The item commits on click only when it is highlighted, as a pointer does.
+      await act(async () => option.dispatchEvent(new MouseEvent("mousemove", { bubbles: true })));
+      await settle();
+      await act(async () => option.click());
+      await settle();
+    }
+    await choose("Mike Repo / docs");
+    await act(async () => submitButton(PUBLICATION_COPY.join).click());
+    await settle();
+    expect(document.body.textContent).toContain(PUBLICATION_COPY.lowOverlapAcknowledge);
+
+    // Choosing another folder starts over: no warning, no carried acknowledgement.
+    await choose("docs-v2");
+    expect(document.body.textContent).not.toContain(PUBLICATION_COPY.lowOverlapAcknowledge);
+    expect(document.querySelector<HTMLInputElement>('input[type="checkbox"]')).toBeNull();
+    const submit = submitButton(PUBLICATION_COPY.join);
+    expect(submit.disabled).toBe(false);
+    await act(async () => submit.click());
+    await settle();
+    const last = fetch.mock.calls.at(-1)!;
+    expect(JSON.parse(String(last[1]?.body))).toEqual({ folderNodeId: "f2" });
+  });
+
+  it("loads the caller's folders from options when the menu did not pass them", async () => {
+    const fetch = fetchRoutes({
+      "/api/publications/options": () => jsonResponse({
+        teams: [],
+        folders: [{ folderNodeId: "loaded-1", label: "Loaded Repo / docs" }],
+      }),
+    });
+    vi.stubGlobal("fetch", fetch);
+    await act(async () => root.render(<JoinDialog open onOpenChange={() => {}} publication={{ publicationId: "p1", name: "HCM KM" }} />));
+    await settle();
+    expect(document.body.textContent).toContain("Loaded Repo / docs");
+    expect(submitButton(PUBLICATION_COPY.join).disabled).toBe(false);
   });
 });
 
@@ -234,6 +298,59 @@ describe("sync publication notices", () => {
   });
 });
 
+describe("Traditional Chinese relative time", () => {
+  const now = Date.parse("2026-10-31T12:00:00Z");
+  it("says 剛剛, days, then the month and day", () => {
+    expect(formatShortTimeZhTw(new Date(now - 20_000), now, "UTC")).toBe("剛剛");
+    expect(formatShortTimeZhTw(new Date(now - 6 * 86_400_000), now, "UTC")).toBe("6 天前");
+    expect(formatShortTimeZhTw(new Date("2026-10-12T08:00:00Z"), now, "UTC")).toBe("10/12");
+    expect(formatShortTimeZhTw(new Date("2025-10-12T08:00:00Z"), now, "UTC")).toBe("2025/10/12");
+  });
+});
+
+describe("publication menu", () => {
+  const managed: PublicationListItem = {
+    publication: { id: "p1", sourceId: "s1", teamWorkspaceId: "t1", name: "HCM KM", kind: "FOLDER", creatorUserId: "u2", status: "ACTIVE" },
+    creatorName: "Mike",
+    updatedAt: new Date("2026-10-28T00:00:00Z"),
+    canJoin: false,
+    canManage: true,
+    documents: [],
+    ownContribution: { id: "c1", userId: "u2", leftAt: null, rightsFrozenAt: null, pendingCatchUp: false },
+  };
+
+  async function openMenu(item: PublicationListItem) {
+    await act(async () => root.render(<PublicationMenu item={item} />));
+    await settle();
+    await act(async () => document.querySelector<HTMLElement>('[aria-label="HCM KM 的發佈操作"]')!.click());
+    await settle();
+  }
+
+  it("asks before unpublishing, because the UI offers no undo", async () => {
+    const requestFetch = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", requestFetch);
+    await openMenu(managed);
+    await act(async () => document.querySelector<HTMLElement>('[data-publication-action="unpublish"]')!.click());
+    await settle();
+    expect(document.body.textContent).toContain("這會把整個發佈");
+    expect(requestFetch).not.toHaveBeenCalled();
+    await act(async () => submitButton("取消發佈").click());
+    await settle();
+    expect(requestFetch).toHaveBeenCalledWith("/api/publications/p1/unpublish", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("reports a refused command through the toast region that outlives the menu", async () => {
+    vi.stubGlobal("fetch", fetchRoutes({
+      "/leave": () => jsonResponse({ error: { code: "WORKSPACE_ACCESS_DENIED", message: "沒有權限離開這個發佈。" } }, 403),
+    }));
+    await openMenu(managed);
+    await act(async () => document.querySelector<HTMLElement>('[data-publication-action="leave"]')!.click());
+    await settle();
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ message: "沒有權限離開這個發佈。", tone: "danger" }));
+    expect(document.querySelector('[role="menu"] [role="alert"]')).toBeNull();
+  });
+});
+
 describe("team authoring entry points", () => {
   const context = (workspaceType: "PERSONAL" | "TEAM"): ActionContext => ({
     workspaceId: "w1",
@@ -255,7 +372,8 @@ describe("team authoring entry points", () => {
     expect(ids).not.toContain("create.import");
     expect(ids).not.toContain("folder.new-document");
     expect(ids).not.toContain("folder.new-folder");
-    expect(ids).not.toContain("navigate.sources");
+    // Sources itself stays reachable: only the authoring entries inside it are hidden.
+    expect(ids).toContain("navigate.sources");
     expect(actionsFor("empty", context("TEAM"))).toEqual([]);
     expect(startActions(context("TEAM"))).toEqual([]);
   });
