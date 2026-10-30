@@ -66,13 +66,13 @@ Repository 約束：`src/modules/knowledge/**` 不 import sources；modules 不 
 | `src/modules/knowledge/application/document-review-service.ts` | 團隊討論 scope；需要時拆出 notification 判權 helper，避免擴張巨型檔案 |
 | `src/app/api/publications/**` | 發佈操作與預覽的薄 routes |
 | `src/components/publications/**` | 發佈/加入 dialog、維護者標示、生命週期選單 |
-| `tests/integration/fixtures/publications.ts` | 兩位建立者、direct/group 成員、多團隊、Folder Sync/Hub 原件共用 fixtures |
+| `tests/fixtures/publications.ts` | 兩位建立者、direct/group 成員、多團隊、Folder Sync/Hub 原件共用 fixtures（沿用 repo 既有 fixture 根目錄） |
 
 功能屬於同一條端到端流程；按下列任務順序落地。每個任務都有自己的測試及 commit，不另拆成無法交付的 schema-only 專案。
 
 ### Task 1: 定義配對、path 與貢獻者狀態規則
 
-**Files:** Create `src/modules/sources/domain/publication.ts`; Test `tests/unit/publication-domain.test.ts`.
+**Files:** Create `src/modules/sources/domain/publication.ts`, `src/modules/sources/domain/publication-errors.ts`（Task 6/8 共用的具名錯誤）; Test `tests/unit/publication-domain.test.ts`.
 
 **Interfaces:** 此任務定義後續共用的型別與函式：
 
@@ -113,7 +113,7 @@ export function publicationOverlap(originPaths: readonly string[], teamPaths: re
 
 ### Task 2: Schema、持久化與可追蹤的事件進度
 
-**Files:** Create migration `030-team-publications.ts`, repositories `publications.ts` / `publication-events.ts`（上述完整目錄）及兩個新 ports；Modify migrations/repositories 的 `index.ts`、knowledge/sources `ports/unit-of-work.ts`、knowledge `domain/source-policy.ts`; Create `tests/integration/fixtures/publications.ts`, `tests/integration/publication-persistence.test.ts`.
+**Files:** Create migrations `030-team-publications.ts` / `031-share-comment-event-context.ts`, repositories `publications.ts` / `publication-events.ts`（上述完整目錄）及兩個新 ports；Modify migrations/repositories 的 `index.ts`、knowledge/sources `ports/unit-of-work.ts`、knowledge `domain/source-policy.ts`; Create `tests/fixtures/publications.ts`, `tests/integration/publication-persistence.test.ts`.
 
 **Consumes:** Task 1 domain types。**Produces:** `SOURCE_TYPES` 增加 `PUBLICATION`，ownership 為 `SOURCE_MANAGED`；兩個 adapter 由 `createRepositories` 在同一連線建立。Unit-of-work 新增 `publicationEvents`，SourceRepositories 另有 `publications`。
 
@@ -123,11 +123,11 @@ Schema 固定如下，時間與 actor/FK 欄位依既有 migration 慣例補全�
 - `knowledge_sources.active_publication_name`：與 `name` 相同的 512 字元 binary collation generated column，只有 `source_type='PUBLICATION' AND status='ACTIVE'` 時為 name，其他為 NULL；`UNIQUE(workspace_id, active_publication_name)`。更新既有 `ck_sources_type_ownership`，不能改舊 migration。
 - `publication_contributors(id PK, publication_id FK, user_id FK, origin_folder_node_id NULL FK, origin_document_id NULL FK, left_at NULL, rights_frozen_at NULL, pending_catch_up)`；`UNIQUE(publication_id,user_id)`，origin 恰有一個非 NULL。單篇只能有第一位貢獻者，由 service 在鎖內驗證。
 - `publication_documents(team_document_id PK FK, publication_id FK, creator_contribution_id FK, current_original_document_id FK, source_path TEXT utf8mb4_bin NULL, path_hash BINARY(32) generated from SHA2(source_path,256))`；`UNIQUE(publication_id,path_hash)`，包含已封存文件；NULL 不保留位置。adapter 查 hash 後再作 binary path 比較，不能把 hash 碰撞當成同一文件。
-- `publication_bindings(contribution_id FK, original_document_id FK, team_document_id FK, active_team_workspace_id UUID NULL, PRIMARY KEY(contribution_id,original_document_id), UNIQUE(original_document_id,active_team_workspace_id))`。建立者及非建立者都存配對並 claim；active key 由來源 JOIN 得到且僅在 publication ACTIVE 時填入，是唯一約束用的 claim key，不能拿來授權。archive 清空、restore 在同一交易重新 claim。重新掛接必須移除舊建立者原件的 binding，讓舊原件停止供應。
-- `publication_events(id PK, document_id NULL FK, tree_node_id NULL FK, kind, revision_id NULL FK, created_at, consumed_at NULL)`；至少一個 target 非 NULL。kind 為 `REVISION` / `TREE` / `LIFECYCLE` / `SOURCE`。事件的 workspace 由 target→source 推導；保留 source 級事件以涵蓋整個原來源的 archive/restore。
+- `publication_bindings(contribution_id FK, original_document_id FK, team_document_id FK, active_team_workspace_id UUID NULL, PRIMARY KEY(contribution_id,original_document_id), UNIQUE(original_document_id,active_team_workspace_id))`。建立者及非建立者都存配對並 claim；`active_team_workspace_id` 是真實 nullable 欄位，由 adapter 依 publication 當下狀態填入（不能跨表生成），僅在 publication ACTIVE 時填入，是唯一約束用的 claim key，不能拿來授權。archive 清空、restore 在同一交易重新 claim。重新掛接必須移除舊建立者原件的 binding，讓舊原件停止供應。
+- `publication_events(id PK, document_id NULL FK, tree_node_id NULL FK, source_id NULL FK, kind, revision_id NULL, created_at, consumed_at NULL)`；document/tree/source 恰好一個非 NULL。`revision_id` 是事件資料而非 FK：working revision 可能在事件未消費前被 prune，consumer 一律重讀目前 revision。kind 為 `REVISION` / `TREE` / `LIFECYCLE` / `SOURCE`。事件的 workspace 由 target→source 推導；保留 source 級事件以涵蓋整個原來源的 archive/restore。
 - `publication_event_deliveries(event_id FK, contribution_id FK, PRIMARY KEY(event_id,contribution_id), processed_at NULL, outcome NULL)`；每個目標各自完成，pending/失敗不能讓根事件 consumed。無目標或明確跳過 LEFT/封存 publication 可完成；flag off 時完全不消費。
 - `publication_reconcile_reports(contribution_id PK FK, report_json, updated_at)`：保存最近一次 notices，讓非同步 apply 結果可讀取。
-- `share_comment_events` 增加 `recipient_user_id UUID NULL FK`、把 `origin_share_link_id` 改成 nullable；`review_comment_mentions.share_link_id` 改 nullable。NULL 只用於團隊 publication，service 及 adapter 驗證 context，不產生匿名 grant。
+- `share_comment_events` 增加 `recipient_user_id UUID NULL FK`、把 `origin_share_link_id` 改成 nullable；`review_comment_mentions.share_link_id` 改 nullable。Migration 031 加 `CHECK ((origin_share_link_id IS NULL) <> (recipient_user_id IS NULL))`：每列恰好一個來源，不能是兩者皆 NULL 的匿名 shape；adapter 對 mention 也要求 null link 只出現在有效 team context。NULL 只用於團隊 publication，service 及 adapter 驗證 context，不產生匿名 grant。
 
 Ports 的方法固定為：
 
@@ -154,6 +154,7 @@ interface PublicationRepository {
   insertDocument(document: PublicationDocument): Promise<void>;
   applyPaths(moves: readonly PlannedMove[]): Promise<void>;
   setPublicationStatus(publicationId: string, status: "ACTIVE" | "ARCHIVED", actorId: string): Promise<void>;
+  prepareDeliveries(limit: number): Promise<void>; // idempotent; skips events that already have delivery rows
   listPendingEvents(userId?: string, limit?: number): Promise<{ eventId: string; contributionId: string }[]>;
   completeDelivery(eventId: string, contributionId: string, outcome: "APPLIED" | "SKIPPED"): Promise<void>;
   saveReport(contributionId: string, report: ReconcileReport): Promise<void>;
@@ -163,14 +164,14 @@ interface PublicationRepository {
 
 `bind/repoint/setPublicationStatus` 原子維護 claims，duplicate key 轉為具名 domain error。`applyPaths` 在持有 publication Source 鎖的交易中先暫清 applied 文件的 path，再寫入 final paths；不能因唯一 index 的逐列檢查而讓合法 swap 失敗。新增 integration fixture `createPublicationFixture()`，回傳 `uow`、`pool`、Mike/Ann 的 trusted callers 與 personal workspace、direct/group team IDs，並提供以公開服務建立 Hub / Folder Sync 原件的 helpers；不用繞過 application 判權。
 
-- [ ] **Step 1 — 寫失敗測試。** `rejects duplicate active names but releases on archive`；`claims joiner originals as well as creator originals`；`reserves archived paths; accepts multiple NULL paths`；`keeps path case distinct and accepts paths longer than 512`；`repoint releases the old original and replaces the creator binding`；`one delivery completing leaves the root event unconsumed while another is pending`；`nullable link fields round-trip without becoming string "null"`。以 `expect(...).rejects`、`expect(rows).toHaveLength(...)` 明確驗證 DB constraint 和 repository round-trip。
+- [ ] **Step 1 — 寫失敗測試。** `rejects duplicate active names but releases on archive`；`claims joiner originals as well as creator originals`；`reserves archived paths; accepts multiple NULL paths`；`keeps path case distinct and accepts paths longer than 512`；`repoint releases the old original and replaces the creator binding`；`one delivery completing leaves the root event unconsumed while another is pending`；`prepareDeliveries(limit) reaches events beyond a full head window`；`nullable link fields round-trip without becoming string "null"`；`a comment event with neither link nor recipient is rejected`。以 `expect(...).rejects`、`expect(rows).toHaveLength(...)` 明確驗證 DB constraint 和 repository round-trip。
 - [ ] **Step 2 — 驗證失敗。** `npm run test:integration -- tests/integration/publication-persistence.test.ts` → 新表缺失而 FAIL（MariaDB 未啟動則先 `make db-up`）。
 - [ ] **Step 3 — 實作 migration 及 adapters。** FK 用 `ON DELETE RESTRICT`；events、deliveries 加未消費查詢索引；禁止同一 document 指到不同 publication 的資料形狀，透過 adapter 鎖內檢查驗證 Source/Workspace 關係。調整 test repositories/mocks 以符合新增 UoW port。
 - [ ] **Step 4 — 驗證及提交。** 同一 integration 指令 PASS，`npm run typecheck` PASS。提交上述明列檔案，commit `feat(db): persist publications and delivery progress`。
 
 ### Task 3: 唯讀封鎖與 publication 專用投影
 
-**Files:** Modify `src/modules/sources/application/source-knowledge-projection-service.ts`, `source-version-guard.ts`, `create-folder-import.ts`, `apply-folder-import.ts`, `src/modules/knowledge/application/internal/tree-transaction.ts`; Create `src/modules/sources/application/publication-write-authority.ts`; Test `tests/integration/publication-lock.test.ts`, `publication-projection.test.ts`.
+**Files:** Modify `src/modules/sources/application/source-knowledge-projection-service.ts`, `source-version-guard.ts`, `src/modules/knowledge/application/internal/tree-transaction.ts`, `eslint.config.mjs`（ignore local `.superpowers/**` scratch）; Create `src/modules/sources/application/publication-write-authority.ts`; Test `tests/integration/publication-lock.test.ts`, `publication-projection.test.ts`. `create-folder-import.ts` / `apply-folder-import.ts` are verified no-ops only if their existing `FOLDER_SYNC` gates already refuse PUBLICATION; the lock test must cover create and Apply directly rather than assuming the gate.
 
 **Consumes:** Tasks 1–2。**Produces:** 只在 sources 內使用的新綁定：
 
@@ -274,7 +275,7 @@ CALLER drain 只處理本人所有 contributions，包含 pending 及既有 righ
 - [ ] **Step 2 — 寫排程與 flag 測試。** 尚未 resolve 的 drain 不阻擋原 Hub save/import response；drain throw 只被 log，原件已成功且 event 留著；off → 不排程、不 consumed、不改 freeze；rollback → 不排程。本人下一次 no-op save/sync 仍觸發 pending/full reconcile，避免必須改內容才可恢復。
 - [ ] **Step 3 — 寫結果測試。** Ann sync 的 preview 與結果都含 Mike 的維護者 notice；creator move 撞上保留 path 時，original sync 仍成功且 team copy path 不變、report 有 `PATH_RESERVED`。preview 以 proposed final originals 計算；最終 reconciliation report 由 Task 11 的 GET 結果端點讀取。不得將其他團隊的 publication 名稱/維護者洩漏給已失去 access 的 contributor。
 - [ ] **Step 4 — 驗證失敗。** `npm run test:unit -- tests/unit/publication-post-commit.test.ts`；`npm run test:integration -- tests/integration/publication-drain.test.ts` → FAIL。
-- [ ] **Step 5 — 實作 drain。** 先發現 events 的目標 contributions，逐目標 transaction，完成後才標記 delivery；pending/錯誤不確認根 event。batch 預設 100，直到本次上限結束，未處理項保持可見。以 contributor 聚合同批內容、位置及 lifecycle，讓同一 sync 的 swap 一起求解。排程只覆蓋真正 mutate 的 hub 命令（含 duplicate、tree/lifecycle）、sources known-entry 及 `imports.apply`；`finalize` 只建 snapshot，不更新原件，故不 drain。
+- [ ] **Step 5 — 實作 drain。** 先以 `prepareDeliveries(limit)` 冪等建立 deliveries（同一 event 不重複排入 head window），再逐目標 transaction 處理，完成後才標記 delivery；pending/錯誤不確認根 event。batch 預設 100，直到本次上限結束，未處理項保持可見。以 contributor 聚合同批內容、位置及 lifecycle，讓同一 sync 的 swap 一起求解。排程只覆蓋真正 mutate 的 hub 命令（含 duplicate、tree/lifecycle）、sources known-entry 及 `imports.apply`；`finalize` 只建 snapshot，不更新原件，故不 drain。
 - [ ] **Step 6 — 驗證及提交。** 上述指令 PASS；commit `feat(sources): deliver publication events after personal saves`。
 
 ### Task 8: Unpublish、restore、rename 與無 caller catch-up
