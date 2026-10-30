@@ -13,6 +13,8 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { compareReviewPassages, useReviewRailLayout, type RailCard } from "./review-rail-layout";
 import { matchesShortcut } from "@/lib/shortcut-keys";
 import { linkify } from "@/lib/linkify";
+import { Popover } from "@base-ui-components/react/popover";
+import { splitMentions, type MentionedPerson } from "@/modules/knowledge/domain/mention-text";
 import { readStored, removeStored, writeStored } from "@/components/shell/use-persisted-state";
 import { useMentionAutocomplete, type MentionScope } from "./mention-autocomplete";
 
@@ -245,7 +247,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
             ? <p className="text-kh-text-muted">Comment deleted by author</p>
             : editing === comment.id && canEdit && !compact
               ? <ReviewReplyForm label="Edit comment" submitLabel="Save" initial={comment.body} onCancel={() => setEditing(undefined)} onSubmit={async body => { await author!.edit(thread.id, comment.id, body); setEditing(undefined); }} />
-              : <CommentBody body={comment.body} compact={compact} onClamped={index === 0 ? value => setClamped(previous => previous[thread.id] === value ? previous : { ...previous, [thread.id]: value }) : undefined} />}
+              : <CommentBody body={comment.body} compact={compact} mentions={comment.mentions} onClamped={index === 0 ? value => setClamped(previous => previous[thread.id] === value ? previous : { ...previous, [thread.id]: value }) : undefined} />}
           </div>
         </li>; })}</ol>
         {/* What follows the remarks starts on their column, past an empty avatar column; a ghost button's -ml-3 puts its label, not its box, there. */}
@@ -294,7 +296,7 @@ function Avatar({ name }: { name?: string | null }) {
 }
 
 /** A remark as text, its http(s) links made links; a preview is held to two lines and says whether it was cut. */
-function CommentBody({ body, compact, onClamped }: { body: string; compact: boolean; onClamped?: (clamped: boolean) => void }) {
+function CommentBody({ body, compact, onClamped, mentions }: { body: string; compact: boolean; onClamped?: (clamped: boolean) => void; mentions?: readonly MentionedPerson[] }) {
   const ref = useRef<HTMLParagraphElement>(null);
   useLayoutEffect(() => {
     const element = ref.current;
@@ -308,6 +310,33 @@ function CommentBody({ body, compact, onClamped }: { body: string; compact: bool
   return <p ref={ref} className={`whitespace-pre-wrap break-words ${compact ? "line-clamp-2" : ""}`}>
     {linkify(body).map((part, index) => part.href
       ? <a key={index} href={part.href} target="_blank" rel="noopener noreferrer" className="font-medium text-kh-link underline decoration-kh-link underline-offset-2 kh-focus-ring" onClick={event => event.stopPropagation()}>{part.text}</a>
-      : part.text)}
+      : splitMentions(part.text, mentions ?? []).map((piece, at) => piece.people
+        ? <MentionCard key={`${index}-${at}`} text={piece.text} people={piece.people} />
+        : piece.text))}
   </p>;
+}
+
+/**
+ * A real `@name` of a comment: a button that opens who it is, on hover, focus and tap.
+ * Everyone the comment mentioned under that name is listed, one row each. Text only.
+ */
+function MentionCard({ text, people }: { text: string; people: readonly MentionedPerson[] }) {
+  const [open, setOpen] = useState(false);
+  return <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Trigger openOnHover delay={150} closeDelay={100} aria-label={`${people[0].name}, mentioned`} onFocus={() => setOpen(true)}
+      onClick={event => event.stopPropagation()} render={<button type="button" />}
+      className="font-medium text-kh-link kh-focus-ring">{text}</Popover.Trigger>
+    <Popover.Portal>
+      <Popover.Positioner side="bottom" align="start" sideOffset={4} className="z-[80]">
+        <Popover.Popup data-mention-card="" initialFocus={false} onClick={event => event.stopPropagation()}
+          className={"flex max-w-72 flex-col gap-2 rounded-lg border border-kh-border bg-kh-bg p-3 text-body-sm text-kh-text shadow-popover outline-none " +
+            "transition-[opacity,transform] duration-120 ease-out data-[starting-style]:opacity-0 data-[ending-style]:opacity-0"}>
+          {people.map(person => <div key={person.empId}>
+            <p className="font-medium">{person.name}</p>
+            <p className="text-caption text-kh-text-muted">{[person.nameEn, person.empId].filter(Boolean).join(" · ")}</p>
+          </div>)}
+        </Popover.Popup>
+      </Popover.Positioner>
+    </Popover.Portal>
+  </Popover.Root>;
 }
