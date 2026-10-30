@@ -63,8 +63,9 @@ describe("review comment mentions repository", () => {
     expect(listed.map(m => m.commentId)).toEqual([b.commentId, a.commentId]);
     expect(listed.every(m => m.mentionedUserId === f.alice && m.readAt === null)).toBe(true);
     expect(await f.uow.run(r => r.reviewMentions.listRecentByRecipient(f.alice, 1))).toHaveLength(1);
-    expect(await f.uow.run(r => r.reviewMentions.mentionedCommentIds(f.alice, [a.commentId, randomUUID()]))).toEqual(new Set([a.commentId]));
-    expect(await f.uow.run(r => r.reviewMentions.mentionedCommentIds(f.alice, []))).toEqual(new Set());
+    const found = await f.uow.run(r => r.reviewMentions.findByComments(f.alice, [a.commentId, randomUUID()]));
+    expect(found.map(m => m.commentId)).toEqual([a.commentId]);
+    expect(await f.uow.run(r => r.reviewMentions.findByComments(f.alice, []))).toEqual([]);
   });
 
   it("markRead touches only the caller's row", async () => {

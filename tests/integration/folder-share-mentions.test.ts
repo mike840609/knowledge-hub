@@ -40,8 +40,9 @@ async function fixture() {
   const anchor: ReviewAnchor = { schemaVersion: 1, blockPath: block.path, blockKind: block.kind, startUtf16: 2, endUtf16: 16, exact: "secret passage", prefix: "A ", suffix: " here." };
   const service = new DocumentReviewService(uow, () => new Date(), () => true);
   const mention = () => service.createForLink(reader, { token, documentId: doc.documentId, expectedRevisionId: doc.revisionId, anchor, body: "Please look", idempotencyKey: randomUUID(), mentions: [mentionedId.id] });
+  const start = (caller = reader) => service.createForLink(caller, { token, documentId: doc.documentId, expectedRevisionId: doc.revisionId, anchor, body: "A question", idempotencyKey: randomUUID() });
   const unread = async () => (await service.listUnreadForOwner(mentioned)).notifications.filter(n => n.kind === "MENTION");
-  return { service, shares, hub, owner, reader, token, link, doc, folderNodeId, sourceId, mentionedId, mention, unread };
+  return { service, shares, hub, owner, reader, mentioned, token, link, doc, folderNodeId, sourceId, anchor, mentionedId, mention, start, unread };
 }
 
 describe("mentions through a folder link", () => {
@@ -65,5 +66,41 @@ describe("mentions through a folder link", () => {
     const found = await f.service.searchMentionCandidates(f.reader, { query: f.mentionedId.emp_id, token: f.token, documentId: f.doc.documentId });
     expect(found.candidates.map(c => c.id)).toEqual([f.mentionedId.id]);
     await expect(f.service.searchMentionCandidates(f.reader, { query: f.mentionedId.emp_id, token: f.token })).rejects.toMatchObject({ code: "SHARE_LINK_NOT_FOUND" });
+  });
+
+  it("a reply through the folder link names the person, who follows through it and clears the mention by looking", async () => {
+    const f = await fixture();
+    const thread = await f.start();
+    await f.service.replyForLink(f.reader, { token: f.token, documentId: f.doc.documentId, threadId: thread.id, body: "Over to you", idempotencyKey: randomUUID(), mentions: [f.mentionedId.id] });
+    expect(await f.unread()).toEqual([expect.objectContaining({ kind: "MENTION", token: f.token, documentId: f.doc.documentId, threadId: thread.id })]);
+    const followed = (await f.service.listFollowedDiscussions(f.mentioned)).items;
+    expect(followed).toEqual([expect.objectContaining({ threadId: thread.id, linkAvailable: true, token: f.token, documentId: f.doc.documentId })]);
+    await f.service.markSeenForLink(f.mentioned, { token: f.token, documentId: f.doc.documentId, threadId: thread.id });
+    expect(await f.unread()).toEqual([]);
+  });
+
+  it("an owner cannot hand over a folder link: the mention must name a link of the document itself", async () => {
+    const f = await fixture();
+    await expect(f.service.createForOwner(f.owner, {
+      documentId: f.doc.documentId, expectedRevisionId: f.doc.revisionId, anchor: f.anchor, body: "Look", idempotencyKey: randomUUID(),
+      mentions: [f.mentionedId.id], mentionLinkId: f.link.id,
+    })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+  });
+
+  it("a dead mention does not hide the reply from a follow whose link still opens", async () => {
+    const f = await fixture();
+    const thread = await f.start(f.mentioned); // follows through the folder link
+    const documentLink = await f.shares.create(f.owner, { documentId: f.doc.documentId });
+    await f.service.replyForOwner(f.owner, { documentId: f.doc.documentId, threadId: thread.id, body: "Owner answers", idempotencyKey: randomUUID(), mentions: [f.mentionedId.id], mentionLinkId: documentLink.id });
+    expect((await f.unread()).map(n => n.kind)).toEqual(["MENTION"]);
+    await f.shares.revoke(f.owner, documentLink.id);
+    const notices = (await f.service.listUnreadForOwner(f.mentioned)).notifications;
+    expect(notices.map(n => n.kind)).toEqual(["FOLLOW"]);
+    expect(notices[0]).toMatchObject({ excerpt: "Owner answers", token: f.token });
+  });
+
+  it("a candidate search on the owner's door with a malformed document id is not found, not an error", async () => {
+    const f = await fixture();
+    await expect(f.service.searchMentionCandidates(f.owner, { query: "a", documentId: "x" })).rejects.toMatchObject({ code: "SHARE_LINK_NOT_FOUND" });
   });
 });

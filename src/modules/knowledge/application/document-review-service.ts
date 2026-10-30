@@ -137,6 +137,8 @@ export class DocumentReviewService {
   /** People to @-mention, for a caller who could write a comment on this document now: a live link, or the owner. Reads only. */
   async searchMentionCandidates(caller: CallerContext, input: { query: string; token?: string; documentId?: string }) {
     if (input.token === undefined && input.documentId === undefined) fail("INVALID_REQUEST", "Provide a share link or a document.");
+    // A malformed id would make MariaDB's UUID column raise rather than match nothing.
+    if (input.token === undefined && !isUuid(input.documentId!)) throw new ShareLinkNotFoundError();
     return this.uow.run(async r => {
       const s = input.token !== undefined ? await this.linkScope(r, input.token, false, input.documentId) : await this.ownerScope(r, caller, input.documentId!, false);
       this.enabled(); this.active(s);
@@ -204,7 +206,9 @@ export class DocumentReviewService {
       if (list) list.push(comment); else commentsByThread.set(comment.threadId, [comment]);
     }
     // A comment naming the caller is its own Inbox entry; it is not counted again as a follow reply.
-    const excludeCommentIds = await r.reviewMentions.mentionedCommentIds(userId, comments.map(comment => comment.id));
+    // Only a live mention is that entry: a dead one shows nothing, so its comment still counts here if the follow's link opens.
+    const named = await r.reviewMentions.findByComments(userId, comments.map(comment => comment.id));
+    const excludeCommentIds = new Set((await this.judgedMentions(r, named)).filter(judged => "comment" in judged).map(judged => judged.mention.commentId));
     const threadIds = [...new Set(follows.map(follow => follow.threadId))];
     const threads = new Map((await r.reviewThreads.findByIds(threadIds)).map(thread => [thread.id, thread]));
     const linkIds = [...new Set(follows.map(follow => follow.shareLinkId))];
@@ -287,7 +291,8 @@ export class DocumentReviewService {
   /**
    * The caller's newest unread mentions that are live: the unread list and the badge read the same rows. A dead one
    * (its link no longer opens, its comment is gone or hidden) is marked read here, so it cannot fill the window and
-   * hide an older live mention. ponytail: a thread the owner hides, then restores, loses its unread mark.
+   * hide an older live mention. ponytail: a thread the owner hides then restores, or a document moved out of a shared folder
+   * and back, loses its unread mark.
    */
   private async unreadMentions(r: KnowledgeRepositories, userId: string) {
     for (;;) {

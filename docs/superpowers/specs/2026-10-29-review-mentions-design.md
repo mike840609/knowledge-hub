@@ -60,7 +60,7 @@ review_comment_mentions(
 )
 ```
 
-Migration `028-review-comment-mentions`, additive.
+Migration `029-review-comment-mentions`, additive (it was 028 until folder share links took that number first).
 
 `share_comment_events.mentioned_user_id` (reserved in 022) stays NULL and
 unused: it holds one user per comment, and one comment may mention several
@@ -220,6 +220,37 @@ CLAUDE.md is updated with the code:
 - *(Recorded consequence)* The owner cannot see to whom a reader forwarded
   their link by mentioning. A reader could already paste the URL anywhere; the
   grant does not widen. Showing the owner "R mentioned X" is out of this cut.
+
+## Folder share links *(added after #305 landed, 2026-10-30)*
+
+This spec was written against document links only; folder links
+(`docs/superpowers/specs/` folder-share design) arrived before merge. How mentions
+behave through them, as built:
+
+- **A reader on a folder page may mention.** The link handed over is the folder
+  link they hold, so the mentioned person's entry and auto-follow carry a link
+  that opens **every document under that folder**, not only the discussed one.
+  This is the rule above ("pass on the link you hold") applied unchanged; it is
+  recorded here because it hands over more reach than a document link does.
+- **Each entry is judged per document.** A mention is live while its link opens
+  *that thread's document* now (`linkValid(link, documentId)`): a document moved
+  out of the folder, archived, or a revoked/expired link kills the entry, which
+  then names nothing. Live entries on a folder link carry `documentId`, so the
+  Inbox opens `/s/:token?d=<documentId>&thread=…`.
+- **Candidate search and mark-seen** through a folder link name the document too
+  (`documentId` beside `token`); a folder token without it, or a document token
+  with it, is not found. With no `token`, `documentId` is the owner's door.
+- **An owner names only links of the document itself** (`listByDocument`). A
+  document shared only through a folder link shows "Create a share link first"
+  although a live link reaches it. Naming a folder link is refused. Accepted
+  limitation, not an oversight: listing the folder links that reach a document
+  needs a reachability read the share list does not do today.
+- **Follow unread and mentions.** A follow's unread count leaves out only the
+  comments whose mention is *live* (that entry shows them); a comment whose
+  mention died still counts if the follow's own link opens.
+- **A dead mention is marked read** when the unread list or badge is built, so
+  a document moved out of a folder and back (or a hidden thread restored) comes
+  back read.
 
 ## Non-goals
 
