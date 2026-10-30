@@ -11,10 +11,11 @@ import type { KnowledgeRepositories } from "../../ports/unit-of-work";
 type LifecycleStatus = "ACTIVE" | "ARCHIVED";
 
 /**
- * Whether a link still opens now, from the Source and Workspace already loaded. This is the one
- * place those conditions are assembled, so a rule added here reaches every reader: the page read,
- * `/s/:token/open`, review's writes and its followed-discussion list. A link exists only on a My
- * Space, and the creator-ownership rule below is what keeps it there.
+ * Whether a link still opens now, from the Source and Workspace already loaded. The page read,
+ * `/s/:token/open`, review's writes and its followed-discussion list all assemble the conditions
+ * here, so a rule added here reaches them together. Saved-share snapshots and the My shares query
+ * judge a different input (a stored snapshot; a SQL page) and keep their own copies. A link exists
+ * only on a My Space, and the creator-ownership rule below is what keeps it there.
  */
 export function linkOpens(
   link: Pick<DocumentShareLink, "revokedAt" | "expiresAt" | "createdBy">,

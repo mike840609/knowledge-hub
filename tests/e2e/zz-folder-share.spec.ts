@@ -86,6 +86,13 @@ test.describe("folder share link", () => {
       await expect(reader.getByRole("heading", { level: 1 })).toHaveText(new RegExp(`^(${names.intro}|${names.deep})$`));
       await expect(tree.locator('a[aria-current="page"]')).toHaveCount(1);
 
+      // The skip link lands on the page's own title, not on a heading anchor that shares its id.
+      const skip = reader.getByRole("link", { name: "Skip to content" });
+      await reader.keyboard.press("Tab");
+      await expect(skip).toBeFocused();
+      await reader.keyboard.press("Enter");
+      await expect(reader.locator("h1")).toBeFocused();
+
       const sub = tree.getByRole("button", { name: names.sub, exact: true });
       if ((await sub.getAttribute("aria-expanded")) === "false") await sub.click();
       await expect(sub).toHaveAttribute("aria-expanded", "true");

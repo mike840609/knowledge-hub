@@ -103,8 +103,8 @@ describe("the folder page's tree across documents", () => {
     await show(view(ids.welcome, "Welcome", []));
     const skip = container.querySelector<HTMLAnchorElement>("main > a")!;
     expect(skip.textContent).toBe("Skip to content");
-    expect(skip.getAttribute("href")).toBe("#shared-content");
-    expect(container.querySelector("#shared-content")!.getAttribute("tabindex")).toBe("-1");
+    expect(skip.getAttribute("href")).toBe("#shared-content:skip");
+    expect(document.getElementById("shared-content:skip")!.getAttribute("tabindex")).toBe("-1");
   });
 
   it("marks the breadcrumb's last item as the location, leaving one current page in the tree", async () => {

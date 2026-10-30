@@ -4,7 +4,7 @@ import { SaveShareButton } from "@/components/knowledge/save-share-button";
 import { SharedReviewPanel } from "@/components/knowledge/shared-review-panel";
 import { sharedFolderLinks } from "@/components/knowledge/shared-folder-links";
 import { SharedFolderTree, SharedFolderTreeButton, SharedFolderTreeScope } from "@/components/knowledge/shared-folder-tree";
-import { SharedByline, SharedFooter, SharedReading, SharedSkipLink } from "@/components/knowledge/shared-reading";
+import { SharedByline, SharedFooter, SharedReading, SharedSkipLink, SHARED_CONTENT_ID } from "@/components/knowledge/shared-reading";
 import { buttonClasses } from "@/components/ui/button";
 
 /**
@@ -63,7 +63,7 @@ export function SharedFolderPage({ token, folder, platformEntry, signInHref }: {
         </SharedFolderTreeScope>
         <div className="kh-share-folder-body">
           <div className="kh-reading-column py-6">
-            <h1 id="shared-content" tabIndex={-1} className="scroll-mt-14 text-page-title font-semibold tracking-tight text-kh-text">{folder.folderName}</h1>
+            <h1 id={SHARED_CONTENT_ID} tabIndex={-1} className="scroll-mt-14 text-page-title font-semibold tracking-tight text-kh-text">{folder.folderName}</h1>
             <SharedByline sharedByName={folder.sharedByName} expiresAt={folder.expiresAt} />
             <p className="mt-6 text-body text-kh-text-muted">This folder has no documents yet.</p>
           </div>
@@ -81,7 +81,7 @@ export function SharedFolderPage({ token, folder, platformEntry, signInHref }: {
         {tree}
         <div className="kh-share-folder-body">
           <SharedReviewPanel key={document.documentId} token={token} documentId={document.documentId} revisionId={document.revisionId} markdown={document.markdown} signInHref={signInHref} brand={lead} actions={actions} wide>
-            <SharedReading document={document} links={sharedFolderLinks(token, document.links)} contentId="shared-content" />
+            <SharedReading document={document} links={sharedFolderLinks(token, document.links)} contentId={SHARED_CONTENT_ID} />
           </SharedReviewPanel>
           <SharedFooter platformEntry={platformEntry} />
         </div>
