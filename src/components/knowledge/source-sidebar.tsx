@@ -23,6 +23,10 @@ import { documentShortcutKey, useDocumentShortcuts } from "./use-document-shortc
 import { useTreeMutations } from "./use-tree-mutations";
 import { useActionRunner } from "@/components/actions/action-menu";
 import { actionsFor, type ActionTarget, type FolderTarget } from "@/components/actions/action-registry";
+import type { PublicationListItem } from "@/modules/sources/application/publication-service";
+import { PublicationEntryMeta, publicationTreeMeta } from "@/components/publications/publication-entry-meta";
+import { PublicationMenu } from "@/components/publications/publication-menu";
+import type { JoinFolderOption } from "@/components/publications/join-dialog";
 
 /** Why a synced source's documents cannot be edited here; read after the name, never part of it. */
 const READ_ONLY_DESCRIPTION = "Synced from a folder, read-only in the Hub";
@@ -38,6 +42,10 @@ export type SourceSidebarProps = {
   retryTree?: (id: string) => Promise<void>;
   selectedDocumentId?: string;
   includeArchived: boolean;
+  /** A Team workspace's publications, each one top-level source entry. */
+  publications?: readonly PublicationListItem[];
+  /** The caller's own folders, for joining a folder publication. */
+  publicationFolders?: readonly JoinFolderOption[];
   /** Given where the explorer stands beside the content (desktop); the navigation menu's copy has no way to collapse. */
   onCollapse?: () => void;
 };
@@ -55,7 +63,7 @@ function withoutArchivedSubtrees(items: KnowledgeTreeItem[]): KnowledgeTreeItem[
   return items.filter((item) => !hidden(item));
 }
 
-export function SourceSidebar({ workspaceId, source, collections, sources, treeStates, ensureTree, retryTree, selectedDocumentId, includeArchived, onCollapse }: SourceSidebarProps) {
+export function SourceSidebar({ workspaceId, source, collections, sources, treeStates, ensureTree, retryTree, selectedDocumentId, includeArchived, publications = [], publicationFolders = [], onCollapse }: SourceSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -211,7 +219,11 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
 
   const matches = visibleCollections.filter(({ source: candidate, tree }) => !needle || (ensureTree && treeStates?.[candidate.id]?.status !== "loaded") || candidate.name.toLowerCase().includes(needle) || tree.some((item) => item.label.toLowerCase().includes(needle)));
   const hasNotes = visibleCollections.some(({ source: candidate }) => candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE");
-  const canCreate = access.actions.canWrite && confirmed;
+  const canCreate = access.actions.canWrite && confirmed && access.workspace.type === "PERSONAL";
+  const publicationBySource = useMemo(
+    () => new Map(publications.map((item) => [item.publication.sourceId, item])),
+    [publications],
+  );
   const newNoteHref = `/w/${workspaceId}/knowledge/new`;
   const addNote = <Tooltip label="Create document"><Link href={newNoteHref} aria-label="Create document" className={buttonClasses({ variant: "ghost", icon: true })}><Plus size={15} aria-hidden="true" /></Link></Tooltip>;
   // What can be made here, from the registry like everything else: the button exists when the action does.
@@ -324,6 +336,8 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
           const Icon = open ? ChevronDown : ChevronRight;
           const readOnly = candidate.ownership === "SOURCE_MANAGED";
           const isNotes = candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE";
+          const publication = publicationBySource.get(candidate.id);
+          const publicationMeta = publication ? publicationTreeMeta(publication) : null;
           return (
             <section key={candidate.id} aria-label={`${candidate.name} documents`}>
               <div className="flex items-center gap-1">
@@ -336,8 +350,10 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                   <span className="truncate">{candidate.name}</span>
                   {candidate.status === "ARCHIVED" ? <Status kind="archived" className="ml-auto text-caption font-normal text-kh-text-muted">Archived</Status> : null}
                 </button>
+                {publication ? <PublicationMenu item={publication} folders={publicationFolders} /> : null}
                 {isNotes && canCreate ? <div className="flex items-center">{addFolder}{addNote}</div> : null}
               </div>
+              {publicationMeta ? <div className="px-2 pb-1"><PublicationEntryMeta meta={publicationMeta} /></div> : null}
               <div id={`collection-${candidate.id}`} hidden={!open} className="mt-1 pl-2">
                 {open && ensureTree && treeStates?.[candidate.id]?.status !== "loaded" ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">
                   {treeStates?.[candidate.id]?.status === "error" ? <>Documents could not be loaded. <button className="kh-focus-ring underline" onClick={() => void retryTree?.(candidate.id)}>Retry</button></> : "Loading documents…"}
@@ -353,8 +369,8 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                   favoriteDocumentIds={favoriteDocumentIds}
                   sharedFolderIds={sharedFolderIds}
                   onToggleFavorite={(documentId) => toggleFavorite(candidate.id, documentId)}
-                  documentActions={(item) => actionsFor("row", {
-                    workspaceId,
+                  documentPublicationMeta={publicationMeta?.documents}
+                  documentActions={(item) => actionsFor("row", {                    workspaceId,
                     workspaceType: access.workspace.type,
                     isPersonalOwner: access.isPersonalOwner,
                     can: access.actions,

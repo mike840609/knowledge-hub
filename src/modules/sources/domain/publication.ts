@@ -59,6 +59,20 @@ export type DocumentBinding = {
 };
 
 /**
+ * A team copy as the team tree lists it: who maintains it (the document's
+ * creator) and when it last changed. `status` is the team document's own
+ * lifecycle; the source's lifecycle gates the whole publication.
+ */
+export type PublicationDocumentView = {
+  teamDocumentId: string;
+  sourcePath: string | null;
+  status: "ACTIVE" | "ARCHIVED";
+  creatorUserId: string;
+  creatorName: string;
+  updatedAt: Date;
+};
+
+/**
  * Rights are judged either as the contributor themselves (their validated
  * groups are only available then) or without a caller (worker, restore,
  * catch-up), where only a direct membership row can be read.
@@ -76,6 +90,8 @@ export type PublicationNotice = {
   sourcePath?: string;
   code: "MAINTAINED_BY_OTHER" | "PATH_RESERVED" | "ORIGINAL_ALREADY_PUBLISHED";
   maintainerUserId?: string;
+  /** The maintainer's display name, filled for the preview/result copy. */
+  maintainerName?: string;
   existingPublicationName?: string;
 };
 

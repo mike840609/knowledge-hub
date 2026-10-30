@@ -19,6 +19,7 @@ import {
   relativePublicationPath,
   type Contribution,
   type Publication,
+  type PublicationDocumentView,
   type PublicationKind,
   type PublishOrigin,
   type ReconcileReport,
@@ -45,7 +46,22 @@ export type PublicationListItem = {
   updatedAt: Date;
   canJoin: boolean;
   canManage: boolean;
-  ownContribution: Pick<Contribution, "id" | "leftAt" | "rightsFrozenAt" | "pendingCatchUp"> | null;
+  /**
+   * The team copies, with their creator and latest content time, for the team
+   * tree. It names a maintainer, never an origin.
+   */
+  documents: PublicationDocumentView[];
+  ownContribution: Pick<Contribution, "id" | "userId" | "leftAt" | "rightsFrozenAt" | "pendingCatchUp"> | null;
+};
+
+/**
+ * What the publish/join dialogs may offer this caller: teams where they hold
+ * `source.manage`, and their own folders to publish or join from. Both are
+ * re-judged under the same transaction; the client cannot widen them.
+ */
+export type PublicationOptions = {
+  teams: { id: string; name: string }[];
+  folders: { folderNodeId: string; label: string; sourceId: string }[];
 };
 
 export type PublicationStatus = {
@@ -167,8 +183,10 @@ export class PublicationService {
           updatedAt: contentUpdatedAt ?? source.updatedAt,
           canJoin: canJoinPublication(workspace, capabilities, publication, own),
           canManage: canManagePublication(workspace, capabilities, publication, own, caller.identity.id),
+          documents: await repositories.publications.listDocumentViews(publication.id),
           ownContribution: own === null ? null : {
             id: own.id,
+            userId: own.userId,
             leftAt: own.leftAt,
             rightsFrozenAt: own.rightsFrozenAt,
             pendingCatchUp: own.pendingCatchUp,
@@ -176,6 +194,60 @@ export class PublicationService {
         });
       }
       return items;
+    });
+  }
+
+  /**
+   * The teams this caller may publish to and the folders they may publish or
+   * join from. Group-derived team access is included only for the caller's
+   * own validated groups; every candidate is then re-judged with the same
+   * capability evaluation the command uses.
+   */
+  async options(caller: CallerContext): Promise<PublicationOptions> {
+    return this.uow.run(async (repositories) => {
+      const workspaces = await repositories.workspaces.listForUser(caller.identity.id);
+      const teams = new Map<string, string>();
+      for (const workspace of workspaces) {
+        if (workspace.workspaceType !== "TEAM" || workspace.lifecycleState !== "ACTIVE") continue;
+        teams.set(workspace.id, workspace.name);
+      }
+      if (caller.validatedExternalGroupIds.length > 0) {
+        const mappings = await repositories.groupMappings.listByExternalGroupIds(
+          caller.validatedExternalGroupIds);
+        for (const mapping of mappings) {
+          if (teams.has(mapping.workspaceId) || mapping.role === "VIEWER") continue;
+          const workspace = await repositories.workspaces.findById(mapping.workspaceId);
+          if (workspace?.workspaceType === "TEAM" && workspace.lifecycleState === "ACTIVE") {
+            teams.set(workspace.id, workspace.name);
+          }
+        }
+      }
+
+      const publishable: PublicationOptions["teams"] = [];
+      for (const [id, name] of teams) {
+        const capabilities = await evaluateWorkspaceCapabilities(repositories, caller, id);
+        if (capabilities.has("source.manage")) publishable.push({ id, name });
+      }
+
+      const folders: PublicationOptions["folders"] = [];
+      for (const workspace of workspaces) {
+        if (workspace.workspaceType !== "PERSONAL" || workspace.personalOwnerUserId !== caller.identity.id) continue;
+        const sources = await repositories.sources.findByWorkspaceId(workspace.id);
+        for (const source of sources) {
+          if (source.status !== "ACTIVE") continue;
+          const nodes = await repositories.tree.listBySource(source.id);
+          for (const node of nodes) {
+            if (node.nodeType !== "FOLDER" || node.status !== "ACTIVE") continue;
+            folders.push({
+              folderNodeId: node.id,
+              label: `${source.name} / ${node.name ?? ""}`,
+              sourceId: source.id,
+            });
+          }
+        }
+      }
+      folders.sort((left, right) => left.label.localeCompare(right.label));
+      return { teams: publishable, folders };
     });
   }
 

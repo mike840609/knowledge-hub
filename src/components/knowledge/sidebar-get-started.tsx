@@ -5,6 +5,9 @@ import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledg
 
 /** The ways to put a first document in a workspace, in the order offered; Personal leads with the import. */
 export function startActions(context: Omit<ActionContext, "onboarding">): Action[] {
+  // Publishing is the only way content enters a team; the Hub's own authoring
+  // entry points are My Space's alone, whatever a TEAM role's capabilities are.
+  if (context.workspaceType === "TEAM") return [];
   const actions = [...actionsFor("empty", { ...context, onboarding: true })];
   if (context.workspaceType === "PERSONAL") actions.sort((a, b) => Number(b.id === "create.import") - Number(a.id === "create.import"));
   return actions;

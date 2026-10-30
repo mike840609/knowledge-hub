@@ -5,11 +5,12 @@ import type {
   PlannedMove,
   Publication,
   PublicationDocument,
+  PublicationDocumentView,
   ReconcileReport,
 } from "@/modules/sources/domain/publication";
 import { publicationError, PublicationError } from "@/modules/sources/domain/publication-errors";
 import type { PublicationRepository } from "@/modules/sources/ports/publication-repository";
-import { asNullableDate, type DbRow, type QueryConnection } from "./shared";
+import { asDate, asNullableDate, type DbRow, type QueryConnection } from "./shared";
 
 const DEFAULT_EVENT_LIMIT = 100;
 
@@ -175,6 +176,28 @@ export class MariaDbPublicationRepository implements PublicationRepository {
       [publicationId],
     );
     return rows.map(mapDocument);
+  }
+
+  async listDocumentViews(publicationId: string): Promise<PublicationDocumentView[]> {
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT pd.team_document_id, pd.source_path, d.status, d.updated_at,
+              c.user_id, u.name
+       FROM publication_documents pd
+       JOIN knowledge_documents d ON d.id = pd.team_document_id
+       JOIN publication_contributors c ON c.id = pd.creator_contribution_id
+       JOIN users u ON u.id = c.user_id
+       WHERE pd.publication_id = ?
+       ORDER BY pd.team_document_id`,
+      [publicationId],
+    );
+    return rows.map((row) => ({
+      teamDocumentId: String(row.team_document_id),
+      sourcePath: row.source_path === null ? null : String(row.source_path),
+      status: String(row.status) as "ACTIVE" | "ARCHIVED",
+      creatorUserId: String(row.user_id),
+      creatorName: String(row.name),
+      updatedAt: asDate(row.updated_at),
+    }));
   }
 
   async latestDocumentUpdatedAt(publicationId: string): Promise<Date | null> {

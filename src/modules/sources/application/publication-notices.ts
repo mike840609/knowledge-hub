@@ -251,6 +251,17 @@ export async function collectPublicationNotices(
     }
   }
 
+  const maintainerIds = [...new Set(notices.flatMap((notice) =>
+    notice.maintainerUserId === undefined ? [] : [notice.maintainerUserId]))];
+  if (maintainerIds.length > 0) {
+    const maintainers = new Map((await repositories.users.findByIds(maintainerIds)).map((user) => [user.id, user.name]));
+    for (const notice of notices) {
+      if (notice.maintainerUserId !== undefined) {
+        notice.maintainerName = maintainers.get(notice.maintainerUserId);
+      }
+    }
+  }
+
   return notices.sort((left, right) =>
     left.publicationId.localeCompare(right.publicationId)
     || (left.originalDocumentId ?? left.sourcePath ?? "").localeCompare(
@@ -258,7 +269,6 @@ export async function collectPublicationNotices(
     )
     || left.code.localeCompare(right.code));
 }
-
 /**
  * Notices for a plan plus a state the caller already holds (Apply's `before`
  * snapshot). No canonical document bodies are read here.

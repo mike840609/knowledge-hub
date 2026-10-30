@@ -11,6 +11,8 @@ import { FolderNameDialogHost } from "./folder-name-dialog";
 import { MoveDialogHost } from "./move-dialog";
 import { PeekHost } from "./peek-host";
 import { ShareLinkDialogHost } from "./share-link-dialog";
+import { PublishDialogHost } from "@/components/publications/publish-request";
+import type { PublicationListItem } from "@/modules/sources/application/publication-service";
 import { InspectorContext } from "./inspector-context";
 import { DocumentSkeleton, TreeSkeleton } from "./knowledge-skeletons";
 import { useScrollRestoration } from "./use-scroll-restoration";
@@ -27,6 +29,8 @@ export function KnowledgeLayout({
   sources,
   collections,
   includeArchived,
+  publications = [],
+  publicationFolders = [],
   children,
 }: {
   workspaceId: string;
@@ -34,6 +38,8 @@ export function KnowledgeLayout({
   sources?: SourceView[];
   collections: { source: SourceView; tree: KnowledgeTreeItem[] }[];
   includeArchived: boolean;
+  publications?: readonly PublicationListItem[];
+  publicationFolders?: readonly { folderNodeId: string; label: string }[];
   children: ReactNode;
 }) {
   const headers = useMemo(() => sources ?? collections.map(c => c.source), [sources, collections]);
@@ -84,6 +90,8 @@ export function KnowledgeLayout({
       ensureTree={trees.ensure}
       retryTree={trees.retry}
       includeArchived={includeArchived}
+      publications={publications}
+      publicationFolders={publicationFolders}
       onCollapse={navigation?.mobileExplorerTarget || overlayExplorer ? undefined : () => toggleExplorer(true)}
     />
   );
@@ -137,6 +145,7 @@ export function KnowledgeLayout({
         </PeekHost>
       </div>
       <ShareLinkDialogHost />
+      <PublishDialogHost />
       <FolderNameDialogHost />
       <MoveDialogHost collections={trees.collections} ensureTree={trees.ensure} retryTree={trees.retry} treeStates={trees.states} />
     </div>

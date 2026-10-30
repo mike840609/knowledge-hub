@@ -2,6 +2,7 @@ import { cache } from "react";
 import { findFirstReadableDocument, sortSourcesByName } from "@/lib/knowledge-navigation";
 import { isHiddenReadFailure } from "./read-errors";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
+import type { PublicationListItem } from "@/modules/sources/application/publication-service";
 import type { KnowledgeRevisionSummary } from "@/modules/knowledge/domain/revision";
 import type { WorkspaceAccessView, WorkspaceNavigationModel, WorkspaceNavigationItem } from "@/server/workspace-admin";
 import { applicationServices } from "@/server/composition";
@@ -54,7 +55,13 @@ export async function getKnowledgeDocumentModel(
       // Read by id only here, after getDocument has let this caller see the
       // document. A path is a caption: failing to read it must not fail the page.
       services.unitOfWork
-        .run(async (repositories) => (await repositories.entries.findByDocumentId(documentId))?.sourcePath ?? null)
+        .run(async (repositories) => {
+          const entry = await repositories.entries.findByDocumentId(documentId);
+          if (entry) return entry.sourcePath;
+          // A team copy has no SourceEntry: its publication-relative path is the one
+          // the publication tables keep, and `NULL` there stays `NULL`.
+          return await repositories.entries.findSourcePathByDocumentId?.(documentId) ?? null;
+        })
         .catch(() => null),
     ]);
     return {
@@ -88,6 +95,10 @@ export type KnowledgeExplorerModel = {
   tree: KnowledgeTreeItem[];
   collections: { source: SourceView; tree: KnowledgeTreeItem[] }[];
   includeArchived: boolean;
+  /** A Team workspace's publications, with the creator and maintainer of each copy. */
+  publications: PublicationListItem[];
+  /** The caller's own folders, for joining a folder publication in the team. */
+  publicationFolders: { folderNodeId: string; label: string }[];
 };
 
 /**
@@ -129,7 +140,8 @@ const loadKnowledgeExplorerModel = cache(async (
   const { caller } = await services.establishTrustedCaller();
   try {
     const workspaces = await services.workspaces.listWorkspaces(caller);
-    if (!workspaces.some((workspace) => workspace.id === workspaceId)) return null;
+    const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
+    if (!workspace) return null;
     const source = await services.queries.getSource(caller, sourceId, { includeArchived });
     if (source.workspaceId !== workspaceId) return null;
     const sources = await services.queries.listSources(caller, workspaceId, { includeArchived });
@@ -138,7 +150,17 @@ const loadKnowledgeExplorerModel = cache(async (
     const ordered = sortSourcesByName(sources);
     // Source headers are cheap; only the current source's tree enters the initial payload.
     const collections = [{ source, tree }];
-    return { sources: ordered, source, tree, collections, includeArchived };
+    // The team's publications are read for the tree's creator/time/maintainer labels and its
+    // publication menu. A personal workspace has none, so it pays nothing for this.
+    const publications = workspace.type === "TEAM"
+      ? await services.publications.list(caller, workspaceId, true).catch(() => [])
+      : [];
+    const publicationFolders = workspace.type === "TEAM"
+      ? await services.publications.options(caller)
+        .then((options) => options.folders.map(({ folderNodeId, label }) => ({ folderNodeId, label })))
+        .catch(() => [])
+      : [];
+    return { sources: ordered, source, tree, collections, includeArchived, publications, publicationFolders };
   } catch (error) {
     if (isHiddenReadFailure(error)) return null;
     throw error;

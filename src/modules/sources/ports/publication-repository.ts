@@ -4,6 +4,7 @@ import type {
   PlannedMove,
   Publication,
   PublicationDocument,
+  PublicationDocumentView,
   ReconcileReport,
 } from "../domain/publication";
 
@@ -32,6 +33,12 @@ export interface PublicationRepository {
     state: Pick<Contribution, "leftAt" | "rightsFrozenAt" | "pendingCatchUp">,
   ): Promise<void>;
   listDocuments(publicationId: string): Promise<PublicationDocument[]>;
+  /**
+   * The publication's team copies as the team tree lists them: path,
+   * lifecycle, creator (the only person who may update it) and content time.
+   * Names are joined from `users` so the tree never loads a personal origin.
+   */
+  listDocumentViews(publicationId: string): Promise<PublicationDocumentView[]>;
   /**
    * The newest `updated_at` among the publication's team documents, or null
    * when it has none (for example an empty publication). Content copies are

@@ -513,7 +513,7 @@ describe("publication API: safe read models", () => {
     });
     expect(typeof item?.updatedAt).toBe("string");
     expect(Object.keys(item?.ownContribution as object).sort()).toEqual(
-      ["id", "leftAt", "pendingCatchUp", "rightsFrozenAt"]);
+      ["id", "leftAt", "pendingCatchUp", "rightsFrozenAt", "userId"]);
     const serialized = JSON.stringify(item);
     expect(serialized).not.toContain(mikeTree.folderNodeId);
     expect(serialized).not.toContain(mikeTree.documents[0].documentId);
