@@ -373,48 +373,91 @@ export class PublicationService {
    * back the whole restore instead of leaving a half-active publication.
    */
   async restore(caller: CallerContext, publicationId: string): Promise<void> {
-    await this.uow.run(async (repositories) => {
-      const publication = await this.lockPublication(repositories, publicationId);
-      const contributions = await repositories.publications.listContributions(publication.id);
-      await requirePublicationLifecycleRights(repositories, caller, publication, contributions);
-      if (publication.status === "ACTIVE") return;
+    try {
+      await this.uow.run(async (repositories) => {
+        const publication = await this.lockPublication(repositories, publicationId);
+        const contributions = await repositories.publications.listContributions(publication.id);
+        await requirePublicationLifecycleRights(repositories, caller, publication, contributions);
+        if (publication.status === "ACTIVE") return;
 
-      // Name first: it is the cheapest conflict and names the outcome the
-      // person sees. The generated unique key still decides a race.
-      if (await activeNameTaken(repositories, publication.teamWorkspaceId, publication.name)) {
-        throw nameTaken();
+        // Name first: it is the cheapest conflict and names the outcome the
+        // person sees. The generated unique key still decides a race.
+        if (await activeNameTaken(repositories, publication.teamWorkspaceId, publication.name)) {
+          throw nameTaken();
+        }
+        for (const contribution of contributions) {
+          for (const binding of await repositories.publications.listBindings(contribution.id)) {
+            const claim = await repositories.publications.findClaim(
+              binding.originalDocumentId, publication.teamWorkspaceId, publication.id);
+            if (claim) throw originalTaken(binding.originalDocumentId, claim.publicationName);
+          }
+        }
+
+        await repositories.publications.setPublicationStatus(
+          publication.id, "ACTIVE", caller.identity.id);
+
+        // The restorer cannot judge anyone else's group-derived rights, so every
+        // contribution is reconciled with NO_CALLER: direct grants apply,
+        // group-only/removed contributors become pending, and an existing rights
+        // freeze is never cleared.
+        for (const contribution of contributions) {
+          if (contribution.leftAt !== null) continue;
+          await reconcileContribution(repositories, {
+            publicationId: publication.id,
+            contributionId: contribution.id,
+            judge: { kind: "NO_CALLER" },
+            now: new Date(),
+          });
+        }
+      });
+    } catch (error) {
+      if (isIntegrityViolation(error)) {
+        // The transaction that lost the race is rolled back, so inspect the
+        // committed winner in a fresh one before naming the outcome. The
+        // generated active-name key and the binding claim key are both
+        // uniqueness violations at the driver level.
+        const conflict = await this.lostRestoreConflict(publicationId);
+        if (conflict?.kind === "NAME") throw nameTaken();
+        if (conflict?.kind === "ORIGINAL") {
+          throw originalTaken(conflict.documentId, conflict.publicationName);
+        }
       }
+      throw error;
+    }
+  }
+
+  /**
+   * After a restore lost a uniqueness race, name what the winner took. A null
+   * answer means the integrity failure was unrelated and must be rethrown.
+   */
+  private async lostRestoreConflict(
+    publicationId: string,
+  ): Promise<
+    | { kind: "NAME" }
+    | { kind: "ORIGINAL"; documentId: string; publicationName: string }
+    | null
+  > {
+    return this.uow.run(async (repositories) => {
+      const publication = await repositories.publications.findById(publicationId);
+      if (!publication) return null;
+      if (await activeNameTaken(repositories, publication.teamWorkspaceId, publication.name)) {
+        return { kind: "NAME" };
+      }
+      const contributions = await repositories.publications.listContributions(publication.id);
       for (const contribution of contributions) {
         for (const binding of await repositories.publications.listBindings(contribution.id)) {
           const claim = await repositories.publications.findClaim(
             binding.originalDocumentId, publication.teamWorkspaceId, publication.id);
-          if (claim) throw originalTaken(binding.originalDocumentId, claim.publicationName);
+          if (claim) {
+            return {
+              kind: "ORIGINAL",
+              documentId: binding.originalDocumentId,
+              publicationName: claim.publicationName,
+            };
+          }
         }
       }
-
-      try {
-        await repositories.publications.setPublicationStatus(
-          publication.id, "ACTIVE", caller.identity.id);
-      } catch (error) {
-        // The generated active-name key lost a race the read above could not
-        // see; the repository already names an original-claim race.
-        if (isIntegrityViolation(error)) throw nameTaken();
-        throw error;
-      }
-
-      // The restorer cannot judge anyone else's group-derived rights, so every
-      // contribution is reconciled with NO_CALLER: direct grants apply,
-      // group-only/removed contributors become pending, and an existing rights
-      // freeze is never cleared.
-      for (const contribution of contributions) {
-        if (contribution.leftAt !== null) continue;
-        await reconcileContribution(repositories, {
-          publicationId: publication.id,
-          contributionId: contribution.id,
-          judge: { kind: "NO_CALLER" },
-          now: new Date(),
-        });
-      }
+      return null;
     });
   }
 
@@ -425,26 +468,36 @@ export class PublicationService {
    */
   async rename(caller: CallerContext, publicationId: string, name: string): Promise<void> {
     const next = normalizePublicationName(name);
-    await this.uow.run(async (repositories) => {
-      const publication = await this.lockPublication(repositories, publicationId);
-      const contributions = await repositories.publications.listContributions(publication.id);
-      await requirePublicationLifecycleRights(repositories, caller, publication, contributions);
-      if (publication.name === next) return;
-      if (
-        publication.status === "ACTIVE"
-        && await activeNameTaken(repositories, publication.teamWorkspaceId, next)
-      ) {
-        throw nameTaken();
-      }
-      try {
+    try {
+      await this.uow.run(async (repositories) => {
+        const publication = await this.lockPublication(repositories, publicationId);
+        const contributions = await repositories.publications.listContributions(publication.id);
+        await requirePublicationLifecycleRights(repositories, caller, publication, contributions);
+        if (publication.name === next) return;
+        if (
+          publication.status === "ACTIVE"
+          && await activeNameTaken(repositories, publication.teamWorkspaceId, next)
+        ) {
+          throw nameTaken();
+        }
         await repositories.sources.updateName(publication.sourceId, next, caller.identity.id);
-      } catch (error) {
-        // Another active publication took the name between the read and the
-        // write; the generated key is the final judge.
-        if (isIntegrityViolation(error)) throw nameTaken();
-        throw error;
+      });
+    } catch (error) {
+      if (isIntegrityViolation(error)) {
+        // The transaction that lost the race is gone; the active-name key is
+        // the only uniqueness rule this write can violate, so re-read it in a
+        // fresh transaction. Anything else (for example affected-0-rows)
+        // stays the original failure rather than a fabricated name conflict.
+        const taken = await this.uow.run(async (repositories) => {
+          const publication = await repositories.publications.findById(publicationId);
+          return publication === null
+            ? false
+            : activeNameTaken(repositories, publication.teamWorkspaceId, next);
+        });
+        if (taken) throw nameTaken();
       }
-    });
+      throw error;
+    }
   }
 
   /**

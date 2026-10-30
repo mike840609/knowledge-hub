@@ -341,6 +341,67 @@ describe("publication lifecycle: rename", () => {
     await service.rename(fixture.ann, published.publicationId, unique("Admin Renamed"));
     expect(await sourceName(publication!.sourceId)).toContain("Admin Renamed");
   });
+
+  it("maps a lost concurrent rename race to PUBLICATION_NAME_TAKEN", async () => {
+    const firstTree = await createFolderTree(fixture.mike, unique("rename-race-a"), [
+      { relative: "a.md", title: "Rename Race A", markdown: "a" },
+    ]);
+    const secondTree = await createFolderTree(fixture.mike, unique("rename-race-b"), [
+      { relative: "b.md", title: "Rename Race B", markdown: "b" },
+    ]);
+    const first = await service.publish(fixture.mike, {
+      teamWorkspaceId: fixture.teamWorkspaceId,
+      name: unique("Rename Race First"),
+      origin: { kind: "FOLDER", folderNodeId: firstTree.folderNodeId },
+    });
+    const second = await service.publish(fixture.mike, {
+      teamWorkspaceId: fixture.teamWorkspaceId,
+      name: unique("Rename Race Second"),
+      origin: { kind: "FOLDER", folderNodeId: secondTree.folderNodeId },
+    });
+    const target = unique("Rename Race Target");
+
+    const outcomes = await Promise.allSettled([
+      service.rename(fixture.mike, first.publicationId, target),
+      service.rename(fixture.mike, second.publicationId, target),
+    ]);
+    expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
+    const rejected = outcomes.filter((outcome) => outcome.status === "rejected");
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason)
+      .toMatchObject({ code: "PUBLICATION_NAME_TAKEN" });
+    expect(await activeNameCount(fixture.teamWorkspaceId, target)).toBe(1);
+  });
+
+  it("maps a publish and rename racing for the same free name", async () => {
+    const existingTree = await createFolderTree(fixture.mike, unique("publish-rename-existing"), [
+      { relative: "a.md", title: "Publish Rename Existing", markdown: "a" },
+    ]);
+    const existing = await service.publish(fixture.mike, {
+      teamWorkspaceId: fixture.teamWorkspaceId,
+      name: unique("Publish Rename Existing Publication"),
+      origin: { kind: "FOLDER", folderNodeId: existingTree.folderNodeId },
+    });
+    const freshTree = await createFolderTree(fixture.mike, unique("publish-rename-fresh"), [
+      { relative: "c.md", title: "Publish Rename Fresh", markdown: "c" },
+    ]);
+    const target = unique("Publish Rename Target");
+
+    const outcomes = await Promise.allSettled([
+      service.rename(fixture.mike, existing.publicationId, target),
+      service.publish(fixture.mike, {
+        teamWorkspaceId: fixture.teamWorkspaceId,
+        name: target,
+        origin: { kind: "FOLDER", folderNodeId: freshTree.folderNodeId },
+      }),
+    ]);
+    expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
+    const rejected = outcomes.filter((outcome) => outcome.status === "rejected");
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason)
+      .toMatchObject({ code: "PUBLICATION_NAME_TAKEN" });
+    expect(await activeNameCount(fixture.teamWorkspaceId, target)).toBe(1);
+  });
 });
 
 describe("publication lifecycle: restore", () => {
@@ -498,5 +559,38 @@ describe("publication lifecycle: restore", () => {
 
     const annAfter = await contributionOf(published.publicationId, fixture.ann.identity.id);
     expect(annAfter?.rightsFrozenAt?.getTime()).toBe(frozenAt.getTime());
+  });
+
+  it("maps a lost concurrent restore race for the same name to PUBLICATION_NAME_TAKEN", async () => {
+    const firstTree = await createFolderTree(fixture.mike, unique("restore-race-a"), [
+      { relative: "a.md", title: "Restore Race A", markdown: "a" },
+    ]);
+    const secondTree = await createFolderTree(fixture.mike, unique("restore-race-b"), [
+      { relative: "b.md", title: "Restore Race B", markdown: "b" },
+    ]);
+    const name = unique("Restore Race Publication");
+    const first = await service.publish(fixture.mike, {
+      teamWorkspaceId: fixture.teamWorkspaceId,
+      name,
+      origin: { kind: "FOLDER", folderNodeId: firstTree.folderNodeId },
+    });
+    await service.unpublish(fixture.mike, first.publicationId);
+    const second = await service.publish(fixture.mike, {
+      teamWorkspaceId: fixture.teamWorkspaceId,
+      name,
+      origin: { kind: "FOLDER", folderNodeId: secondTree.folderNodeId },
+    });
+    await service.unpublish(fixture.mike, second.publicationId);
+
+    const outcomes = await Promise.allSettled([
+      service.restore(fixture.mike, first.publicationId),
+      service.restore(fixture.mike, second.publicationId),
+    ]);
+    expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
+    const rejected = outcomes.filter((outcome) => outcome.status === "rejected");
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason)
+      .toMatchObject({ code: "PUBLICATION_NAME_TAKEN" });
+    expect(await activeNameCount(fixture.teamWorkspaceId, name)).toBe(1);
   });
 });
