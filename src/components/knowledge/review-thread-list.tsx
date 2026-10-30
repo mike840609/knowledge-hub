@@ -324,7 +324,11 @@ function MentionCard({ text, people }: { text: string; people: readonly Mentione
   const [open, setOpen] = useState(false);
   // Set by any close: focus handed back to the trigger afterwards (Escape) must not open the card again.
   const closed = useRef(false);
-  return <Popover.Root open={open} onOpenChange={next => { if (!next) closed.current = true; setOpen(next); }}>
+  return <Popover.Root open={open} onOpenChange={(next, details) => {
+    if (!next && details.reason === "trigger-press") return; // a press opens the card; it never closes it
+    if (!next) closed.current = true;
+    setOpen(next);
+  }}>
     <Popover.Trigger openOnHover delay={150} closeDelay={100} aria-label={`${people[0].name}, mentioned`} onPointerDown={() => { closed.current = false; }} onBlur={() => { closed.current = false; }}
       onFocus={event => { if (!closed.current && event.currentTarget.matches(":focus-visible")) setOpen(true); }}
       onClick={event => event.stopPropagation()} render={<button type="button" />}

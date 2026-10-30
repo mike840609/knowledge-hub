@@ -338,3 +338,21 @@ test("Escape from the trigger or from inside the card leaves it closed, focus on
   expect(document.activeElement).toBe(button);
   expect(button.getAttribute("aria-expanded")).toBe("false");
 });
+
+test("a press on a card that hover opened, after the patient-click window, leaves it open", async () => {
+  vi.useFakeTimers();
+  try {
+    renderList([thread("t1", [0], "Para zero.", "@陳小明 hi", [ming])], { writesEnabled: false });
+    const button = mentionButtons()[0];
+    const fire = (type: string) => button.dispatchEvent(Object.assign(new MouseEvent(type, { bubbles: true, cancelable: true }), { pointerType: "mouse" }));
+    await act(async () => { for (const type of ["pointerenter", "mouseenter", "pointermove", "mousemove"]) fire(type); await vi.advanceTimersByTimeAsync(2000); });
+    expect(popup()).not.toBeNull();
+    await act(async () => { fire("pointerdown"); fire("mousedown"); });
+    await act(async () => { button.focus(); await vi.advanceTimersByTimeAsync(10); });
+    await act(async () => { fire("pointerup"); fire("mouseup"); fire("click"); await vi.advanceTimersByTimeAsync(300); });
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(popup()).not.toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
