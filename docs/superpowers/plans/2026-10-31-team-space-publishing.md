@@ -204,10 +204,10 @@ Binding 從鎖內讀取 publication/contribution，以 Task 5 的規則判權；
 
 **Consumes:** `repositories.publicationEvents.record/recordMany`。**Produces:** 每筆個人 revision 記錄它的 ID；tree/folder mutation 記 target，consumer 擴展受影響 descendants。bulk revision 用 `recordMany`；path-only 的 source entry 更新、同步 archive/restore，以及整個個人 Source archive/restore 都有事件。
 
-- [ ] **Step 1 — 寫 guard 測試。** 沿用 link guard 的三個 revision writers（含 `insertMany`），驗證對應 `record/recordMany`；再明列 tree/lifecycle 六個 knowledge internals 與 sources 的 locator/lifecycle 寫入點。guard 同時盤點 `.revisions.insert(Many)?`、tree parent/name/status、document status、entry sourcePath/lifecycle 及 source lifecycle，避免僅掃 revisions 漏掉沒有新 revision 的 rename。重複事件可接受，遺漏不可接受。
+- [ ] **Step 1 — 寫 guard 測試。** 沿用 link guard 的 revision writers（含 `insertMany` 與 Task 3 新增的 publication writer），驗證對應 `record/recordMany`；再明列 tree/lifecycle 六個 knowledge internals 與 sources 的 locator/lifecycle 寫入點。guard 同時盤點 `.revisions.insert(Many)?`、tree parent/name/status、document status、entry sourcePath/lifecycle 及 source lifecycle，避免僅掃 revisions 漏掉沒有新 revision 的 rename。重複事件可接受，遺漏不可接受。
 - [ ] **Step 2 — 寫 integration 測試。** `rollback leaves neither revision nor event` 斷言兩者數目都不變；`same hash saves no new revision event`；bulk N 份文件有 N 個 revision IDs；`path-only sync rename emits an event`；`folder move/archive and source archive emit events covering descendants`；`projected team copies never emit personal publication events`。
 - [ ] **Step 3 — 驗證失敗。** `npm run test:unit -- tests/unit/publication-event-write-points.test.ts`；`npm run test:integration -- tests/integration/publication-events.test.ts` → FAIL。
-- [ ] **Step 4 — 實作交易內記錄。** knowledge 只呼叫自己的 event port；以同一連線查出的 source→workspace 判斷 PERSONAL。source 級事件用該 Source 的 root tree node 作 target；若沒有 tree 節點即沒有可發佈的原件，不需事件。consumer 只看目前狀態，事件 payload 不當更新內容。
+- [ ] **Step 4 — 實作交易內記錄。** knowledge 只呼叫自己的 event port；以同一連線查出的 source→workspace 判斷 PERSONAL。source 級 archive/restore 用 `publication_events.source_id` 作 target；document/tree 事件用對應 target。consumer 只看目前狀態，事件 payload 不當更新內容。
 - [ ] **Step 5 — 驗證及提交。** 上述兩個指令與 link-index guard PASS；commit `feat(knowledge): record publication changes transactionally`。
 
 ### Task 5: 單一 reconciliation 演算法
