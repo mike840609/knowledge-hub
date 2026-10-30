@@ -198,6 +198,13 @@ export class MariaDbPublicationRepository implements PublicationRepository {
     }
   }
 
+  async unbind(contributionId: string, originalDocumentId: string): Promise<void> {
+    await this.connection.query(
+      "DELETE FROM publication_bindings WHERE contribution_id = ? AND original_document_id = ?",
+      [contributionId, originalDocumentId],
+    );
+  }
+
   async repoint(teamDocumentId: string, originalDocumentId: string): Promise<void> {
     const documents = await this.connection.query<DbRow[]>(
       "SELECT * FROM publication_documents WHERE team_document_id = ? FOR UPDATE",

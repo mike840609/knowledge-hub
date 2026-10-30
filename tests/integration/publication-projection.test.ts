@@ -82,6 +82,44 @@ describe("publication projection", () => {
     expect(teamDocument.source_id).toBe(publication.sourceId);
   });
 
+  it("claims the original with a binding in the same transaction as the copy", async () => {
+    const folder = await fixture.createFolder(fixture.mike, "repo/claim", "claim");
+    const original = await fixture.createSyncedOriginal(fixture.mike, {
+      parentId: folder.treeNodeId,
+      sourcePath: "repo/claim/a.md",
+      title: "Claimed",
+      markdown: "claimed",
+    });
+    const publication = await fixture.createPublication({
+      name: "Claimed Publication",
+      kind: "FOLDER",
+      creator: fixture.mike,
+      origin: { kind: "FOLDER", folderNodeId: folder.treeNodeId },
+    });
+
+    const copied = await fixture.uow.run(async (repositories) => {
+      const projection = await bindPublicationProjection(repositories, {
+        publicationId: publication.publication.id,
+        contributionId: publication.contributionId,
+        judge: { kind: "CALLER", caller: fixture.mike },
+      });
+      return projection.copy({
+        originalDocumentId: original.documentId,
+        parentId: null,
+        nodeName: "Claimed",
+        sourcePath: "a.md",
+      });
+    });
+
+    const bindings = await fixture.uow.run((repositories) =>
+      repositories.publications.listBindings(publication.contributionId));
+    expect(bindings).toEqual([{
+      contributionId: publication.contributionId,
+      originalDocumentId: original.documentId,
+      teamDocumentId: copied.documentId,
+    }]);
+  });
+
   it("equal hash writes no revision", async () => {
     const folder = await fixture.createFolder(fixture.mike, "repo/equal", "equal");
     const original = await fixture.createSyncedOriginal(fixture.mike, {

@@ -242,13 +242,6 @@ export async function bindPublicationProjection(
     return creator;
   }
 
-  async function authorityFeeds(document: PublicationDocument, originalDocumentId: string): Promise<boolean> {
-    if (document.creatorContributionId === authority.contribution.id) return true;
-    const bindings = await repositories.publications.listBindings(authority.contribution.id);
-    return bindings.some((binding) =>
-      binding.teamDocumentId === document.teamDocumentId && binding.originalDocumentId === originalDocumentId);
-  }
-
   return {
     async copy(input) {
       await requireOriginalInContribution(input.originalDocumentId);
@@ -299,6 +292,13 @@ export async function bindPublicationProjection(
         sourcePath: input.sourcePath,
         status: "ACTIVE",
       });
+      // The copy claims its original in the same transaction, so a reconciliation
+      // that created it can never leave the original unclaimed.
+      await repositories.publications.bind({
+        contributionId: authority.contribution.id,
+        originalDocumentId: input.originalDocumentId,
+        teamDocumentId: documentId,
+      });
       return { documentId, treeNodeId };
     },
 
@@ -307,9 +307,9 @@ export async function bindPublicationProjection(
       if (teamDocument.currentOriginalDocumentId !== originalDocumentId) {
         throw new NotFoundError("This team document is not fed by that original.");
       }
-      if (!(await authorityFeeds(teamDocument, originalDocumentId))) {
-        throw new WorkspaceAccessDeniedError("Only the document's creator may update it in the team.");
-      }
+      // Only the document's creator updates it: a joiner's remembered binding is
+      // matching memory, never authority.
+      requireCreatorAuthority(teamDocument);
       // The copy must live in the publication source this authority owns.
       const stored = await repositories.documents.findById(teamDocumentId);
       requireSameSource(stored);

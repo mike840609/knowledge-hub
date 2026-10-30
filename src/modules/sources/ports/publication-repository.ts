@@ -28,6 +28,12 @@ export interface PublicationRepository {
   listDocuments(publicationId: string): Promise<PublicationDocument[]>;
   listBindings(contributionId: string): Promise<DocumentBinding[]>;
   bind(binding: DocumentBinding): Promise<void>;
+  /**
+   * Forgets one contributor's remembered original. A reconciliation that moves
+   * an original onto the creator's own archived copy uses this before
+   * `repoint`, because one original may feed only one team document.
+   */
+  unbind(contributionId: string, originalDocumentId: string): Promise<void>;
   /** Reattaches a team document to a new original, replacing its creator binding only. */
   repoint(teamDocumentId: string, originalDocumentId: string): Promise<void>;
   insertDocument(document: PublicationDocument): Promise<void>;
