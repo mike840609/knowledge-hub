@@ -322,14 +322,17 @@ function CommentBody({ body, compact, onClamped, mentions }: { body: string; com
  */
 function MentionCard({ text, people }: { text: string; people: readonly MentionedPerson[] }) {
   const [open, setOpen] = useState(false);
-  return <Popover.Root open={open} onOpenChange={setOpen}>
-    <Popover.Trigger openOnHover delay={150} closeDelay={100} aria-label={`${people[0].name}, mentioned`} onFocus={() => setOpen(true)}
+  // Set by any close: focus handed back to the trigger afterwards (Escape) must not open the card again.
+  const closed = useRef(false);
+  return <Popover.Root open={open} onOpenChange={next => { if (!next) closed.current = true; setOpen(next); }}>
+    <Popover.Trigger openOnHover delay={150} closeDelay={100} aria-label={`${people[0].name}, mentioned`} onPointerDown={() => { closed.current = false; }} onBlur={() => { closed.current = false; }}
+      onFocus={event => { if (!closed.current && event.currentTarget.matches(":focus-visible")) setOpen(true); }}
       onClick={event => event.stopPropagation()} render={<button type="button" />}
       className="font-medium text-kh-link kh-focus-ring">{text}</Popover.Trigger>
     <Popover.Portal>
       <Popover.Positioner side="bottom" align="start" sideOffset={4} className="z-[80]">
         <Popover.Popup data-mention-card="" initialFocus={false} onClick={event => event.stopPropagation()}
-          className={"flex max-w-72 flex-col gap-2 rounded-lg border border-kh-border bg-kh-bg p-3 text-body-sm text-kh-text shadow-popover outline-none " +
+          className={"flex max-w-[18rem] break-words flex-col gap-2 rounded-lg border border-kh-border bg-kh-bg p-3 text-body-sm text-kh-text shadow-popover outline-none " +
             "transition-[opacity,transform] duration-120 ease-out data-[starting-style]:opacity-0 data-[ending-style]:opacity-0"}>
           {people.map(person => <div key={person.empId}>
             <p className="font-medium">{person.name}</p>

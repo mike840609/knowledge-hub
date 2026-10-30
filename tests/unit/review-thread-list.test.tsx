@@ -220,6 +220,12 @@ const ming = { name: "陳小明", nameEn: "Ming Chen", empId: "E1234" };
 function mentionButtons() {
   return Array.from(host.querySelectorAll<HTMLButtonElement>("p button"));
 }
+// jsdom does not match :focus-visible after a script's focus(); say it as a keyboard arrival would.
+function keyboardFocus(button: HTMLElement) {
+  const matches = button.matches.bind(button);
+  button.matches = (selector: string) => selector === ":focus-visible" || matches(selector);
+  button.focus();
+}
 function popup() {
   return document.body.querySelector<HTMLElement>("[data-mention-card]");
 }
@@ -241,7 +247,7 @@ for (const how of ["focus", "pointerenter", "click"] as const) {
       renderList([thread("t1", [0], "Para zero.", "@陳小明 please check", [ming])], { writesEnabled: false });
       const button = mentionButtons()[0];
       await act(async () => {
-        if (how === "focus") button.focus();
+        if (how === "focus") keyboardFocus(button);
         else if (how === "pointerenter") { for (const type of ["pointerenter", "mouseenter", "pointermove", "mousemove"]) button.dispatchEvent(Object.assign(new MouseEvent(type, { bubbles: type.endsWith("move") }), { pointerType: "mouse" })); await vi.advanceTimersByTimeAsync(500); }
         else { button.focus(); button.click(); }
         await vi.advanceTimersByTimeAsync(50);
@@ -301,4 +307,34 @@ test("a body's markup is not emitted around a mention", () => {
   renderList([thread("t1", [0], "Para zero.", "<b>@陳小明</b>", [ming])], { writesEnabled: false });
   expect(host.querySelector("b")).toBeNull();
   expect(host.textContent).toContain("<b>");
+});
+
+for (const pointerType of ["mouse", "touch"] as const) {
+  test(`a ${pointerType} press, in the browser's real event order, leaves the card open`, async () => {
+    renderList([thread("t1", [0], "Para zero.", "@陳小明 hi", [ming])], { writesEnabled: false });
+    const button = mentionButtons()[0];
+    const fire = (type: string) => button.dispatchEvent(Object.assign(new MouseEvent(type, { bubbles: true, cancelable: true }), { pointerType }));
+    await act(async () => { fire("pointerdown"); fire("mousedown"); });
+    await act(async () => { button.focus(); });
+    await act(async () => { fire("pointerup"); fire("mouseup"); fire("click"); });
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(popup()).not.toBeNull();
+  });
+}
+
+test("Escape from the trigger or from inside the card leaves it closed, focus on the trigger", async () => {
+  renderList([thread("t1", [0], "Para zero.", "@陳小明 hi", [ming])], { writesEnabled: false });
+  const button = mentionButtons()[0];
+  const escape = (target: Element) => act(async () => { target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+  await act(async () => { keyboardFocus(button); });
+  expect(popup()).not.toBeNull();
+  await escape(button);
+  expect(popup()).toBeNull();
+  await act(async () => { button.blur(); keyboardFocus(button); });
+  expect(popup()).not.toBeNull();
+  await act(async () => { popup()!.focus(); });
+  await escape(popup()!);
+  expect(popup()).toBeNull();
+  expect(document.activeElement).toBe(button);
+  expect(button.getAttribute("aria-expanded")).toBe("false");
 });

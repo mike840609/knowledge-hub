@@ -149,6 +149,13 @@ test("an anonymous reader sees a mention highlighted and who it is", async ({ re
     await visitor.mouse.move(0, 0);
     await expect(card).toHaveCount(0);
 
+    await mention.click();
+    await expect(card).toContainText("P3-106");
+    await expect(mention).toHaveAttribute("aria-expanded", "true");
+    await visitor.keyboard.press("Escape");
+    await expect(card).toHaveCount(0);
+    await visitor.mouse.move(0, 0);
+
     await visitor.keyboard.press("Tab");
     await mention.focus();
     await expect(card).toContainText("P3-106");
