@@ -4,6 +4,7 @@ import { WorkspaceAccessDeniedError } from "@/modules/workspaces/domain/errors";
 import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
 import {
   DocumentNotFoundError,
+  IntegrityViolationError,
   InvalidParentError,
   NotFoundError,
   SourceArchivedError,
@@ -18,6 +19,7 @@ import { uuidv7 } from "@/shared/ids/uuidv7";
 import type {
   Contribution,
   Publication,
+  PublicationDocument,
   RightsJudge,
 } from "../domain/publication";
 import type { SourceRepositories } from "../ports/unit-of-work";
@@ -120,14 +122,20 @@ export async function bindPublicationProjection(
   repositories: SourceRepositories,
   input: { publicationId: string; contributionId: string; judge: RightsJudge },
 ): Promise<PublicationProjection> {
-  const publication = await repositories.publications.findById(input.publicationId);
-  if (!publication) throw new NotFoundError("Publication was not found.");
+  const initial = await repositories.publications.findById(input.publicationId);
+  if (!initial) throw new NotFoundError("Publication was not found.");
 
-  const source = await repositories.sources.lockById(publication.sourceId);
+  const source = await repositories.sources.lockById(initial.sourceId);
   if (!source || source.sourceType !== "PUBLICATION") {
     throw new NotFoundError("Publication source was not found.");
   }
-  if (publication.status !== "ACTIVE") throw new SourceArchivedError("This publication is archived.");
+  // Re-read the publication after the Source lock: an archive can win between
+  // the routing read and the lock, and no writer may act on a stale ACTIVE row.
+  const publication = await repositories.publications.findBySourceId(source.id);
+  if (!publication || publication.id !== input.publicationId || publication.status !== "ACTIVE") {
+    throw new SourceArchivedError("This publication is archived.");
+  }
+  if (source.status !== "ACTIVE") throw new SourceArchivedError("This publication is archived.");
 
   const contributions = await repositories.publications.listContributions(publication.id);
   const contribution = contributions.find((candidate) => candidate.id === input.contributionId);
@@ -177,32 +185,68 @@ export async function bindPublicationProjection(
     return revision;
   }
 
-  async function createRevisionCopy(teamDocumentId: string, originalRevision: Awaited<ReturnType<typeof currentRevision>>): Promise<string> {
+  async function createRevisionCopy(
+    teamDocumentId: string,
+    originalRevision: Awaited<ReturnType<typeof currentRevision>>,
+    actorId: string,
+  ): Promise<string> {
     const content = {
       title: originalRevision.title,
       markdown: originalRevision.markdown,
       metadata: originalRevision.metadata,
     };
-    const { contentHash } = fingerprintRevisionContent(content);
+    // Store exactly the canonical payload the hash covers (trimmed title,
+    // CRLF-normalized Markdown, canonical metadata), as every other revision
+    // writer does.
+    const { normalized, contentHash } = fingerprintRevisionContent(content);
     const revisionId = uuidv7();
     const revisionNo = await repositories.revisions.nextRevisionNumber(teamDocumentId);
     await repositories.revisions.insert({
       id: revisionId,
       documentId: teamDocumentId,
       revisionNo,
-      ...content,
+      ...normalized,
       contentHash,
-      createdBy: authority.actorId,
+      createdBy: actorId,
       createdAt: new Date(),
     });
-    await repositories.documents.setCurrentRevision(teamDocumentId, revisionId, authority.actorId);
+    await repositories.documents.setCurrentRevision(teamDocumentId, revisionId, actorId);
     await repositories.links.replaceForDocument({
       documentId: teamDocumentId,
       revisionId,
-      links: extractDocumentLinks(content.markdown),
+      links: extractDocumentLinks(normalized.markdown),
     });
     await repositories.documents.assertComplete(teamDocumentId);
     return revisionId;
+  }
+
+  function creatorContributionOf(document: PublicationDocument): Contribution {
+    const creator = contributions.find((candidate) => candidate.id === document.creatorContributionId);
+    if (!creator) throw new IntegrityViolationError("The team document's creator contribution is missing.");
+    return creator;
+  }
+
+  async function teamDocumentOf(teamDocumentId: string): Promise<PublicationDocument> {
+    const documents = await repositories.publications.listDocuments(authority.publication.id);
+    const document = documents.find((candidate) => candidate.teamDocumentId === teamDocumentId);
+    if (!document) throw new NotFoundError("This document is not part of the publication.");
+    return document;
+  }
+
+  /** Only the creator contribution owns a team document's content and placement. */
+  function requireCreatorAuthority(document: PublicationDocument): Contribution {
+    const creator = creatorContributionOf(document);
+    if (creator.id !== authority.contribution.id) {
+      throw new WorkspaceAccessDeniedError("Only the document's creator may change it in the team.");
+    }
+    return creator;
+  }
+
+  async function authorityFeeds(document: PublicationDocument, originalDocumentId: string): Promise<boolean> {
+    if (document.creatorContributionId === authority.contribution.id) return true;
+    const bindings = await repositories.publications.listBindings(authority.contribution.id);
+    return bindings.some((binding) =>
+      binding.teamDocumentId === document.teamDocumentId && binding.originalDocumentId === originalDocumentId);
   }
 
   return {
@@ -231,7 +275,7 @@ export async function bindPublicationProjection(
         createdAt: now,
         updatedAt: now,
       });
-      await createRevisionCopy(documentId, original);
+      await createRevisionCopy(documentId, original, authority.actorId);
       await repositories.tree.insert({
         id: treeNodeId,
         sourceId: authority.sourceId,
@@ -259,15 +303,18 @@ export async function bindPublicationProjection(
     },
 
     async refresh(teamDocumentId, originalDocumentId) {
-      const documents = await repositories.publications.listDocuments(authority.publication.id);
-      const teamDocument = documents.find((candidate) => candidate.teamDocumentId === teamDocumentId);
-      if (!teamDocument || teamDocument.currentOriginalDocumentId !== originalDocumentId) {
+      const teamDocument = await teamDocumentOf(teamDocumentId);
+      if (teamDocument.currentOriginalDocumentId !== originalDocumentId) {
         throw new NotFoundError("This team document is not fed by that original.");
+      }
+      if (!(await authorityFeeds(teamDocument, originalDocumentId))) {
+        throw new WorkspaceAccessDeniedError("Only the document's creator may update it in the team.");
       }
       // The copy must live in the publication source this authority owns.
       const stored = await repositories.documents.findById(teamDocumentId);
       requireSameSource(stored);
 
+      const creator = creatorContributionOf(teamDocument);
       const original = await currentRevision(originalDocumentId);
       const teamCurrent = await currentRevision(teamDocumentId);
       if (unchangedRevision(teamCurrent, {
@@ -277,11 +324,13 @@ export async function bindPublicationProjection(
       })) {
         return { changed: false };
       }
-      await createRevisionCopy(teamDocumentId, original);
+      await createRevisionCopy(teamDocumentId, original, creator.userId);
       return { changed: true };
     },
 
     async place(input) {
+      const teamDocument = await teamDocumentOf(input.teamDocumentId);
+      const creator = requireCreatorAuthority(teamDocument);
       const stored = await repositories.documents.findById(input.teamDocumentId);
       requireSameSource(stored);
       const node = await repositories.tree.findByDocumentId(input.teamDocumentId);
@@ -291,23 +340,25 @@ export async function bindPublicationProjection(
       if (!input.nodeName.trim()) throw new ValidationError("A placed document needs a non-empty name.");
       const previousParentId = node.parentId;
       if (previousParentId !== input.parentId) {
-        await repositories.tree.updateParent(node.id, input.parentId, authority.actorId);
+        await repositories.tree.updateParent(node.id, input.parentId, creator.userId);
       }
       const siblings = orderSiblingsByPosition(allNodes.filter((candidate) => candidate.parentId === input.parentId && candidate.id !== node.id));
       // A document node stores no name (its title is the revision's); `nodeName`
       // is the placement label the caller must supply, never persisted here.
-      await placeNodeAtIndex(repositories, authority.sourceId, node.id, input.parentId, siblings.length, authority.actorId);
+      await placeNodeAtIndex(repositories, authority.sourceId, node.id, input.parentId, siblings.length, creator.userId);
       if (previousParentId !== input.parentId) {
-        await renumberSiblingPositions(repositories, authority.sourceId, previousParentId, authority.actorId);
+        await renumberSiblingPositions(repositories, authority.sourceId, previousParentId, creator.userId);
       }
     },
 
     async setDocumentStatus(teamDocumentId, status) {
+      const teamDocument = await teamDocumentOf(teamDocumentId);
+      const creator = requireCreatorAuthority(teamDocument);
       const stored = await repositories.documents.findById(teamDocumentId);
       requireSameSource(stored);
       if (stored?.status === status) return;
-      await repositories.documents.updateStatus(teamDocumentId, status, authority.actorId);
-      await repositories.tree.updateStatusForDocument(teamDocumentId, status, authority.actorId);
+      await repositories.documents.updateStatus(teamDocumentId, status, creator.userId);
+      await repositories.tree.updateStatusForDocument(teamDocumentId, status, creator.userId);
     },
 
     async ensureFolder(parentId, name) {
