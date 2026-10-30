@@ -354,7 +354,7 @@ the current caller, so "has left" is not computed at read time.
   constraint (their team documents still exist).
 - If the contributor leaving is the publication creator, the tree entry still
   names them (attribution), but they **lose unpublish, restore and rename**
-  while they have left (my call): someone who stepped away should not archive
+  while they have left (decided): someone who stepped away should not archive
   joiners' work. Admins keep those rights; resuming restores the creator's.
 - **Unfreezing and resuming reconcile, not copy.** Both run the same
   per-contributor reconciliation as catch-up (below): eligible originals,
