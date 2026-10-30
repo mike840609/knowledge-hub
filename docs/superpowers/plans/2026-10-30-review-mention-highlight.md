@@ -36,6 +36,7 @@
 
 **Files:**
 - Modify: `src/modules/knowledge/domain/review-mention.ts`
+- As built: the splitter lives in `src/modules/knowledge/domain/mention-text.ts` and `review-mention.ts` re-exports it, because `review-mention.ts` imports `node:crypto`, which must not reach the client bundle.
 - Test: `tests/unit/review-mention.test.ts` (extend)
 
 **Interfaces:**

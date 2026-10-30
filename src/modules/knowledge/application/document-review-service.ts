@@ -429,7 +429,7 @@ export class DocumentReviewService {
         for(const comment of view.comments) {
           const source=sources.get(comment.id)!;
           comment.authorName=(await r.users.findById(source.authorUserId))?.name;
-          if(!source.deletedAt && (owner || source.visibility!=="HIDDEN")) shown.push({view:comment,body:source.body});
+          if(!source.deletedAt) shown.push({view:comment,body:comment.body}); // the projected body: it alone decides what is shown
         }
         results.push(view);
       }

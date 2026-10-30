@@ -322,11 +322,11 @@ function CommentBody({ body, compact, onClamped, mentions }: { body: string; com
  */
 function MentionCard({ text, people }: { text: string; people: readonly MentionedPerson[] }) {
   const [open, setOpen] = useState(false);
-  // Set by any close: focus handed back to the trigger afterwards (Escape) must not open the card again.
+  // Set by Escape only (the one close that hands focus back to the trigger): that focus must not reopen the card.
   const closed = useRef(false);
   return <Popover.Root open={open} onOpenChange={(next, details) => {
     if (!next && details.reason === "trigger-press") return; // a press opens the card; it never closes it
-    if (!next) closed.current = true;
+    if (!next && details.reason === "escape-key") closed.current = true;
     setOpen(next);
   }}>
     <Popover.Trigger openOnHover delay={150} closeDelay={100} aria-label={`${people[0].name}, mentioned`} onPointerDown={() => { closed.current = false; }} onBlur={() => { closed.current = false; }}

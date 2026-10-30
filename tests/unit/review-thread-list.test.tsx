@@ -356,3 +356,20 @@ test("a press on a card that hover opened, after the patient-click window, leave
     vi.useRealTimers();
   }
 });
+
+test("keyboard focus opens the card after a hover opened and left it", async () => {
+  vi.useFakeTimers();
+  try {
+    renderList([thread("t1", [0], "Para zero.", "@陳小明 hi", [ming])], { writesEnabled: false });
+    const button = mentionButtons()[0];
+    const fire = (type: string) => button.dispatchEvent(Object.assign(new MouseEvent(type, { bubbles: type.endsWith("move") }), { pointerType: "mouse" }));
+    await act(async () => { for (const type of ["pointerenter", "mouseenter", "pointermove", "mousemove"]) fire(type); await vi.advanceTimersByTimeAsync(500); });
+    expect(popup()).not.toBeNull();
+    await act(async () => { for (const type of ["pointerleave", "mouseleave"]) fire(type); await vi.advanceTimersByTimeAsync(500); });
+    expect(popup()).toBeNull();
+    await act(async () => { keyboardFocus(button); await vi.advanceTimersByTimeAsync(50); });
+    expect(popup()).not.toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});

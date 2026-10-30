@@ -167,8 +167,10 @@ test("an anonymous reader sees a mention highlighted and who it is", async ({ re
     await expect(card).toHaveCount(0);
     await visitor.mouse.move(0, 0);
 
-    await visitor.keyboard.press("Tab");
-    await mention.focus();
+    // Reach it as a keyboard user does: Tab from the focusable before it, until focus lands on it.
+    await visitor.locator("body").click({ position: { x: 1, y: 1 } });
+    for (let step = 0; step < 60 && !(await mention.evaluate(el => el === document.activeElement)); step++) await visitor.keyboard.press("Tab");
+    await expect(mention).toBeFocused();
     await expect(card).toContainText("P3-106");
     await visitor.keyboard.press("Escape");
     await expect(card).toHaveCount(0);
