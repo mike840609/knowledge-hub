@@ -14,6 +14,17 @@
 
 將 `KM_TEAM_WORKSPACES_ENABLED=true` 設在伺服器環境並重啟。只有完全相同的 `true` 會開放；unset、`false`、`1`、`yes`、`TRUE` 等值都維持關閉。不需重新建置，也不修改既有資料或 membership。
 
+請照以下順序執行；第 5、6 步最容易漏掉：
+
+1. 先備份資料庫，再部署含 publication 功能的版本。migration 皆為 additive。
+2. 設定 `KM_TEAM_WORKSPACES_ENABLED=true` 並重啟。
+3. 以同一個資料庫與環境執行一次 catch-up（下一節）。
+4. 讀取 summary 行。`failed=<n>` 會 exit 1：先檢查失敗原因、修正後重跑；指令可安全重複執行。
+5. 被標成 `pending` 的 contributor（group-only、被移除或降級、已封存 team 的 contributor）必須各自從自己的 My Space 儲存或同步一次。這兩個請求以本人身分判斷 groups 並 reconcile 文件；在那之前，他們的團隊文件維持「等待同步」標示。
+6. 確認團隊樹上這些文件不再顯示「等待同步」，且對該 contributor 讀 `GET /api/publications/:id/status` 時 `pending: false`。
+
+`make db-catch-up-publications` 與 `GET /api/publications/:id/status` 是維運的兩個讀取點；旗標關閉時兩者都不寫入。
+
 ## 重新開放後的 publication catch-up
 
 Team workspaces 關閉期間，個人的儲存仍會記錄 publication 事件，但沒有東西消費它們。只把旗標打開並不夠：重啟後要執行一次 catch-up。
@@ -29,6 +40,19 @@ make db-catch-up-publications
 - 自願離開、因權限被 freeze、以及已 unpublish 或被 admin 封存的 publication 都會保留，catch-up 不會自動恢復。
 - 輸出為 `applied=<n> pending=<n> skipped=<n> failed=<n>`。有任何 contribution 失敗時 exit 1，否則 exit 0，且可安全重跑。
 
+## catch-up 後的 contributor 狀態
+
+Contributor 的狀態決定維運要期待什麼、以及由什麼解除：
+
+| 狀態 | 團隊中的樣子 | 解除方式 |
+| --- | --- | --- |
+| Active | 文件會從該 contributor 的原稿更新。 | — |
+| Pending catch-up（「等待同步」） | 副本仍可閱讀，但落後。catch-up 無法在不取得本人請求的情況下判斷其權限。 | 該 contributor 下一次儲存或同步；會 reconcile 當下的原稿、位置與生命週期，不只單一 revision。 |
+| Rights-frozen（「不再更新」） | 文件仍可讀並加註；其他人不能更新。 | 同一位 contributor 之後成功的儲存或同步。 |
+| Left（「不再更新」） | 文件仍可讀且凍結；contribution 記錄為自願離開。 | 只有該 contributor 明確按「繼續更新」；一般儲存與 catch-up 都不會恢復。 |
+
+`pending` 不是 freeze，freeze 也不是 leave。catch-up 會保留這三種狀態，也會保留 admin 封存與已 unpublish 的 publication，且不會隱含地還原其中任何一種。
+
 ## Unpublish、restore 與 rename
 
 Publication creator 或 team admin 可以 unpublish、restore、rename。Admin 以 caller 的 effective `membership.manage_basic` 判斷（OWNER/ADMIN，含 group 來源）；creator 則仍需持有 `source.manage`，且不能已離開。
@@ -37,8 +61,16 @@ Publication creator 或 team admin 可以 unpublish、restore、rename。Admin �
 - **Restore** 會重新 claim 名稱和每一個 original。若期間已有其他 active publication 取用名稱或任一 original，整個 restore 會 rollback，分別回 `PUBLICATION_NAME_TAKEN` 或 `PUBLICATION_ORIGINAL_TAKEN`，publication 維持封存。成功時會 reconcile direct contributor；group-only／被移除者維持 pending，等本人 save 或 sync；rights freeze 不會被清除。
 - **Rename** 只改 publication 的 canonical name（不新增 revision）。撞到 active 名稱時回 `PUBLICATION_NAME_TAKEN`，訊息為「已有同名發佈，請取一個能說明內容的名字」。
 
+實務上：
+
+- 這些指令位於團隊樹中 publication 項目的選單。「取消發佈／封存」會先要求確認，因為它同時封存 joiner 的文件。
+- Unpublish 之後，contributor 儲存或同步原稿仍會照常更新 My Space，但**絕不會讓 publication 復活**。要帶回來，永遠只能由 admin 或 publication creator 明確 restore。
+- Restore 是全有全無。若期間 active 名稱或任一個 original 已被取用，整個 transaction 會 rollback，publication 維持封存，不會只還原一半。請先解除衝突（封存或改名佔用的 publication）再 restore。
+- Restore 只會 reconcile 那些不需要本人 caller 就能判斷權限的 contributor。group-only 或被移除的 contributor 副本會維持「等待同步」，直到本人儲存或同步；rights freeze 與自願離開不會被 restore 清除。
+
 ## 驗證
 
 - `tests/unit/team-workspaces-flag.test.ts` 驗證旗標解析；`tests/unit/personal-rollout.test.ts` 驗證 personal-only caller 的權限。
 - `tests/integration/personal-workspace-rollout.test.ts` 驗證既有 Team 的導覽、直接讀寫、匯出與重新開放後資料可用性。
 - `tests/e2e/team-workspaces-coming-soon.spec.ts` 驗證關閉和開啟狀態的入口，以及關閉時直接連結被拒絕。
+- `tests/e2e/zz-team-publishing.spec.ts`（`@smoke-team`）以固定的可信任 persona 走完發佈→閱讀與留言→建立者儲存→加入但不覆寫→重新接回→移除→取消發佈。證據與實際 gate 指令見 [2026-10-31 驗證紀錄](../superpowers/verification/2026-10-31-team-space-publishing.md)。
