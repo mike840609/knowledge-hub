@@ -7,7 +7,7 @@ import type {
   PublicationDocument,
   ReconcileReport,
 } from "@/modules/sources/domain/publication";
-import { publicationError } from "@/modules/sources/domain/publication-errors";
+import { publicationError, PublicationError } from "@/modules/sources/domain/publication-errors";
 import type { PublicationRepository } from "@/modules/sources/ports/publication-repository";
 import { asNullableDate, type DbRow, type QueryConnection } from "./shared";
 
@@ -198,11 +198,60 @@ export class MariaDbPublicationRepository implements PublicationRepository {
     }
   }
 
-  async unbind(contributionId: string, originalDocumentId: string): Promise<void> {
+  async unbind(publicationId: string, contributionId: string, originalDocumentId: string): Promise<void> {
     await this.connection.query(
-      "DELETE FROM publication_bindings WHERE contribution_id = ? AND original_document_id = ?",
-      [contributionId, originalDocumentId],
+      `DELETE b FROM publication_bindings b
+       JOIN publication_contributors c ON c.id = b.contribution_id
+       JOIN publications p ON p.id = c.publication_id
+       WHERE b.contribution_id = ? AND b.original_document_id = ? AND p.id = ?`,
+      [contributionId, originalDocumentId, publicationId],
     );
+  }
+
+  async findClaim(
+    originalDocumentId: string,
+    teamWorkspaceId: string,
+    excludePublicationId: string,
+  ): Promise<{ publicationId: string; publicationName: string } | null> {
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT p.id, s.name
+       FROM publication_bindings b
+       JOIN publication_contributors c ON c.id = b.contribution_id
+       JOIN publications p ON p.id = c.publication_id
+       JOIN knowledge_sources s ON s.id = p.source_id
+       WHERE b.original_document_id = ?
+         AND b.active_team_workspace_id = ?
+         AND p.id <> ?
+       ORDER BY s.name, p.id
+       LIMIT 1`,
+      [originalDocumentId, teamWorkspaceId, excludePublicationId],
+    );
+    const row = rows[0];
+    return row ? { publicationId: String(row.id), publicationName: String(row.name) } : null;
+  }
+
+  private savepointSequence = 0;
+
+  async runClaimAttempt<T>(
+    work: () => Promise<T>,
+  ): Promise<{ ok: true; value: T } | { ok: false; error: Error }> {
+    const savepoint = `publication_claim_${this.savepointSequence}`;
+    this.savepointSequence += 1;
+    await this.connection.query(`SAVEPOINT ${savepoint}`);
+    try {
+      const value = await work();
+      await this.connection.query(`RELEASE SAVEPOINT ${savepoint}`);
+      return { ok: true, value };
+    } catch (error) {
+      // MariaDB keeps the transaction usable after a statement-level duplicate
+      // key, so rolling back to this savepoint drops only the losing copy.
+      await this.connection.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+      await this.connection.query(`RELEASE SAVEPOINT ${savepoint}`);
+      if (error instanceof PublicationError && error.code === "PUBLICATION_ORIGINAL_TAKEN") {
+        return { ok: false, error };
+      }
+      throw error;
+    }
   }
 
   async repoint(teamDocumentId: string, originalDocumentId: string): Promise<void> {

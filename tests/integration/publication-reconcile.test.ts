@@ -45,6 +45,15 @@ async function bindingsOf(contributionId: string) {
   return fixture.uow.run((repositories) => repositories.publications.listBindings(contributionId));
 }
 
+async function documentsForOriginal(publicationIds: readonly string[], originalId: string) {
+  const placeholders = publicationIds.map(() => "?").join(", ");
+  return fixture.pool.query<{ publication_id: string; team_document_id: string }[]>(
+    `SELECT publication_id, team_document_id FROM publication_documents
+     WHERE publication_id IN (${placeholders}) AND current_original_document_id = ?`,
+    [...publicationIds, originalId],
+  );
+}
+
 async function revisionCount(documentId: string): Promise<number> {
   const rows = await fixture.pool.query<{ total: number }[]>(
     "SELECT COUNT(*) AS total FROM knowledge_revisions WHERE document_id = ?",
@@ -672,6 +681,8 @@ describe("path reservations and moves", () => {
     await reconcile(publication.publication.id, publication.contributionId, mikeJudge());
     const teamA = (await publicationDocuments(publication.publication.id))
       .find((doc) => doc.currentOriginalDocumentId === a.documentId)!;
+    const teamC = (await publicationDocuments(publication.publication.id))
+      .find((doc) => doc.sourcePath === "c.md")!;
     const revisionsBefore = await revisionCount(teamA.teamDocumentId);
 
     await renameOriginalPath("mike", fixture.mikeFolderSourceId, a.documentId, "reconcile/conflict/c.md");
@@ -684,7 +695,251 @@ describe("path reservations and moves", () => {
       code: "PATH_RESERVED",
     }]);
     expect(await storedPath(teamA.teamDocumentId)).toBe("a.md");
+    expect(await storedPath(teamC.teamDocumentId)).toBe("c.md");
     expect(await revisionCount(teamA.teamDocumentId)).toBe(revisionsBefore);
+  });
+
+  it("re-attaches the same copy for a same-sync delete plus add", async () => {
+    const folder = await fixture.createFolder(fixture.mike, "reconcile/delete-add", "delete-add");
+    const deleted = await fixture.createSyncedOriginal(fixture.mike, {
+      parentId: folder.treeNodeId, sourcePath: "reconcile/delete-add/a.md", title: "Version one", markdown: "one",
+    });
+    const publication = await fixture.createPublication({
+      name: "Reconcile Delete Add", kind: "FOLDER", creator: fixture.mike,
+      origin: { kind: "FOLDER", folderNodeId: folder.treeNodeId },
+    });
+    await reconcile(publication.publication.id, publication.contributionId, mikeJudge());
+    const [team] = await publicationDocuments(publication.publication.id);
+    const discussion = await fixture.createDiscussion({
+      workspaceId: fixture.teamWorkspaceId,
+      documentId: team.teamDocumentId,
+      revisionId: await fixture.revisionIdOf(team.teamDocumentId),
+      authorId: fixture.mike.identity.id,
+    });
+
+    // One sync: the old document is deleted, a new document replaces it at the
+    // same path, and one genuinely new document appears elsewhere.
+    await archiveOriginal("mike", fixture.mikeFolderSourceId, fixture.mikePersonalWorkspaceId, deleted.documentId);
+    const replacement = await fixture.createSyncedOriginal(fixture.mike, {
+      parentId: folder.treeNodeId, sourcePath: "reconcile/delete-add/a.md", title: "Version two", markdown: "two",
+    });
+    const fresh = await fixture.createSyncedOriginal(fixture.mike, {
+      parentId: folder.treeNodeId, sourcePath: "reconcile/delete-add/b.md", title: "Fresh", markdown: "fresh",
+    });
+
+    const result = await reconcile(publication.publication.id, publication.contributionId, mikeJudge());
+
+    expect(result.report.created).toBe(1);
+    expect(result.report.restored).toBe(1);
+    expect(result.report.archived).toBe(0);
+    expect(result.report.notices).toEqual([]);
+    const docs = await publicationDocuments(publication.publication.id);
+    expect(docs).toHaveLength(2);
+    const reused = docs.find((doc) => doc.teamDocumentId === team.teamDocumentId)!;
+    expect(reused.currentOriginalDocumentId).toBe(replacement.documentId);
+    expect(reused.sourcePath).toBe("a.md");
+    expect(reused.status).toBe("ACTIVE");
+    expect((await currentRevisionOf(team.teamDocumentId)).title).toBe("Version two");
+    const threads = await fixture.pool.query<{ id: string }[]>(
+      "SELECT id FROM document_review_threads WHERE document_id = ?",
+      [team.teamDocumentId],
+    );
+    expect(threads.map((thread) => thread.id)).toEqual([discussion.threadId]);
+    expect(docs.find((doc) => doc.currentOriginalDocumentId === fresh.documentId)?.sourcePath).toBe("b.md");
+  });
+
+  it("lets a new original take a path vacated by a move in the same sync", async () => {
+    const folder = await fixture.createFolder(fixture.mike, "reconcile/vacate", "vacate");
+    const mover = await fixture.createSyncedOriginal(fixture.mike, {
+      parentId: folder.treeNodeId, sourcePath: "reconcile/vacate/a.md", title: "Mover", markdown: "mover",
+    });
+    const publication = await fixture.createPublication({
+      name: "Reconcile Vacate", kind: "FOLDER", creator: fixture.mike,
+      origin: { kind: "FOLDER", folderNodeId: folder.treeNodeId },
+    });
+    await reconcile(publication.publication.id, publication.contributionId, mikeJudge());
+    const [teamMover] = await publicationDocuments(publication.publication.id);
+    const revisionsBefore = await revisionCount(teamMover.teamDocumentId);
+
+    // One sync: the old original moves to b.md and a new original appears at a.md.
+    await renameOriginalPath("mike", fixture.mikeFolderSourceId, mover.documentId, "reconcile/vacate/b.md");
+    const incoming = await fixture.createSyncedOriginal(fixture.mike, {
+      parentId: folder.treeNodeId, sourcePath: "reconcile/vacate/a.md", title: "Incoming", markdown: "incoming",
+    });
+    const result = await reconcile(publication.publication.id, publication.contributionId, mikeJudge());
+
+    expect(result.report.created).toBe(1);
+    expect(result.report.moved).toBe(1);
+    expect(result.report.notices).toEqual([]);
+    const docs = await publicationDocuments(publication.publication.id);
+    expect(docs).toHaveLength(2);
+    expect(docs.find((doc) => doc.teamDocumentId === teamMover.teamDocumentId)?.sourcePath).toBe("b.md");
+    expect(docs.find((doc) => doc.currentOriginalDocumentId === incoming.documentId)?.sourcePath).toBe("a.md");
+    expect(await revisionCount(teamMover.teamDocumentId)).toBe(revisionsBefore);
+  });
+});
+
+describe("cross-publication claims", () => {
+  it("reports a claim held by another publication and still applies the rest", async () => {
+    const parent = await projectFolder(
+      "mike", fixture.mikeFolderSourceId, fixture.mikePersonalWorkspaceId,
+      null, "claim/det/parent", "parent",
+    );
+    const sub = await projectFolder(
+      "mike", fixture.mikeFolderSourceId, fixture.mikePersonalWorkspaceId,
+      parent.treeNodeId, "claim/det/parent/sub", "sub",
+    );
+    const shared = await projectDocument("mike", fixture.mikeFolderSourceId, fixture.mikePersonalWorkspaceId, {
+      parentId: sub.treeNodeId, sourcePath: "claim/det/parent/sub/o.md", title: "Shared O", markdown: "o",
+    });
+    const own = await projectDocument("mike", fixture.mikeFolderSourceId, fixture.mikePersonalWorkspaceId, {
+      parentId: parent.treeNodeId, sourcePath: "claim/det/parent/b.md", title: "Own B", markdown: "b",
+    });
+    const winner = await fixture.createPublication({
+      name: "Claim Winner", kind: "FOLDER", creator: fixture.mike,
+      origin: { kind: "FOLDER", folderNodeId: sub.treeNodeId },
+    });
+    const loser = await fixture.createPublication({
+      name: "Claim Loser", kind: "FOLDER", creator: fixture.mike,
+      origin: { kind: "FOLDER", folderNodeId: parent.treeNodeId },
+    });
+    await reconcile(winner.publication.id, winner.contributionId, mikeJudge());
+
+    const result = await reconcile(loser.publication.id, loser.contributionId, mikeJudge());
+
+    expect(result.state).toBe("APPLIED");
+    expect(result.report.created).toBe(1);
+    expect(result.report.notices).toEqual([{
+      publicationId: loser.publication.id,
+      originalDocumentId: shared.documentId,
+      code: "ORIGINAL_ALREADY_PUBLISHED",
+      existingPublicationName: "Claim Winner",
+    }]);
+    const losingDocs = await publicationDocuments(loser.publication.id);
+    expect(losingDocs).toHaveLength(1);
+    expect(losingDocs[0].currentOriginalDocumentId).toBe(own.documentId);
+    expect(await documentsForOriginal([loser.publication.id], shared.documentId)).toHaveLength(0);
+
+    // The refusal is stable: a later run reports the same claim and changes nothing.
+    const rerun = await reconcile(loser.publication.id, loser.contributionId, mikeJudge());
+    expect(rerun.report.created).toBe(0);
+    expect(rerun.report.notices.map((notice) => notice.code)).toEqual(["ORIGINAL_ALREADY_PUBLISHED"]);
+    expect(await publicationDocuments(loser.publication.id)).toHaveLength(1);
+  });
+
+  it("rolls back only a losing claim attempt and keeps the transaction usable", async () => {
+    const folder = await fixture.createFolder(fixture.mike, "claim/savepoint", "savepoint");
+    const claimed = await fixture.createSyncedOriginal(fixture.mike, {
+      parentId: folder.treeNodeId, sourcePath: "claim/savepoint/claimed.md", title: "Claimed", markdown: "claimed",
+    });
+    await fixture.createSyncedOriginal(fixture.mike, {
+      parentId: folder.treeNodeId, sourcePath: "claim/savepoint/other.md", title: "Other", markdown: "other",
+    });
+    const owner = await fixture.createPublication({
+      name: "Savepoint Owner", kind: "FOLDER", creator: fixture.mike,
+      origin: { kind: "FOLDER", folderNodeId: folder.treeNodeId },
+    });
+    await reconcile(owner.publication.id, owner.contributionId, mikeJudge());
+
+    const otherFolder = await fixture.createFolder(fixture.mike, "claim/savepoint-free", "savepoint-free");
+    const free = await fixture.createSyncedOriginal(fixture.mike, {
+      parentId: otherFolder.treeNodeId, sourcePath: "claim/savepoint-free/free.md", title: "Free", markdown: "free",
+    });
+    const challenger = await fixture.createPublication({
+      name: "Savepoint Challenger", kind: "FOLDER", creator: fixture.mike,
+      origin: { kind: "FOLDER", folderNodeId: otherFolder.treeNodeId },
+    });
+    const teamClaimed = await fixture.createTeamDocument({
+      publication: challenger,
+      creatorContributionId: challenger.contributionId,
+      originalDocumentId: claimed.documentId,
+      sourcePath: "claimed.md",
+      title: "Claimed",
+    });
+    const teamFree = await fixture.createTeamDocument({
+      publication: challenger,
+      creatorContributionId: challenger.contributionId,
+      originalDocumentId: free.documentId,
+      sourcePath: "free.md",
+      title: "Free",
+    });
+
+    const outcome = await fixture.uow.run(async (repositories) => {
+      const attempt = await repositories.publications.runClaimAttempt(async () => {
+        // The first binding is legal and must still be rolled back with the
+        // failing attempt, proving the savepoint isolates the whole copy.
+        await repositories.publications.bind({
+          contributionId: challenger.contributionId,
+          originalDocumentId: free.documentId,
+          teamDocumentId: teamFree.teamDocumentId,
+        });
+        await repositories.publications.bind({
+          contributionId: challenger.contributionId,
+          originalDocumentId: claimed.documentId,
+          teamDocumentId: teamClaimed.teamDocumentId,
+        });
+      });
+      // A write after the failed attempt proves the transaction is still usable.
+      await repositories.publications.saveReport(challenger.contributionId, {
+        created: 0, updated: 0, moved: 0, archived: 0, restored: 0, notices: [],
+      });
+      return attempt;
+    });
+
+    expect(outcome).toMatchObject({ ok: false, error: { code: "PUBLICATION_ORIGINAL_TAKEN" } });
+    expect(await bindingsOf(challenger.contributionId)).toEqual([]);
+    expect(await fixture.uow.run((repositories) =>
+      repositories.publications.findReport(challenger.contributionId))).not.toBeNull();
+  });
+
+  it("lets one of two racing publications win the claim without aborting the other", async () => {
+    const parent = await projectFolder(
+      "mike", fixture.mikeFolderSourceId, fixture.mikePersonalWorkspaceId,
+      null, "claim/race/parent", "parent",
+    );
+    const sub = await projectFolder(
+      "mike", fixture.mikeFolderSourceId, fixture.mikePersonalWorkspaceId,
+      parent.treeNodeId, "claim/race/parent/sub", "sub",
+    );
+    const shared = await projectDocument("mike", fixture.mikeFolderSourceId, fixture.mikePersonalWorkspaceId, {
+      parentId: sub.treeNodeId, sourcePath: "claim/race/parent/sub/o.md", title: "Race O", markdown: "o",
+    });
+    await projectDocument("mike", fixture.mikeFolderSourceId, fixture.mikePersonalWorkspaceId, {
+      parentId: sub.treeNodeId, sourcePath: "claim/race/parent/sub/oa.md", title: "Race OA", markdown: "oa",
+    });
+    const onlyB = await projectDocument("mike", fixture.mikeFolderSourceId, fixture.mikePersonalWorkspaceId, {
+      parentId: parent.treeNodeId, sourcePath: "claim/race/parent/only-b.md", title: "Only B", markdown: "b",
+    });
+    const first = await fixture.createPublication({
+      name: "Claim Race A", kind: "FOLDER", creator: fixture.mike,
+      origin: { kind: "FOLDER", folderNodeId: sub.treeNodeId },
+    });
+    const second = await fixture.createPublication({
+      name: "Claim Race B", kind: "FOLDER", creator: fixture.mike,
+      origin: { kind: "FOLDER", folderNodeId: parent.treeNodeId },
+    });
+
+    const [firstResult, secondResult] = await Promise.all([
+      reconcile(first.publication.id, first.contributionId, mikeJudge()),
+      reconcile(second.publication.id, second.contributionId, mikeJudge()),
+    ]);
+
+    expect(firstResult.state).toBe("APPLIED");
+    expect(secondResult.state).toBe("APPLIED");
+    const sharedDocs = await documentsForOriginal(
+      [first.publication.id, second.publication.id], shared.documentId);
+    expect(sharedDocs).toHaveLength(1);
+    const noticeForShared = [...firstResult.report.notices, ...secondResult.report.notices]
+      .filter((notice) => notice.originalDocumentId === shared.documentId);
+    expect(noticeForShared).toHaveLength(1);
+    expect(noticeForShared[0].code).toBe("ORIGINAL_ALREADY_PUBLISHED");
+    const winnerPublicationId = sharedDocs[0].publication_id;
+    expect(noticeForShared[0].existingPublicationName)
+      .toBe(winnerPublicationId === first.publication.id ? "Claim Race A" : "Claim Race B");
+
+    // B's unshared original still applies even when B loses the contested one.
+    expect(secondResult.report.created).toBeGreaterThanOrEqual(1);
+    expect(await documentsForOriginal([second.publication.id], onlyB.documentId)).toHaveLength(1);
   });
 });
 

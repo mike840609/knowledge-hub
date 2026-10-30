@@ -147,11 +147,17 @@ function notice(
   publicationId: string,
   originalDocumentId: string,
   code: PublicationNotice["code"],
-  maintainerUserId?: string,
+  extra?: { maintainerUserId?: string; existingPublicationName?: string },
 ): PublicationNotice {
-  return maintainerUserId === undefined
-    ? { publicationId, originalDocumentId, code }
-    : { publicationId, originalDocumentId, code, maintainerUserId };
+  return {
+    publicationId,
+    originalDocumentId,
+    code,
+    ...(extra?.maintainerUserId === undefined ? {} : { maintainerUserId: extra.maintainerUserId }),
+    ...(extra?.existingPublicationName === undefined
+      ? {}
+      : { existingPublicationName: extra.existingPublicationName }),
+  };
 }
 
 /**
@@ -250,9 +256,11 @@ export async function reconcileContribution(
 
 /**
  * Read every current fact before writing: eligible originals, persisted
- * bindings and all team copies. Restore/reattach the creator's own archived
- * holder, resolve legal moves against the simultaneous final state, then apply
- * creation, refresh, placement and archival.
+ * bindings and all team copies. Lifecycle and moves are decided before matching:
+ * copies fed by ineligible originals are archived first, mapped moves are
+ * resolved against the simultaneous final state, and only then do unbound
+ * originals match a holder (a holder moving away or archived is free).
+ * Creation, refresh, placement and archival follow.
  */
 async function applyReconciliation(
   repositories: SourceRepositories,
@@ -266,6 +274,10 @@ async function applyReconciliation(
   let bindings = await repositories.publications.listBindings(contribution.id);
   const contributions = await repositories.publications.listContributions(publication.id);
   const movedDocumentIds = new Set<string>();
+  /** Copies archived by this run that still need a net count at the end. */
+  const archivedThisRun = new Set<string>();
+  let restoredCount = 0;
+  const eligibleIds = new Set(originals.map((original) => original.documentId));
 
   const documentOf = (teamDocumentId: string) => documents.find((document) => document.teamDocumentId === teamDocumentId);
   const bindingOf = (originalDocumentId: string) =>
@@ -279,69 +291,142 @@ async function applyReconciliation(
   const maintainerOf = (document: PublicationDocument) =>
     contributions.find((candidate) => candidate.id === document.creatorContributionId)?.userId;
 
-  async function rememberBinding(originalDocumentId: string, teamDocumentId: string): Promise<void> {
+  /** The other active publication claiming this original in this team, if any. */
+  async function findClaimName(originalDocumentId: string): Promise<string | null> {
+    const claim = await repositories.publications.findClaim(
+      originalDocumentId, publication.teamWorkspaceId, publication.id);
+    return claim?.publicationName ?? null;
+  }
+
+  function pushClaimNotice(originalDocumentId: string, existingPublicationName: string): void {
+    report.notices.push(notice(
+      publication.id, originalDocumentId, "ORIGINAL_ALREADY_PUBLISHED", { existingPublicationName }));
+  }
+
+  /**
+   * Remembers an original → team copy pairing. A cross-publication claim
+   * conflict is isolated in a savepoint and reported, never allowed to abort the
+   * contribution's other originals.
+   */
+  async function rememberBinding(originalDocumentId: string, teamDocumentId: string): Promise<boolean> {
     const existing = bindingOf(originalDocumentId);
-    if (existing?.teamDocumentId === teamDocumentId) return;
-    if (existing) {
-      await repositories.publications.unbind(contribution.id, originalDocumentId);
-      bindings = bindings.filter((binding) => binding.originalDocumentId !== originalDocumentId);
+    if (existing?.teamDocumentId === teamDocumentId) return true;
+    const claim = await findClaimName(originalDocumentId);
+    if (claim !== null) {
+      pushClaimNotice(originalDocumentId, claim);
+      return false;
     }
-    await repositories.publications.bind({
-      contributionId: contribution.id,
-      originalDocumentId,
-      teamDocumentId,
+    const attempt = await repositories.publications.runClaimAttempt(async () => {
+      if (existing) {
+        await repositories.publications.unbind(publication.id, contribution.id, originalDocumentId);
+      }
+      await repositories.publications.bind({
+        contributionId: contribution.id,
+        originalDocumentId,
+        teamDocumentId,
+      });
     });
+    if (!attempt.ok) {
+      const winner = await findClaimName(originalDocumentId);
+      if (winner !== null) {
+        pushClaimNotice(originalDocumentId, winner);
+        return false;
+      }
+      throw attempt.error;
+    }
+    bindings = bindings.filter((binding) => binding.originalDocumentId !== originalDocumentId);
     bindings.push({ contributionId: contribution.id, originalDocumentId, teamDocumentId });
+    return true;
   }
 
   async function restore(document: PublicationDocument): Promise<void> {
     if (document.status === "ACTIVE") return;
     await projection.setDocumentStatus(document.teamDocumentId, "ACTIVE");
     document.status = "ACTIVE";
-    report.restored += 1;
+    restoredCount += 1;
   }
 
   async function archive(document: PublicationDocument): Promise<void> {
     if (document.status === "ARCHIVED") return;
     await projection.setDocumentStatus(document.teamDocumentId, "ARCHIVED");
     document.status = "ARCHIVED";
-    report.archived += 1;
+    archivedThisRun.add(document.teamDocumentId);
   }
 
   /**
    * The incoming original lands on the creator's own archived copy: the old copy
    * is archived (its path stays reserved), the archived copy is repointed,
-   * restored and keeps its discussion threads.
+   * restored and keeps its discussion threads. The whole reattach is one
+   * savepoint, so a claim conflict leaves every row as it was.
    */
   async function reattach(
     holder: PublicationDocument,
     original: EligibleOriginal,
     current: PublicationDocument | undefined,
-  ): Promise<void> {
-    if (current && current.teamDocumentId !== holder.teamDocumentId) {
-      await archive(current);
-      await repositories.publications.unbind(contribution.id, original.documentId);
-      bindings = bindings.filter((binding) => binding.originalDocumentId !== original.documentId);
-    } else if (bindingOf(original.documentId)) {
-      await repositories.publications.unbind(contribution.id, original.documentId);
-      bindings = bindings.filter((binding) => binding.originalDocumentId !== original.documentId);
+  ): Promise<boolean> {
+    const claim = await findClaimName(original.documentId);
+    if (claim !== null) {
+      pushClaimNotice(original.documentId, claim);
+      return false;
     }
-    await repositories.publications.repoint(holder.teamDocumentId, original.documentId);
-    // repoint replaced the holder's previous creator binding.
-    bindings = bindings.filter((binding) =>
-      !(binding.contributionId === contribution.id && binding.teamDocumentId === holder.teamDocumentId));
+    const attempt = await repositories.publications.runClaimAttempt(async () => {
+      if (current && current.teamDocumentId !== holder.teamDocumentId) {
+        if (current.status === "ACTIVE") {
+          await projection.setDocumentStatus(current.teamDocumentId, "ARCHIVED");
+        }
+        await repositories.publications.unbind(publication.id, contribution.id, original.documentId);
+      }
+      await repositories.publications.repoint(holder.teamDocumentId, original.documentId);
+      if (holder.status === "ARCHIVED") {
+        await projection.setDocumentStatus(holder.teamDocumentId, "ACTIVE");
+      }
+    });
+    if (!attempt.ok) {
+      const winner = await findClaimName(original.documentId);
+      if (winner !== null) {
+        pushClaimNotice(original.documentId, winner);
+        return false;
+      }
+      throw attempt.error;
+    }
+
+    if (current && current.teamDocumentId !== holder.teamDocumentId && current.status === "ACTIVE") {
+      current.status = "ARCHIVED";
+      archivedThisRun.add(current.teamDocumentId);
+    }
+    // repoint replaced both the holder's previous creator binding and the
+    // incoming original's old binding.
+    bindings = bindings.filter((binding) => !(
+      binding.contributionId === contribution.id
+      && (binding.originalDocumentId === original.documentId
+        || binding.teamDocumentId === holder.teamDocumentId)
+    ));
     bindings.push({
       contributionId: contribution.id,
       originalDocumentId: original.documentId,
       teamDocumentId: holder.teamDocumentId,
     });
     holder.currentOriginalDocumentId = original.documentId;
-    await restore(holder);
+    if (holder.status === "ARCHIVED") {
+      holder.status = "ACTIVE";
+      restoredCount += 1;
+    }
+    return true;
   }
 
-  const mapped: { original: EligibleOriginal; teamDocumentId: string }[] = [];
-  const toCreate: EligibleOriginal[] = [];
+  // 1. Lifecycle first: a copy whose original is no longer eligible (deleted,
+  // archived, moved out, source archived) is archived before matching, so a
+  // same-sync delete+add can reattach it in this same run.
+  for (const document of documents) {
+    if (isOwn(document) && document.status === "ACTIVE" && !eligibleIds.has(document.currentOriginalDocumentId)) {
+      await archive(document);
+    }
+  }
 
+  // 2. Decide already-mapped originals. Their copies may be restored or moved
+  // onto the creator's own archived holder before any move is planned.
+  const mapped: { original: EligibleOriginal; teamDocumentId: string }[] = [];
+  const toMatch: EligibleOriginal[] = [];
   for (const original of originals) {
     const binding = bindingOf(original.documentId);
     const bound = binding === undefined ? undefined : documentOf(binding.teamDocumentId);
@@ -349,82 +434,45 @@ async function applyReconciliation(
       // Mapped to another creator's copy: only report it, never create or
       // overwrite. The remembered binding is what keeps the message stable.
       report.notices.push(notice(
-        publication.id, original.documentId, "MAINTAINED_BY_OTHER", maintainerOf(bound)));
+        publication.id, original.documentId, "MAINTAINED_BY_OTHER", { maintainerUserId: maintainerOf(bound) }));
       continue;
     }
 
     let target = bound;
     if (binding && !bound) {
       // Defensive: the binding points at no team copy of this publication.
-      await repositories.publications.unbind(contribution.id, original.documentId);
+      await repositories.publications.unbind(publication.id, contribution.id, original.documentId);
       bindings = bindings.filter((candidate) => candidate.originalDocumentId !== original.documentId);
     } else if (target && target.currentOriginalDocumentId !== original.documentId) {
       // Defensive: a stale binding never lets one original feed two copies.
-      await repositories.publications.unbind(contribution.id, original.documentId);
+      await repositories.publications.unbind(publication.id, contribution.id, original.documentId);
       bindings = bindings.filter((candidate) => candidate.originalDocumentId !== original.documentId);
       target = undefined;
     }
+    if (!target) target = activeOwnFedBy(original.documentId);
+    if (!target) {
+      toMatch.push(original);
+      continue;
+    }
+
     const holder = holderOfPath(original.teamPath);
-
-    if (target) {
-      if (
-        holder
-        && holder.teamDocumentId !== target.teamDocumentId
-        && isOwn(holder)
-        && holder.status === "ARCHIVED"
-      ) {
-        await reattach(holder, original, target);
-        target = holder;
-      } else {
-        await restore(target);
-      }
-      mapped.push({ original, teamDocumentId: target.teamDocumentId });
-      continue;
+    if (
+      holder
+      && holder.teamDocumentId !== target.teamDocumentId
+      && isOwn(holder)
+      && holder.status === "ARCHIVED"
+    ) {
+      if (!(await reattach(holder, original, target))) continue;
+      target = holder;
+    } else {
+      await restore(target);
     }
-
-    const activeOwn = activeOwnFedBy(original.documentId);
-    if (holder && isOwn(holder) && holder.status === "ARCHIVED" && holder.teamDocumentId !== activeOwn?.teamDocumentId) {
-      // A move onto the creator's own archived copy: the archived copy is
-      // restored and repointed, and its old copy (if any) is archived keeping
-      // its own path.
-      await reattach(holder, original, activeOwn);
-      mapped.push({ original, teamDocumentId: holder.teamDocumentId });
-      continue;
-    }
-    if (activeOwn) {
-      // A remembered binding is missing, but the current original still feeds
-      // this copy; repair the memory instead of creating a duplicate.
-      await rememberBinding(original.documentId, activeOwn.teamDocumentId);
-      mapped.push({ original, teamDocumentId: activeOwn.teamDocumentId });
-      continue;
-    }
-    if (holder) {
-      if (!isOwn(holder)) {
-        await rememberBinding(original.documentId, holder.teamDocumentId);
-        report.notices.push(notice(
-          publication.id, original.documentId, "MAINTAINED_BY_OTHER", maintainerOf(holder)));
-        continue;
-      }
-      // The creator's own active copy already holds this path for another
-      // original; this one cannot take it.
-      report.notices.push(notice(publication.id, original.documentId, "PATH_RESERVED"));
-      continue;
-    }
-
-    toCreate.push(original);
+    if (!(await rememberBinding(original.documentId, target.teamDocumentId))) continue;
+    mapped.push({ original, teamDocumentId: target.teamDocumentId });
   }
 
-  // An original that is no longer eligible — archived, removed, moved out of the
-  // folder, or its source archived — archives the copy it used to feed.
-  const kept = new Set(mapped.map((entry) => entry.teamDocumentId));
-  for (const document of documents) {
-    if (isOwn(document) && document.status === "ACTIVE" && !kept.has(document.teamDocumentId)) {
-      await archive(document);
-    }
-  }
-
-  // Resolve the creator's moves against the simultaneous final state, so swaps
-  // and rotations apply; a conflict keeps the old path and is reported.
+  // 3. Resolve the creator's moves against the simultaneous final state, so
+  // swaps and rotations apply; a conflict keeps the old path and is reported.
   const held = new Map(documents.map((document) => [document.teamDocumentId, document]));
   const planned: PlannedMove[] = [];
   const originalByDocument = new Map(mapped.map((entry) => [entry.teamDocumentId, entry.original]));
@@ -451,6 +499,40 @@ async function applyReconciliation(
     const original = originalByDocument.get(move.teamDocumentId);
     if (!original) continue;
     report.notices.push(notice(publication.id, original.documentId, "PATH_RESERVED"));
+  }
+
+  // 4. Match originals without a copy against the final path state. A path
+  // vacated by an applied move is free, so a same-sync move plus add works.
+  const toCreate: EligibleOriginal[] = [];
+  for (const original of toMatch) {
+    const holder = original.teamPath === null
+      ? undefined
+      : documents.find((document) => document.sourcePath === original.teamPath);
+    if (!holder) {
+      toCreate.push(original);
+      continue;
+    }
+    if (!isOwn(holder)) {
+      if (!(await rememberBinding(original.documentId, holder.teamDocumentId))) continue;
+      report.notices.push(notice(
+        publication.id, original.documentId, "MAINTAINED_BY_OTHER", { maintainerUserId: maintainerOf(holder) }));
+      continue;
+    }
+    if (holder.status === "ARCHIVED") {
+      if (!(await reattach(holder, original, undefined))) continue;
+      mapped.push({ original, teamDocumentId: holder.teamDocumentId });
+      continue;
+    }
+    // The creator's own active copy holds this path in the final state.
+    report.notices.push(notice(publication.id, original.documentId, "PATH_RESERVED"));
+  }
+
+  // 5. Any own active copy not kept by a mapping is stale.
+  const kept = new Set(mapped.map((entry) => entry.teamDocumentId));
+  for (const document of documents) {
+    if (isOwn(document) && document.status === "ACTIVE" && !kept.has(document.teamDocumentId)) {
+      await archive(document);
+    }
   }
 
   const teamNodes = await repositories.tree.listBySource(publication.sourceId);
@@ -491,18 +573,37 @@ async function applyReconciliation(
   }
 
   for (const original of toCreate) {
+    const claim = await findClaimName(original.documentId);
+    if (claim !== null) {
+      pushClaimNotice(original.documentId, claim);
+      continue;
+    }
     const parentId = await ensureFolders(placementNames(original, original.teamPath));
-    await projection.copy({
+    const attempt = await repositories.publications.runClaimAttempt(() => projection.copy({
       originalDocumentId: original.documentId,
       parentId,
       nodeName: original.revision.title,
       sourcePath: original.teamPath,
-    });
+    }));
+    if (!attempt.ok) {
+      const winner = await findClaimName(original.documentId);
+      if (winner !== null) {
+        pushClaimNotice(original.documentId, winner);
+        continue;
+      }
+      throw attempt.error;
+    }
     // `copy` inserts the binding in the same transaction.
     report.created += 1;
   }
 
   await projection.pruneEmptyFolders();
   report.moved = movedDocumentIds.size;
+  // A copy archived and reattached in this one transaction never reaches the
+  // team as archived, so it is not counted as an archive.
+  report.archived = [...archivedThisRun]
+    .filter((teamDocumentId) => documentOf(teamDocumentId)?.status === "ARCHIVED")
+    .length;
+  report.restored = restoredCount;
   return report;
 }

@@ -29,13 +29,30 @@ export interface PublicationRepository {
   listBindings(contributionId: string): Promise<DocumentBinding[]>;
   bind(binding: DocumentBinding): Promise<void>;
   /**
-   * Forgets one contributor's remembered original. A reconciliation that moves
-   * an original onto the creator's own archived copy uses this before
-   * `repoint`, because one original may feed only one team document.
+   * Forgets one contributor's remembered original inside one publication. A
+   * reconciliation that moves an original onto the creator's own archived copy
+   * uses this before `repoint`, because one original may feed only one team
+   * document.
    */
-  unbind(contributionId: string, originalDocumentId: string): Promise<void>;
+  unbind(publicationId: string, contributionId: string, originalDocumentId: string): Promise<void>;
   /** Reattaches a team document to a new original, replacing its creator binding only. */
   repoint(teamDocumentId: string, originalDocumentId: string): Promise<void>;
+  /**
+   * The active claim on an original in a team, held by another publication.
+   * `active_team_workspace_id` is non-null only while the publication source is
+   * ACTIVE, so a returned row is a live claim.
+   */
+  findClaim(
+    originalDocumentId: string,
+    teamWorkspaceId: string,
+    excludePublicationId: string,
+  ): Promise<{ publicationId: string; publicationName: string } | null>;
+  /**
+   * Runs one claim attempt (create + bind, or repoint) inside a savepoint. A
+   * `PUBLICATION_ORIGINAL_TAKEN` duplicate rolls back only that attempt, so one
+   * losing original never aborts the contribution's other work.
+   */
+  runClaimAttempt<T>(work: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false; error: Error }>;
   insertDocument(document: PublicationDocument): Promise<void>;
   /**
    * Writes final paths for applied moves. The caller holds the publication
