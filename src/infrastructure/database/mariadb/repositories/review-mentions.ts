@@ -41,6 +41,11 @@ export class MariaDbReviewMentionsRepository implements ReviewMentionRepository 
       "SELECT * FROM review_comment_mentions WHERE mentioned_user_id=? AND read_at IS NULL ORDER BY created_at DESC, comment_id DESC LIMIT ?", [userId, limit]);
     return rows.map(toMention);
   }
+  async listUnreadTeamByRecipient(userId: string): Promise<ReviewMention[]> {
+    const rows = await this.connection.query<DbRow[]>(
+      "SELECT * FROM review_comment_mentions WHERE mentioned_user_id=? AND read_at IS NULL AND share_link_id IS NULL ORDER BY created_at DESC, comment_id DESC", [userId]);
+    return rows.map(toMention);
+  }
   async findByThreads(userId: string, threadIds: readonly string[]): Promise<ReviewMention[]> {
     if (threadIds.length === 0) return [];
     const rows = await this.connection.query<DbRow[]>(
@@ -59,7 +64,8 @@ export class MariaDbReviewMentionsRepository implements ReviewMentionRepository 
     await this.connection.query("UPDATE review_comment_mentions SET read_at=? WHERE mentioned_user_id=? AND comment_id=? AND read_at IS NULL", [at, userId, commentId]);
   }
   async markAllRead(userId: string, at: Date): Promise<void> {
-    await this.connection.query("UPDATE review_comment_mentions SET read_at=? WHERE mentioned_user_id=? AND read_at IS NULL", [at, userId]);
+    // Team mentions are marked by the service once their live access is judged.
+    await this.connection.query("UPDATE review_comment_mentions SET read_at=? WHERE mentioned_user_id=? AND share_link_id IS NOT NULL AND read_at IS NULL", [at, userId]);
   }
   async markThreadRead(userId: string, threadId: string, at: Date): Promise<void> {
     await this.connection.query(

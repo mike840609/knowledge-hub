@@ -41,6 +41,9 @@ type DiscussionQueryBase = { revisionId:string|null; writesEnabled:boolean; call
 export type DiscussionQueryView =
   | (DiscussionQueryBase & { canModerate:true; threads:OwnerReviewThreadView[] })
   | (DiscussionQueryBase & { canModerate:false; threads:ReviewThreadView[] });
+/** Capabilities are read once per request per Workspace; the caller's groups are never cached across requests. */
+type CapabilityOf = (workspaceId:string)=>ReturnType<typeof evaluateWorkspaceCapabilities>;
+type RequestAccess = { capabilityOf:CapabilityOf; readable:(documentId:string)=>Promise<ReviewScope|null> };
 export class DocumentReviewService {
   constructor(
     private readonly uow:KnowledgeUnitOfWork,
@@ -73,10 +76,21 @@ export class DocumentReviewService {
         : {...base,canModerate:false as const,threads:await this.views(r,documentId,false,caller.identity.id)};
     });
   }
-  /** Only events owned by the caller are selected at the repository boundary. */
-  private async notificationViews(r: KnowledgeRepositories, events: Awaited<ReturnType<KnowledgeRepositories["shareCommentEvents"]["listUnreadByRecipient"]>>) {
+  /** Only events owned by or explicitly delivered to the caller are selected at the repository boundary. */
+  private async notificationViews(r: KnowledgeRepositories, events: Awaited<ReturnType<KnowledgeRepositories["shareCommentEvents"]["listUnreadByRecipient"]>>, caller: CallerContext, access: RequestAccess, includeUnavailable: boolean) {
     const views = [];
     for (const e of events) {
+      const team = e.recipientUserId != null;
+      if (team && !await access.readable(e.documentId)) {
+        // An entry whose member access is gone stays in history, naming nothing and leading nowhere.
+        if (includeUnavailable) views.push({
+          id: e.id, workspaceId: "", documentId: "", sourceId: "", documentTitle: "",
+          threadId: e.threadId, commentId: e.commentId, authorName: undefined, excerpt: "",
+          createdAt: e.createdAt, readAt: e.readAt, threadStatus: "OPEN" as const, kind: "OWNER" as const,
+          access: { kind: "TEAM" as const, available: false },
+        });
+        continue;
+      }
       const thread = await r.reviewThreads.findById(e.threadId);
       const document = await r.documents.findById(e.documentId);
       const revision = await r.revisions.findCurrent(e.documentId);
@@ -85,50 +99,67 @@ export class DocumentReviewService {
       if (!thread || thread.visibility === "HIDDEN" || isRetractedThread(comments)) continue;
       if (!document || !revision || !comment || comment.deletedAt || comment.visibility === "HIDDEN") continue;
       const author = await r.users.findById(e.createdByUserId);
-      views.push({ ...projectShareCommentNotification({
-        id: e.id, workspaceId: e.workspaceId, documentId: e.documentId,
-        sourceId: document.sourceId, documentTitle: revision.title,
-        threadId: e.threadId, commentId: e.commentId,
-        authorName: author?.name, body: comment.body, createdAt: e.createdAt,
-        readAt: e.readAt, threadStatus: thread.status,
-      }), kind: "OWNER" as const });
+      views.push({
+        ...projectShareCommentNotification({
+          id: e.id, workspaceId: e.workspaceId, documentId: e.documentId,
+          sourceId: document.sourceId, documentTitle: revision.title,
+          threadId: e.threadId, commentId: e.commentId,
+          authorName: author?.name, body: comment.body, createdAt: e.createdAt,
+          readAt: e.readAt, threadStatus: thread.status,
+        }),
+        kind: "OWNER" as const,
+        ...(team ? { access: { kind: "TEAM" as const, available: true } } : {}),
+      });
     }
     return views;
   }
-  /** The caller's unread: comments on their shared documents, replies in discussions they follow, and comments naming them. */
+  /** The caller's unread: comments on their documents or team documents, replies in discussions they follow, and comments naming them. */
   async listUnreadForOwner(caller: CallerContext) {
-    return this.uow.run(async r => ({
-      notifications: newestFirst([
-        ...await this.notificationViews(r, await r.shareCommentEvents.listUnreadByRecipient(caller.identity.id)),
-        ...(await this.followViews(r, caller.identity.id)).filter(view => view.readAt === null),
-        ...(await this.mentionViews(r, await this.unreadMentions(r, caller), caller)).filter(view => view.readAt === null),
-      ]),
-    }));
+    return this.uow.run(async r => {
+      const access = this.requestAccess(r, caller);
+      return {
+        notifications: newestFirst([
+          ...await this.notificationViews(r, await r.shareCommentEvents.listUnreadByRecipient(caller.identity.id), caller, access, false),
+          ...(await this.followViews(r, caller.identity.id)).filter(view => view.readAt === null),
+          ...(await this.mentionViews(r, await this.unreadMentions(r, caller, access), caller, access))
+            .filter(view => view.readAt === null && (view.access?.kind !== "TEAM" || view.access.available)),
+        ]),
+      };
+    });
   }
   /** The Inbox badge: as many as `listUnreadForOwner` lists, without loading a title or author. */
   async countUnreadForOwner(caller: CallerContext): Promise<{ count: number }> {
     return this.uow.run(async r => {
-      const owner = (await r.shareCommentEvents.listUnreadCountsByRecipient(caller.identity.id)).reduce((sum, row) => sum + row.unreadCount, 0);
+      const access = this.requestAccess(r, caller);
+      const rows = await r.shareCommentEvents.listUnreadCountsByRecipient(caller.identity.id);
+      // A team row counts only while the caller still holds document.read; personal rows always do.
+      let owner = 0;
+      for (const row of rows) {
+        if (row.recipientUserId === null || await access.readable(row.documentId)) owner += row.unreadCount;
+      }
       const follows = (await this.followedThreads(r, caller.identity.id)).filter(({ summary }) => !("unavailable" in summary) && !!summary.latestReply && summary.unread > 0).length;
-      const mentions = (await this.judgedMentions(r, await this.unreadMentions(r, caller), caller)).filter(judged => "comment" in judged).length;
+      const mentions = (await this.judgedMentions(r, await this.unreadMentions(r, caller, access), caller, access)).filter(judged => "comment" in judged).length;
       return { count: owner + follows + mentions };
     });
   }
-  /** Lightweight counts for My shares. No comment bodies or full revisions are loaded. */
+  /** Lightweight counts for My shares. Team entries are not share-link activity and stay out of every per-share row. */
   async listUnreadShareCountsForOwner(caller: CallerContext) {
-    return this.uow.run(r => r.shareCommentEvents.listUnreadCountsByRecipient(caller.identity.id));
+    return this.uow.run(async r => (await r.shareCommentEvents.listUnreadCountsByRecipient(caller.identity.id))
+      .filter(row => row.recipientUserId === null)
+      .map(row => ({ documentId: row.documentId, shareLinkId: row.shareLinkId, unreadCount: row.unreadCount, latestThreadId: row.latestThreadId })));
   }
   /** A bounded, cursor-paged cross-document activity feed, including already-read comments. */
   async listActivityForOwner(caller: CallerContext, before?: { createdAt: Date; id: string }) {
     return this.uow.run(async r => {
+      const access = this.requestAccess(r, caller);
       const size = 50;
       const events = await r.shareCommentEvents.listRecentByRecipient(caller.identity.id, before, size + 1);
       const page = events.slice(0, size);
       // Follows and mentions are not paged: at most FOLLOW_LIMIT each, all on the first page (specs 2026-10-22, 2026-10-29, deviation).
       const follows = before ? [] : await this.followViews(r, caller.identity.id);
-      const mentions = before ? [] : await this.mentionViews(r, await r.reviewMentions.listRecentByRecipient(caller.identity.id, FOLLOW_LIMIT), caller);
+      const mentions = before ? [] : await this.mentionViews(r, await r.reviewMentions.listRecentByRecipient(caller.identity.id, FOLLOW_LIMIT), caller, access);
       return {
-        notifications: newestFirst([...await this.notificationViews(r, page), ...follows, ...mentions]),
+        notifications: newestFirst([...await this.notificationViews(r, page, caller, access, true), ...follows, ...mentions]),
         nextCursor: events.length > size && page.length
           ? { createdAt: page[page.length - 1].createdAt.toISOString(), id: page[page.length - 1].id }
           : null,
@@ -143,15 +174,34 @@ export class DocumentReviewService {
       if (isUuid(commentId)) await this.uow.run(r => r.reviewMentions.markRead(caller.identity.id, commentId, this.clock()));
       return;
     }
-    await this.uow.run(r => eventId.startsWith(FOLLOW_PREFIX)
-      ? r.reviewFollows.markSeen(eventId.slice(FOLLOW_PREFIX.length), caller.identity.id, this.clock())
-      : r.shareCommentEvents.markEventRead(caller.identity.id, eventId, this.clock()));
+    await this.uow.run(async r => {
+      if (eventId.startsWith(FOLLOW_PREFIX)) {
+        await r.reviewFollows.markSeen(eventId.slice(FOLLOW_PREFIX.length), caller.identity.id, this.clock());
+        return;
+      }
+      const event = await r.shareCommentEvents.findById(caller.identity.id, eventId);
+      if (!event) return;
+      // A team notice is refused, not silently skipped, once the caller can no longer read its document.
+      if (event.recipientUserId !== null && !await this.requestAccess(r, caller).readable(event.documentId)) throw new ShareLinkNotFoundError();
+      await r.shareCommentEvents.markEventRead(caller.identity.id, eventId, this.clock());
+    });
   }
   async markAllActivityRead(caller: CallerContext) {
     await this.uow.run(async r => {
-      await r.shareCommentEvents.markAllRead(caller.identity.id, this.clock());
-      await r.reviewFollows.markAllSeen(caller.identity.id, this.clock());
-      await r.reviewMentions.markAllRead(caller.identity.id, this.clock());
+      const at = this.clock();
+      const access = this.requestAccess(r, caller);
+      // Personal rows are all the caller's; team rows are marked by id only after their access is judged.
+      await r.shareCommentEvents.markAllRead(caller.identity.id, at);
+      const teamEvents = await r.shareCommentEvents.listUnreadTeamByRecipient(caller.identity.id);
+      const readable: string[] = [];
+      for (const event of teamEvents) if (await access.readable(event.documentId)) readable.push(event.id);
+      await r.shareCommentEvents.markEventsRead(caller.identity.id, readable, at);
+      await r.reviewFollows.markAllSeen(caller.identity.id, at);
+      await r.reviewMentions.markAllRead(caller.identity.id, at);
+      const teamMentions = await r.reviewMentions.listUnreadTeamByRecipient(caller.identity.id);
+      for (const judged of await this.judgedMentions(r, teamMentions, caller, access)) {
+        if ("comment" in judged) await r.reviewMentions.markRead(caller.identity.id, judged.mention.commentId, at);
+      }
     });
   }
   /** The owner has looked at one discussion: its notices are read, the rest of the document's are not. */
@@ -338,8 +388,9 @@ export class DocumentReviewService {
    * comment and its discussion stand visible (`projectReviewerThread`'s rules). Anything else is dead.
    * ponytail: at most FOLLOW_LIMIT mentions, one comment lookup each; paging once readers are named more.
    */
-  private async judgedMentions(r: KnowledgeRepositories, mentions: readonly ReviewMention[], caller?: CallerContext) {
+  private async judgedMentions(r: KnowledgeRepositories, mentions: readonly ReviewMention[], caller?: CallerContext, access?: RequestAccess) {
     if (mentions.length === 0) return [];
+    const judge = access ?? (caller ? this.requestAccess(r, caller) : undefined);
     // Comments, threads and links each come in one query; only a link's reach is judged per document.
     const named = new Map((await r.reviewComments.findByIds(mentions.map(mention => mention.commentId))).map(comment => [comment.id, comment]));
     const threadIds = [...new Set([...named.values()].map(comment => comment.threadId))];
@@ -359,7 +410,7 @@ export class DocumentReviewService {
       if (mention.shareLinkId === null) {
         // A team mention carries no link: it is live only while the caller still holds
         // document.read in the publication's team, judged now as the caller (groups included).
-        const team = caller ? await this.teamReadable(r, caller, thread.documentId) : null;
+        const team = caller && judge ? await judge.readable(thread.documentId) : null;
         const document = team ? await r.documents.findById(thread.documentId) : null;
         judged.push(team && document
           ? { mention, thread, comment, link: null, team: true, workspaceId: team.workspace.id, sourceId: document.sourceId }
@@ -374,15 +425,31 @@ export class DocumentReviewService {
     }
     return judged;
   }
-  /** The team scope for a read, or null when this caller may not read the document. */
-  private async teamReadable(r: KnowledgeRepositories, caller: CallerContext, documentId: string): Promise<ReviewScope | null> {
-    try {
-      const s = await this.documentScope(r, caller, documentId, false);
-      return s.team ? s : null;
-    } catch (error) {
-      if (error instanceof ShareLinkNotFoundError) return null;
-      throw error;
-    }
+  /**
+   * One request's team judgements. Capabilities are read once per Workspace for the whole request;
+   * the caller's validated groups live on the caller and are never cached across requests.
+   */
+  private requestAccess(r: KnowledgeRepositories, caller: CallerContext): RequestAccess {
+    const capabilities = new Map<string, ReturnType<CapabilityOf>>();
+    const capabilityOf: CapabilityOf = (workspaceId) => {
+      const found = capabilities.get(workspaceId);
+      if (found) return found;
+      const judged = evaluateWorkspaceCapabilities({ workspaceMemberships: r.workspaceMemberships, groupMappings: r.groupMappings }, caller, workspaceId);
+      capabilities.set(workspaceId, judged);
+      return judged;
+    };
+    return {
+      capabilityOf,
+      readable: async (documentId) => {
+        try {
+          const s = await this.documentScope(r, caller, documentId, false, capabilityOf);
+          return s.team ? s : null;
+        } catch (error) {
+          if (error instanceof ShareLinkNotFoundError) return null;
+          throw error;
+        }
+      },
+    };
   }
   /**
    * The caller's newest unread mentions that are live: the unread list and the badge read the same rows. A dead one
@@ -390,26 +457,36 @@ export class DocumentReviewService {
    * hide an older live mention. ponytail: a thread the owner hides then restores, or a document moved out of a shared folder
    * and back, loses its unread mark.
    */
-  private async unreadMentions(r: KnowledgeRepositories, caller: CallerContext) {
+  private async unreadMentions(r: KnowledgeRepositories, caller: CallerContext, access?: RequestAccess) {
     for (;;) {
       const unread = await r.reviewMentions.listUnreadByRecipient(caller.identity.id, FOLLOW_LIMIT);
       // A team mention whose access was lost keeps its row and read state, so it reads normally if
       // access returns; only a dead personal link mention is marked read here.
-      const dead = (await this.judgedMentions(r, unread, caller)).filter(judged => !("comment" in judged) && judged.mention.shareLinkId !== null);
+      const dead = (await this.judgedMentions(r, unread, caller, access)).filter(judged => !("comment" in judged) && judged.mention.shareLinkId !== null);
       if (dead.length === 0) return unread;
       for (const { mention } of dead) await r.reviewMentions.markRead(caller.identity.id, mention.commentId, this.clock());
       if (unread.length < FOLLOW_LIMIT) return unread.filter(mention => !dead.some(gone => gone.mention.commentId === mention.commentId));
     }
   }
-  /** Mentions as Inbox entries, one per comment. A dead one names nothing and is never unread. */
-  private async mentionViews(r: KnowledgeRepositories, mentions: readonly ReviewMention[], caller: CallerContext): Promise<ShareCommentNotificationView[]> {
+  /** Mentions as Inbox entries, one per comment. A dead personal one names nothing and is never unread; a team one keeps its read state. */
+  private async mentionViews(r: KnowledgeRepositories, mentions: readonly ReviewMention[], caller: CallerContext, access: RequestAccess): Promise<ShareCommentNotificationView[]> {
     const views: ShareCommentNotificationView[] = [];
     const titles = new Map<string, string>();
     const authorNames = new Map<string, string | undefined>();
-    for (const judged of await this.judgedMentions(r, mentions, caller)) {
+    for (const judged of await this.judgedMentions(r, mentions, caller, access)) {
       const { mention } = judged;
       const base = { id: `${MENTION_PREFIX}${mention.commentId}`, workspaceId: "", documentId: "", sourceId: "", commentId: mention.commentId, createdAt: mention.createdAt };
-      if (!("comment" in judged)) { views.push({ ...base, kind: "MENTION", commentId: "", threadId: "", documentTitle: "", authorName: undefined, excerpt: "", readAt: mention.createdAt, threadStatus: "OPEN", linkAvailable: false }); continue; }
+      if (!("comment" in judged)) {
+        // A team mention loses only its link's reach, not the caller's read state: losing access must
+        // not mark it read, so regaining access shows the same unread entry again.
+        const team = mention.shareLinkId === null;
+        views.push({
+          ...base, kind: "MENTION", commentId: "", threadId: "", documentTitle: "", authorName: undefined, excerpt: "",
+          readAt: team ? mention.readAt : mention.createdAt, threadStatus: "OPEN", linkAvailable: false,
+          ...(team ? { access: { kind: "TEAM" as const, available: false } } : {}),
+        });
+        continue;
+      }
       const { thread, comment, link, team } = judged;
       if (!titles.has(thread.documentId)) titles.set(thread.documentId, (await r.revisions.findCurrent(thread.documentId))?.title ?? "");
       if (!authorNames.has(comment.authorUserId)) authorNames.set(comment.authorUserId, (await r.users.findById(comment.authorUserId))?.name);
@@ -418,7 +495,9 @@ export class DocumentReviewService {
           ...base, ...(team ? { workspaceId: judged.workspaceId, documentId: thread.documentId, sourceId: judged.sourceId } : {}),
           threadId: thread.id, documentTitle: titles.get(thread.documentId)!, authorName: authorNames.get(comment.authorUserId), body: comment.body, readAt: mention.readAt, threadStatus: thread.status,
         }),
-        ...(link ? folderDocument(link, thread.documentId) : {}), kind: "MENTION", ...(link ? { token: link.token } : {}), linkAvailable: true,
+        ...(link ? folderDocument(link, thread.documentId) : {}), kind: "MENTION", ...(link ? { token: link.token } : {}),
+        ...(team ? { access: { kind: "TEAM" as const, available: true } } : {}),
+        linkAvailable: true,
       });
     }
     return views;
@@ -550,27 +629,27 @@ export class DocumentReviewService {
    * document, or a published team document they can read (direct or group).
    * Every failure is the same not-found, so a team is not disclosed to outsiders.
    */
-  private async documentScope(r:KnowledgeRepositories,caller:CallerContext,documentId:string,lock=true):Promise<ReviewScope> {
+  private async documentScope(r:KnowledgeRepositories,caller:CallerContext,documentId:string,lock=true,capabilityOf?:CapabilityOf):Promise<ReviewScope> {
     const s=await this.locate(r,documentId,lock);
     if(s.workspace.workspaceType==="PERSONAL") {
       if(s.workspace.lifecycleState!=="ACTIVE" || s.workspace.personalOwnerUserId!==caller.identity.id) throw new ShareLinkNotFoundError();
       return {...s,ownerUserId:caller.identity.id,canModerate:true,team:false};
     }
-    return this.teamScope(r,caller,s);
+    return this.teamScope(r,caller,s,capabilityOf);
   }
   /**
    * An ACTIVE team workspace whose PUBLICATION document this caller can read.
    * The workspace lock is held for writes exactly as on the personal path.
    * `team` marks the scope so writes know not to follow or hand over a link.
    */
-  private async teamScope(r:KnowledgeRepositories,caller:CallerContext,s:LocatedScope):Promise<ReviewScope> {
+  private async teamScope(r:KnowledgeRepositories,caller:CallerContext,s:LocatedScope,capabilityOf:CapabilityOf=(workspaceId)=>evaluateWorkspaceCapabilities({workspaceMemberships:r.workspaceMemberships,groupMappings:r.groupMappings},caller,workspaceId)):Promise<ReviewScope> {
     // An archived document or an unpublished/archived Source is gone from the team for review too:
     // no discussion body, anchor quote or moderation acts on it, not even for its creator.
     if(!this.teamsEnabled() || s.workspace.workspaceType!=="TEAM" || s.workspace.lifecycleState!=="ACTIVE"
       || s.source.sourceType!=="PUBLICATION" || s.document.status!=="ACTIVE" || s.source.status!=="ACTIVE") throw new ShareLinkNotFoundError();
     const publication=await r.sourcePolicy.findPublicationDocument(s.document.id);
     if(!publication) throw new ShareLinkNotFoundError();
-    const capabilities=await evaluateWorkspaceCapabilities({workspaceMemberships:r.workspaceMemberships,groupMappings:r.groupMappings},caller,s.workspace.id);
+    const capabilities=await capabilityOf(s.workspace.id);
     if(!capabilities.has("document.read")) throw new ShareLinkNotFoundError();
     return {
       ...s,ownerUserId:publication.creatorUserId,
