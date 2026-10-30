@@ -122,3 +122,59 @@ test("a mentioned person who stopped following clears the mention by opening its
   await expect(page.locator(`[data-review-thread="${threadId}"]`)).toHaveAttribute("data-active", "");
   await expect.poll(unread).toEqual([]);
 });
+
+// Spec 2026-10-30: the people a visible comment mentions are shown to whoever holds the link, signed in or not.
+test("an anonymous reader sees a mention highlighted and who it is", async ({ request, browser, baseURL }) => {
+  const doc = await createReviewDocument(request);
+  const token = doc.links[0].path.split("/").pop()!;
+  const viewer = phase3Origin("viewer");
+  const { candidates } = await (await request.get(`${viewer}/api/review-mentions/candidates?query=groupAdmin&token=${token}`, { headers: { Origin: viewer } })).json();
+  const body = "Please look @Phase3 groupAdmin at this";
+  const created = await request.post(`${viewer}/api/share-review/threads`, { headers: { Origin: viewer }, data: { token, expectedRevisionId: doc.revisionId, anchor: ANCHOR, body, idempotencyKey: crypto.randomUUID(), mentions: [candidates[0].id] } });
+  expect(created.status()).toBe(201);
+
+  const anonymous = await browser.newContext({ baseURL: baseURL! });
+  try {
+    const visitor = await anonymous.newPage();
+    await visitor.setViewportSize({ width: 1440, height: 900 });
+    await visitor.goto(`/s/${token}`);
+    await openReviewDiscussions(visitor);
+    const mention = visitor.getByRole("button", { name: "Phase3 groupAdmin, mentioned" });
+    await expect(mention).toHaveText("@Phase3 groupAdmin");
+    const card = visitor.locator("[data-mention-card]");
+
+    await mention.hover();
+    await expect(card).toContainText("Phase3 groupAdmin");
+    await expect(card).toContainText("P3-106");
+    await visitor.mouse.move(0, 0);
+    await expect(card).toHaveCount(0);
+
+    await mention.click();
+    await expect(card).toContainText("P3-106");
+    await expect(mention).toHaveAttribute("aria-expanded", "true");
+    await visitor.keyboard.press("Escape");
+    await expect(card).toHaveCount(0);
+    await visitor.mouse.move(0, 0);
+
+    // Resting on it opens the card; pressing it after the patient-click window must not close it.
+    await mention.hover();
+    await expect(card).toBeVisible();
+    await visitor.waitForTimeout(800);
+    await mention.click();
+    await expect(card).toBeVisible();
+    await expect(mention).toHaveAttribute("aria-expanded", "true");
+    await visitor.keyboard.press("Escape");
+    await expect(card).toHaveCount(0);
+    await visitor.mouse.move(0, 0);
+
+    // Reach it as a keyboard user does: Tab from the focusable before it, until focus lands on it.
+    await visitor.locator("body").click({ position: { x: 1, y: 1 } });
+    for (let step = 0; step < 60 && !(await mention.evaluate(el => el === document.activeElement)); step++) await visitor.keyboard.press("Tab");
+    await expect(mention).toBeFocused();
+    await expect(card).toContainText("P3-106");
+    await visitor.keyboard.press("Escape");
+    await expect(card).toHaveCount(0);
+  } finally {
+    await anonymous.close();
+  }
+});

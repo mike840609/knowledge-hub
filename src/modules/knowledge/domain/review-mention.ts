@@ -21,3 +21,5 @@ export function normalizeMentions(raw: unknown, ctx: { writerId: string; ownerId
   if (ids.size > MENTION_LIMIT) throw new DomainError("INVALID_REQUEST", `Mention at most ${MENTION_LIMIT} people in one comment.`);
   return [...ids];
 }
+
+export { splitMentions, type MentionedPerson, type MentionPart } from "./mention-text";

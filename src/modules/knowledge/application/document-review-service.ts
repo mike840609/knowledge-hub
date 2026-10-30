@@ -3,8 +3,8 @@ import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { DomainError } from "@/shared/domain/errors";
 import { isUuid, uuidv7 } from "@/shared/ids/uuidv7";
 import { isShareToken, ShareLinkNotFoundError } from "../domain/document-share-link";
-import { REVIEW_LIMITS, isRetractedThread, projectOwnerThread, projectReviewerThread, projectReviewComment, validateReviewBody, validateReviewIdempotencyKey, type ReviewThread, type ReviewComment, type ReviewAnchor, type ReviewStatus, type ReviewVisibility, type ReviewThreadView, type OwnerReviewThreadView, type CreateReviewThreadInput, type CreateOwnerReviewThreadInput, type ReplyReviewInput, type ReplyOwnerReviewInput } from "../domain/document-review";
-import { MENTION_LIMIT, MENTION_PREFIX, normalizeMentions, type ReviewMention } from "../domain/review-mention";
+import { REVIEW_LIMITS, isRetractedThread, projectOwnerThread, projectReviewerThread, projectReviewComment, validateReviewBody, validateReviewIdempotencyKey, type ReviewThread, type ReviewComment, type ReviewCommentView, type ReviewAnchor, type ReviewStatus, type ReviewVisibility, type ReviewThreadView, type OwnerReviewThreadView, type CreateReviewThreadInput, type CreateOwnerReviewThreadInput, type ReplyReviewInput, type ReplyOwnerReviewInput } from "../domain/document-review";
+import { MENTION_LIMIT, MENTION_PREFIX, normalizeMentions, splitMentions, type MentionedPerson, type ReviewMention } from "../domain/review-mention";
 import { followForMention } from "./follow-for-mention";
 import { createReviewAnchorRelocator, validateReviewAnchor } from "../domain/review-anchor";
 import { projectShareCommentNotification, EXCERPT_LIMIT, type ShareCommentNotificationView } from "../domain/share-comment-event";
@@ -389,6 +389,27 @@ export class DocumentReviewService {
       await r.shareCommentEvents.markDocumentRead(caller.identity.id,documentId,this.clock());
     });
   }
+  /**
+   * The people each shown comment mentions, as they are now, kept only where the body still names
+   * them (`splitMentions`). One read of the rows and one of the users for the whole discussion.
+   */
+  private async attachMentions(r:KnowledgeRepositories,shown:readonly {view:ReviewCommentView;body:string}[]) {
+    const rows=await r.reviewMentions.listMentionedUsersByComments(shown.map(s=>s.view.id));
+    if(rows.length===0) return;
+    const users=await r.users.findByIds([...new Set(rows.map(row=>row.mentionedUserId))]);
+    const people=new Map(users.map(u=>[u.id,{name:u.name,nameEn:u.nameEn,empId:u.emp_id} satisfies MentionedPerson]));
+    const byComment=new Map<string,MentionedPerson[]>();
+    for(const row of rows) {
+      const person=people.get(row.mentionedUserId);
+      if(person) byComment.set(row.commentId,[...(byComment.get(row.commentId) ?? []),person]);
+    }
+    for(const {view,body} of shown) {
+      const named=byComment.get(view.id) ?? [];
+      const occurring=new Set(splitMentions(body,named).flatMap(part=>part.people ?? []));
+      const mentions=named.filter(person=>occurring.has(person));
+      if(mentions.length) view.mentions=mentions;
+    }
+  }
   private views(r:KnowledgeRepositories,documentId:string,owner:true,callerUserId?:string):Promise<OwnerReviewThreadView[]>;
   private views(r:KnowledgeRepositories,documentId:string,owner:false,callerUserId?:string):Promise<ReviewThreadView[]>;
   private async views(r:KnowledgeRepositories,documentId:string,owner:boolean,callerUserId?:string):Promise<ReviewThreadView[]|OwnerReviewThreadView[]> {
@@ -396,6 +417,7 @@ export class DocumentReviewService {
     if(!revision) fail("REVIEW_NOT_FOUND","Document discussion was not found.");
     const relocateAnchor=createReviewAnchorRelocator(revision.markdown);
     const results=[];
+    const shown:{view:ReviewCommentView;body:string}[]=[];
     for(const thread of await r.reviewThreads.listByDocument(documentId)) {
       if(!owner && thread.visibility==="HIDDEN") continue;
       const comments=await r.reviewComments.listByThread(thread.id);
@@ -403,11 +425,16 @@ export class DocumentReviewService {
       const anchor=relocateAnchor(thread.anchor,thread.createdRevisionId===revision.id);
       const view=owner?projectOwnerThread(thread,comments,anchor,callerUserId):projectReviewerThread(thread,comments,anchor,callerUserId);
       if(view) {
-        const authors=new Map(comments.map(comment=>[comment.id,comment.authorUserId]));
-        for(const comment of view.comments) comment.authorName=(await r.users.findById(authors.get(comment.id)!))?.name;
+        const sources=new Map(comments.map(comment=>[comment.id,comment]));
+        for(const comment of view.comments) {
+          const source=sources.get(comment.id)!;
+          comment.authorName=(await r.users.findById(source.authorUserId))?.name;
+          if(!source.deletedAt) shown.push({view:comment,body:comment.body}); // the projected body: it alone decides what is shown
+        }
         results.push(view);
       }
     }
+    await this.attachMentions(r,shown);
     return results.sort((a,b)=>{
       const left=a.currentAnchor.anchor,right=b.currentAnchor.anchor;
       if(!left || !right) { if(left) return -1; if(right) return 1; }

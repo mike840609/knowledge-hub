@@ -46,15 +46,15 @@ export class MariaDbUserRepository implements UserRepository {
     return rows[0] ? mapUser(rows[0]) : null;
   }
 
-  async findByIds(ids: readonly string[]): Promise<UserIdentity[]> {
-    const users: UserIdentity[] = [];
+  async findByIds(ids: readonly string[]): Promise<Array<UserIdentity & { nameEn: string | null }>> {
+    const users: Array<UserIdentity & { nameEn: string | null }> = [];
     for (let start = 0; start < ids.length; start += USER_ID_CHUNK) {
       const batch = ids.slice(start, start + USER_ID_CHUNK);
       const rows = await this.connection.query<DbRow[]>(
-        `SELECT id, emp_id, name, org_code FROM users WHERE id IN (${placeholders(batch.length)})`,
+        `SELECT id, emp_id, name, name_en, org_code FROM users WHERE id IN (${placeholders(batch.length)})`,
         [...batch],
       );
-      users.push(...rows.map(mapUser));
+      users.push(...rows.map(row => ({ ...mapUser(row), nameEn: row.name_en == null ? null : String(row.name_en) })));
     }
     return users;
   }

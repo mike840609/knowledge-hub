@@ -14,11 +14,11 @@ function anchor(blockPath: number[], exact: string) {
   return { schemaVersion: 1 as const, blockPath, blockKind: "paragraph" as const, startUtf16: 0, endUtf16: exact.length, exact, prefix: "", suffix: "" };
 }
 
-function thread(id: string, blockPath: number[], exact: string, body = `body of ${id}`) {
+function thread(id: string, blockPath: number[], exact: string, body = `body of ${id}`, mentions?: { name: string; nameEn: string | null; empId: string }[]) {
   return {
     id, status: "OPEN" as const, createdAt: new Date(0), updatedAt: new Date(0),
     currentAnchor: { match: "MATCHED" as const, anchor: anchor(blockPath, exact) },
-    comments: [{ id: `${id}-c1`, threadId: id, authorName: "Ann", body, visibility: "VISIBLE" as const, createdAt: new Date(0), editedAt: null, deleted: false, own: false }],
+    comments: [{ id: `${id}-c1`, threadId: id, authorName: "Ann", body, visibility: "VISIBLE" as const, createdAt: new Date(0), editedAt: null, deleted: false, own: false, ...(mentions ? { mentions } : {}) }],
   };
 }
 
@@ -214,4 +214,162 @@ test("editing a comment never offers @", async () => {
   const field = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Edit comment"]')!;
   expect(field).not.toBeNull();
   expect(field.hasAttribute("aria-autocomplete")).toBe(false);
+});
+
+const ming = { name: "陳小明", nameEn: "Ming Chen", empId: "E1234" };
+function mentionButtons() {
+  return Array.from(host.querySelectorAll<HTMLButtonElement>("p button"));
+}
+// jsdom does not match :focus-visible after a script's focus(); say it as a keyboard arrival would.
+function keyboardFocus(button: HTMLElement) {
+  const matches = button.matches.bind(button);
+  button.matches = (selector: string) => selector === ":focus-visible" || matches(selector);
+  button.focus();
+}
+function popup() {
+  return document.body.querySelector<HTMLElement>("[data-mention-card]");
+}
+
+test("a mentioned name is a button named for the person, set in the link colour", () => {
+  renderList([thread("t1", [0], "Para zero.", "@陳小明 please check", [ming])], { writesEnabled: false });
+  const found = mentionButtons();
+  expect(found).toHaveLength(1);
+  expect(found[0].getAttribute("aria-label")).toBe("陳小明, mentioned");
+  expect(found[0].textContent).toBe("@陳小明");
+  expect(found[0].className).toContain("text-kh-link");
+  expect(found[0].closest("p")?.textContent).toBe("@陳小明 please check");
+});
+
+for (const how of ["focus", "pointerenter", "click"] as const) {
+  test(`the card shows name, then name_en · emp_id, on ${how}; it closes again`, async () => {
+    vi.useFakeTimers();
+    try {
+      renderList([thread("t1", [0], "Para zero.", "@陳小明 please check", [ming])], { writesEnabled: false });
+      const button = mentionButtons()[0];
+      await act(async () => {
+        if (how === "focus") keyboardFocus(button);
+        else if (how === "pointerenter") { for (const type of ["pointerenter", "mouseenter", "pointermove", "mousemove"]) button.dispatchEvent(Object.assign(new MouseEvent(type, { bubbles: type.endsWith("move") }), { pointerType: "mouse" })); await vi.advanceTimersByTimeAsync(500); }
+        else { button.focus(); button.click(); }
+        await vi.advanceTimersByTimeAsync(50);
+      });
+      const card = popup();
+      expect(card).not.toBeNull();
+      expect(card?.textContent).toContain("陳小明");
+      expect(card?.textContent).toContain("Ming Chen · E1234");
+      await act(async () => {
+        if (how === "pointerenter") { for (const type of ["pointerleave", "mouseleave"]) button.dispatchEvent(Object.assign(new MouseEvent(type), { pointerType: "mouse" })); }
+        else button.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      expect(popup()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+}
+
+test("emp_id stands alone when there is no name_en", async () => {
+  renderList([thread("t1", [0], "Para zero.", "@陳小明", [{ ...ming, nameEn: null }])], { writesEnabled: false });
+  await act(async () => { mentionButtons()[0].click(); });
+  expect(popup()?.textContent).toContain("E1234");
+  expect(popup()?.textContent).not.toContain("·");
+});
+
+test("people sharing a name share one card per occurrence", async () => {
+  renderList([thread("t1", [0], "Para zero.", "@Ann and @Ann", [{ name: "Ann", nameEn: null, empId: "E1" }, { name: "Ann", nameEn: "Ann B", empId: "E2" }])], { writesEnabled: false });
+  expect(mentionButtons()).toHaveLength(2);
+  await act(async () => { mentionButtons()[1].click(); });
+  expect(popup()?.textContent).toContain("E1");
+  expect(popup()?.textContent).toContain("Ann B · E2");
+});
+
+test("an @ inside a link stays the link", () => {
+  renderList([thread("t1", [0], "Para zero.", "see https://x.y/@陳小明", [ming])], { writesEnabled: false });
+  expect(host.querySelectorAll("p a[href]")).toHaveLength(1);
+  expect(mentionButtons()).toHaveLength(0);
+});
+
+test("unmentioned names stay text", () => {
+  renderList([thread("t1", [0], "Para zero.", "@Bob hi", [ming])], { writesEnabled: false });
+  expect(mentionButtons()).toHaveLength(0);
+});
+
+test("clicking a mention does not activate the card; focusing it does not either", async () => {
+  const activated: unknown[] = [];
+  renderList([thread("t1", [0], "Para zero.", "@陳小明 hi", [ming])], { writesEnabled: false, onActivate: (...a: unknown[]) => { activated.push(a); } } as never);
+  const button = mentionButtons()[0];
+  await act(async () => { button.focus(); });
+  await act(async () => { button.click(); });
+  expect(activated).toEqual([]);
+});
+
+test("a body's markup is not emitted around a mention", () => {
+  renderList([thread("t1", [0], "Para zero.", "<b>@陳小明</b>", [ming])], { writesEnabled: false });
+  expect(host.querySelector("b")).toBeNull();
+  expect(host.textContent).toContain("<b>");
+});
+
+for (const pointerType of ["mouse", "touch"] as const) {
+  test(`a ${pointerType} press, in the browser's real event order, leaves the card open`, async () => {
+    renderList([thread("t1", [0], "Para zero.", "@陳小明 hi", [ming])], { writesEnabled: false });
+    const button = mentionButtons()[0];
+    const fire = (type: string) => button.dispatchEvent(Object.assign(new MouseEvent(type, { bubbles: true, cancelable: true }), { pointerType }));
+    await act(async () => { fire("pointerdown"); fire("mousedown"); });
+    await act(async () => { button.focus(); });
+    await act(async () => { fire("pointerup"); fire("mouseup"); fire("click"); });
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(popup()).not.toBeNull();
+  });
+}
+
+test("Escape from the trigger or from inside the card leaves it closed, focus on the trigger", async () => {
+  renderList([thread("t1", [0], "Para zero.", "@陳小明 hi", [ming])], { writesEnabled: false });
+  const button = mentionButtons()[0];
+  const escape = (target: Element) => act(async () => { target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+  await act(async () => { keyboardFocus(button); });
+  expect(popup()).not.toBeNull();
+  await escape(button);
+  expect(popup()).toBeNull();
+  await act(async () => { button.blur(); keyboardFocus(button); });
+  expect(popup()).not.toBeNull();
+  await act(async () => { popup()!.focus(); });
+  await escape(popup()!);
+  expect(popup()).toBeNull();
+  expect(document.activeElement).toBe(button);
+  expect(button.getAttribute("aria-expanded")).toBe("false");
+});
+
+test("a press on a card that hover opened, after the patient-click window, leaves it open", async () => {
+  vi.useFakeTimers();
+  try {
+    renderList([thread("t1", [0], "Para zero.", "@陳小明 hi", [ming])], { writesEnabled: false });
+    const button = mentionButtons()[0];
+    const fire = (type: string) => button.dispatchEvent(Object.assign(new MouseEvent(type, { bubbles: true, cancelable: true }), { pointerType: "mouse" }));
+    await act(async () => { for (const type of ["pointerenter", "mouseenter", "pointermove", "mousemove"]) fire(type); await vi.advanceTimersByTimeAsync(2000); });
+    expect(popup()).not.toBeNull();
+    await act(async () => { fire("pointerdown"); fire("mousedown"); });
+    await act(async () => { button.focus(); await vi.advanceTimersByTimeAsync(10); });
+    await act(async () => { fire("pointerup"); fire("mouseup"); fire("click"); await vi.advanceTimersByTimeAsync(300); });
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(popup()).not.toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("keyboard focus opens the card after a hover opened and left it", async () => {
+  vi.useFakeTimers();
+  try {
+    renderList([thread("t1", [0], "Para zero.", "@陳小明 hi", [ming])], { writesEnabled: false });
+    const button = mentionButtons()[0];
+    const fire = (type: string) => button.dispatchEvent(Object.assign(new MouseEvent(type, { bubbles: type.endsWith("move") }), { pointerType: "mouse" }));
+    await act(async () => { for (const type of ["pointerenter", "mouseenter", "pointermove", "mousemove"]) fire(type); await vi.advanceTimersByTimeAsync(500); });
+    expect(popup()).not.toBeNull();
+    await act(async () => { for (const type of ["pointerleave", "mouseleave"]) fire(type); await vi.advanceTimersByTimeAsync(500); });
+    expect(popup()).toBeNull();
+    await act(async () => { keyboardFocus(button); await vi.advanceTimersByTimeAsync(50); });
+    expect(popup()).not.toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
 });

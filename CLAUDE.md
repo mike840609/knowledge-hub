@@ -131,7 +131,9 @@ pass.
   validated current-revision selected-text fragments; hidden bodies and
   outdated quotes are excluded. Exactly two entries serve content without a caller:
   `readShared`, which serves the document, and `DocumentReviewService.queryForLink`,
-  which serves the visible discussion and those fragments. A third,
+  which serves the visible discussion and those fragments and, for each person a
+  visible comment mentions, that person's `name`, `name_en` and `emp_id`
+  (`docs/superpowers/specs/2026-10-30-review-mention-highlight-design.md`). A third,
   `readSharedTarget`, answers without one but serves no content: it judges the
   link for `/s/:token/open` and names only the document id to open, before
   sign-in is asked for (so a dead link is a plain 404). Every other entry,
