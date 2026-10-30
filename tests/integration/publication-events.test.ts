@@ -139,6 +139,25 @@ describe("publication events for personal originals", () => {
     expect(new Set(rows.map((row) => row.document_id))).toEqual(new Set(created.map((document) => document.documentId)));
   });
 
+  it("round-trips a bulk event list across more than one insert statement", async () => {
+    const original = await fixture.createHubOriginal(fixture.mike, "Bulk events", "bulk event body");
+    const count = 601;
+    await fixture.uow.run((repositories) => repositories.publicationEvents.recordMany(
+      Array.from({ length: count }, () => ({
+        documentId: original.documentId, treeNodeId: null, sourceId: null,
+        kind: "REVISION" as const, revisionId: original.revisionId, at: new Date(),
+      })),
+    ));
+
+    const [row] = await fixture.pool.query<{ total: number; unconsumed: number }[]>(
+      `SELECT COUNT(*) AS total, SUM(consumed_at IS NULL) AS unconsumed
+       FROM publication_events WHERE document_id = ?`,
+      [original.documentId],
+    );
+    expect(Number(row.total)).toBe(count + 1);
+    expect(Number(row.unconsumed)).toBe(count + 1);
+  });
+
   it("records a path-only sync rename without inventing a revision", async () => {
     const folder = await fixture.createFolder(fixture.mike, "repo/rename", "rename");
     const original = await fixture.createSyncedOriginal(fixture.mike, {
