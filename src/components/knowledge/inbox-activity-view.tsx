@@ -24,6 +24,8 @@ type View = "inbox" | "activity";
  */
 const SPLIT_MIN_PX = 75 * 16;
 const ABOUT = "Comments on your shared documents, and replies in discussions you follow on pages shared with you. Opening a discussion marks it read; resolving it is a separate action.";
+/** Lost team access is history, not attention, and its rows carry no document to mark read. */
+const markable = (item: ShareCommentNotificationView) => item.access?.kind !== "TEAM" || item.access.available;
 
 function useSplit() {
   const ref = useRef<HTMLDivElement>(null);
@@ -72,7 +74,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
 
   // A dead link's entry needs nothing from anyone: it is history, not attention. So does lost team access.
   const needsAttention = (item: ShareCommentNotificationView) =>
-    item.access?.kind === "TEAM" && !item.access.available ? false : item.readAt === null || (item.threadStatus === "OPEN" && item.linkAvailable !== false);
+    markable(item) && (item.readAt === null || (item.threadStatus === "OPEN" && item.linkAvailable !== false));
   const attention = useMemo(() => items.filter(needsAttention), [items]);
   // The entry being read stays in its place even once reading it has settled it, so ↑/↓ go on from there.
   const shown = view === "inbox" ? items.filter(item => needsAttention(item) || (split && item.id === selectedId)) : items;
@@ -93,7 +95,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
         thread ? { documentId: entry!.documentId, threadId: entry!.threadId }
         : entry ? { action: "mark-read", eventId: entry.id } : { action: "mark-all-read" });
       const now = new Date();
-      const settles = (item: ShareCommentNotificationView) => !entry || item.id === entry.id || (thread && (!isLinkEntry(item.kind) || isTeamEntry(item)) && item.threadId === entry.threadId);
+      const settles = (item: ShareCommentNotificationView) => markable(item) && (!entry || item.id === entry.id || (thread && (!isLinkEntry(item.kind) || isTeamEntry(item)) && item.threadId === entry.threadId));
       setItems(previous => previous.map(item => !item.readAt && settles(item) ? { ...item, readAt: now } : item));
       window.dispatchEvent(new Event("kh:notification-changed"));
     } catch (cause) {
@@ -103,11 +105,11 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
 
   const selected = split ? items.find(item => item.id === selectedId) : undefined;
   // Looking at an entry is reading it, as opening it always was; nothing is selected unasked (spec).
-  const unreadSelection = selected?.readAt === null ? selected : null;
+  const unreadSelection = selected?.readAt === null && markable(selected) ? selected : null;
   useEffect(() => { if (unreadSelection) void mark(unreadSelection, true); }, [unreadSelection, mark]);
   const select = (item: ShareCommentNotificationView) => {
     // Choosing it again after a failed mark is asking again.
-    if (item.id === selectedId && item.readAt === null) void mark(item, true);
+    if (item.id === selectedId && item.readAt === null && markable(item)) void mark(item, true);
     setSelectedId(item.id);
     const url = new URL(window.location.href);
     url.searchParams.set("item", item.id);
@@ -168,7 +170,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
               ? <Link className={row} href={href} prefetch={isLinkEntry(item.kind) && !isTeamEntry(item) ? false : undefined} data-inbox-entry={item.id} aria-current={current ? "true" : undefined} onClick={openRow(item)}>{content}</Link>
               : split ? <button type="button" className={row} data-inbox-entry={item.id} aria-current={current ? "true" : undefined} onClick={() => select(item)}>{content}</button>
               : <div className="min-w-0 flex-1 px-1 py-1">{content}</div>}
-            {item.readAt === null && <Button variant="ghost" size="sm" disabled={busy} onClick={() => void mark(item)}>Mark read</Button>}
+            {item.readAt === null && markable(item) && <Button variant="ghost" size="sm" disabled={busy} onClick={() => void mark(item)}>Mark read</Button>}
           </li>; })}
         </ul>}
       </TabsPanel>)}
