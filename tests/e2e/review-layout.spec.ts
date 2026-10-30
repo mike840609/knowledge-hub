@@ -448,7 +448,7 @@ test("the shared page keeps one left edge: its bar, its byline, its article and 
         range.selectNodeContents(document.querySelector(selector)!);
         return Math.round(range.getClientRects()[0].left);
       };
-      return { bar: textLeft(".kh-share-page > div:first-child span"), byline: textLeft(".kh-share-page .kh-byline > span > span"), article: textLeft("[data-review-document] p"), footer: textLeft(".kh-share-page footer p") };
+      return { bar: textLeft(".kh-share-page > div:first-of-type span"), byline: textLeft(".kh-share-page .kh-byline > span > span"), article: textLeft("[data-review-document] p"), footer: textLeft(".kh-share-page footer p") };
     });
   const aligned = async () => {
     const { bar, byline, article, footer } = await edges();

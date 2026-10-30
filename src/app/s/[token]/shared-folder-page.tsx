@@ -4,7 +4,7 @@ import { SaveShareButton } from "@/components/knowledge/save-share-button";
 import { SharedReviewPanel } from "@/components/knowledge/shared-review-panel";
 import { sharedFolderLinks } from "@/components/knowledge/shared-folder-links";
 import { SharedFolderTree, SharedFolderTreeButton, SharedFolderTreeScope } from "@/components/knowledge/shared-folder-tree";
-import { SharedByline, SharedFooter, SharedReading } from "@/components/knowledge/shared-reading";
+import { SharedByline, SharedFooter, SharedReading, SharedSkipLink, SHARED_CONTENT_ID } from "@/components/knowledge/shared-reading";
 import { buttonClasses } from "@/components/ui/button";
 
 /**
@@ -35,7 +35,7 @@ export function SharedFolderPage({ token, folder, platformEntry, signInHref }: {
             const last = index === crumbs.length - 1;
             return [
               index > 0 ? <li key={`${index}-separator`} aria-hidden="true">/</li> : null,
-              <li key={index} aria-current={last ? "page" : undefined} title={name} className={`min-w-0 truncate ${last ? "font-medium text-kh-text" : ""}`}>{name}</li>,
+              <li key={index} aria-current={last ? "location" : undefined} title={name} className={`min-w-0 truncate ${last ? "font-medium text-kh-text" : ""}`}>{name}</li>,
             ];
           })}
         </ol>
@@ -52,6 +52,7 @@ export function SharedFolderPage({ token, folder, platformEntry, signInHref }: {
   if (!document) {
     return (
       <main className="kh-share-page kh-share-folder min-h-screen bg-kh-bg">
+        <SharedSkipLink />
         <SharedFolderTreeScope>
           <div className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-kh-border bg-kh-bg px-4">
             {lead}
@@ -62,7 +63,7 @@ export function SharedFolderPage({ token, folder, platformEntry, signInHref }: {
         </SharedFolderTreeScope>
         <div className="kh-share-folder-body">
           <div className="kh-reading-column py-6">
-            <h1 className="text-page-title font-semibold tracking-tight text-kh-text">{folder.folderName}</h1>
+            <h1 id={SHARED_CONTENT_ID} tabIndex={-1} className="scroll-mt-14 text-page-title font-semibold tracking-tight text-kh-text">{folder.folderName}</h1>
             <SharedByline sharedByName={folder.sharedByName} expiresAt={folder.expiresAt} />
             <p className="mt-6 text-body text-kh-text-muted">This folder has no documents yet.</p>
           </div>
@@ -73,13 +74,14 @@ export function SharedFolderPage({ token, folder, platformEntry, signInHref }: {
   }
   return (
     <main className="kh-share-page kh-share-folder min-h-screen bg-kh-bg">
+      <SharedSkipLink />
       {/* The bar is the panel's, inside the body beside the tree; it reaches back over the tree's column (globals.css). */}
       <SharedFolderTreeScope>
         {/* Before the panel, as it was the bar's first part: the rail still comes first in focus order. */}
         {tree}
         <div className="kh-share-folder-body">
           <SharedReviewPanel key={document.documentId} token={token} documentId={document.documentId} revisionId={document.revisionId} markdown={document.markdown} signInHref={signInHref} brand={lead} actions={actions} wide>
-            <SharedReading document={document} links={sharedFolderLinks(token, document.links)} />
+            <SharedReading document={document} links={sharedFolderLinks(token, document.links)} contentId={SHARED_CONTENT_ID} />
           </SharedReviewPanel>
           <SharedFooter platformEntry={platformEntry} />
         </div>

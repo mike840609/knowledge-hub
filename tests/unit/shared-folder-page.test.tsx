@@ -72,7 +72,7 @@ describe("a folder link's page", () => {
     const html = await render(ids.setup);
     const crumbs = html.match(/<nav aria-label="Breadcrumb"[^>]*>(.*?)<\/nav>/)![1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
     expect(crumbs).toBe("Onboarding / Engineering / Dev setup");
-    expect(html).toMatch(/<li[^>]*aria-current="page"[^>]*>Dev setup<\/li>/);
+    expect(html).toMatch(/<li[^>]*aria-current="location"[^>]*>Dev setup<\/li>/);
   });
 
   it("lists the folder in a tree: the document read is current, the folders on its path open, the rest closed", async () => {
@@ -84,7 +84,7 @@ describe("a folder link's page", () => {
     expect(html).toMatch(/<button[^>]*aria-expanded="true"[^>]*>.*?Engineering/);
     expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>.*?HR/);
     expect(html).toContain(`href="/s/tok?d=${ids.faq}"`);
-    expect(html.match(/aria-current="page"/g)).toHaveLength(2);
+    expect(html.match(/aria-current="page"/g)).toHaveLength(1);
   });
 
   it("links an in-folder wikilink within the link, and reads every other link as its text", async () => {
@@ -154,6 +154,28 @@ describe("a folder link's page", () => {
 });
 
 describe("a document link's page", () => {
+  it("starts with a skip link to the page's own title", async () => {
+    shared({ kind: "DOCUMENT", revisionId: "rev", title: "Doc", markdown: "Body.", pageIcon: null, sharedByName: "Mike", updatedAt: new Date(), expiresAt: new Date() });
+    const html = await render();
+    expect(html).toContain('<a href="#shared-content:skip" class="kh-skip-link">Skip to content</a>');
+    expect(html).toMatch(/<h1[^>]*id="shared-content:skip"[^>]*tabindex="-1"[^>]*>Doc<\/h1>/);
+    expect(html).not.toMatch(/<article[^>]*id="shared-content:skip"/);
+  });
+
+  it("targets the article when the document's own heading is the title", async () => {
+    shared({ kind: "DOCUMENT", revisionId: "rev", title: "Doc", markdown: "# Own title\n\nBody.", pageIcon: null, sharedByName: "Mike", updatedAt: new Date(), expiresAt: new Date() });
+    const html = await render();
+    expect(html).toMatch(/<article[^>]*id="shared-content:skip"[^>]*tabindex="-1"[^>]*data-review-document/);
+    expect(html).not.toMatch(/<h1[^>]*id="shared-content:skip"/);
+  });
+
+  it("does not let a heading named “Shared content” take the skip target's id", async () => {
+    shared({ kind: "DOCUMENT", revisionId: "rev", title: "Doc", markdown: "## Shared content\n\nBody.", pageIcon: null, sharedByName: "Mike", updatedAt: new Date(), expiresAt: new Date() });
+    const html = await render();
+    expect(html.match(/id="shared-content"/g)).toHaveLength(1);
+    expect(html).toContain('id="shared-content:skip"');
+  });
+
   it("still resolves no links: a [[wikilink]] is its text", async () => {
     shared({ kind: "DOCUMENT", revisionId: "rev", title: "Doc", markdown: "See [[Code review]].", pageIcon: null, sharedByName: "Mike", updatedAt: new Date(), expiresAt: new Date() });
     const html = await render();

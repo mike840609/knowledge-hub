@@ -15,11 +15,15 @@ vi.mock("next/link", () => ({
   },
 }));
 vi.mock("@/components/knowledge/save-share-button", () => ({ SaveShareButton: () => <button type="button">Save</button> }));
-vi.mock("@/components/knowledge/shared-reading", () => ({
-  SharedReading: ({ document }: { document: { title: string } }) => <article>{document.title}</article>,
-  SharedByline: () => null,
-  SharedFooter: () => <footer />,
-}));
+vi.mock("@/components/knowledge/shared-reading", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/knowledge/shared-reading")>();
+  return {
+    ...actual,
+    SharedReading: ({ document, contentId }: { document: { title: string }; contentId?: string }) => <article id={contentId} tabIndex={contentId ? -1 : undefined}>{document.title}</article>,
+    SharedByline: () => null,
+    SharedFooter: () => <footer />,
+  };
+});
 // A stand-in that, like the real panel, draws the page's bar (brand and actions) inside itself.
 vi.mock("@/components/knowledge/shared-review-panel", () => ({
   SharedReviewPanel: ({ brand, actions, children }: { brand?: React.ReactNode; actions?: React.ReactNode; children: React.ReactNode }) => (
@@ -93,5 +97,22 @@ describe("the folder page's tree across documents", () => {
     await act(async () => button.click());
     expect(button.getAttribute("aria-expanded")).toBe("true");
     expect(nav.classList.contains("max-sm:hidden")).toBe(false);
+  });
+
+  it("starts with a skip link to the reading column", async () => {
+    await show(view(ids.welcome, "Welcome", []));
+    const skip = container.querySelector<HTMLAnchorElement>("main > a")!;
+    expect(skip.textContent).toBe("Skip to content");
+    expect(skip.getAttribute("href")).toBe("#shared-content:skip");
+    expect(document.getElementById("shared-content:skip")!.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("marks the breadcrumb's last item as the location, leaving one current page in the tree", async () => {
+    await show(view(ids.setup, "Dev setup", [{ id: "n-eng", name: "Engineering" }]));
+    const crumbs = container.querySelector("nav[aria-label='Breadcrumb']")!;
+    expect(crumbs.querySelector('[aria-current="location"]')!.textContent).toBe("Dev setup");
+    const current = container.querySelectorAll('[aria-current="page"]');
+    expect(current).toHaveLength(1);
+    expect(current[0].textContent).toContain("Dev setup");
   });
 });

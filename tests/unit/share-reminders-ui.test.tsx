@@ -81,7 +81,9 @@ describe("useSharedFolderIds", () => {
     expect(seen()).toBe("");
   });
 
-  it("refreshes when the tab returns to view, so an expired link stops being marked", async () => {
+  it("refreshes on a return, coalesces both signals, and still reads on a later app switch", async () => {
+    let now = 1_000_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
     let folders = [{ folderNodeId: "a", name: "A" }];
     const fetchStub = vi.fn(async () => new Response(JSON.stringify({ folders }), { status: 200 }));
     vi.stubGlobal("fetch", fetchStub);
@@ -89,10 +91,17 @@ describe("useSharedFolderIds", () => {
     await flush();
     expect(fetchStub).toHaveBeenCalledTimes(1);
     folders = [];
+    now += 5_000;
     act(() => { document.dispatchEvent(new Event("visibilitychange")); });
     await flush();
     expect(fetchStub).toHaveBeenCalledTimes(2);
     expect(seen()).toBe("");
+    // A tab return can fire both; the second signal inside the cooldown does not read again.
+    act(() => { window.dispatchEvent(new Event("focus")); });
+    await flush();
+    expect(fetchStub).toHaveBeenCalledTimes(2);
+    // Returning from another application fires focus without visibilitychange; that still reads.
+    now += 1_001;
     act(() => { window.dispatchEvent(new Event("focus")); });
     await flush();
     expect(fetchStub).toHaveBeenCalledTimes(3);
@@ -133,7 +142,7 @@ describe("the share dialog", () => {
     expect(dialogText()).toContain("Also visible through the shared folder Handbook");
     const button = Array.from(document.body.querySelectorAll("button")).find((candidate) => candidate.textContent === "Handbook")!;
     // Tabbed to on its own, it says what it does and that Handbook is a folder, not only the name.
-    expect(button.getAttribute("aria-label")).toBe("Open share links for folder Handbook");
+    expect(button.getAttribute("aria-label")).toBe("Handbook — open share links for this folder");
     await act(async () => { button.click(); });
     await flush();
     expect(fetchStub).toHaveBeenCalledWith("/api/tree-nodes/n1/share-links", expect.anything());

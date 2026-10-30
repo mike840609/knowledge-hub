@@ -13,6 +13,7 @@ import { SavedShareService } from "@/modules/knowledge/application/saved-share-s
 import type { ReviewAnchor } from "@/modules/knowledge/domain/document-review";
 import { projectReviewBlocks } from "@/modules/knowledge/domain/review-anchor";
 import { ensureDefaultHubSource } from "@/modules/sources/application/ensure-default-hub-source";
+import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
 import { PersonalWorkspaceService } from "@/modules/workspaces/application/personal-workspace-service";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 
@@ -157,6 +158,24 @@ describe("My shares lists folder links", () => {
     await f.shares.revoke(f.owner.caller, f.link.id);
     expect(await statuses()).toEqual(["revoked"]);
     expect(await f.mine({ status: "revoked" })).toHaveLength(1);
+  });
+
+  it("marks a folder link unavailable while its source is archived, and active again once restored", async () => {
+    const f = await fixture();
+    const sources = new SourceApplicationService(f.uow);
+    await sources.archiveSource(f.owner.caller, f.owner.sourceId);
+    expect((await f.mine()).find(item => item.id === f.link.id)).toMatchObject({ status: "unavailable" });
+    await sources.restoreSource(f.owner.caller, f.owner.sourceId);
+    expect((await f.mine()).find(item => item.id === f.link.id)).toMatchObject({ status: "active" });
+  });
+
+  it("marks a folder link unavailable in the management query when its workspace is archived", async () => {
+    // A personal space is frozen against archival, so this is the defect branch the query still guards.
+    const f = await fixture();
+    const now = new Date();
+    await f.uow.run(r => r.workspaces.setWorkspaceLifecycle(f.owner.workspaceId, "ARCHIVED", f.owner.caller.identity.id, now, now));
+    const rows = await f.uow.run(r => r.shareLinks.listForWorkspace(f.owner.workspaceId, f.owner.caller.identity.id, { q: "", status: "all", page: 1 }, now, 51, 0));
+    expect(rows).toEqual([expect.objectContaining({ id: f.link.id, status: "unavailable" })]);
   });
 
   it("finds a folder link by the folder's name and by its label, and not by a stranger", async () => {

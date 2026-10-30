@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { DomainError } from "@/shared/domain/errors";
 import { isUuid, uuidv7 } from "@/shared/ids/uuidv7";
-import { evaluateShareLinkValidity, isReachableThroughFolder, isShareToken, ShareLinkNotFoundError } from "../domain/document-share-link";
+import { isShareToken, ShareLinkNotFoundError } from "../domain/document-share-link";
 import { REVIEW_LIMITS, isRetractedThread, projectOwnerThread, projectReviewerThread, projectReviewComment, validateReviewBody, validateReviewIdempotencyKey, type ReviewThread, type ReviewComment, type ReviewAnchor, type ReviewStatus, type ReviewVisibility, type ReviewThreadView, type OwnerReviewThreadView, type CreateReviewThreadInput, type CreateOwnerReviewThreadInput, type ReplyReviewInput, type ReplyOwnerReviewInput } from "../domain/document-review";
 import { MENTION_LIMIT, MENTION_PREFIX, normalizeMentions, type ReviewMention } from "../domain/review-mention";
 import { createReviewAnchorRelocator, validateReviewAnchor } from "../domain/review-anchor";
@@ -10,7 +10,7 @@ import { projectShareCommentNotification, EXCERPT_LIMIT, type ShareCommentNotifi
 import { orderFollowedDiscussions, summarizeFollowedThread, type FollowedDiscussionView } from "../domain/review-follow";
 import type { DocumentShareLink } from "../domain/document-share-link";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
-import { reachableChain } from "./internal/folder-link-reach";
+import { documentReachesFolder, linkOpens, openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
 
 function fail(code:string, message:string):never { throw new DomainError(code,message); }
 function canonicalAnchor(a:ReviewAnchor) { if(!a || typeof a!=="object") fail("INVALID_REQUEST","Provide an anchor."); return {schemaVersion:a.schemaVersion,blockPath:a.blockPath,blockKind:a.blockKind,startUtf16:a.startUtf16,endUtf16:a.endUtf16,exact:a.exact,prefix:a.prefix,suffix:a.suffix}; }
@@ -331,28 +331,13 @@ export class DocumentReviewService {
     if (link.target.kind !== "FOLDER" || documentIds.length === 0) return null;
     const folder = await r.tree.findById(link.target.folderNodeId);
     if (!folder || folder.nodeType !== "FOLDER") return null;
-    const source = await r.sourcePolicy.findById(folder.sourceId);
-    if (!source) return null;
-    const workspace = await r.workspaces.findById(source.workspaceId);
-    if (!workspace || workspace.workspaceType !== "PERSONAL") return null;
-    const membership = await r.workspaceMemberships.find(workspace.id, link.createdBy);
-    const open = evaluateShareLinkValidity({
-      link,
-      documentStatus: folder.status,
-      sourceStatus: source.status,
-      workspaceLifecycle: workspace.lifecycleState,
-      workspaceOwnerUserId: workspace.personalOwnerUserId,
-      creatorDirectRole: membership ? membership.role ?? null : undefined,
-      now: this.clock(),
-    }).valid;
-    if (!open) return null;
+    if (!await openShareLinkTarget(r, link, folder, this.clock())) return null;
     const documents = new Map((await r.documents.findByIds(documentIds)).map(document => [document.id, document]));
     const chains = await r.tree.listChainsByDocumentIds(documentIds, folder.sourceId);
     const reachable = new Set<string>();
     for (const documentId of documentIds) {
       const document = documents.get(documentId);
-      const chain = chains.get(documentId);
-      if (document && document.status === "ACTIVE" && document.sourceId === folder.sourceId && chain && isReachableThroughFolder(chain, folder.id)) reachable.add(documentId);
+      if (document && documentReachesFolder(folder, document, chains.get(documentId))) reachable.add(documentId);
     }
     return reachable;
   }
@@ -371,7 +356,7 @@ export class DocumentReviewService {
   /** `targetStatus` is the link's target's: its document's, or its folder node's (folder share spec §2). */
   private async opens(r: KnowledgeRepositories, scope: Awaited<ReturnType<DocumentReviewService["scope"]>>, link: DocumentShareLink, targetStatus: "ACTIVE" | "ARCHIVED"): Promise<boolean> {
     const membership = await r.workspaceMemberships.find(scope.workspace.id, link.createdBy);
-    return evaluateShareLinkValidity({ link, documentStatus: targetStatus, sourceStatus: scope.source.status, workspaceLifecycle: scope.workspace.lifecycleState, workspaceOwnerUserId: scope.workspace.personalOwnerUserId, creatorDirectRole: membership ? membership.role ?? null : undefined, now: this.clock() }).valid;
+    return linkOpens(link, targetStatus, scope.source, scope.workspace, membership ? membership.role ?? null : undefined, this.clock());
   }
   /** Marks this document's events read. Owner scope first: a non-owner reaches nothing. */
   async markDocumentRead(caller:CallerContext,documentId:string) {

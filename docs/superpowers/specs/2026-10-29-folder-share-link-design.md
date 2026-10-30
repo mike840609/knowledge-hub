@@ -297,7 +297,9 @@ folder icon; opening one goes to `/s/:token`.
 
 - **Create**: the folder's entry in the My Space tree action menu
   (`action-menu.tsx`) gets *Share*, opening `share-link-dialog.tsx` in a
-  folder mode. `DocumentShareService.create` (or a sibling `createForFolder`)
+  folder mode. The action is offered only in a personal space the caller owns
+  (`isPersonalOwner`), never to another member or in a Team workspace.
+  `DocumentShareService.create` (or a sibling `createForFolder`)
   locks the owned scope via the folder node (Source FOR UPDATE, same order as
   today), requires a `FOLDER`, `ACTIVE` node in an `ACTIVE` My Space Source
   owned by the caller, counts active links per folder, and audits

@@ -125,6 +125,18 @@ describe("on a phone, the tree is behind a button in the bar", () => {
     expect(disclosure().getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("moves focus into the tree when it opens, so Tab walks the tree", async () => {
+    await show("d-setup");
+    await act(async () => disclosure().click());
+    expect(document.activeElement).toBe(container.querySelector("nav a"));
+  });
+
+  it("focuses the empty tree itself when there is nothing in it", async () => {
+    await act(async () => root.render(page([], null)));
+    await act(async () => disclosure().click());
+    expect(document.activeElement).toBe(container.querySelector("nav"));
+  });
+
   it("closes on a press outside it, and stays open on a press inside it", async () => {
     await show("d-setup");
     await act(async () => disclosure().click());

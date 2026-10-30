@@ -86,6 +86,13 @@ test.describe("folder share link", () => {
       await expect(reader.getByRole("heading", { level: 1 })).toHaveText(new RegExp(`^(${names.intro}|${names.deep})$`));
       await expect(tree.locator('a[aria-current="page"]')).toHaveCount(1);
 
+      // The skip link lands on the page's own title, not on a heading anchor that shares its id.
+      const skip = reader.getByRole("link", { name: "Skip to content" });
+      await reader.keyboard.press("Tab");
+      await expect(skip).toBeFocused();
+      await reader.keyboard.press("Enter");
+      await expect(reader.locator("h1")).toBeFocused();
+
       const sub = tree.getByRole("button", { name: names.sub, exact: true });
       if ((await sub.getAttribute("aria-expanded")) === "false") await sub.click();
       await expect(sub).toHaveAttribute("aria-expanded", "true");
@@ -96,6 +103,8 @@ test.describe("folder share link", () => {
 
       // Out of the folder, a link is its text and carries nothing, not even the title.
       const article = reader.locator("article").first();
+      // The article stays the reading column's direct child: its 32px end padding is the comment-marker gutter.
+      await expect(article).toHaveCSS("padding-right", "32px");
       await expect(article.getByText(names.outside, { exact: true })).toBeVisible();
       await expect(article.locator("span", { hasText: new RegExp(`^${names.outside}$`) })).not.toHaveAttribute("title", /.*/);
       await expect(article.getByRole("link", { name: names.outside })).toHaveCount(0);
@@ -128,6 +137,8 @@ test.describe("folder share link", () => {
       await expect(tree).toBeHidden();
       await disclosure.click();
       await expect(tree).toBeVisible();
+      // Focus moves into the list, so Tab walks the tree rather than the bar behind it.
+      await expect(tree.locator("a, button").first()).toBeFocused();
       const phoneSub = tree.getByRole("button", { name: names.sub, exact: true });
       if ((await phoneSub.getAttribute("aria-expanded")) === "false") await phoneSub.click();
       await tree.getByRole("link", { name: names.deep, exact: true }).click();
@@ -184,7 +195,7 @@ test.describe("folder share link", () => {
     const documentDialog = page.getByRole("dialog", { name: "Share link" });
     const also = documentDialog.getByRole("list", { name: "Also shared through folders" });
     await expect(also).toContainText("Also visible through the shared folder", ROUND_TRIP);
-    await also.getByRole("button", { name: `Open share links for folder ${names.folder}`, exact: true }).click();
+    await also.getByRole("button", { name: `${names.folder} — open share links for this folder`, exact: true }).click();
     await expect(page.getByRole("dialog", { name: `Share folder ${names.folder}` })).toBeVisible(ROUND_TRIP);
     await page.keyboard.press("Escape");
 

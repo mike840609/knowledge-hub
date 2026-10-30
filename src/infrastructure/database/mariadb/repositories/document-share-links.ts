@@ -1,4 +1,4 @@
-import type { ManagedShareLink, ShareManagementQuery } from "@/modules/knowledge/domain/share-management";
+import type { ManagedShareLink, ShareManagementQuery, ShareManagementStatus } from "@/modules/knowledge/domain/share-management";
 import { toLikePattern } from "@/modules/knowledge/domain/search-query";
 import { shareLinkPath } from "@/modules/knowledge/domain/document-share-link";
 import { IntegrityViolationError } from "@/modules/knowledge/domain/errors";
@@ -58,12 +58,16 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
       [now, workspaceId, callerId, callerId, query.q, toLikePattern(query.q), toLikePattern(query.q), query.status, query.status, limit, offset],
     );
     const totals = await this.viewTotals(rows.map(row => String(row.id)));
-    return rows.map(row => ({
-      id: String(row.id), kind: row.folder_node_id === null ? "DOCUMENT" : "FOLDER",
-      documentId: row.document_id === null ? null : String(row.document_id), folderNodeId: row.folder_node_id === null ? null : String(row.folder_node_id), sourceId: String(row.source_id), title: String(row.title), sourceName: String(row.source_name),
-      label: row.label === null ? null : String(row.label), path: shareLinkPath(String(row.token)), status: String(row.link_status) as ManagedShareLink["status"],
-      createdAt: asDate(row.created_at), expiresAt: asDate(row.expires_at), revokedAt: asNullableDate(row.revoked_at), totalViews: totals.get(String(row.id))?.totalViews ?? 0, lastViewedAt: totals.get(String(row.id))?.lastViewedAt ?? null,
-    }));
+    return rows.map((row): ManagedShareLink => {
+      const base = {
+        id: String(row.id), sourceId: String(row.source_id), title: String(row.title), sourceName: String(row.source_name),
+        label: row.label === null ? null : String(row.label), path: shareLinkPath(String(row.token)), status: String(row.link_status) as ShareManagementStatus,
+        createdAt: asDate(row.created_at), expiresAt: asDate(row.expires_at), revokedAt: asNullableDate(row.revoked_at), totalViews: totals.get(String(row.id))?.totalViews ?? 0, lastViewedAt: totals.get(String(row.id))?.lastViewedAt ?? null,
+      };
+      return row.folder_node_id === null
+        ? { ...base, kind: "DOCUMENT", documentId: String(row.document_id), folderNodeId: null }
+        : { ...base, kind: "FOLDER", documentId: null, folderNodeId: String(row.folder_node_id) };
+    });
   }
 
   async listOpenFolderLinks(workspaceId: string, ownerId: string, now: Date): Promise<OpenFolderLink[]> {

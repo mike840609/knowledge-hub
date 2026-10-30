@@ -4,7 +4,6 @@ import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { isUuid, uuidv7 } from "@/shared/ids/uuidv7";
 import {
   assertShareLinkCreation,
-  evaluateShareLinkValidity,
   isActiveShareLink,
   isShareToken,
   shareLinkExpiry,
@@ -19,7 +18,8 @@ import { linkLookupKey } from "../domain/link-graph";
 import { buildLinkResolver } from "../domain/link-resolution";
 import type { OpenFolderLink } from "../ports/document-share-link-repository";
 import type { ShareTokenIssuer } from "../ports/share-token-issuer";
-import { reachableChain } from "./internal/folder-link-reach";
+import { openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
+import { linkOrigin } from "./internal/link-origin";
 import type { TreeViewNode } from "../ports/tree-repository";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
 
@@ -362,22 +362,9 @@ async function requireOpenLink(
   target: { sourceId: string; status: "ACTIVE" | "ARCHIVED" },
   now: Date,
 ): Promise<{ workspaceId: string }> {
-  const source = await repositories.sourcePolicy.findById(target.sourceId);
-  if (!source) throw new ShareLinkNotFoundError();
-  const workspace = await repositories.workspaces.findById(source.workspaceId);
-  if (!workspace) throw new ShareLinkNotFoundError();
-  const membership = await repositories.workspaceMemberships.find(workspace.id, link.createdBy);
-  const verdict = evaluateShareLinkValidity({
-    link,
-    documentStatus: target.status,
-    sourceStatus: source.status,
-    workspaceLifecycle: workspace.lifecycleState,
-    workspaceOwnerUserId: workspace.personalOwnerUserId,
-    creatorDirectRole: membership ? membership.role ?? null : undefined,
-    now,
-  });
-  if (!verdict.valid) throw new ShareLinkNotFoundError();
-  return { workspaceId: workspace.id };
+  const open = await openShareLinkTarget(repositories, link, target, now);
+  if (!open) throw new ShareLinkNotFoundError();
+  return open;
 }
 
 async function requireCreator(repositories: KnowledgeRepositories, link: DocumentShareLink) {
@@ -493,7 +480,7 @@ async function reachableLinks(
   const catalog = await repositories.links.loadCatalog(workspaceId);
   const resolver = buildLinkResolver(catalog);
   const byId = new Map(catalog.map((entry) => [entry.documentId, entry]));
-  const origin = { documentId: document.id, sourceId: document.sourceId, sourcePath: byId.get(document.id)?.sourcePath ?? null };
+  const origin = linkOrigin(document, byId.get(document.id));
   const seen = new Set<string>();
   const links: SharedResolvedLink[] = [];
   for (const link of extracted) {

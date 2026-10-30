@@ -537,7 +537,7 @@ describe("action registry — folder.share (folder share spec §8)", () => {
   } as const);
   const shareOffered = (ctx: ActionContext) => ids(availableActions(ctx)).includes("folder.share");
 
-  // Sharing is reading: neither capability nor ownership is a rule, only where the folder is and its state.
+  // Sharing is reading: neither capability nor source ownership is a rule, only where the folder is and its state.
   it.each(cells)("canWrite=$canWrite $ownership folder $status in a $sourceStatus source, confirmed=$confirmed, $workspaceType, owner=$isPersonalOwner", (cell) => {
     const offered = shareOffered(context({
       workspaceType: cell.workspaceType,

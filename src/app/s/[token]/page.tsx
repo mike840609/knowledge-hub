@@ -1,6 +1,6 @@
 import { SaveShareButton } from "@/components/knowledge/save-share-button";
 import { SharedReviewPanel } from "@/components/knowledge/shared-review-panel";
-import { SharedFooter, SharedReading } from "@/components/knowledge/shared-reading";
+import { SharedFooter, SharedReading, SharedSkipLink, SHARED_CONTENT_ID } from "@/components/knowledge/shared-reading";
 import { buttonClasses } from "@/components/ui/button";
 import type { Metadata } from "next";
 import type { SharedView } from "@/modules/knowledge/application/document-share-service";
@@ -46,15 +46,23 @@ function sharedTitle(shared: SharedView): string {
   return shared.document ? shared.document.title : shared.folderName;
 }
 
+/** The query a Hub entry carries back to the page read. */
+const returnToQuery = (returnTo: string) => new URLSearchParams({ returnTo }).toString();
+
+/** The Hub entry for a full browser navigation, continuing to `returnTo` once signed in; null without a public origin. */
+function hubEntry(returnTo: string): string | null {
+  const origin = publicOrigin();
+  return origin ? `${origin}/?${returnToQuery(returnTo)}` : null;
+}
+
 /** Signing in to comment comes back to the page read, where the signed-in reader can then comment. */
 function signInHref(returnTo: string): string {
-  return `${publicOrigin() ?? ""}/?${new URLSearchParams({ returnTo })}`;
+  return hubEntry(returnTo) ?? `/?${returnToQuery(returnTo)}`;
 }
 
 /** The Hub's front door, by a full browser navigation, continuing to `returnTo` once signed in. */
 function platformEntry(returnTo: string): string {
-  const origin = publicOrigin();
-  return origin ? `${origin}/?${new URLSearchParams({ returnTo })}` : returnTo;
+  return hubEntry(returnTo) ?? returnTo;
 }
 
 export default async function SharedPage(props: SharedPageProps) {
@@ -70,11 +78,12 @@ export default async function SharedPage(props: SharedPageProps) {
   const entry = platformEntry(`/s/${token}/open`);
   return (
     <main className="kh-share-page min-h-screen bg-kh-bg">
+      <SharedSkipLink />
       {/* One pinned bar, then the title: the brand, Comments, Save and Open share a row. Save and Open show one word each (their full names stay for assistive technology), and on a phone only their icons. */}
       <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={signInHref(`/s/${token}`)}
         brand={<span className="shrink-0 text-body font-semibold text-kh-text">Knowledge Hub</span>}
         actions={<><SaveShareButton token={token} /><span aria-hidden="true" className="mx-1 h-4 w-px bg-kh-border max-sm:hidden" /><a href={entry} className={buttonClasses({ variant: "ghost" })}><ExternalLink className="size-4" aria-hidden="true" /><span className="max-sm:sr-only">Open<span className="sr-only"> in Knowledge Hub</span></span></a></>}>
-        <SharedReading document={shared} />
+        <SharedReading document={shared} contentId={SHARED_CONTENT_ID} />
       </SharedReviewPanel>
       <SharedFooter platformEntry={entry} />
     </main>
