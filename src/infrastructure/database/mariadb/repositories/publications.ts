@@ -403,9 +403,12 @@ export class MariaDbPublicationRepository implements PublicationRepository {
     }
   }
 
-  async listPendingEvents(userId?: string, limit = DEFAULT_EVENT_LIMIT): Promise<{ eventId: string; contributionId: string }[]> {
+  async listPendingEvents(
+    userId?: string,
+    limit = DEFAULT_EVENT_LIMIT,
+  ): Promise<{ eventId: string; contributionId: string; publicationId: string }[]> {
     const rows = await this.connection.query<DbRow[]>(
-      `SELECT d.event_id, d.contribution_id
+      `SELECT d.event_id, d.contribution_id, c.publication_id
        FROM publication_event_deliveries d
        JOIN publication_events e ON e.id = d.event_id
        JOIN publication_contributors c ON c.id = d.contribution_id
@@ -414,7 +417,11 @@ export class MariaDbPublicationRepository implements PublicationRepository {
        LIMIT ?`,
       userId === undefined ? [limit] : [userId, limit],
     );
-    return rows.map((row) => ({ eventId: String(row.event_id), contributionId: String(row.contribution_id) }));
+    return rows.map((row) => ({
+      eventId: String(row.event_id),
+      contributionId: String(row.contribution_id),
+      publicationId: String(row.publication_id),
+    }));
   }
 
   async completeDelivery(

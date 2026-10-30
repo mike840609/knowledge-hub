@@ -9,7 +9,9 @@ import { reviewWritesEnabled } from "./config";
 import { PersonalPreferencesService } from "@/modules/personal/application/personal-preferences-service";
 import { PersonalProfileService } from "@/modules/personal/application/personal-profile-service";
 import { AgentContextService } from "@/modules/knowledge/application/agent-context-service";
+import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { GetImportScopeService } from "@/modules/sources/application/get-import-scope";
+import { drainPublicationEvents } from "@/modules/sources/application/publication-drain";
 import {GetSourceHealthService} from "@/modules/sources/application/get-source-health";
 import { ListFolderUpdatesService } from "@/modules/personal/application/list-folder-updates";
 import { GetSyncRunDetailService } from "@/modules/sources/application/get-sync-run-detail";
@@ -49,6 +51,7 @@ import { HubIdentityResolver } from "@/modules/identity/application/hub-identity
 import { establishTrustedCaller as establishTrustedCallerWith } from "@/server/trusted-caller";
 import { importRuntimeConfig } from "@/server/import-config";
 import { createIdentityProvider } from "@/server/identity-provider-factory";
+import { schedulePublicationDrain, withPostCommitDrain } from "./publication-post-commit";
 import { closeDatabasePool, getDatabasePool } from "./database-pool";
 
 let services: ReturnType<typeof buildApplicationServices> | undefined;
@@ -76,7 +79,31 @@ export function buildApplicationServices(databasePool: Pool, options: {
   const providerKind = identityProviderKind();
   const providerName = companySsoProviderName();
   const sessionReaderConfigured = options.companySessionReader !== undefined;
-  const hub = new HubKnowledgeCommandServiceImpl(unitOfWork);
+  // Only the caller's own events are consumed in their request, so group-derived
+  // rights are judged as them. Each mutator schedules after its transaction has
+  // committed and released its locks.
+  const scheduleAfterPersonalWrite = (caller: CallerContext): void => {
+    schedulePublicationDrain(caller, {
+      drain: (captured) => drainPublicationEvents(unitOfWork, {
+        judge: { kind: "CALLER", caller: captured },
+      }),
+    });
+  };
+  const hub = withPostCommitDrain(
+    new HubKnowledgeCommandServiceImpl(unitOfWork),
+    [
+      "createDocument",
+      "createRevision",
+      "duplicateDocument",
+      "moveTreeNode",
+      "renameFolder",
+      "archiveDocument",
+      "restoreDocument",
+      "archiveFolder",
+      "restoreFolder",
+    ],
+    scheduleAfterPersonalWrite,
+  );
   const queries = new KnowledgeQueryServiceImpl(unitOfWork);
   const links = new KnowledgeLinkServiceImpl(unitOfWork);
   const documentReadProgress = new DocumentReadProgressService(unitOfWork, queries);
@@ -86,7 +113,11 @@ export function buildApplicationServices(databasePool: Pool, options: {
   const savedShares = new SavedShareService(unitOfWork);
   const feedbackReports = new FeedbackReportService(new MariaDbFeedbackReportStore(databasePool));
   const shares = new DocumentShareService(unitOfWork, new RandomShareTokenIssuer());
-  const sources = new SourceApplicationService(unitOfWork);
+  const sources = withPostCommitDrain(
+    new SourceApplicationService(unitOfWork),
+    ["applyKnownEntry", "archiveKnownEntry"],
+    scheduleAfterPersonalWrite,
+  );
   const workspaceAdmin = new WorkspaceAdminService(unitOfWork);
   const teams = new TeamWorkspaceService(unitOfWork);
   const governance = new TeamGovernanceService(unitOfWork);
@@ -141,7 +172,11 @@ export function buildApplicationServices(databasePool: Pool, options: {
     finalize: new FinalizeFolderImportService(unitOfWork, { limits: importConfig.limits, readyTtlMs: importConfig.readyTtlMs, memoryBudget }),
     preview: new GetFolderImportPreviewService(unitOfWork),
     diff: new GetFolderImportDiffService(unitOfWork),
-    apply: new ApplyFolderImportService(unitOfWork, { memoryBudget }),
+    apply: withPostCommitDrain(
+      new ApplyFolderImportService(unitOfWork, { memoryBudget }),
+      ["apply"],
+      scheduleAfterPersonalWrite,
+    ),
     cleanup: new CleanupFolderImportsService(unitOfWork),
   };
   return {

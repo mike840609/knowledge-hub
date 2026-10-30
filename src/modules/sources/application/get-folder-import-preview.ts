@@ -3,6 +3,7 @@ import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { importError } from "@/modules/sources/domain/import-errors";
 import type { SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
 import { requireKnownSnapshotWorkspaceRead } from "./import-snapshot-access";
+import { publicationNoticesForSnapshot } from "./publication-notices";
 import { previewFromSnapshot, resolveImportPreviewNames, type ImportPreview } from "./reconcile-import-snapshot";
 
 export type { ImportPreview } from "./reconcile-import-snapshot";
@@ -27,9 +28,11 @@ export class GetFolderImportPreviewService {
       const preview=await resolveImportPreviewNames(repositories, previewFromSnapshot(snapshot, now));
       if(snapshot.sourceId && snapshot.state==="READY"){
         const source=await repositories.sources.findById(snapshot.sourceId);
-        if(source && source.syncVersion!==snapshot.basedOnVersion)return {...preview,state:"STALE"};
+        // A stale plan no longer describes the proposed final originals.
+        if(source && source.syncVersion!==snapshot.basedOnVersion)return {...preview,publicationNotices:[],state:"STALE"};
       }
-      return {...preview,safety:snapshot.plan ? await safetyForPlan(repositories,snapshot.sourceId,snapshot.plan):undefined};
+      const publicationNotices=await publicationNoticesForSnapshot(repositories, caller, snapshot);
+      return {...preview,publicationNotices,safety:snapshot.plan ? await safetyForPlan(repositories,snapshot.sourceId,snapshot.plan):undefined};
     });
   }
 }

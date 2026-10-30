@@ -7,6 +7,7 @@ import { lockWorkspaceForMutation } from "@/modules/workspaces/application/works
 import { importError } from "@/modules/sources/domain/import-errors";
 import { hashImportPlan, hashReadyImportSnapshot } from "@/modules/sources/domain/import-integrity";
 import type { ImportDiffSummary } from "@/modules/sources/domain/import-plan";
+import type { PublicationNotice } from "@/modules/sources/domain/publication";
 import type { KnowledgeSource } from "@/modules/sources/domain/source";
 import type { SyncRun } from "@/modules/sources/domain/sync-run";
 import type { SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
@@ -17,9 +18,18 @@ import { captureAppliedChanges } from "./record-sync-run-changes";
 import type { ImportMemoryBudget } from "./import-memory-budget";
 import { requireKnownSnapshotWorkspaceRead } from "./import-snapshot-access";
 import { translateKnownSnapshotAccessError } from "./import-snapshot-access";
+import { publicationNoticesForSnapshot } from "./publication-notices";
 
 export type ApplyFolderImportResult =
-  | { kind: "APPLIED"; sourceId: string; resultVersion: number; runId: string | null; alreadyApplied: boolean }
+  | {
+    kind: "APPLIED";
+    sourceId: string;
+    resultVersion: number;
+    runId: string | null;
+    alreadyApplied: boolean;
+    /** Display-only: another contributor maintains one of the applied paths. */
+    publicationNotices?: PublicationNotice[];
+  }
   | { kind: "VERSION_CONFLICT"; sourceId: string; snapshotVersion: number; currentVersion: number };
 
 type Options = { now?: () => Date; failurePoint?: ImportApplyFailurePoint; memoryBudget?: ImportMemoryBudget };
@@ -90,9 +100,31 @@ export class ApplyFolderImportService {
 
   async apply(caller: CallerContext, snapshotId: string, riskAcknowledgment?: ImportRiskAcknowledgment): Promise<ApplyFolderImportResult> {
     const budget = this.memoryBudget;
-    if (!budget) return this.applyNow(caller, snapshotId, riskAcknowledgment);
-    const bytes = await this.uow.run((repositories) => repositories.importSnapshotEntries.markdownBytes(snapshotId));
-    return budget.run(bytes, () => this.applyNow(caller, snapshotId, riskAcknowledgment));
+    const result = budget
+      ? await budget.run(
+        await this.uow.run((repositories) => repositories.importSnapshotEntries.markdownBytes(snapshotId)),
+        () => this.applyNow(caller, snapshotId, riskAcknowledgment),
+      )
+      : await this.applyNow(caller, snapshotId, riskAcknowledgment);
+    if (result.kind !== "APPLIED") return result;
+
+    // A display-only read after the import committed. It must never turn a
+    // successful import into a failure, so any lookup problem just omits the
+    // notices; the next sync/drain still reconciles the publication.
+    const publicationNotices = await this.uow.run(async (repositories) => {
+      const snapshot = await repositories.importSnapshots.findById(snapshotId);
+      if (!snapshot) return [];
+      return publicationNoticesForSnapshot(repositories, caller, snapshot, {
+        includePathReserved: true,
+      });
+    }).catch((error: unknown) => {
+      console.error(
+        "Publication notices could not be resolved after import.",
+        error instanceof Error ? error.name : "UnknownError",
+      );
+      return [];
+    });
+    return { ...result, publicationNotices };
   }
 
   private async applyNow(caller: CallerContext, snapshotId: string, riskAcknowledgment?: ImportRiskAcknowledgment): Promise<ApplyFolderImportResult> {

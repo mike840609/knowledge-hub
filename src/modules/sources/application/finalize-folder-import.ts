@@ -11,6 +11,7 @@ import type { FinalizedImportSnapshotEntry, ImportSnapshot, ImportSnapshotEntry 
 import type { SourceRepositories, SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
 import { translateKnownSnapshotAccessError } from "./import-snapshot-access";
 import type { ImportMemoryBudget } from "./import-memory-budget";
+import { publicationNoticesForSnapshot } from "./publication-notices";
 import {
   blockedImportPlan,
   previewFromSnapshot,
@@ -154,7 +155,14 @@ export class FinalizeFolderImportService {
     // and resolveImportPreviewNames swallows errors — swallowing a
     // transaction-aborting error (a deadlock rolls the whole thing back) would
     // let a rolled-back finalize still report a READY preview.
-    return this.uow.run((repositories) => resolveImportPreviewNames(repositories, preview));
+    return this.uow.run(async (repositories) => {
+      const named = await resolveImportPreviewNames(repositories, preview);
+      const stored = await repositories.importSnapshots.findById(snapshotId);
+      const publicationNotices = stored
+        ? await publicationNoticesForSnapshot(repositories, caller, stored)
+        : [];
+      return { ...named, publicationNotices };
+    });
   }
 
   private async finalizePrepare(

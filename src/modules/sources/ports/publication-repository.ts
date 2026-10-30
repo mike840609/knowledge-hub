@@ -68,7 +68,11 @@ export interface PublicationRepository {
    * team publishing is enabled.
    */
   prepareDeliveries(limit: number): Promise<void>;
-  listPendingEvents(userId?: string, limit?: number): Promise<{ eventId: string; contributionId: string }[]>;
+  /**
+   * Pending deliveries in event order. `publicationId` is joined from the
+   * contribution so a drain can reconcile without a second lookup per row.
+   */
+  listPendingEvents(userId?: string, limit?: number): Promise<{ eventId: string; contributionId: string; publicationId: string }[]>;
   /** Marks one target done; the root event is consumed only when none remain. */
   completeDelivery(eventId: string, contributionId: string, outcome: "APPLIED" | "SKIPPED"): Promise<void>;
   saveReport(contributionId: string, report: ReconcileReport): Promise<void>;
