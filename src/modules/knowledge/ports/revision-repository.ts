@@ -10,6 +10,8 @@ export interface RevisionRepository {
   /** Many revisions in few statements; returns only the ids that exist. */
   findByIds(ids: readonly string[]): Promise<KnowledgeRevision[]>;
   findCurrent(documentId: string): Promise<KnowledgeRevision | null>;
+  /** The current revision of many documents in one statement; returns only ids that exist. */
+  findCurrentByIds(documentIds: readonly string[]): Promise<KnowledgeRevision[]>;
   findByRevisionNo(documentId: string, revisionNo: number): Promise<KnowledgeRevision | null>;
   listByDocument(documentId: string): Promise<KnowledgeRevision[]>;
   listSummariesByDocument(documentId: string): Promise<KnowledgeRevisionSummary[]>;

@@ -1,5 +1,4 @@
 "use client";
-import { SharesNavigation } from "./shares-navigation";
 import { Illustration } from "@/components/knowledge/illustration";
 
 
@@ -13,7 +12,6 @@ import { Copy, MoreHorizontal, Search } from "lucide-react";
 import { MenuRoot, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
 import { buttonClasses } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
-import { PageHeader } from "@/components/shell/page-header";
 import { Input } from "@/components/ui/input";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -29,12 +27,14 @@ import type { ManagedShareLink, ShareManagementQuery, ShareManagementStatus } fr
 const labels: Record<ShareManagementStatus, string> = { active: "Active", expired: "Expired", revoked: "Revoked", unavailable: "Unavailable" };
 type UnreadShareCount = { documentId: string; unreadCount: number; latestThreadId: string };
 export type ShareManagementModel = { query: ShareManagementQuery; items: ManagedShareLink[]; hasNext: boolean };
-export function ShareManagementView({ workspaceId, model, filterError, hasDocuments = true, discussionsUnread = 0 }: { workspaceId: string; model: ShareManagementModel; filterError?: string; hasDocuments?: boolean; discussionsUnread?: number }) {
+export function ShareManagementView({ workspaceId, model, filterError, hasDocuments = true }: { workspaceId: string; model: ShareManagementModel; filterError?: string; hasDocuments?: boolean }) {
   const router = useRouter(), toast = useToast();
   const [origin, setOrigin] = useState("");
   const [status, setStatus] = useState<string>(model.query.status);
+  const [query, setQuery] = useState<string>(model.query.q);
   const filterForm = useRef<HTMLFormElement>(null);
   useEffect(() => setStatus(model.query.status), [model.query.status]);
+  useEffect(() => setQuery(model.query.q), [model.query.q]);
   const [unreadCounts, setUnreadCounts] = useState<UnreadShareCount[]>([]);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -96,24 +96,24 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
     if (await writeLinkToClipboard(item.path)) { toast({ message: "Link copied." }); setError(null); }
     else { setDetails(item.id); setManualCopy({ id: item.id }); setError({ code: "COPY_FAILED", message: "Clipboard unavailable. The link is selected; copy it manually." }); }
   }
-  return <main className="kh-page pb-6">
-    <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" description="Manage links to your documents. Anyone holding an active link can read its latest saved content without signing in." />
-    <SharesNavigation workspaceId={workspaceId} active="mine" discussionsUnread={discussionsUnread} />
-    <form ref={filterForm} action={`/w/${workspaceId}/shares`} method="get" className="mt-4 flex flex-wrap items-center gap-2" aria-label="Filter shares">
-      <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-auto">
+  return <>
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+    <form ref={filterForm} action={`/w/${workspaceId}/shares`} method="get" className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:flex-1" aria-label="Filter shares">
+      <div className="relative basis-full sm:w-72 sm:flex-none">
         <label htmlFor="shares-query" className="sr-only">Find shares</label>
         <Search size={15} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-kh-text-muted" />
-        <Input id="shares-query" name="q" defaultValue={model.query.q} maxLength={200} placeholder="Find shares…" className="kh-search-field" />
+        <Input id="shares-query" name="q" value={query} onChange={event => setQuery(event.target.value)} maxLength={200} placeholder="Find shares…" className="kh-search-field" />
       </div>
       <label htmlFor="shares-status" className="sr-only">Status</label>
       <SelectMenu id="shares-status" name="status" value={status} onValueChange={(value) => applyAndSearch(filterForm.current, () => setStatus(value))} options={[{ value: "all", label: "All statuses" }, ...Object.entries(labels).map(([value, label]) => ({ value, label }))]} />
       <LiveSearch />
       {model.query.q || model.query.status !== "active" || model.query.page > 1 ? <Link className="kh-focus-ring rounded-md text-body-sm text-kh-link" href={`/w/${workspaceId}/shares`}>Clear filters</Link> : null}
     </form>
+    {model.items.length > 0 ? <p role="status" className="ml-auto text-caption text-kh-text-muted">{model.items.length} {model.items.length === 1 ? "share" : "shares"}{model.query.page > 1 || model.hasNext ? " on this page" : ""}</p> : null}
+    </div>
     {filterError ? <p role="alert" className="mt-3 text-body text-kh-danger">{filterError}</p> : null}
     <GovernanceError error={error} />
     {!filterError && model.items.length === 0 ? <EmptyState icon={Share2} illustration={!model.query.q && model.query.page === 1 && (model.query.status === "all" || (model.query.status === "active" && !hasDocuments)) ? <Illustration kind="shares" /> : undefined} title={!model.query.q && model.query.page === 1 && model.query.status === "active" ? "No active share links." : filtered ? "No shares match these filters." : "No share links yet."} description={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? "Clear the filters to see links with other titles or statuses." : hasDocuments ? "Open a document and choose Share to create a link." : "Links you share to your documents appear here."} action={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/shares?status=all`}>Show all shares</Link> : hasDocuments ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/knowledge`}>Browse documents</Link> : <WorkspaceContentActions workspaceId={workspaceId} />} /> : null}
-    {model.items.length > 0 ? <p role="status" className="mt-3 text-caption text-kh-text-muted">{model.items.length} {model.items.length === 1 ? "share" : "shares"}{model.query.page > 1 || model.hasNext ? " on this page" : ""}</p> : null}
     {model.items.length > 0 ? <div aria-hidden="true" className="mt-4 hidden grid-cols-[minmax(0,1fr)_6rem_7rem_4rem_6rem] items-center gap-3 border-b border-kh-border px-3 py-2 text-caption text-kh-text-muted md:grid"><span>Document / link</span><span>Status</span><span>Expires</span><span className="text-right">Views</span><span /></div> : null}
     <ul aria-label="Share links" onKeyDown={navigateListRows} className="mt-4 space-y-2 md:mt-0 md:space-y-0">
       {model.items.map(item => {
@@ -137,7 +137,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
             <span className="col-span-2 text-caption text-kh-text-muted md:col-span-1"><span className="md:sr-only">Expires </span><Timestamp value={item.expiresAt} variant="date" /></span>
             <span className="col-start-2 row-start-2 whitespace-nowrap text-right text-caption tabular-nums text-kh-text-muted md:col-auto md:row-auto">{item.totalViews.toLocaleString()}<span className="md:sr-only"> {item.totalViews === 1 ? "view" : "views"}</span></span>
             <div className="col-start-2 row-start-1 flex items-center gap-1 justify-self-end md:col-auto md:row-auto">
-              {status === "active" ? <Button variant="ghost" size="sm" icon aria-label={`Copy link for ${item.title} · ${item.label ?? "Untitled link"}`} disabled={busy !== null} onClick={() => void copy(item)}><Copy size={15} aria-hidden="true" /></Button> : null}
+              {status === "active" ? <Button variant="ghost" size="sm" icon className="kh-row-action" aria-label={`Copy link for ${item.title} · ${item.label ?? "Untitled link"}`} disabled={busy !== null} onClick={() => void copy(item)}><Copy size={15} aria-hidden="true" /></Button> : null}
               <MenuRoot>
                 <MenuTrigger aria-label={actionLabel} disabled={busy !== null} className={buttonClasses({ variant: "ghost", icon: true, size: "sm", className: "kh-row-action" })}><MoreHorizontal size={15} aria-hidden="true" /></MenuTrigger>
                 <MenuContent align="end" className="min-w-40">
@@ -160,5 +160,5 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
     </ul>
     <ConfirmDialog open={!!confirmedItem} onOpenChange={open => { if (!open) setConfirming(null); }} title="Revoke share link?" description={<>Revoke “{confirmedItem?.label ?? "Untitled link"}” for {confirmedItem?.title}? Anyone holding this link will lose access. This cannot be undone.</>} cancelLabel="Keep" confirmLabel="Confirm revoke" onConfirm={() => { if (confirming) void revoke(confirming); }} />
     {model.query.page > 1 || model.hasNext ? <nav aria-label="Share pages" className="mt-4 flex items-center gap-4 text-body"><span className="text-kh-text-muted">Page {model.query.page}</span>{model.query.page > 1 ? <Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page - 1)}>Previous</Link> : null}{model.hasNext ? <Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page + 1)}>Next</Link> : null}</nav> : null}
-  </main>;
+  </>;
 }

@@ -128,12 +128,27 @@ export class DocumentReviewService {
   async listFollowedDiscussions(caller: CallerContext): Promise<{ items: FollowedDiscussionView[] }> {
     return this.uow.run(async r => {
       const items: FollowedDiscussionView[] = [];
-      for (const { thread, link, summary } of await this.followedThreads(r, caller.identity.id)) {
+      const followed = await this.followedThreads(r, caller.identity.id);
+      const documentIds = new Set<string>();
+      const authorIds = new Set<string>();
+      for (const { thread, summary } of followed) {
+        if ("unavailable" in summary) continue;
+        documentIds.add(thread.documentId);
+        authorIds.add(summary.latest.authorUserId);
+      }
+      const revisions = new Map(
+        (await r.revisions.findCurrentByIds([...documentIds]))
+          .map(revision => [revision.documentId, revision]),
+      );
+      const users = new Map(
+        (await r.users.findByIds([...authorIds]))
+          .map(user => [user.id, user]),
+      );
+      for (const { thread, link, summary } of followed) {
         if ("unavailable" in summary) { items.push({ threadId: thread.id, linkAvailable: false }); continue; }
-        const revision = await r.revisions.findCurrent(thread.documentId);
         items.push({
-          threadId: thread.id, linkAvailable: true, token: link!.token, documentTitle: revision?.title ?? "", threadStatus: thread.status,
-          authorName: (await r.users.findById(summary.latest.authorUserId))?.name,
+          threadId: thread.id, linkAvailable: true, token: link!.token, documentTitle: revisions.get(thread.documentId)?.title ?? "", threadStatus: thread.status,
+          authorName: users.get(summary.latest.authorUserId)?.name,
           excerpt: [...summary.latest.body].slice(0, EXCERPT_LIMIT).join(""), latestAt: summary.latest.createdAt, unread: summary.unread,
         });
       }
@@ -160,11 +175,15 @@ export class DocumentReviewService {
   }
   /**
    * The caller's followed discussions with their link's state, judged now.
-   * Comments come in one query; links and their judgement once per document and link.
-   * ponytail: at most FOLLOW_LIMIT follows, one thread lookup each; cursor paging and one joined query once readers follow more.
+   * Comments, threads, revisions and users come in batches; links and their judgement once per document and link.
+   * ponytail: at most FOLLOW_LIMIT follows; cursor paging once readers follow more.
    */
   private async followedThreads(r: KnowledgeRepositories, userId: string) {
     const follows = await r.reviewFollows.listFollowing(userId, FOLLOW_LIMIT);
+    const threads = new Map(
+      (await r.reviewThreads.findByIds(follows.map(follow => follow.threadId)))
+        .map(thread => [thread.id, thread]),
+    );
     const commentsByThread = new Map<string, ReviewComment[]>();
     for (const comment of await r.reviewComments.listByThreads(follows.map(follow => follow.threadId))) {
       const list = commentsByThread.get(comment.threadId);
@@ -174,7 +193,7 @@ export class DocumentReviewService {
     const validByLink = new Map<string, boolean>();
     const found = [];
     for (const follow of follows) {
-      const thread = await r.reviewThreads.findById(follow.threadId);
+      const thread = threads.get(follow.threadId);
       if (!thread) continue;
       if (!linksByDocument.has(thread.documentId)) linksByDocument.set(thread.documentId, await r.shareLinks.listByDocument(thread.documentId));
       const link = linksByDocument.get(thread.documentId)!.find(candidate => candidate.id === follow.shareLinkId);
@@ -191,17 +210,28 @@ export class DocumentReviewService {
    */
   private async followViews(r: KnowledgeRepositories, userId: string): Promise<ShareCommentNotificationView[]> {
     const views: ShareCommentNotificationView[] = [];
-    const titles = new Map<string, string>();
-    const authorNames = new Map<string, string | undefined>();
-    for (const { follow, thread, link, summary } of await this.followedThreads(r, userId)) {
+    const followed = await this.followedThreads(r, userId);
+    const documentIds = new Set<string>();
+    const authorIds = new Set<string>();
+    for (const { thread, summary } of followed) {
+      if ("unavailable" in summary) continue;
+      documentIds.add(thread.documentId);
+      if (summary.latestReply) authorIds.add(summary.latestReply.authorUserId);
+    }
+    const titles = new Map(
+      (await r.revisions.findCurrentByIds([...documentIds]))
+        .map(revision => [revision.documentId, revision.title]),
+    );
+    const names = new Map(
+      (await r.users.findByIds([...authorIds]))
+        .map(user => [user.id, user.name]),
+    );
+    for (const { follow, thread, link, summary } of followed) {
       const base = { id: `${FOLLOW_PREFIX}${thread.id}`, workspaceId: "", documentId: "", sourceId: "", threadId: thread.id };
       if ("unavailable" in summary) { views.push({ ...base, kind: "FOLLOW", documentTitle: "", commentId: "", authorName: undefined, excerpt: "", createdAt: follow.seenAt, readAt: follow.seenAt, threadStatus: "OPEN", linkAvailable: false }); continue; }
       if (!summary.latestReply) continue;
-      if (!titles.has(thread.documentId)) titles.set(thread.documentId, (await r.revisions.findCurrent(thread.documentId))?.title ?? "");
-      const authorId = summary.latestReply.authorUserId;
-      if (!authorNames.has(authorId)) authorNames.set(authorId, (await r.users.findById(authorId))?.name);
       views.push({
-        ...projectShareCommentNotification({ ...base, documentTitle: titles.get(thread.documentId)!, commentId: summary.latestReply.id, authorName: authorNames.get(authorId), body: summary.latestReply.body, createdAt: summary.latestReply.createdAt, readAt: summary.unread > 0 ? null : follow.seenAt, threadStatus: thread.status }),
+        ...projectShareCommentNotification({ ...base, documentTitle: titles.get(thread.documentId) ?? "", commentId: summary.latestReply.id, authorName: names.get(summary.latestReply.authorUserId), body: summary.latestReply.body, createdAt: summary.latestReply.createdAt, readAt: summary.unread > 0 ? null : follow.seenAt, threadStatus: thread.status }),
         kind: "FOLLOW", token: link!.token, replyCount: summary.unread, linkAvailable: true,
       });
     }

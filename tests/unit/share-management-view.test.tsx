@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, vi, afterEach } from "vitest";
 import { ShareManagementView } from "@/components/knowledge/share-management-view";
 import type { ManagedShareLink } from "@/modules/knowledge/domain/share-management";
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }), useSearchParams: () => new URLSearchParams() }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => vi.fn() }));
 vi.mock("@/components/shell/use-workspace-authorization", () => ({ requestWorkspaceAccessCheck: vi.fn() }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -65,5 +65,31 @@ it.each([
       expect(links.some(link => link.textContent === "Next")).toBe(next);
       for (const link of links) expect(link.href).toContain("q=guide");
     }
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});
+
+it("puts the count on the toolbar row and hides the copy action at rest", async () => {
+  const item: ManagedShareLink = { id: "link", documentId: "doc", sourceId: "source", title: "Guide", sourceName: "Wiki", label: "For team", path: "/s/token", status: "active", createdAt: new Date(), expiresAt: new Date(Date.now() + 86400000), revokedAt: null, totalViews: 3, lastViewedAt: null };
+  const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+  try {
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={{ items: [item], query: { q: "", status: "all", page: 1 }, hasNext: false }} />));
+    const count = host.querySelector('[role="status"]')!;
+    expect(count.textContent).toBe("1 share");
+    expect(count.className).toContain("ml-auto");
+    const search = host.querySelector<HTMLInputElement>("#shares-query")!;
+    expect(search.parentElement?.className).toContain("sm:w-72");
+    expect(search.parentElement?.className).not.toContain("sm:flex-1");
+    expect(search.closest("form")?.className).toContain("w-full");
+    const copy = host.querySelector('button[aria-label="Copy link for Guide · For team"]')!;
+    expect(copy.className).toContain("kh-row-action");
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});
+
+it("shows no count when the list is empty", async () => {
+  const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+  try {
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={{ items: [], query: { q: "", status: "active", page: 1 }, hasNext: false }} />));
+    expect(host.querySelector('[role="status"]')).toBeNull();
+    expect(host.textContent).toContain("No active share links.");
   } finally { await act(async () => root.unmount()); host.remove(); }
 });

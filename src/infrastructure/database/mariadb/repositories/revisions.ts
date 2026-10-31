@@ -101,6 +101,17 @@ export class MariaDbRevisionRepository implements RevisionRepository {
     return rows[0] ? mapRevision(rows[0]) : null;
   }
 
+  async findCurrentByIds(documentIds: readonly string[]): Promise<KnowledgeRevision[]> {
+    if (documentIds.length === 0) return [];
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT r.* FROM knowledge_revisions r
+       INNER JOIN knowledge_documents d ON d.current_revision_id = r.id AND r.document_id = d.id
+       WHERE d.id IN (${documentIds.map(() => "?").join(",")})`,
+      [...documentIds],
+    );
+    return rows.map(mapRevision);
+  }
+
   async findByRevisionNo(documentId: string, revisionNo: number): Promise<KnowledgeRevision | null> {
     const rows = await this.connection.query<DbRow[]>(
       "SELECT * FROM knowledge_revisions WHERE document_id = ? AND revision_no = ?",
