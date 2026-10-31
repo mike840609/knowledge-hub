@@ -5,7 +5,6 @@ import type { WorkspaceShellModel } from "@/server/knowledge-read";
 import { QuickSearch } from "@/components/search/quick-search";
 import { buttonClasses } from "@/components/ui/button";
 import { DocumentContextBar } from "./document-context-bar";
-import { InboxPopover } from "./inbox-popover";
 
 /**
  * A narrow window's header: the Menu, Search, and the document's title and actions. A wide window has no
@@ -21,7 +20,6 @@ export function Topbar({ model, onMenuClick }: { model: WorkspaceShellModel; onM
       </div>
       <QuickSearch workspaceId={model.workspace.id} />
       <DocumentContextBar workspaceId={model.workspace.id} className="flex-1 px-3" />
-      {model.access.workspace.type === "PERSONAL" ? <div className="shrink-0 pr-2"><InboxPopover workspaceId={model.workspace.id} placement="mobile" /></div> : null}
     </header>
   );
 }

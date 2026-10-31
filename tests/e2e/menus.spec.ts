@@ -82,33 +82,40 @@ test("the rails' density is chosen from the user menu, sizes the rows, and persi
   const rowHeight = async () => (await graphRow.boundingBox())?.height;
   const fontSize = () => graphRow.evaluate((element) => getComputedStyle(element).fontSize);
 
-  // Compact is the default, before anyone has chosen.
-  expect(await density()).toBe("compact");
-  expect(await rowHeight()).toBe(28);
-  expect(await fontSize()).toBe("13px");
-
-  await page.getByLabel(/^Account: /).click();
-  const [compactBox, comfortableBox] = await Promise.all([
-    page.getByRole("menuitemradio", { name: "Compact" }).boundingBox(),
-    page.getByRole("menuitemradio", { name: "Comfortable" }).boundingBox(),
-  ]);
-  expect(compactBox && comfortableBox).toBeTruthy();
-  expect(Math.abs(compactBox!.y - comfortableBox!.y)).toBeLessThanOrEqual(1);
-  await page.getByRole("menuitemradio", { name: "Comfortable" }).click();
+  // Comfortable is the default, before anyone has chosen.
   expect(await density()).toBe("comfortable");
   expect(await rowHeight()).toBe(32);
   expect(await fontSize()).toBe("14px");
-  expect(await page.evaluate(() => localStorage.getItem("kh:density"))).toBe("comfortable");
-
-  // Stamped before first paint, so a reload opens comfortable without a step through compact.
-  await page.reload();
-  expect(await density()).toBe("comfortable");
-  expect(await rowHeight()).toBe(32);
 
   await page.getByLabel(/^Account: /).click();
-  await expect(page.getByRole("menuitemradio", { name: "Comfortable" })).toHaveAttribute("aria-checked", "true");
   await page.getByRole("menuitemradio", { name: "Compact" }).click();
+  expect(await density()).toBe("compact");
   expect(await rowHeight()).toBe(28);
+  expect(await fontSize()).toBe("13px");
+  expect(await page.evaluate(() => localStorage.getItem("kh:density"))).toBe("compact");
+
+  // Stamped before first paint, so a reload opens compact without a step through comfortable.
+  await page.reload();
+  expect(await density()).toBe("compact");
+  expect(await rowHeight()).toBe(28);
+
+  await page.getByLabel(/^Account: /).click();
+  await expect(page.getByRole("menuitemradio", { name: "Compact" })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("menuitemradio", { name: "Comfortable" }).click();
+  expect(await rowHeight()).toBe(32);
+});
+
+test("Comfortable is offered before Compact in the density row", async ({ page }) => {
+  await page.goto(KNOWLEDGE);
+  await page.getByLabel(/^Account: /).click();
+  const [comfortableBox, compactBox] = await Promise.all([
+    page.getByRole("menuitemradio", { name: "Comfortable" }).boundingBox(),
+    page.getByRole("menuitemradio", { name: "Compact" }).boundingBox(),
+  ]);
+  expect(comfortableBox && compactBox).toBeTruthy();
+  // Two choices share the row; the default sits first, left to right.
+  expect(Math.abs(comfortableBox!.y - compactBox!.y)).toBeLessThanOrEqual(1);
+  expect(comfortableBox!.x).toBeLessThan(compactBox!.x);
 });
 
 test("the sidebar display options toggle archived mode", async ({ page }) => {
