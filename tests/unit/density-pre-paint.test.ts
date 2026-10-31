@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { THEME_PRE_PAINT_SCRIPT } from "@/app/theme-script";
 
 /**
- * The head script decides the rails' density before first paint: compact unless comfortable was chosen,
- * and compact whenever storage cannot answer, without disturbing the theme it also stamps.
+ * The head script decides the rails' density before first paint: comfortable unless compact was chosen,
+ * and comfortable whenever storage cannot answer, without disturbing the theme it also stamps.
  */
 function runScript() {
   new Function(THEME_PRE_PAINT_SCRIPT)();
@@ -20,8 +20,14 @@ afterEach(() => {
 });
 
 describe("pre-paint density", () => {
-  it("is compact before anyone has chosen", () => {
-    expect(runScript()).toEqual({ theme: "light", density: "compact" });
+  it("is comfortable before anyone has chosen", () => {
+    expect(runScript()).toEqual({ theme: "light", density: "comfortable" });
+  });
+
+  it("is compact once chosen, alongside a chosen theme", () => {
+    localStorage.setItem("kh:density", "compact");
+    localStorage.setItem("kh:theme", "dark");
+    expect(runScript()).toEqual({ theme: "dark", density: "compact" });
   });
 
   it("is comfortable once chosen, alongside a chosen theme", () => {
@@ -47,13 +53,13 @@ describe("pre-paint density", () => {
     expect(runScript().theme).toBe("dark");
   });
 
-  it("treats a value it does not know as compact", () => {
+  it("treats a value it does not know as comfortable", () => {
     localStorage.setItem("kh:density", "cozy");
-    expect(runScript().density).toBe("compact");
+    expect(runScript().density).toBe("comfortable");
   });
 
-  it("falls back to light and compact when storage throws", () => {
+  it("falls back to light and comfortable when storage throws", () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("blocked"); });
-    expect(runScript()).toEqual({ theme: "light", density: "compact" });
+    expect(runScript()).toEqual({ theme: "light", density: "comfortable" });
   });
 });

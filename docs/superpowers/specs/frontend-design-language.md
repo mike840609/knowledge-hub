@@ -933,7 +933,7 @@ have painted anything, so this is the cost of not having two blocks of
 identical dark values that must be edited together.
 
 Density is kept the same way: `kh:density` in storage, `data-density` stamped
-by the same pre-paint script (`compact` unless `comfortable` was chosen), and
+by the same pre-paint script (`comfortable` unless `compact` was chosen), and
 changed only from the account menu. It sizes the rails and nothing else
 (§15, "Rows sit on the ladder").
 
@@ -1086,14 +1086,14 @@ the reader's **density**, chosen under Density in the account menu:
 
 | Density | Row | Label |
 | --- | --- | --- |
-| Compact (default) | 28px, the reference's height | `body-sm` (13px) |
-| Comfortable | 32px, the `md` rung | `body` (14px) |
+| Comfortable (default) | 32px, the `md` rung | `body` (14px) |
+| Compact | 28px, the reference's height | `body-sm` (13px) |
 
-Comfortable is the rail as it was before compact existed. Compact was first
-refused on the ground that a rung is not added for one surface; it was made
-anyway because at 32px the rails were the one place the density difference
-from the reference showed, and the explorer is the surface read most. It is
-not a rung: no button, field or menu row takes it, and the floated `sm`
+Comfortable is the default and the rail as it was before compact existed. Compact
+was first refused on the ground that a rung is not added for one surface; it was
+made an option anyway because at 32px the rails were the one place the density
+difference from the reference showed, and the explorer is the surface read most.
+It is not a rung: no button, field or menu row takes it, and the floated `sm`
 control still fits with 2px either side.
 
 A rail row carries `kh-rail-row` (its height, from `--kh-rail-row-height`) and,

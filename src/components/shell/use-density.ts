@@ -8,11 +8,11 @@ export type Density = "compact" | "comfortable";
 export const DENSITY_STORAGE_KEY = "kh:density";
 
 /**
- * How tall the rails' rows are: compact (28px, 13px labels) unless the reader picks comfortable (32px,
- * 14px). Kept the way the theme is kept — an attribute on <html> the stylesheet reads, stamped before
- * first paint — so the rails never jump on load.
+ * How tall the rails' rows are: comfortable (32px, 14px) unless the reader picks compact (28px, 13px).
+ * Kept the way the theme is kept — an attribute on <html> the stylesheet reads, stamped before first
+ * paint — so the rails never jump on load.
  */
-const DEFAULT_DENSITY: Density = "compact";
+const DEFAULT_DENSITY: Density = "comfortable";
 
 function isDensity(value: string | null): value is Density {
   return value === "compact" || value === "comfortable";

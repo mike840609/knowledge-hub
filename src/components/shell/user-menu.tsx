@@ -88,13 +88,13 @@ export function UserMenu({ identityName, identityEmpId, workspaceId, compact = f
             onValueChange={(value) => setDensity(value as Density)}
             className="grid grid-cols-2 gap-0.5 px-1"
           >
-            <MenuRadioItem compact value="compact" closeOnClick={false}>
-              <Rows4 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <span>Compact</span>
-            </MenuRadioItem>
             <MenuRadioItem compact value="comfortable" closeOnClick={false}>
               <Rows3 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               <span>Comfortable</span>
+            </MenuRadioItem>
+            <MenuRadioItem compact value="compact" closeOnClick={false}>
+              <Rows4 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>Compact</span>
             </MenuRadioItem>
           </MenuRadioGroup>
         </MenuGroup>
