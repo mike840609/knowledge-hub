@@ -7,7 +7,7 @@ import { SampleWikiImport } from "./sample-wiki-import";
 
 import { useRouter } from "next/navigation";
 import { requestWorkspaceAccessCheck, useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -543,7 +543,8 @@ export function FolderImportForm({
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [state.kind]);
-  useEffect(() => {
+  // Layout timing so the host disables dismissal before the busy frame paints.
+  useLayoutEffect(() => {
     onBusyChange?.(busy);
   }, [busy, onBusyChange]);
   const status = statusText(state, now);

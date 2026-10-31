@@ -19,6 +19,7 @@ export function ImportFolderDialog({
 }): React.JSX.Element {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(true);
   useEffect(() => {
     if (!busy) return;
     const blockSearch = (event: KeyboardEvent) => {
@@ -31,8 +32,16 @@ export function ImportFolderDialog({
     return () => window.removeEventListener("keydown", blockSearch, true);
   }, [busy]);
 
+  function requestClose(): void {
+    // Close locally first: a history entry that refuses to navigate must not
+    // leave the dialog on screen with no way out.
+    if (busy || !open) return;
+    setOpen(false);
+    router.back();
+  }
+
   return (
-    <Dialog.Root open onOpenChange={(next) => { if (!next && !busy) router.back(); }}>
+    <Dialog.Root open={open} onOpenChange={(next) => { if (!next) requestClose(); }}>
       <Dialog.Portal>
         <Dialog.Backdrop className={dialogBackdropClasses()} />
         <Dialog.Popup className={dialogPopupClasses("w-[min(40rem,92vw)] max-h-[85vh] overflow-y-auto")}>

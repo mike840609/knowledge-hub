@@ -64,10 +64,11 @@ function closeButton(): HTMLButtonElement {
   return element;
 }
 
-it("goes back to the Sources history entry when closed", () => {
+it("goes back to the Sources history entry when closed, and still closes if navigation no-ops", () => {
   render();
   act(() => closeButton().click());
   expect(state.back).toHaveBeenCalledOnce();
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
 });
 
 it("keeps the dialog open while the import is running", () => {
