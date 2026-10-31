@@ -93,6 +93,35 @@ it("unlocks immediately when a slow folder scan is cancelled", async () => {
   await act(async () => { cancel.click(); });
   expect(closeButton().disabled).toBe(false);
   expect(fetcher).not.toHaveBeenCalled();
+  await act(async () => { release([]); });
+});
+
+it("waits for a cancelled scan to finish before starting another scan", async () => {
+  act(() => root.render(<ImportFolderDialog workspaceId="w1" canImport limits={limits} />));
+  await act(async () => { chooseFolderButton().click(); });
+  const finishFirst = release;
+  const cancel = () => [...document.querySelectorAll("button")].find((button) => button.textContent === "Cancel import")!;
+  await act(async () => { cancel().click(); });
+  await act(async () => { chooseFolderButton().click(); });
+  expect(state.collect).toHaveBeenCalledTimes(1);
+  await act(async () => { cancel().click(); });
+  expect(closeButton().disabled).toBe(false);
+  await act(async () => { finishFirst([]); });
+  expect(state.collect).toHaveBeenCalledTimes(1);
+});
+
+it("starts the next scan once the cancelled read settles", async () => {
+  act(() => root.render(<ImportFolderDialog workspaceId="w1" canImport limits={limits} />));
+  await act(async () => { chooseFolderButton().click(); });
+  const finishFirst = release;
+  const cancel = [...document.querySelectorAll("button")].find((button) => button.textContent === "Cancel import")!;
+  await act(async () => { cancel.click(); });
+  await act(async () => { chooseFolderButton().click(); });
+  expect(state.collect).toHaveBeenCalledTimes(1);
+  await act(async () => { finishFirst([]); });
+  expect(state.collect).toHaveBeenCalledTimes(2);
+  await act(async () => { release([]); });
+  expect(closeButton().disabled).toBe(false);
 });
 
 it("locks and permits cancellation while the sample wiki is loading", async () => {

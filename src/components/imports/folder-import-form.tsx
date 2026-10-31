@@ -97,6 +97,19 @@ function assertNotCancelled(signal?: AbortSignal): void {
   }
 }
 
+// A cancelled getFile() cannot be interrupted by the browser. Serialize native
+// scans across form instances so a new import waits for that read to settle.
+let folderScanTail: Promise<void> = Promise.resolve();
+
+function queueFolderScan(handle: FileSystemDirectoryHandle, signal: AbortSignal): Promise<File[]> {
+  const scan = folderScanTail.then(() => {
+    assertNotCancelled(signal);
+    return collectHandleFiles(handle, signal);
+  });
+  folderScanTail = scan.then(() => {}, () => {});
+  return scan;
+}
+
 async function buildManifest(
   staged: StagedFile[],
   limits: FolderImportClientLimits,
@@ -609,7 +622,7 @@ export function FolderImportForm({
       const files = await new Promise<File[]>((resolve, reject) => {
         const cancelled = () => reject(Object.assign(new Error("Import was cancelled."), { code: "IMPORT_CANCELLED" }));
         controller.signal.addEventListener("abort", cancelled, { once: true });
-        collectHandleFiles(handle, controller.signal).then(resolve, reject).finally(() => controller.signal.removeEventListener("abort", cancelled));
+        queueFolderScan(handle, controller.signal).then(resolve, reject).finally(() => controller.signal.removeEventListener("abort", cancelled));
       });
       checkActive();
       if (files.length === 0) { setState({ kind: "IDLE" }); return; }
