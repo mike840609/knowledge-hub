@@ -420,4 +420,49 @@ describe("tree dragging", () => {
     await act(async () => { fire(rowFor("A"), "dragstart"); fire(target, "drop"); });
     expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:A", position: Number.MAX_SAFE_INTEGER });
   });
+  it("unlocks after a successful no-op append and an unchanged tree refresh", async () => {
+    const folder: KnowledgeTreeItem = { type: "folder", id: "n:F", parentId: null, label: "F", position: 0, status: "ACTIVE" };
+    const original = [folder, doc("A", 0, "n:F"), doc("B", 1, "n:F")];
+    const onReorder = vi.fn(async () => true);
+    const { rerender } = render({ items: original, onReorder, folderActions: () => [moveAction("folder.move")] });
+    const header = rowFor("F").querySelector<HTMLElement>("[data-row-node-id]")!;
+    const next = rowFor("B");
+    const bounds = { top: 0, bottom: 20, height: 20, left: 0, right: 100, width: 100, x: 0, y: 0, toJSON: () => ({}) };
+    header.getBoundingClientRect = () => bounds;
+    next.getBoundingClientRect = () => bounds;
+    const fire = (element: HTMLElement, name: string, y: number) => {
+      const event = new Event(name, { bubbles: true, cancelable: true });
+      Object.defineProperties(event, { dataTransfer: { value: { effectAllowed: "", setData: vi.fn() } }, clientY: { value: y } });
+      element.dispatchEvent(event);
+      return event;
+    };
+    await act(async () => { fire(next, "dragstart", 10); fire(header, "drop", 10); });
+    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:B", position: Number.MAX_SAFE_INTEGER });
+    // Successful append of an already-last node returns the same stored positions.
+    rerender({ items: original.map((item) => ({ ...item })) });
+    let start: Event | undefined;
+    await act(async () => { start = fire(rowFor("A"), "dragstart", 10); fire(rowFor("B"), "drop", 19); });
+    expect(start?.defaultPrevented).toBe(false);
+    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:A", position: 1 });
+    expect(onReorder).toHaveBeenCalledTimes(2);
+  });
+
+  it("waits for the first keyboard PATCH response before dispatching a queued reorder", async () => {
+    let finishFirst!: (ok: boolean) => void;
+    const onReorder = vi.fn()
+      .mockImplementationOnce(() => new Promise<boolean>((resolve) => { finishFirst = resolve; }))
+      .mockImplementation(async () => true);
+    const { rerender } = render({ onReorder });
+    act(() => {
+      rowFor("B").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true, cancelable: true }));
+      rowFor("B").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", altKey: true, bubbles: true, cancelable: true }));
+    });
+    rerender({ items: [doc("A", 0), doc("C", 1), doc("B", 2)] });
+    // The matching RSC tree may arrive before the PATCH response; it is not write completion.
+    expect(onReorder).toHaveBeenCalledTimes(1);
+    await act(async () => { finishFirst(true); });
+    expect(onReorder).toHaveBeenCalledTimes(2);
+    expect(onReorder).toHaveBeenLastCalledWith({ nodeId: "n:B", position: 1 });
+  });
+
 });
