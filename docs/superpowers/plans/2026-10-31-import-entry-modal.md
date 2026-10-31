@@ -479,11 +479,11 @@ git commit -m "feat(import): open folder import over Sources"
 - `@modal/[...catchAll]/page.tsx` returns `null`. `default.tsx` alone is not enough: on a soft navigation to a route the slot does not match, Next keeps the slot's active subpage, so the catch-all closes the dialog when the import lands on the Preview.
 - `FolderImportForm` accepts `replaceOnComplete`; `ImportFolderDialog` passes it. A successful modal import replaces the transient `/sources/import` history entry with the Preview, so Back returns to Sources instead of reopening the form.
 - `tests/unit/import-folder-dialog-busy.test.tsx` drives the real form and dialog together and proves the busy lock on the close button and Escape.
-- Minor, deferred: the `onBusyChange` effect runs after paint, so the close control can be enabled for roughly one frame at the PREPARING transition; no upload has started in that window. `Dialog.Root` also stays `open` because dismissal depends on `router.back()`.
+- Minor, deferred at first review: the `onBusyChange` effect ran after paint, so the close control could be enabled for roughly one frame at the PREPARING transition. `Dialog.Root` also stayed `open` because dismissal depended on `router.back()`. Both are fixed in the follow-up below.
 
 ## Follow-up verification (2026-10-31)
 
 - The implementation commits are present through `149fe0a7`; unchecked historical steps above do not indicate verified RED runs.
 - Full unit suite: 312 files, 3,568 tests passed. Typecheck and lint passed. The two planned E2E files passed all 14 tests against a fresh production build.
 - Review found that the format guide could navigate away during an import. The dialog now makes the guide unavailable while busy and restores it when idle; the real-form busy test covers this.
-- The previously noted one-frame busy-state delay remains deferred.
+- Follow-up `fix/import-modal-minors` closes the remaining review minors: `onBusyChange` now uses `useLayoutEffect`, `Dialog.Root` is controlled so a refused navigation still hides the dialog, and the intercepted route renders the same `StatusMessage` as the full page when access is missing.
