@@ -452,6 +452,67 @@ describe("publication API: access is re-judged before publication shape", () => 
     );
   });
 
+  it("answers 404 to a non-member for every command on an archived team", async () => {
+    const teamId = await teamWithRoles("Hidden Archived Commands Team", [
+      { user: fixture.mike, role: "OWNER" },
+    ]);
+    const tree = await createFolderTree(fixture.mike, unique("hidden-archived-commands"), [
+      { relative: "a.md", title: "Hidden Archived Commands A", markdown: "a" },
+    ]);
+    const archivedTree = await createFolderTree(fixture.mike, unique("hidden-archived-commands-b"), [
+      { relative: "b.md", title: "Hidden Archived Commands B", markdown: "b" },
+    ]);
+    const activeName = unique("Hidden Archived Commands Publication");
+    const active = await publishTree(fixture.mike, teamId, tree, activeName);
+    const activeSourceId = await publicationSourceId(active.publicationId);
+    const archivedName = unique("Hidden Archived Commands Archived");
+    const archived = await publishTree(fixture.mike, teamId, archivedTree, archivedName);
+    const archivedSourceId = await publicationSourceId(archived.publicationId);
+    as(fixture.mike);
+    expect((await unpublish(request(), ofPublication(archived.publicationId))).status).toBe(204);
+
+    const now = new Date();
+    await fixture.uow.run((repositories) => repositories.workspaces.setWorkspaceLifecycle(
+      teamId, "ARCHIVED", fixture.mike.identity.id, now, now));
+
+    as(outsiderCaller("Archived Commands"));
+    await expectError(
+      await publish(request({
+        teamWorkspaceId: teamId,
+        name: unique("Outsider Archived Publish"),
+        origin: { kind: "DOCUMENT", documentId: tree.documents[0].documentId },
+      })),
+      404,
+      "NOT_FOUND",
+    );
+    await expectError(
+      await preview(request({
+        teamWorkspaceId: teamId,
+        name: unique("Outsider Archived Preview"),
+        origin: { kind: "DOCUMENT", documentId: tree.documents[0].documentId },
+      })),
+      404,
+      "NOT_FOUND",
+    );
+    await expectError(
+      await join(request({ folderNodeId: tree.folderNodeId }), ofPublication(active.publicationId)),
+      404,
+      "NOT_FOUND",
+    );
+    await expectError(
+      await unpublish(request(), ofPublication(active.publicationId)), 404, "NOT_FOUND");
+    await expectError(
+      await restore(request(), ofPublication(archived.publicationId)), 404, "NOT_FOUND");
+    await expectError(
+      await rename(request({ name: "Hijacked Archived" }), ofPublication(active.publicationId)),
+      404,
+      "NOT_FOUND",
+    );
+    expect((await sourceRow(activeSourceId)).status).toBe("ACTIVE");
+    expect((await sourceRow(activeSourceId)).name).toBe(activeName);
+    expect((await sourceRow(archivedSourceId)).status).toBe("ARCHIVED");
+  });
+
   it("hides a document publication from a non-member before refusing its kind", async () => {
     const teamId = await teamWithRoles("Hidden Document Team", [
       { user: fixture.mike, role: "OWNER" },

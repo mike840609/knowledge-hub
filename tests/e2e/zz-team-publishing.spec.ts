@@ -130,11 +130,19 @@ async function treeAddress(page: Page, label: string): Promise<{ sourceId: strin
  * the way in, as it is for the owner's articles.
  */
 async function commentOn(page: Page, passage: string, body: string): Promise<void> {
-  await page.locator("[data-review-document] p").filter({ hasText: passage }).first().hover();
+  // The review document and the target paragraph are rendered asynchronously.
+  // Hovering before they exist is a no-op, leaving the button at opacity 0.
+  const article = page.locator("[data-review-document]");
+  await expect(article).toBeVisible();
+  const target = article.locator("p").filter({ hasText: passage }).first();
+  await expect(target).toBeVisible();
+  await target.hover();
   const paragraph = page.getByRole("button", { name: /^Comment on paragraph:/ }).first();
-  await expect(paragraph).toBeEnabled();
-  // The control is revealed by pointerover on its paragraph: wait for it to be shown, then click it
-  // for real (the canonical paragraph-comment pattern), so actionability and hit-testing are checked.
+  // The control is revealed by pointerover on its paragraph: wait for it to exist
+  // and be shown, then click it for real (the canonical paragraph-comment pattern),
+  // so actionability and hit-testing are checked.
+  await expect(paragraph).toHaveCount(1);
+  await expect(paragraph).toBeVisible();
   await expect(paragraph).toHaveCSS("opacity", "1");
   await paragraph.click();
   const field = page.getByRole("textbox", { name: "Add comment" });

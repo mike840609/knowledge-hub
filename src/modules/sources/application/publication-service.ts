@@ -595,7 +595,7 @@ export class PublicationService {
    */
   async unpublish(caller: CallerContext, publicationId: string): Promise<void> {
     await this.uow.run(async (repositories) => {
-      const publication = await this.lockPublication(repositories, publicationId);
+      const publication = await this.lockPublication(repositories, caller, publicationId);
       const contributions = await repositories.publications.listContributions(publication.id);
       await requirePublicationLifecycleRights(repositories, caller, publication, contributions);
       if (publication.status === "ARCHIVED") return;
@@ -613,7 +613,7 @@ export class PublicationService {
   async restore(caller: CallerContext, publicationId: string): Promise<void> {
     try {
       await this.uow.run(async (repositories) => {
-        const publication = await this.lockPublication(repositories, publicationId);
+        const publication = await this.lockPublication(repositories, caller, publicationId);
         const contributions = await repositories.publications.listContributions(publication.id);
         await requirePublicationLifecycleRights(repositories, caller, publication, contributions);
         if (publication.status === "ACTIVE") return;
@@ -708,7 +708,7 @@ export class PublicationService {
     const next = normalizePublicationName(name);
     try {
       await this.uow.run(async (repositories) => {
-        const publication = await this.lockPublication(repositories, publicationId);
+        const publication = await this.lockPublication(repositories, caller, publicationId);
         const contributions = await repositories.publications.listContributions(publication.id);
         await requirePublicationLifecycleRights(repositories, caller, publication, contributions);
         if (publication.name === next) return;
@@ -744,6 +744,7 @@ export class PublicationService {
    */
   private async lockPublication(
     repositories: SourceRepositories,
+    caller: CallerContext,
     publicationId: string,
   ): Promise<Publication> {
     const routed = await repositories.publications.findById(publicationId);
@@ -756,6 +757,10 @@ export class PublicationService {
     if (!publication || publication.id !== publicationId) {
       throw new NotFoundError("Publication was not found.");
     }
+    // Membership is judged before lifecycle: a non-member of an archived team
+    // must see the same 404 as for an unknown publication, not the archived
+    // state that only a member is entitled to learn.
+    await requireTeamRead(repositories, caller, publication.teamWorkspaceId);
     // Source → Workspace: an archived team blocks every lifecycle command
     // (admin and creator alike) before any write, not only through the
     // capability check in `requirePublicationLifecycleRights`.
@@ -864,14 +869,15 @@ async function requireActiveTeamWithSourceManage(
 ): Promise<void> {
   const workspace = await repositories.workspaces.findById(teamWorkspaceId);
   if (!workspace || workspace.workspaceType !== "TEAM") throw new WorkspaceNotFoundError();
+  const capabilities = await evaluateWorkspaceCapabilities(repositories, caller, teamWorkspaceId);
+  // A caller with no read grant is not a member of this team: hide it exactly
+  // as a missing team is hidden, before the archived state can disclose that
+  // the team exists. A member who can read but not publish is a 403 at the
+  // HTTP edge, without disclosing anything to a non-member.
+  if (!capabilities.has("document.read")) throw new WorkspaceNotFoundError();
   if (workspace.lifecycleState !== "ACTIVE") {
     throw new WorkspaceAccessDeniedError("Publishing requires an active team workspace.");
   }
-  const capabilities = await evaluateWorkspaceCapabilities(repositories, caller, teamWorkspaceId);
-  // A caller with no read grant is not a member of this team: hide it exactly
-  // as a missing team is hidden. A member who can read but not publish is a
-  // 403 at the HTTP edge, without disclosing anything to a non-member.
-  if (!capabilities.has("document.read")) throw new WorkspaceNotFoundError();
   if (!capabilities.has("source.manage")) {
     throw new PublicationAccessDeniedError("Publishing to a team requires source.manage.");
   }

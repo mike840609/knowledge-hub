@@ -727,3 +727,172 @@ describe("publication lifecycle: archived team", () => {
     })).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
   });
 });
+
+describe("publication oracle: non-member vs archived team", () => {
+  /**
+   * A team with only Mike. Ann owns a folder but is not a member, so every
+   * command must answer exactly as for a publication that does not exist.
+   */
+  async function outsiderTeam(): Promise<{
+    teamId: string;
+    active: { publicationId: string; sourceId: string; name: string };
+    archived: { publicationId: string; sourceId: string; name: string };
+    annTree: { folderNodeId: string };
+  }> {
+    const teamId = await createTeamWithRoles("Oracle Team", [
+      { userId: fixture.mike.identity.id, role: "OWNER" },
+    ]);
+    const mikeTree = await createFolderTree(fixture.mike, unique("oracle-mike"), [
+      { relative: "a.md", title: "Oracle Mike", markdown: "mike" },
+    ]);
+    const archivedTree = await createFolderTree(fixture.mike, unique("oracle-archived"), [
+      { relative: "b.md", title: "Oracle Archived", markdown: "archived" },
+    ]);
+    const activeName = unique("Oracle Active");
+    const active = await service.publish(fixture.mike, {
+      teamWorkspaceId: teamId,
+      name: activeName,
+      origin: { kind: "FOLDER", folderNodeId: mikeTree.folderNodeId },
+    });
+    const archivedName = unique("Oracle Archived Publication");
+    const archived = await service.publish(fixture.mike, {
+      teamWorkspaceId: teamId,
+      name: archivedName,
+      origin: { kind: "FOLDER", folderNodeId: archivedTree.folderNodeId },
+    });
+    await service.unpublish(fixture.mike, archived.publicationId);
+    const activeSource = (await fixture.uow.run((repositories) =>
+      repositories.publications.findById(active.publicationId)))!.sourceId;
+    const archivedSource = (await fixture.uow.run((repositories) =>
+      repositories.publications.findById(archived.publicationId)))!.sourceId;
+    const annTree = await createFolderTree(fixture.ann, unique("oracle-ann"), [
+      { relative: "a.md", title: "Oracle Ann", markdown: "ann" },
+    ]);
+    return {
+      teamId,
+      active: { publicationId: active.publicationId, sourceId: activeSource, name: activeName },
+      archived: { publicationId: archived.publicationId, sourceId: archivedSource, name: archivedName },
+      annTree,
+    };
+  }
+
+  async function expectOutsiderHidden(
+    caller: CallerContext,
+    teamId: string,
+    fixtureState: Awaited<ReturnType<typeof outsiderTeam>>,
+  ): Promise<void> {
+    await expect(service.publish(caller, {
+      teamWorkspaceId: teamId,
+      name: unique("Outsider Attempt"),
+      origin: { kind: "FOLDER", folderNodeId: fixtureState.annTree.folderNodeId },
+    })).rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND" });
+    await expect(service.preview(caller, {
+      teamWorkspaceId: teamId,
+      name: unique("Outsider Preview"),
+      origin: { kind: "FOLDER", folderNodeId: fixtureState.annTree.folderNodeId },
+    })).rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND" });
+    await expect(service.join(caller, {
+      publicationId: fixtureState.active.publicationId,
+      folderNodeId: fixtureState.annTree.folderNodeId,
+      acknowledgeLowOverlap: true,
+    })).rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND" });
+    await expect(service.unpublish(caller, fixtureState.active.publicationId))
+      .rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND" });
+    await expect(service.restore(caller, fixtureState.archived.publicationId))
+      .rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND" });
+    await expect(service.rename(caller, fixtureState.active.publicationId, unique("Outsider Renamed")))
+      .rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND" });
+  }
+
+  it("hides an archived team from a non-member on every publication command", async () => {
+    const state = await outsiderTeam();
+    await new TeamWorkspaceService(fixture.uow).archiveTeamWorkspace(fixture.mike, state.teamId);
+
+    await expectOutsiderHidden(fixture.ann, state.teamId, state);
+
+    // Nothing was written by any refused command.
+    expect(await sourceStatus(state.active.sourceId)).toBe("ACTIVE");
+    expect(await sourceName(state.active.sourceId)).toBe(state.active.name);
+    expect(await sourceStatus(state.archived.sourceId)).toBe("ARCHIVED");
+    expect(await sourceName(state.archived.sourceId)).toBe(state.archived.name);
+    const contributions = await fixture.uow.run((repositories) =>
+      repositories.publications.listContributions(state.active.publicationId));
+    expect(contributions.some((contribution) => contribution.userId === fixture.ann.identity.id))
+      .toBe(false);
+  });
+
+  it("keeps an active team hidden from a non-member on every publication command", async () => {
+    const state = await outsiderTeam();
+
+    await expectOutsiderHidden(fixture.ann, state.teamId, state);
+
+    expect(await sourceStatus(state.active.sourceId)).toBe("ACTIVE");
+    expect(await sourceName(state.active.sourceId)).toBe(state.active.name);
+    expect(await sourceStatus(state.archived.sourceId)).toBe("ARCHIVED");
+  });
+
+  it("keeps the archived outcome for a member of an archived team", async () => {
+    const teamId = await createTeamWithRoles("Oracle Member Team", [
+      { userId: fixture.mike.identity.id, role: "OWNER" },
+      { userId: fixture.ann.identity.id, role: "EDITOR" },
+    ]);
+    const mikeTree = await createFolderTree(fixture.mike, unique("oracle-member-mike"), [
+      { relative: "a.md", title: "Oracle Member Mike", markdown: "mike" },
+    ]);
+    const archivedTree = await createFolderTree(fixture.mike, unique("oracle-member-archived"), [
+      { relative: "b.md", title: "Oracle Member Archived", markdown: "archived" },
+    ]);
+    const annTree = await createFolderTree(fixture.ann, unique("oracle-member-ann"), [
+      { relative: "a.md", title: "Oracle Member Ann", markdown: "ann" },
+    ]);
+    const activeName = unique("Oracle Member Active");
+    const active = await service.publish(fixture.mike, {
+      teamWorkspaceId: teamId,
+      name: activeName,
+      origin: { kind: "FOLDER", folderNodeId: mikeTree.folderNodeId },
+    });
+    const archived = await service.publish(fixture.mike, {
+      teamWorkspaceId: teamId,
+      name: unique("Oracle Member Archived Publication"),
+      origin: { kind: "FOLDER", folderNodeId: archivedTree.folderNodeId },
+    });
+    await service.unpublish(fixture.mike, archived.publicationId);
+    const activeSource = (await fixture.uow.run((repositories) =>
+      repositories.publications.findById(active.publicationId)))!.sourceId;
+
+    await new TeamWorkspaceService(fixture.uow).archiveTeamWorkspace(fixture.mike, teamId);
+
+    for (const caller of [fixture.mike, fixture.ann]) {
+      // Membership is established, so the archived state is the answer: 403 for
+      // publish/preview/join, 409 for the lifecycle commands.
+      await expect(service.publish(caller, {
+        teamWorkspaceId: teamId,
+        name: unique("Member Attempt"),
+        origin: { kind: "FOLDER", folderNodeId: annTree.folderNodeId },
+      })).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
+      await expect(service.preview(caller, {
+        teamWorkspaceId: teamId,
+        name: unique("Member Preview"),
+        origin: { kind: "FOLDER", folderNodeId: annTree.folderNodeId },
+      })).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
+      await expect(service.join(caller, {
+        publicationId: active.publicationId,
+        folderNodeId: annTree.folderNodeId,
+        acknowledgeLowOverlap: true,
+      })).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
+      await expect(service.unpublish(caller, active.publicationId))
+        .rejects.toMatchObject({ code: "WORKSPACE_ARCHIVED" });
+      await expect(service.rename(caller, active.publicationId, unique("Member Renamed")))
+        .rejects.toMatchObject({ code: "WORKSPACE_ARCHIVED" });
+      await expect(service.restore(caller, archived.publicationId))
+        .rejects.toMatchObject({ code: "WORKSPACE_ARCHIVED" });
+    }
+
+    expect(await sourceStatus(activeSource)).toBe("ACTIVE");
+    expect(await sourceName(activeSource)).toBe(activeName);
+    const contributions = await fixture.uow.run((repositories) =>
+      repositories.publications.listContributions(active.publicationId));
+    expect(contributions.map((contribution) => contribution.userId))
+      .toEqual([fixture.mike.identity.id]);
+  });
+});
