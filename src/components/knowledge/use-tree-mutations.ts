@@ -19,6 +19,13 @@ import {
 
 export type OrganizeResult = { ok: true } | { ok: false; message: string };
 
+export type MoveNodeInput = {
+  nodeId: string;
+  label: string;
+  from: { parentId: string | null; position: number };
+  to: { parentId: string | null; label: string | null; position?: number };
+};
+
 export type TreeMutations = {
   archiveDocument(input: { documentId: string; sourceId: string; title: string }): Promise<void>;
   restoreDocument(input: { documentId: string; sourceId: string; title: string }): Promise<void>;
@@ -30,15 +37,12 @@ export type TreeMutations = {
   createFolder(input: { name: string; parentId: string | null; sourceId: string | null }): Promise<OrganizeResult>;
   renameFolder(input: { nodeId: string; from: string; to: string }): Promise<OrganizeResult>;
   /**
-   * Into a folder, or to the top level with a null parent, last. `from` is where it was, for the Undo;
-   * `to.label` is the folder's name, or null for the top level. For a dialog, like the two above.
+   * Into a folder, or to the top level with a null parent, last — or at `to.position` among that
+   * parent's siblings. `from` is where it was, for the Undo; `to.label` is the folder's name, or null
+   * for the top level. For a dialog, like the two above, a refusal comes back as words to put beside
+   * the field; `report: "toast"` is for the drag surface, which has no field to put them beside.
    */
-  moveNode(input: {
-    nodeId: string;
-    label: string;
-    from: { parentId: string | null; position: number };
-    to: { parentId: string | null; label: string | null };
-  }): Promise<OrganizeResult>;
+  moveNode(input: MoveNodeInput, report?: "dialog" | "toast"): Promise<OrganizeResult>;
   /**
    * To another place among its own siblings, from the keyboard. There is no dialog to put a refusal
    * beside, so it is said as a toast here, and there is no Undo toast either: a step is undone by the
@@ -129,9 +133,12 @@ export function useTreeMutations(): TreeMutations {
     }
 
     return {
-      async moveNode({ nodeId, label, from, to }) {
+      async moveNode({ nodeId, label, from, to }, report = "dialog") {
         try {
-          await governanceRequest(`/api/tree-nodes/${nodeId}`, "PATCH", { parentId: to.parentId });
+          await governanceRequest(`/api/tree-nodes/${nodeId}`, "PATCH", {
+            parentId: to.parentId,
+            ...(to.position !== undefined ? { position: to.position } : {}),
+          });
           toast({
             message: movedNode(label, to.label),
             undo: {
@@ -145,7 +152,10 @@ export function useTreeMutations(): TreeMutations {
           refresh();
           return { ok: true };
         } catch (failure) {
-          return { ok: false, message: organizeFailure(governanceFailure(failure)) };
+          const message = organizeFailure(governanceFailure(failure));
+          // The dialog shows the words beside its field; a drag has no field, so it is never silent.
+          if (report === "toast") toast({ message, tone: "danger" });
+          return { ok: false, message };
         }
       },
       async reorderNode({ nodeId, position }) {

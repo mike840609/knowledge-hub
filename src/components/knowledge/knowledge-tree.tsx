@@ -17,6 +17,7 @@ import type { Action } from "@/components/actions/action-registry";
 import { isSingleKeyShortcut } from "@/lib/shortcut-keys";
 import { REVEAL_FOLDER_EVENT } from "./move-request";
 import { CLEAR_FILTER_TO_REORDER, alreadyAtEdge, reorderedNode } from "./organize-messages";
+import type { MoveNodeInput } from "./use-tree-mutations";
 import { Status } from "@/components/ui/status";
 import { Tooltip } from "@/components/ui/tooltip";
 
@@ -48,6 +49,11 @@ export type KnowledgeTreeProps = {
    * decides which place from what it shows; whether it may is the actions' say, and the server's.
    */
   onReorder: (input: { nodeId: string; position: number }) => Promise<boolean>;
+  /**
+   * Puts a node into another folder, or at a place among that folder's siblings, from a drop. The
+   * tree decides where from what it shows; whether it may is the actions' say, and the server's.
+   */
+  onMove: (input: MoveNodeInput) => Promise<boolean>;
 };
 
 function documentHref(

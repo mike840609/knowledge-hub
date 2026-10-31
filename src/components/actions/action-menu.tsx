@@ -251,6 +251,13 @@ type RowProps = {
   "aria-current"?: "page";
   "aria-selected"?: boolean;
   "data-node-id"?: string;
+  /** The row header a drag starts from, and the id hit-testing finds it by (tree drag spec). */
+  draggable?: boolean;
+  "data-row-node-id"?: string;
+  onDragStart?: React.DragEventHandler;
+  onDragOver?: React.DragEventHandler;
+  onDrop?: React.DragEventHandler;
+  onDragEnd?: React.DragEventHandler;
 };
 
 export function RowContextMenu({

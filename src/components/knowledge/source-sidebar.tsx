@@ -395,6 +395,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                   })}
                   onRunAction={runAction}
                   onReorder={async (input) => (await mutations.reorderNode(input)).ok}
+                  onMove={async (input) => (await mutations.moveNode(input, "toast")).ok}
                 /> : null}
               </div>
             </section>

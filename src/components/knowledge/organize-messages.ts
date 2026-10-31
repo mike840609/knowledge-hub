@@ -36,6 +36,10 @@ export const movedNode = (name: string, destination: string | null) =>
 export const reorderedNode = (name: string, direction: "up" | "down", index: number, count: number) =>
   `Moved ${quote(name)} ${direction}. Position ${index + 1} of ${count}.`;
 
+/** Said aloud after a drop: a drag has no direction the way a key press does, so only where it landed. */
+export const placedNode = (name: string, index: number, count: number) =>
+  `Placed ${quote(name)}. Position ${index + 1} of ${count}.`;
+
 export const alreadyAtEdge = (name: string, edge: "first" | "last") => `${quote(name)} is already ${edge}.`;
 
 /** The tree shows a filtered subset, whose neighbours are not the node's real ones. */
