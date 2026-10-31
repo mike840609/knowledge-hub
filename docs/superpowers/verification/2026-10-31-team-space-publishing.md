@@ -2,7 +2,7 @@
 
 Date: 2026-10-31 (Asia/Taipei).
 Branch: `docs/team-space-publishing`.
-HEAD during the final gates: `0d864ba8` (the independent pre-merge review follow-ups). The feature was originally recorded at `f256bf7d`; `7b8f43dd` fixed five Important findings from the final whole-branch review, `493db35f` fixed the independent review's Critical move-out event and three Important findings, `0b60de70` restored the team `/knowledge/new` URL for the approved composer flow, and `0d864ba8` removed the remaining team create-from-link UI entries (unresolved wikilinks are plain text in the reader, Links panel, local graph and workspace graph). The unit, integration, team e2e and team smoke gates below were re-run on the final HEAD; the personal smoke failure remains the unrelated pre-existing one.
+HEAD during the final gates: `9590c21e` (the agreed Minor batch). The feature was originally recorded at `f256bf7d`; `7b8f43dd` fixed five Important findings from the final whole-branch review, `493db35f` fixed the independent review's Critical move-out event and three Important findings, `0b60de70` restored the team `/knowledge/new` URL for the approved composer flow, `0d864ba8` removed the remaining team create-from-link UI entries, and `9590c21e` closed the agreed Minor batch (consume race, tree-view rollback, explicit purge mode, lazy per-document metadata, active-team reads, mention mark-read access, skipped-batch progress, single-document overlap warning, join-after-leave resume, header state, and security regression tests). The unit, integration and team smoke gates below were re-run on the final HEAD; the personal smoke failure remains the unrelated pre-existing one.
 Spec: `docs/superpowers/specs/2026-10-30-team-space-publishing-design.md`. Plan: `docs/superpowers/plans/2026-10-31-team-space-publishing.md`.
 
 ## Scope
@@ -18,9 +18,9 @@ Environment: macOS, Node v24.6.0, Playwright 1.63.0 with the installed Chromium,
 | Command | Result |
 | --- | --- |
 | `npm run test:e2e -- tests/e2e/zz-team-publishing.spec.ts` | **PASS (final)** — 7 tests passed; zero failed, flaky or skipped. |
-| `make verify` | **PASS (final)** — unit **343 files / 4,091 tests passed**; `tsc --noEmit` clean; ESLint clean; production build compiled. |
-| `npm run test:integration` | **PASS (final)** — **112 files / 1,143 tests passed**. |
-| `npm run test:e2e:smoke` | **PASS (final)** — **15 tests passed**, 50.0s browser stage; 120.99s including build; 0 failed/flaky/skipped; includes all seven new team flows. |
+| `make verify` | **PASS (final)** — unit **343 files / 4,096 tests passed**; `tsc --noEmit` clean; ESLint clean; production build compiled. |
+| `npm run test:integration` | **PASS (final)** — **112 files / 1,156 tests passed**. (One unrelated `folder-share-read` transient DB error occurred in a parallel full run; the focused file passed and the full rerun passed 112/112.) |
+| `npm run test:e2e:smoke` | **PASS (final)** — **15 tests passed**, 41.5s browser stage; 119.49s including build; 0 failed/flaky/skipped; includes all seven new team flows. |
 | `npm run test:e2e:smoke:personal` | **FAIL (pre-existing, not this feature)** — 3 passed, 1 failed: `personal-workspace.spec.ts` → after “Restore revision 1”, the editor shows the recovered draft (“Persistent draft body”) instead of the restored “Original body”. Reproduced identically at `main` `2aada14f` with the same command (3 passed, 1 failed), where none of this feature's code exists. No product or unrelated test was changed to hide it. |
 | Independent review wave at `493db35f` | **PASS at that point** — unit **341 files / 4,083 tests**; integration **112 files / 1,143 tests**; typecheck and lint clean. The later `0b60de70`/`0d864ba8` follow-ups are covered by the final rows above. |
 
@@ -29,6 +29,8 @@ Environment: macOS, Node v24.6.0, Playwright 1.63.0 with the installed Chromium,
 The final whole-branch review found no Critical issues and five Important ones: team-visible “no longer updated”, reconcile of a pending contribution with no delivery, quadratic publication projection, quadratic sync-notice matching, and missing event/delivery retention. Commit `7b8f43dd` fixed all five and added the retention script; the team e2e, `make verify`, full integration and team smoke were then re-run on that commit and all passed. Later independent-review fixes are recorded below; the final rows above are the final HEAD evidence.
 
 The independent pre-merge review then found one Critical issue (a move out of a published folder never archived the team copy) and three Important ones (default-off retention growth, explorer-wide document reads, and team authoring reachability), plus this record's integration test count was inconsistent between two lines. Commit `493db35f` fixed all of them — including hiding `document.duplicate` — and `0b60de70` restored the team `/knowledge/new` URL because the approved `document-composer-navigation.spec.ts` smoke flow uses a team workspace for the composer. `0d864ba8` then removed the remaining team create-from-link UI entries (reader, Links panel, local graph, workspace graph), so unresolved wikilinks in a team render as plain text; the page is URL-only, which is the documented residual (Unresolved limits 6), not a hidden capability.
+
+The agreed Minor batch at `9590c21e` then closed the remaining correctness/safety gaps: the root-event consume race, tree-view rollback on a lost claim, an explicit purge mode, lazy per-document metadata for collapsed publications, ACTIVE-team reads, access-judged team mention mark-read, skipped-batch catch-up progress, single-document overlap warning, join-after-leave resume, creator/joiner header state, and the security regression tests. The final gates above are that commit. Two new Minor follow-ups remain deferred: the purge/drain event-lock order (deadlock aborts one side; rerun is safe) and the whole-tree checkpoint copy cost on very large publishes.
 
 ## End-to-end cases
 
