@@ -17,7 +17,7 @@
 - `Alt+↑/↓` and the Move dialog keep their behavior and wording.
 - Drag is offered only where `(hover: hover) and (pointer: fine)` matches. Touch is unchanged.
 - No new design token: `--kh-primary` and `kh-bg-selected`.
-- One PATCH per drop; no optimistic reorder.
+- One PATCH per position-changing drop; a same-parent drop at the same stored numeric position sends none. An append still reaches the server because archived siblings may be hidden; no optimistic reorder.
 - No new copy except `placedNode`: `Placed “X”. Position N of M.` (N is 1-based, counted over visible siblings).
 - `make verify` must pass. Integration: `npx tsx scripts/test/integration.ts tests/integration/organize-api.test.ts`. E2E: `npx tsx scripts/test/e2e.ts --grep @tree-drag`.
 

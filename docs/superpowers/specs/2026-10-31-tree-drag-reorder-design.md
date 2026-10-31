@@ -143,7 +143,7 @@ drop cannot be translated. Rows stay draggable, and `dragstart` cancels itself
 and announces `CLEAR_FILTER_TO_REORDER` — the same sentence the keyboard uses —
 so a pointer user learns why, rather than finding an inert row.
 
-**One request per drop**, chosen by the destination:
+**At most one request per drop**, chosen by the destination:
 
 | Drop | Request | Feedback |
 | --- | --- | --- |
@@ -151,7 +151,9 @@ so a pointer user learns why, rather than finding an inert row.
 | into the folder it already lives in | `{ position: APPEND }` → `reorderNode` | live region |
 | another folder, before/after one of its children | `{ parentId, position }` → `moveNode` | toast `Moved "X" to "Y".` with Undo |
 | into another folder | `{ parentId }` (server appends) → `moveNode` | toast with Undo |
-| a drop that changes nothing | still one request; the server renumbers idempotently | the same feedback as its row above |
+| a same-parent drop whose numeric position is unchanged | no request; clear the drag immediately | live region reports the current position |
+
+An append into the current folder still goes to the server: hidden archived siblings mean visible order alone cannot prove it would be unchanged.
 
 `APPEND` is `Number.MAX_SAFE_INTEGER`; `placeNodeAtIndex` clamps it, so the node
 lands after every sibling including hidden archived ones — exactly where the
@@ -255,7 +257,7 @@ token is introduced.
   another and read the order back; drag a document into a folder and undo it;
   drag a folder above another; hover a collapsed folder for half a second
   without dropping and assert it opened; separately, drop onto a collapsed
-  folder and assert it opened; assert exactly one PATCH per drop; assert the
+  folder and assert it opened; assert exactly one PATCH per position-changing drop; assert the
   seeded `SOURCE_MANAGED` source's rows are not draggable. Reuses `childrenOf`
   and `row` from `tests/e2e/fixtures/organize.ts` and the local `expectOrder`
   shape of `zz-organize-move.spec.ts`.

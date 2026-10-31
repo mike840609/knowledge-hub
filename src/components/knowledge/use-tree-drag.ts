@@ -20,6 +20,15 @@ export function useTreeDrag(input: Input) {
   const [enabled, setEnabled] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [indicator, setIndicator] = useState<TreeDragIndicator>(null);
+  const indicatorRef = useRef<TreeDragIndicator>(null);
+  const updateIndicator = (next: TreeDragIndicator) => {
+    const previous = indicatorRef.current;
+    if (previous === null && next === null) return;
+    if (previous?.kind === "into" && next?.kind === "into" && previous.nodeId === next.nodeId) return;
+    if (previous?.kind === "line" && next?.kind === "line" && previous.top === next.top && previous.left === next.left && previous.width === next.width) return;
+    indicatorRef.current = next;
+    setIndicator(next);
+  };
   const dragging = useRef<string | null>(null);
   const destinations = useRef<ReadonlySet<string>>(new Set());
   const busy = useRef(false);
@@ -35,7 +44,7 @@ export function useTreeDrag(input: Input) {
   const giveUp = useRef<number | undefined>(undefined);
   const clearExpand = () => { window.clearTimeout(expandTimer.current); expandFor.current = null; };
   const cleanup = () => {
-    dragging.current = null; pointerY.current = null; setDraggingId(null); setIndicator(null);
+    dragging.current = null; pointerY.current = null; setDraggingId(null); updateIndicator(null);
     window.cancelAnimationFrame(frame.current ?? 0); clearExpand();
   };
   useEffect(() => {
@@ -93,15 +102,18 @@ export function useTreeDrag(input: Input) {
     },
     onDragOver: (event: DragEvent<HTMLElement>) => {
       if (!dragging.current || busy.current) return;
-      event.stopPropagation(); event.preventDefault(); event.dataTransfer.dropEffect = "move";
+      event.stopPropagation();
       pointerY.current = event.clientY;
       const item = input.items.find((entry) => entry.id === nodeId);
       if (!item) return;
       const zone = zoneFor(event, item);
-      if (!dropPlacement(input.items, dragging.current, nodeId, zone, destinations.current)) { setIndicator(null); clearExpand(); return; }
+      if (!dropPlacement(input.items, dragging.current, nodeId, zone, destinations.current)) {
+        event.dataTransfer.dropEffect = "none"; updateIndicator(null); clearExpand(); return;
+      }
+      event.preventDefault(); event.dataTransfer.dropEffect = "move";
       const rect = event.currentTarget.getBoundingClientRect();
       if (zone === "into") {
-        setIndicator({ kind: "into", nodeId });
+        updateIndicator({ kind: "into", nodeId });
         if (input.isCollapsed(nodeId) && expandFor.current !== nodeId) {
           clearExpand(); expandFor.current = nodeId;
           expandTimer.current = window.setTimeout(() => { input.expandFolder(nodeId); expandFor.current = null; }, 500);
@@ -109,12 +121,13 @@ export function useTreeDrag(input: Input) {
       } else {
         clearExpand();
         const bottom = item.type === "folder" ? event.currentTarget.closest("[data-node-id]")?.getBoundingClientRect().bottom ?? rect.bottom : rect.bottom;
-        setIndicator({ kind: "line", top: zone === "before" ? rect.top : bottom, left: rect.left, width: rect.width });
+        const top = zone === "before" ? rect.top : bottom;
+        updateIndicator({ kind: "line", top, left: rect.left, width: rect.width });
       }
     },
     onDragLeave: (event: DragEvent<HTMLElement>) => {
       if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
-      setIndicator(null); clearExpand(); pointerY.current = null;
+      updateIndicator(null); clearExpand(); pointerY.current = null;
     },
     onDrop: async (event: DragEvent<HTMLElement>) => {
       if (!dragging.current || busy.current) return;
@@ -126,6 +139,12 @@ export function useTreeDrag(input: Input) {
       const zone = zoneFor(event, target);
       const placement = dropPlacement(input.items, source.id, target.id, zone, destinations.current);
       if (!placement) { cleanup(); return; }
+      // Stored positions include hidden archived siblings. Equal numeric positions prove this is a no-op;
+      // visible order alone cannot prove an append is unchanged.
+      if (placement.kind === "reorder" && placement.position === source.position) {
+        input.announce(placedNode(source.label, placement.index, placement.count));
+        cleanup(); return;
+      }
       busy.current = true; awaitingResponse.current = true; refreshed.current = false;
       expected.current = { id: source.id, parentId: placement.kind === "move" ? placement.parentId : source.parentId,
         position: placement.position, oldParent: source.parentId, oldPosition: source.position };
