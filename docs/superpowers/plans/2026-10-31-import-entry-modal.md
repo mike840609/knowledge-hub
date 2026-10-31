@@ -469,6 +469,14 @@ Expected: PASS.
 git add src/app/w/[workspaceId]/sources/layout.tsx \
   "src/app/w/[workspaceId]/sources/@modal/default.tsx" \
   "src/app/w/[workspaceId]/sources/@modal/(.)import/page.tsx" \
+  "src/app/w/[workspaceId]/sources/@modal/[...catchAll]/page.tsx" \
   tests/e2e/import-entry-modal.spec.ts
 git commit -m "feat(import): open folder import over Sources"
 ```
+
+## Implementation Notes From Review
+
+- `@modal/[...catchAll]/page.tsx` returns `null`. `default.tsx` alone is not enough: on a soft navigation to a route the slot does not match, Next keeps the slot's active subpage, so the catch-all closes the dialog when the import lands on the Preview.
+- `FolderImportForm` accepts `replaceOnComplete`; `ImportFolderDialog` passes it. A successful modal import replaces the transient `/sources/import` history entry with the Preview, so Back returns to Sources instead of reopening the form.
+- `tests/unit/import-folder-dialog-busy.test.tsx` drives the real form and dialog together and proves the busy lock on the close button and Escape.
+- Minor, deferred: the `onBusyChange` effect runs after paint, so the close control can be enabled for roughly one frame at the PREPARING transition; no upload has started in that window. `Dialog.Root` also stays `open` because dismissal depends on `router.back()`.
