@@ -79,6 +79,7 @@ it("puts the count on the toolbar row and hides the copy action at rest", async 
     const search = host.querySelector<HTMLInputElement>("#shares-query")!;
     expect(search.parentElement?.className).toContain("sm:w-72");
     expect(search.parentElement?.className).not.toContain("sm:flex-1");
+    expect(search.closest("form")?.className).toContain("w-full");
     const copy = host.querySelector('button[aria-label="Copy link for Guide · For team"]')!;
     expect(copy.className).toContain("kh-row-action");
   } finally { await act(async () => root.unmount()); host.remove(); }

@@ -60,3 +60,14 @@ it("marks the label while a navigation is pending", async () => {
   await mount(null);
   expect(host.querySelector(".opacity-60")).not.toBeNull();
 });
+
+it("reverts the optimistic tab when a navigation settles without changing the URL", async () => {
+  state.pending = true;
+  const tabs = await mount(null);
+  await act(async () => tabs.saved.click());
+  expect(tabs.saved.getAttribute("aria-current")).toBe("page");
+  state.pending = false;
+  await act(async () => root.render(<SharesNavigation workspaceId="ws" />));
+  expect([...host.querySelectorAll("a")].find(node => node.textContent?.startsWith("My shares"))?.getAttribute("aria-current")).toBe("page");
+  expect([...host.querySelectorAll("a")].find(node => node.textContent?.startsWith("Saved shares"))?.getAttribute("aria-current")).toBeNull();
+});

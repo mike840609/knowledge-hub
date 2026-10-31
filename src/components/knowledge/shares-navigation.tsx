@@ -2,7 +2,7 @@
 
 import Link, { useLinkStatus } from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { tabClasses, tabListClasses } from "@/components/ui/tab";
 
 export type SharesTab = "mine" | "saved" | "discussions";
@@ -19,8 +19,11 @@ export function parseSharesTab(tab: string | null): SharesTab {
 export function SharesNavigation({ workspaceId, discussionsUnread = 0 }: { workspaceId: string; discussionsUnread?: number }) {
   const params = useSearchParams();
   const derived = parseSharesTab(params.get("tab"));
-  const [active, setActive] = useState<SharesTab>(derived);
-  useEffect(() => setActive(derived), [derived]);
+  const [optimistic, setOptimistic] = useState<{ from: SharesTab; to: SharesTab } | null>(null);
+  const active = optimistic && derived === optimistic.from ? optimistic.to : derived;
+  useEffect(() => {
+    if (optimistic && derived !== optimistic.from) setOptimistic(null);
+  }, [derived, optimistic]);
 
   const sections = [
     { id: "mine", label: "My shares", href: `/w/${workspaceId}/shares` },
@@ -39,10 +42,10 @@ export function SharesNavigation({ workspaceId, discussionsUnread = 0 }: { works
           className={tabClasses(active === section.id)}
           onClick={event => {
             if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
-            setActive(section.id);
+            setOptimistic({ from: derived, to: section.id });
           }}
         >
-          <TabLabel>
+          <TabLabel onSettled={() => setOptimistic(null)}>
             {section.label}
             {section.id === "discussions" && discussionsUnread > 0 && (
               <span aria-label={`${discussionsUnread} unread`} className="ml-1 tabular-nums text-caption text-kh-text-muted">{discussionsUnread}</span>
@@ -54,8 +57,15 @@ export function SharesNavigation({ workspaceId, discussionsUnread = 0 }: { works
   );
 }
 
-/** Dims the label while the link's navigation is in flight, so an unprefetched click still answers. */
-function TabLabel({ children }: { children: React.ReactNode }) {
+/** Dims the label while the link's navigation is in flight, and reports the settle so a failed navigation can drop the optimistic tab. */
+function TabLabel({ children, onSettled }: { children: React.ReactNode; onSettled?: () => void }) {
   const { pending } = useLinkStatus();
+  const settled = useRef(onSettled);
+  settled.current = onSettled;
+  const wasPending = useRef(false);
+  useEffect(() => {
+    if (wasPending.current && !pending) settled.current?.();
+    wasPending.current = pending;
+  }, [pending]);
   return <span className={pending ? "opacity-60" : undefined}>{children}</span>;
 }

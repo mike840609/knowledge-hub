@@ -98,7 +98,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
   }
   return <>
     <div className="mt-3 flex flex-wrap items-center gap-2">
-    <form ref={filterForm} action={`/w/${workspaceId}/shares`} method="get" className="flex min-w-0 flex-1 flex-wrap items-center gap-2" aria-label="Filter shares">
+    <form ref={filterForm} action={`/w/${workspaceId}/shares`} method="get" className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:flex-1" aria-label="Filter shares">
       <div className="relative basis-full sm:w-72 sm:flex-none">
         <label htmlFor="shares-query" className="sr-only">Find shares</label>
         <Search size={15} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-kh-text-muted" />

@@ -15,6 +15,7 @@ const mount=async(value=model)=>{await act(async()=>root.render(<SavedSharesView
 it("separates saved shares, preserves route filters and links only to the public reader",async()=>{
  await mount({...model,query:{q:"guide",status:"all",page:2},hasNext:true});
  expect(host.querySelector('a[href="/s/live-token"]')).not.toBeNull();
+ const search=host.querySelector<HTMLInputElement>("#saved-shares-query")!;expect(search.parentElement?.className).toContain("sm:w-72");expect(search.parentElement?.className).not.toContain("sm:flex-1");
  expect(host.querySelector('input[name="tab"]')?.getAttribute("value")).toBe("saved");const next=[...host.querySelectorAll("a")].find(x=>x.textContent==="Next");expect(next?.getAttribute("href")).toContain("tab=saved");expect(next?.getAttribute("href")).toContain("page=3");
  expect(host.textContent).not.toContain("Revoke");expect(host.textContent).not.toContain("Views");expect(host.textContent).not.toContain("Favorite");
 });

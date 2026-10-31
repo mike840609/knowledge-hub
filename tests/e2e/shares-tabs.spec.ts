@@ -56,3 +56,24 @@ test("a row's rule sits below its subtitle, and its actions wait for hover", asy
   await row.hover();
   await expect.poll(() => copy.evaluate(node => getComputedStyle(node).opacity)).toBe("1");
 });
+
+test("a phone keeps the search full width and the page inside the viewport", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  const origin = phase3Origin("reviewOwner");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${origin}/w/${doc.workspaceId}/shares`);
+  const input = page.getByLabel("Find shares", { exact: true });
+  const box = (await input.boundingBox())!;
+  expect(box.width).toBeGreaterThan(320);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const count = page.getByRole("status").filter({ hasText: /shares$/ });
+  if (await count.count()) {
+    const countBox = (await count.boundingBox())!;
+    expect(countBox.y).toBeGreaterThanOrEqual(box.y + box.height);
+  }
+  await page.getByRole("link", { name: "Saved shares", exact: true }).click();
+  await expect(page).toHaveURL(/tab=saved/);
+  const saved = page.getByLabel("Find saved shares", { exact: true });
+  expect((await saved.boundingBox())!.width).toBeGreaterThan(320);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
