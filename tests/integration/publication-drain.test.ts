@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
+import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import { ApplyFolderImportService } from "@/modules/sources/application/apply-folder-import";
 import {
   CreateFolderImportService,
@@ -215,6 +216,14 @@ async function contributionOf(publicationId: string, userId: string) {
   const contributions = await fixture.uow.run((repositories) =>
     repositories.publications.listContributions(publicationId));
   return contributions.find((contribution) => contribution.userId === userId);
+}
+
+async function discussionCount(documentId: string): Promise<number> {
+  const [row] = await fixture.pool.query<{ total: unknown }[]>(
+    "SELECT COUNT(*) AS total FROM document_review_threads WHERE document_id = ?",
+    [documentId],
+  );
+  return Number(row?.total ?? 0);
 }
 
 async function eventRows(documentId: string): Promise<{ id: string; consumed_at: Date | null }[]> {
@@ -731,6 +740,168 @@ describe("publication drain", () => {
     expect(manyCount.reads()).toBe(singleCount.reads());
     expect(manyCount.reads()).toBeLessThanOrEqual(2);
     expect(await publicationDocuments(manyPublication.publication.id)).toHaveLength(6);
+  });
+
+  it("archives a Hub document moved out of a published folder and keeps its discussion", async () => {
+    const hub = new HubKnowledgeCommandServiceImpl(fixture.uow);
+    const label = `hub-out-${uuidv7()}`;
+    const folder = await hub.createFolder(fixture.mike, {
+      sourceId: fixture.mikeHubSourceId, parentId: null, name: label,
+    });
+    const original = await hub.createDocument(fixture.mike, {
+      sourceId: fixture.mikeHubSourceId,
+      parentId: folder.treeNodeId,
+      title: "Hub Out",
+      markdown: "# Hub Out\n\nbody\n",
+      metadata: {},
+    });
+    const publication = await publishFolder(
+      fixture.mike, fixture.teamWorkspaceId, `Hub out ${label}`, folder.treeNodeId);
+    await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+    const [teamDocument] = await publicationDocuments(publication.publication.id);
+    expect(teamDocument.status).toBe("ACTIVE");
+    await fixture.createDiscussion({
+      workspaceId: fixture.teamWorkspaceId,
+      documentId: teamDocument.teamDocumentId,
+      revisionId: await fixture.revisionIdOf(teamDocument.teamDocumentId),
+      authorId: fixture.mike.identity.id,
+    });
+
+    await hub.moveTreeNode(fixture.mike, {
+      nodeId: original.treeNodeId, newParentId: null, newPosition: 0,
+    });
+    await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+
+    const [archived] = await publicationDocuments(publication.publication.id);
+    expect(archived.teamDocumentId).toBe(teamDocument.teamDocumentId);
+    expect(archived.status).toBe("ARCHIVED");
+    expect(await discussionCount(teamDocument.teamDocumentId)).toBe(1);
+  });
+
+  it("archives a Hub folder moved out of a published folder", async () => {
+    const hub = new HubKnowledgeCommandServiceImpl(fixture.uow);
+    const label = `hub-sub-out-${uuidv7()}`;
+    const root = await hub.createFolder(fixture.mike, {
+      sourceId: fixture.mikeHubSourceId, parentId: null, name: label,
+    });
+    const sub = await hub.createFolder(fixture.mike, {
+      sourceId: fixture.mikeHubSourceId, parentId: root.treeNodeId, name: "sub",
+    });
+    await hub.createDocument(fixture.mike, {
+      sourceId: fixture.mikeHubSourceId,
+      parentId: sub.treeNodeId,
+      title: "Hub Sub",
+      markdown: "# Hub Sub\n\nbody\n",
+      metadata: {},
+    });
+    const publication = await publishFolder(
+      fixture.mike, fixture.teamWorkspaceId, `Hub sub out ${label}`, root.treeNodeId);
+    await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+    expect((await publicationDocuments(publication.publication.id))[0].status).toBe("ACTIVE");
+
+    await hub.moveTreeNode(fixture.mike, {
+      nodeId: sub.treeNodeId, newParentId: null, newPosition: 0,
+    });
+    await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+
+    expect((await publicationDocuments(publication.publication.id))[0].status).toBe("ARCHIVED");
+  });
+
+  it("archives a synced document moved out of a published folder and reserves its path", async () => {
+    const path = `sync-out-${uuidv7()}`;
+    const folder = await folderWithDocuments(fixture.mike, path, [
+      { name: "a.md", text: "# Sync Out\n\nbody\n" },
+    ]);
+    const publication = await publishFolder(
+      fixture.mike, fixture.teamWorkspaceId, `Sync out ${path}`, folder.folderNodeId);
+    await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+    const [teamDocument] = await publicationDocuments(publication.publication.id);
+    expect(teamDocument.status).toBe("ACTIVE");
+    expect(teamDocument.sourcePath).toBe("a.md");
+    await fixture.createDiscussion({
+      workspaceId: fixture.teamWorkspaceId,
+      documentId: teamDocument.teamDocumentId,
+      revisionId: await fixture.revisionIdOf(teamDocument.teamDocumentId),
+      authorId: fixture.mike.identity.id,
+    });
+
+    const original = folder.documents["a.md"];
+    const node = await fixture.uow.run((repositories) =>
+      repositories.tree.findByDocumentId(original.documentId));
+    await fixture.uow.run(async (repositories) => {
+      const { bindSourceProjection } = await import(
+        "@/modules/sources/application/source-knowledge-projection-service"
+      );
+      const projection = bindSourceProjection(repositories, {
+        id: fixture.mikeFolderSourceId,
+        workspaceId: fixture.mikePersonalWorkspaceId,
+      });
+      await projection.moveProjectedNode(fixture.mike, {
+        nodeId: node!.id, newParentId: null, newPosition: 0,
+      });
+    });
+    await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+
+    const [archived] = await publicationDocuments(publication.publication.id);
+    expect(archived.teamDocumentId).toBe(teamDocument.teamDocumentId);
+    expect(archived.status).toBe("ARCHIVED");
+    expect(archived.sourcePath).toBe("a.md");
+    expect(await discussionCount(teamDocument.teamDocumentId)).toBe(1);
+  });
+
+  it("archives a synced subfolder moved out of a published folder and reserves its document path", async () => {
+    const path = `sync-sub-out-${uuidv7()}`;
+    const folder = await folderWithDocuments(fixture.mike, path, [
+      { name: "top.md", text: "# Top\n\ntop\n" },
+    ]);
+    const sub = await fixture.uow.run(async (repositories) => {
+      const { bindSourceProjection } = await import(
+        "@/modules/sources/application/source-knowledge-projection-service"
+      );
+      const projection = bindSourceProjection(repositories, {
+        id: fixture.mikeFolderSourceId,
+        workspaceId: fixture.mikePersonalWorkspaceId,
+      });
+      return projection.projectFolder(fixture.mike, {
+        sourceId: fixture.mikeFolderSourceId,
+        mapping: { sourceEntryId: uuidv7(), externalId: null, sourcePath: `${path}/sub` },
+        parentId: folder.folderNodeId,
+        name: "sub",
+      });
+    });
+    await fixture.createSyncedOriginal(fixture.mike, {
+      parentId: sub.treeNodeId,
+      sourcePath: `${path}/sub/nested.md`,
+      title: "Nested",
+      markdown: "# Nested\n\nbody\n",
+    });
+    const publication = await publishFolder(
+      fixture.mike, fixture.teamWorkspaceId, `Sync sub out ${path}`, folder.folderNodeId);
+    await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+    const documents = await publicationDocuments(publication.publication.id);
+    expect(documents).toHaveLength(2);
+    const nested = documents.find((document) => document.sourcePath === "sub/nested.md");
+    expect(nested?.status).toBe("ACTIVE");
+
+    await fixture.uow.run(async (repositories) => {
+      const { bindSourceProjection } = await import(
+        "@/modules/sources/application/source-knowledge-projection-service"
+      );
+      const projection = bindSourceProjection(repositories, {
+        id: fixture.mikeFolderSourceId,
+        workspaceId: fixture.mikePersonalWorkspaceId,
+      });
+      await projection.moveProjectedNode(fixture.mike, {
+        nodeId: sub.treeNodeId, newParentId: null, newPosition: 0,
+      });
+    });
+    await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+
+    const after = await publicationDocuments(publication.publication.id);
+    expect(after.find((document) => document.teamDocumentId === nested!.teamDocumentId)?.status)
+      .toBe("ARCHIVED");
+    expect(after.find((document) => document.teamDocumentId === nested!.teamDocumentId)?.sourcePath)
+      .toBe("sub/nested.md");
   });
 
   it("leaves events inserted during a batch visible to the next run", async () => {

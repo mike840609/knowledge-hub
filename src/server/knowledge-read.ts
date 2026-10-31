@@ -149,11 +149,14 @@ const loadKnowledgeExplorerModel = cache(async (
     // Source headers are cheap; only the current source's tree enters the initial payload.
     const collections = [{ source, tree }];
     // The team's publications are read for the tree's creator/time/maintainer labels and its
-    // publication menu. A personal workspace has none, so it pays nothing for this.
-    // Only the tree needs per-document metadata; the options route is read when a
-    // join dialog opens, not on every team page load.
+    // publication menu. Per-document metadata is loaded only for the source this page renders,
+    // so a team page never reads every publication's documents. A personal workspace has none.
+    // The options route is read when a join dialog opens, not on every team page load.
     const publications = workspace.type === "TEAM"
-      ? await services.publications.list(caller, workspaceId, true, { includeDocuments: true }).catch(() => [])
+      ? await services.publications.list(caller, workspaceId, true, {
+        includeDocuments: true,
+        documentsSourceId: sourceId,
+      }).catch(() => [])
       : [];
     return { sources: ordered, source, tree, collections, includeArchived, publications };
   } catch (error) {

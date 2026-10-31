@@ -48,7 +48,9 @@ export type PublicationListItem = {
   canManage: boolean;
   /**
    * The team copies, with their creator and latest content time, for the team
-   * tree. It names a maintainer, never an origin.
+   * tree. It names a maintainer, never an origin. Empty unless the caller asked
+   * for the publication that owns `documentsSourceId`: an explorer renders one
+   * source and must not read every publication's document metadata.
    */
   documents: PublicationDocumentView[];
   ownContribution: Pick<Contribution, "id" | "userId" | "leftAt" | "rightsFrozenAt" | "pendingCatchUp"> | null;
@@ -148,7 +150,7 @@ export class PublicationService {
     caller: CallerContext,
     teamId: string,
     includeArchived = false,
-    options: { includeDocuments?: boolean } = {},
+    options: { includeDocuments?: boolean; documentsSourceId?: string } = {},
   ): Promise<PublicationListItem[]> {
     return this.uow.run(async (repositories) => {
       const workspace = await repositories.workspaces.findById(teamId);
@@ -185,8 +187,11 @@ export class PublicationService {
           updatedAt: contentUpdatedAt.get(publication.id) ?? source.updatedAt,
           canJoin: canJoinPublication(workspace, capabilities, publication, own),
           canManage: canManagePublication(workspace, capabilities, publication, own, caller.identity.id),
-          // The tree needs per-document maintainers; the list endpoint does not.
+          // The tree needs per-document maintainers only for the source it is
+          // rendering; the list endpoint and every other publication stay free
+          // of document reads.
           documents: options.includeDocuments === true
+            && options.documentsSourceId === publication.sourceId
             ? await repositories.publications.listDocumentViews(publication.id)
             : [],
           ownContribution: own === null ? null : {

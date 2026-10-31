@@ -38,9 +38,12 @@ describe("team explorer read model", () => {
     const model = await getKnowledgeExplorerModel("w1", "s1", { includeArchived: true });
 
     expect(model?.publications).toEqual([]);
-    // The tree needs maintainers, so documents are included; a page load does not
-    // enumerate every personal source just to fill a join dialog nobody opened.
-    expect(list).toHaveBeenCalledWith(caller, "w1", true, { includeDocuments: true });
+    // The tree needs maintainers for the rendered source only; a page load does
+    // not enumerate every publication's documents or every personal source.
+    expect(list).toHaveBeenCalledWith(caller, "w1", true, {
+      includeDocuments: true,
+      documentsSourceId: "s1",
+    });
     expect(options).not.toHaveBeenCalled();
     expect(model).not.toHaveProperty("publicationFolders");
   });

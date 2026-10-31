@@ -117,6 +117,21 @@ async function archiveOriginal(caller: CallerContext, documentId: string): Promi
   });
 }
 
+async function moveOriginalOut(caller: CallerContext, documentId: string): Promise<void> {
+  const node = await fixture.uow.run((repositories) =>
+    repositories.tree.findByDocumentId(documentId));
+  if (!node) throw new Error("The original has no tree node.");
+  await fixture.uow.run(async (repositories) => {
+    const projection = bindSourceProjection(repositories, {
+      id: folderSourceOf(caller),
+      workspaceId: workspaceOf(caller),
+    });
+    await projection.moveProjectedNode(caller, {
+      nodeId: node.id, newParentId: null, newPosition: 0,
+    });
+  });
+}
+
 async function createNewOriginal(
   caller: CallerContext,
   folderNodeId: string,
@@ -280,6 +295,30 @@ describe("publication catch-up: flag on", () => {
 
     // Leave the shared fixture source usable for any later test.
     await sources.restoreSource(fixture.mike, fixture.mikeFolderSourceId);
+  });
+
+  it("archives a team copy after its original was moved out while the flag was off", async () => {
+    const tree = await createFolderTree(fixture.mike, unique("catchup-moveout"), [
+      { relative: "a.md", title: "Moved Out A", markdown: "a" },
+    ]);
+    const published = await service.publish(fixture.mike, {
+      teamWorkspaceId: fixture.teamWorkspaceId,
+      name: unique("Catch-up Moved Out Publication"),
+      origin: { kind: "FOLDER", folderNodeId: tree.folderNodeId },
+    });
+    const [teamDocument] = await listDocuments(published.publicationId);
+    expect(await documentStatus(teamDocument.teamDocumentId)).toBe("ACTIVE");
+
+    setFlag(false);
+    await moveOriginalOut(fixture.mike, tree.documents[0].documentId);
+    setFlag(true);
+    const { result } = await runCatchUp();
+    expect(result.status).toBe("RAN");
+    if (result.status !== "RAN") throw new Error("catch-up did not run");
+    expect(result.failed).toBe(0);
+
+    expect(await documentStatus(teamDocument.teamDocumentId)).toBe("ARCHIVED");
+    expect((await listDocuments(published.publicationId))[0].sourcePath).toBe("a.md");
   });
 
   it("preserves a left contributor's documents and contribution state", async () => {

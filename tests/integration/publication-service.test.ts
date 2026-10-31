@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PublicationService } from "@/modules/sources/application/publication-service";
 import { reconcileContribution } from "@/modules/sources/application/publication-reconciler";
+import type { SourceRepositories, SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
@@ -626,5 +627,82 @@ describe("publication service: leave and resume", () => {
     const newPath = documentsAfterResume.find((document) => document.sourcePath === "new.md");
     expect(newPath?.creatorContributionId).toBe(joined.contributionId);
     expect(await titleOf(newPath?.teamDocumentId ?? "")).toBe("Ann New");
+  });
+});
+
+/** Records which publication IDs had their document metadata loaded. */
+function countingDocumentViews(base: SourceUnitOfWork): {
+  uow: SourceUnitOfWork;
+  publicationIds: () => string[];
+} {
+  const publicationIds: string[] = [];
+  return {
+    publicationIds: () => publicationIds,
+    uow: {
+      async run<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
+        return base.run(async (repositories) => {
+          const publications = new Proxy(repositories.publications, {
+            get(target, property, receiver) {
+              if (property === "listDocumentViews") {
+                return async (publicationId: string) => {
+                  publicationIds.push(publicationId);
+                  return target.listDocumentViews(publicationId);
+                };
+              }
+              return Reflect.get(target, property, receiver);
+            },
+          });
+          const wrapped = new Proxy(repositories, {
+            get(target, property, receiver) {
+              return property === "publications"
+                ? publications
+                : Reflect.get(target, property, receiver);
+            },
+          });
+          return work(wrapped);
+        });
+      },
+      runWithCreatorQuotaLock: (creatorId, timeoutSeconds, work) =>
+        base.runWithCreatorQuotaLock(creatorId, timeoutSeconds, work),
+    },
+  };
+}
+
+describe("publication service: list", () => {
+  it("loads document metadata only for the rendered source", async () => {
+    const firstTree = await createFolderTree(fixture.mike, unique("list-first"), [
+      { relative: "a.md", title: "List A", markdown: "a" },
+    ]);
+    const first = await service.publish(fixture.mike, {
+      teamWorkspaceId: fixture.teamWorkspaceId,
+      name: unique("List First Publication"),
+      origin: { kind: "FOLDER", folderNodeId: firstTree.folderNodeId },
+    });
+    const secondTree = await createFolderTree(fixture.mike, unique("list-second"), [
+      { relative: "b.md", title: "List B", markdown: "b" },
+    ]);
+    const second = await service.publish(fixture.mike, {
+      teamWorkspaceId: fixture.teamWorkspaceId,
+      name: unique("List Second Publication"),
+      origin: { kind: "FOLDER", folderNodeId: secondTree.folderNodeId },
+    });
+    const firstSourceId = (await fixture.uow.run((repositories) =>
+      repositories.publications.findById(first.publicationId)))!.sourceId;
+
+    const counting = countingDocumentViews(fixture.uow);
+    const listed = await new PublicationService(counting.uow).list(
+      fixture.mike,
+      fixture.teamWorkspaceId,
+      false,
+      { includeDocuments: true, documentsSourceId: firstSourceId },
+    );
+
+    const firstItem = listed.find((item) => item.publication.id === first.publicationId);
+    const secondItem = listed.find((item) => item.publication.id === second.publicationId);
+    expect(firstItem?.documents).toHaveLength(1);
+    expect(secondItem?.documents).toEqual([]);
+    // The second publication's metadata was never read at all.
+    expect(counting.publicationIds()).toEqual([first.publicationId]);
+    expect(counting.publicationIds()).not.toContain(second.publicationId);
   });
 });

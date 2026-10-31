@@ -586,27 +586,47 @@ export class MariaDbPublicationRepository implements PublicationRepository {
    * never reference the table they are modifying, and the delivery delete runs
    * before the event delete to satisfy the RESTRICT foreign key.
    */
-  async purgeConsumedEvents(
+  async purgeEvents(
     cutoff: Date,
     limit: number,
+    options: { includeUnconsumed: boolean },
   ): Promise<{ events: number; deliveries: number }> {
-    const rows = await this.connection.query<DbRow[]>(
-      `SELECT e.id FROM publication_events e
-       WHERE e.consumed_at IS NOT NULL AND e.consumed_at <= ?
-         AND NOT EXISTS (
-           SELECT 1 FROM publication_event_deliveries d
-           WHERE d.event_id = e.id AND d.processed_at IS NULL
-         )
-       ORDER BY e.consumed_at, e.id
-       LIMIT ?`,
-      [cutoff, limit],
-    );
+    const rows = options.includeUnconsumed
+      ? await this.connection.query<DbRow[]>(
+        `SELECT e.id FROM publication_events e
+         WHERE e.created_at <= ?
+            OR (e.consumed_at IS NOT NULL AND e.consumed_at <= ?)
+         ORDER BY e.created_at, e.id
+         LIMIT ?`,
+        [cutoff, cutoff, limit],
+      )
+      : await this.connection.query<DbRow[]>(
+        `SELECT e.id FROM publication_events e
+         WHERE e.created_at <= ?
+           AND (
+             e.consumed_at IS NOT NULL
+             OR EXISTS (
+               SELECT 1 FROM publication_event_deliveries d
+               WHERE d.event_id = e.id
+             )
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM publication_event_deliveries d
+             JOIN publication_contributors c ON c.id = d.contribution_id
+             WHERE d.event_id = e.id
+               AND d.processed_at IS NULL
+               AND c.left_at IS NULL
+               AND c.rights_frozen_at IS NULL
+           )
+         ORDER BY e.created_at, e.id
+         LIMIT ?`,
+        [cutoff, limit],
+      );
     if (rows.length === 0) return { events: 0, deliveries: 0 };
     const ids = rows.map((row) => String(row.id));
     const placeholders = ids.map(() => "?").join(", ");
     const deliveries = await this.connection.query(
-      `DELETE FROM publication_event_deliveries
-       WHERE event_id IN (${placeholders}) AND processed_at IS NOT NULL`,
+      `DELETE FROM publication_event_deliveries WHERE event_id IN (${placeholders})`,
       ids,
     );
     const events = await this.connection.query(

@@ -88,7 +88,11 @@ describe("publication event retention", () => {
     const boundary = await insertEvent({ documentId: original.documentId, createdAt: atCutoff, consumedAt: atCutoff });
     const younger = await insertEvent({ documentId: original.documentId, createdAt: fresh, consumedAt: fresh });
 
-    const result = await purgePublicationEvents(fixture.pool, { now: () => now });
+    const result = await purgePublicationEvents(fixture.pool, {
+      now: () => now,
+      // Flag-on rule: unconsumed events are never deleted wholesale.
+      includeUnconsumed: false,
+    });
 
     expect(result.status).toBe("RAN");
     expect(result.events).toBe(3);
@@ -104,7 +108,88 @@ describe("publication event retention", () => {
     expect(Number(keptDeliveries[0]?.n ?? 0)).toBe(2);
 
     // A rerun has nothing left to remove and stays idempotent.
-    const again = await purgePublicationEvents(fixture.pool, { now: () => now });
+    const again = await purgePublicationEvents(fixture.pool, {
+      now: () => now,
+      includeUnconsumed: false,
+    });
     expect(again).toMatchObject({ status: "RAN", events: 0, deliveries: 0 });
+  });
+
+  it("deletes old unconsumed events and their deliveries while the flag is off", async () => {
+    const original = await fixture.createHubOriginal(fixture.mike, "Off retention source", "off");
+    const publication = await fixture.createPublication({
+      name: `Off Retention ${uuidv7()}`,
+      kind: "DOCUMENT",
+      creator: fixture.mike,
+      origin: { kind: "DOCUMENT", documentId: original.documentId },
+    });
+    const now = new Date("2026-10-31T12:00:00Z");
+    const cutoff = new Date(now.getTime() - purgeRetentionDays() * 86_400_000);
+    const old = new Date(cutoff.getTime() - 60_000);
+    const fresh = new Date(cutoff.getTime() + 60_000);
+
+    const stale = await insertEvent({ documentId: original.documentId, createdAt: old, consumedAt: null });
+    await insertDelivery({ eventId: stale.id, contributionId: publication.contributionId, processedAt: null });
+    const freshEvent = await insertEvent({ documentId: original.documentId, createdAt: fresh, consumedAt: null });
+
+    // No explicit mode: the feature flag selects it. Nothing consumes events
+    // while the flag is off, and catch-up later reconciles from current state.
+    const previous = process.env.KM_TEAM_WORKSPACES_ENABLED;
+    process.env.KM_TEAM_WORKSPACES_ENABLED = "false";
+    try {
+      const result = await purgePublicationEvents(fixture.pool, { now: () => now });
+      expect(result.includeUnconsumed).toBe(true);
+      expect(result.deliveries).toBeGreaterThanOrEqual(1);
+    } finally {
+      if (previous === undefined) delete process.env.KM_TEAM_WORKSPACES_ENABLED;
+      else process.env.KM_TEAM_WORKSPACES_ENABLED = previous;
+    }
+    expect(await remainingEventIds([stale.id])).toEqual([]);
+    expect(await remainingEventIds([freshEvent.id])).toEqual([freshEvent.id]);
+    const staleDeliveries = await fixture.pool.query<{ n: unknown }[]>(
+      "SELECT COUNT(*) AS n FROM publication_event_deliveries WHERE event_id = ?",
+      [stale.id],
+    );
+    expect(Number(staleDeliveries[0]?.n ?? 0)).toBe(0);
+  });
+
+  it("keeps an active pending delivery and ages out a frozen contributor's delivery when the flag is on", async () => {
+    const original = await fixture.createHubOriginal(fixture.mike, "Frozen retention source", "frozen");
+    const publication = await fixture.createPublication({
+      name: `Frozen Retention ${uuidv7()}`,
+      kind: "DOCUMENT",
+      creator: fixture.mike,
+      origin: { kind: "DOCUMENT", documentId: original.documentId },
+    });
+    const now = new Date("2026-10-31T12:00:00Z");
+    const cutoff = new Date(now.getTime() - purgeRetentionDays() * 86_400_000);
+    const old = new Date(cutoff.getTime() - 60_000);
+
+    const frozenContributionId = await fixture.addContribution({
+      publicationId: publication.publication.id,
+      user: fixture.ann,
+      origin: { kind: "DOCUMENT", documentId: original.documentId },
+    });
+    await fixture.uow.run((repositories) => repositories.publications.setContributionState(
+      frozenContributionId,
+      { leftAt: null, rightsFrozenAt: new Date(), pendingCatchUp: false },
+    ));
+
+    // A live contributor's pending work is never aged out.
+    const activePending = await insertEvent({ documentId: original.documentId, createdAt: old, consumedAt: null });
+    await insertDelivery({ eventId: activePending.id, contributionId: publication.contributionId, processedAt: null });
+    // A rights-frozen contributor never reconciles on its own, so its old
+    // pending delivery is removed only by the documented retention rule.
+    const frozenPending = await insertEvent({ documentId: original.documentId, createdAt: old, consumedAt: null });
+    await insertDelivery({ eventId: frozenPending.id, contributionId: frozenContributionId, processedAt: null });
+
+    const result = await purgePublicationEvents(fixture.pool, {
+      now: () => now,
+      includeUnconsumed: false,
+      log: () => {},
+    });
+    expect(result.events).toBe(1);
+    expect(result.deliveries).toBe(1);
+    expect(await remainingEventIds([activePending.id, frozenPending.id])).toEqual([activePending.id]);
   });
 });

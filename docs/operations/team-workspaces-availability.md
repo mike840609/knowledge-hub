@@ -48,10 +48,10 @@ make db-purge-publication-events
 # window: --days N, or KM_PUBLICATION_RETENTION_DAYS (default 30)
 ```
 
-- The job deletes only events that are already consumed and older than the window **and** whose deliveries are all processed; it removes those processed deliveries first (`FK … ON DELETE RESTRICT`).
-- Unconsumed events, events with a pending delivery, and every delivery of a retained event are never deleted, so a behind publication stays detectable.
-- It does not consult the Team feature flag (events are recorded with it off too). It is batched and idempotent, so it is safe to rerun and suitable for a weekly schedule.
-- The output is `Publication retention: deleted events=<n> deliveries=<n> cutoff=<iso>`.
+- **While the flag is off**, nothing consumes events and the job removes every event older than the window, including unconsumed ones, after deleting its deliveries. This is safe because catch-up reconciles each contribution from current state rather than from the event log. `--include-unconsumed` selects this rule explicitly (and is refused while the flag is on).
+- **While the flag is on**, the job removes only events older than the window that are consumed. An unconsumed event is kept while any of its pending deliveries belongs to an active contributor, or while it has no delivery yet. It is removed only when every pending delivery belongs to a contributor who left or is rights-frozen — those contributors never reconcile on their own, and their copy is already labelled 「不再更新」.
+- Deliveries are deleted before their events (`FK … ON DELETE RESTRICT`). Batched and idempotent, so it is safe to rerun and suitable for a weekly schedule.
+- The output names the mode: `Publication retention: deleted events=<n> deliveries=<n> cutoff=<iso> mode=flag-off|flag-on`.
 
 ## Contributor states after a catch-up
 

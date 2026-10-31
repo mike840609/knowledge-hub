@@ -262,7 +262,17 @@ export function bindSourceProjection(
       await renumberSiblingPositions(repositories, source.id, previousParentId, caller.identity.id, hints?.treeView);
     }
     // Moves create no revision; the target node is what the team learns about.
-    await recordEvent({ documentId: null, treeNodeId: node.id, sourceId: null, kind: "TREE", at: new Date() });
+    // When the node leaves its previous parent, that parent is a second target:
+    // a contribution publishing the old folder (or an ancestor) must reconcile
+    // and archive the copy, which the moved node's new ancestry cannot signal.
+    const at = new Date();
+    const events: PublicationEventInput[] = [
+      { documentId: null, treeNodeId: node.id, sourceId: null, kind: "TREE", at },
+    ];
+    if (previousParentId !== null && previousParentId !== newParentId) {
+      events.push({ documentId: null, treeNodeId: previousParentId, sourceId: null, kind: "TREE", at });
+    }
+    await recordEvents(events);
   }
 
   async function archiveLinkedFolderEntry(caller: CallerContext, treeNodeId: string): Promise<void> {

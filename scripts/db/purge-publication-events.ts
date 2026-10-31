@@ -2,8 +2,9 @@ import type { Pool } from "mariadb";
 import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
+import { teamWorkspacesEnabled } from "@/server/config";
 
-/** Consumed events and processed deliveries older than this are removable. */
+/** Events and deliveries older than this are removable. */
 export const DEFAULT_PURGE_RETENTION_DAYS = 30;
 
 /** One transaction removes at most this many root events. */
@@ -14,6 +15,8 @@ export type PurgeResult = {
   events: number;
   deliveries: number;
   cutoff: Date;
+  /** True when old unconsumed events were eligible (the flag-off window). */
+  includeUnconsumed: boolean;
 };
 
 type PurgeOptions = {
@@ -23,6 +26,15 @@ type PurgeOptions = {
   now?: () => Date;
   /** Defaults to console.log; tests pass a collector. */
   log?: (line: string) => void;
+  /**
+   * Delete old unconsumed events too. Defaults to `!teamWorkspacesEnabled()`:
+   * nothing consumes events while the flag is off, and catch-up reconciles
+   * current state, so the off window can be bounded safely. Never enable this
+   * while the flag is on.
+   */
+  includeUnconsumed?: boolean;
+  /** Defaults to the deployment flag; tests may pin it. */
+  teamEnabled?: () => boolean;
 };
 
 /**
@@ -37,14 +49,16 @@ export function purgeRetentionDays(raw = process.env.KM_PUBLICATION_RETENTION_DA
 /**
  * Retention for the publication event log. Every personal revision/move/
  * lifecycle write records an event, including while Team publishing is off, so
- * an operator needs a way to keep `publication_events` and
+ * an operator needs to keep `publication_events` and
  * `publication_event_deliveries` bounded.
  *
- * A row is removable only when the root event is consumed (at or before the
- * cutoff) and every delivery is processed; pending deliveries, unconsumed
- * events and the deliveries of retained events are untouched. Batched and
- * idempotent, and it does not look at the Team feature flag: events are
- * recorded with the flag off too.
+ * While the flag is off nothing consumes events, so every event older than the
+ * cutoff is removable (its deliveries first); catch-up later reconciles each
+ * contribution from current state. While the flag is on, only consumed events
+ * are removed, plus unconsumed events whose pending deliveries all belong to
+ * LEFT or rights-frozen contributors (they never reconcile on their own); an
+ * active pending delivery, or an event with no delivery yet, is always kept.
+ * Batched and idempotent.
  */
 export async function purgePublicationEvents(
   pool: Pool,
@@ -54,13 +68,20 @@ export async function purgePublicationEvents(
   const days = options.days ?? purgeRetentionDays();
   const now = (options.now ?? (() => new Date()))();
   const cutoff = new Date(now.getTime() - days * 86_400_000);
+  const enabled = (options.teamEnabled ?? teamWorkspacesEnabled)();
+  const includeUnconsumed = options.includeUnconsumed ?? !enabled;
+  if (includeUnconsumed && enabled) {
+    throw new Error(
+      "Refusing to delete unconsumed publication events while KM_TEAM_WORKSPACES_ENABLED is on.",
+    );
+  }
   const uow = new MariaDbUnitOfWork(pool);
 
   let events = 0;
   let deliveries = 0;
   for (;;) {
     const batch = await uow.run((repositories) =>
-      repositories.publications.purgeConsumedEvents(cutoff, PURGE_BATCH));
+      repositories.publications.purgeEvents(cutoff, PURGE_BATCH, { includeUnconsumed }));
     events += batch.events;
     deliveries += batch.deliveries;
     if (batch.events === 0) break;
@@ -68,18 +89,22 @@ export async function purgePublicationEvents(
 
   log(
     `Publication retention: deleted events=${events} deliveries=${deliveries} `
-    + `cutoff=${cutoff.toISOString()}`,
+    + `cutoff=${cutoff.toISOString()} mode=${includeUnconsumed ? "flag-off" : "flag-on"}`,
   );
-  return { status: "RAN", events, deliveries, cutoff };
+  return { status: "RAN", events, deliveries, cutoff, includeUnconsumed };
 }
 
-const HELP = `Usage: npx tsx scripts/db/purge-publication-events.ts [--days N] [--target dev|test|e2e]
+const HELP = `Usage: npx tsx scripts/db/purge-publication-events.ts [--days N] [--include-unconsumed] [--target dev|test|e2e]
 
-Deletes consumed publication events older than N days (default 30, or
-KM_PUBLICATION_RETENTION_DAYS) together with their processed deliveries.
-Events that are unconsumed, or that still have a pending delivery, are kept.
-The Team feature flag does not affect this job: events are recorded even while
-Team spaces are off. Safe to rerun and safe to schedule (for example, weekly).
+Deletes publication events older than N days (default 30, or
+KM_PUBLICATION_RETENTION_DAYS) together with their deliveries.
+
+While KM_TEAM_WORKSPACES_ENABLED is off this also deletes unconsumed events:
+nothing consumes them and catch-up reconciles each contribution from current
+state. While the flag is on, unconsumed events are kept unless every pending
+delivery belongs to a contributor who left or is rights-frozen. --include-
+unconsumed forces the off-window rule and is refused while the flag is on.
+Safe to rerun and suitable for a weekly schedule.
 `;
 
 async function main(): Promise<void> {
@@ -91,7 +116,7 @@ async function main(): Promise<void> {
   const targetIndex = args.indexOf("--target");
   const target = targetIndex === -1 ? "dev" : args[targetIndex + 1];
   if (target !== "dev" && target !== "test" && target !== "e2e") {
-    throw new Error("Invalid arguments. Expected: [--days N] [--target dev|test|e2e].");
+    throw new Error("Invalid arguments. Expected: [--days N] [--include-unconsumed] [--target dev|test|e2e].");
   }
   const daysIndex = args.indexOf("--days");
   const days = daysIndex === -1 ? purgeRetentionDays() : Number(args[daysIndex + 1]);
@@ -101,7 +126,10 @@ async function main(): Promise<void> {
 
   const pool = createDatabasePool(databaseConfig(target));
   try {
-    await purgePublicationEvents(pool, { days });
+    await purgePublicationEvents(pool, {
+      days,
+      ...(args.includes("--include-unconsumed") ? { includeUnconsumed: true } : {}),
+    });
   } finally {
     await pool.end();
   }

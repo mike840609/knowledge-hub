@@ -657,6 +657,7 @@ const TEAM_HIDDEN_AUTHORING: ReadonlySet<ActionId> = new Set([
   "create.document",
   "create.folder",
   "create.import",
+  "document.duplicate",
   "folder.new-document",
   "folder.new-folder",
 ]);

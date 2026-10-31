@@ -400,11 +400,17 @@ describe("team authoring entry points", () => {
     confirmed: true,
   });
 
-  it("offers no create, folder or import action in a team", () => {
+  it("offers no create, folder, import or duplicate action in a team", () => {
+    const hubTarget = {
+      documentId: "d1", sourceId: "s1", label: "Doc", ownership: "HUB_MANAGED" as const,
+      status: "ACTIVE" as const, sourceStatus: "ACTIVE" as const,
+      revision: "CURRENT" as const, favorite: false,
+    };
     const ids = [
       ...actionsFor("palette", context("TEAM")),
       ...actionsFor("create", context("TEAM")),
       ...actionsFor("empty", context("TEAM")),
+      ...actionsFor("row", { ...context("TEAM"), target: hubTarget }),
       ...actionsFor("row", { ...context("TEAM"), folder: { nodeId: "n1", sourceId: "s1", label: "Folder", ownership: "HUB_MANAGED", status: "ACTIVE", sourceStatus: "ACTIVE" } }),
     ].map((action) => action.id);
     expect(ids).not.toContain("create.document");
@@ -412,6 +418,7 @@ describe("team authoring entry points", () => {
     expect(ids).not.toContain("create.import");
     expect(ids).not.toContain("folder.new-document");
     expect(ids).not.toContain("folder.new-folder");
+    expect(ids).not.toContain("document.duplicate");
     // Sources itself stays reachable: only the authoring entries inside it are hidden.
     expect(ids).toContain("navigate.sources");
     expect(actionsFor("empty", context("TEAM"))).toEqual([]);

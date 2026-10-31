@@ -14,6 +14,9 @@ import { isUuid } from "@/shared/ids/uuidv7";
  * which document to go back to on Cancel. Both are the same kind of input: a title the create request
  * would refuse (empty, too long) is left out, and `from` is followed only if it names a document of
  * this workspace that the reader can read — otherwise Cancel goes to the list, as ever.
+ *
+ * A Team workspace has no Hub authoring entry point (publishing is the way in), so this page is not
+ * found there even for an editor whose `canWrite` is true. The create service stays as it is.
  */
 export default async function NewNotePage({
   params,
@@ -25,6 +28,7 @@ export default async function NewNotePage({
   const { workspaceId } = await params;
   const model = await getWorkspaceShellModel(workspaceId);
   if (!model?.access.actions.canWrite) notFound();
+  if (model.workspace.type === "TEAM") notFound();
   const { folder, title, from } = await searchParams;
   const folderId = typeof folder === "string" && isUuid(folder) ? folder : null;
   const folderLabel = folderId ? await findHubFolderLabel(workspaceId, folderId) : null;

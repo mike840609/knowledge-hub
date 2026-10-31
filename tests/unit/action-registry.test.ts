@@ -454,10 +454,11 @@ describe("action registry — duplicating a document", () => {
     expect(offered).toEqual(expected);
   });
 
-  it("is on a row and in the palette, and names the document it copies", () => {
-    expect(ids(actionsFor("row", context({ target: target() })))).toContain("document.duplicate");
-    expect(ids(actionsFor("palette", context({ target: target() })))).toContain("document.duplicate");
-    const duplicate = availableActions(context({ target: target() })).find((action) => action.id === "document.duplicate");
+  it("is on a row and in the palette in My Space, and names the document it copies", () => {
+    const personal = context({ workspaceType: "PERSONAL", target: target() });
+    expect(ids(actionsFor("row", personal))).toContain("document.duplicate");
+    expect(ids(actionsFor("palette", personal))).toContain("document.duplicate");
+    const duplicate = availableActions(personal).find((action) => action.id === "document.duplicate");
     expect(duplicate?.effect).toEqual({
       kind: "command",
       command: "document.duplicate",
@@ -465,6 +466,12 @@ describe("action registry — duplicating a document", () => {
       sourceId: "s1",
       label: "Onboarding",
     });
+  });
+
+  it("is hidden by every team surface", () => {
+    const team = context({ target: target() });
+    expect(ids(actionsFor("row", team))).not.toContain("document.duplicate");
+    expect(ids(actionsFor("palette", team))).not.toContain("document.duplicate");
   });
 
   it("is found by the words a reader would use for it", () => {
@@ -749,7 +756,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
   it("leaves out Copy for Agent where it is not offered, without leaving a hole", () => {
     expect(sectionsOf(context({ target: target() }))).toEqual([
       ["document.copy-link"],
-      ["document.favorite", "document.duplicate", "document.move"],
+      ["document.favorite", "document.move"],
       ["document.open-side-peek", "document.open-new-tab"],
       ["document.export"],
       ["document.archive"],

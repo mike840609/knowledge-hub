@@ -126,14 +126,21 @@ export interface PublicationRepository {
   saveReport(contributionId: string, report: ReconcileReport): Promise<void>;
   findReport(contributionId: string): Promise<ReconcileReport | null>;
   /**
-   * Retention for the event log: one bounded batch of consumed events at or
-   * older than `cutoff` whose deliveries are all processed, plus those
-   * processed deliveries (deleted first, because the FK is RESTRICT).
-   * Unconsumed events, events with a pending delivery, and the deliveries of
-   * retained events are never touched.
+   * Retention for the event log: one bounded batch of events at or older than
+   * `cutoff`, plus their deliveries (deleted first, because the FK is
+   * RESTRICT).
+   *
+   * `includeUnconsumed` is the flag-off mode: nothing consumes events then, so
+   * any old event is removed and catch-up later reconciles current state.
+   * Without it (flag on) only consumed events are removed, except that an
+   * unconsumed event whose only pending deliveries belong to LEFT or
+   * rights-frozen contributions is aged out — those contributors never
+   * reconcile on their own. An unconsumed event with a pending delivery to an
+   * active contribution, or with no delivery yet, is never touched.
    */
-  purgeConsumedEvents(
+  purgeEvents(
     cutoff: Date,
     limit: number,
+    options: { includeUnconsumed: boolean },
   ): Promise<{ events: number; deliveries: number }>;
 }

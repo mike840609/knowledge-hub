@@ -8,9 +8,10 @@ import {
 } from "../../domain/errors";
 import { normalizeTreePosition } from "../../domain/tree-rules";
 import type { KnowledgeRepositories } from "../../ports/unit-of-work";
+import type { PublicationEventInput } from "../../ports/publication-event-repository";
 import type { MoveTreeNodeInput } from "../hub-knowledge-command-service";
 import { assertActiveFolderAncestry } from "../tree-validation";
-import { recordPersonalPublicationEvent } from "./publication-event-recording";
+import { recordManyPersonalPublicationEvents } from "./publication-event-recording";
 import { renumberSiblingPositions, placeNodeAtIndex, requireHubManagedSourceContext, requireLockedSourceNode } from "./tree-transaction";
 
 /**
@@ -52,7 +53,17 @@ export async function moveTreeNodeInTransaction(
   }
   // The target is the node: the consumer expands it to the descendants whose
   // team documents move with it (publishing spec, "When the team updates").
-  await recordPersonalPublicationEvent(repositories, workspace, {
-    documentId: null, treeNodeId: node.id, sourceId: null, kind: "TREE", at: new Date(),
-  });
+  // A move out of a published folder leaves that folder, so the moved node's
+  // current ancestry no longer contains it: the previous parent is recorded as
+  // a second target, which tells every contribution publishing it (or a folder
+  // above it) to reconcile and archive the copy. A root previous parent names
+  // nothing and is not recorded.
+  const at = new Date();
+  const events: PublicationEventInput[] = [
+    { documentId: null, treeNodeId: node.id, sourceId: null, kind: "TREE", at },
+  ];
+  if (previousParentId !== null && previousParentId !== input.newParentId) {
+    events.push({ documentId: null, treeNodeId: previousParentId, sourceId: null, kind: "TREE", at });
+  }
+  await recordManyPersonalPublicationEvents(repositories, workspace, events);
 }

@@ -50,10 +50,10 @@ make db-purge-publication-events
 # 保留窗：--days N，或 KM_PUBLICATION_RETENTION_DAYS（預設 30）
 ```
 
-- 只刪除「已被消費、早於保留窗，且所有 delivery 都已處理」的事件；先用 `FK … ON DELETE RESTRICT` 安全順序刪除其已處理的 delivery，再刪事件。
-- 未被消費的事件、仍有 pending delivery 的事件，以及被保留事件的所有 delivery 都不會刪除，因此落後的 publication 仍可被偵測。
-- 此工作不看 Team 功能旗標（旗標關閉時仍會記錄事件），分批且可重複執行，適合排成每週工作。
-- 輸出為 `Publication retention: deleted events=<n> deliveries=<n> cutoff=<iso>`。
+- **旗標關閉時**沒有任何東西消費事件，因此工作會刪除早於保留窗的所有事件（包含未消費事件），並先刪除其 delivery。這是安全的：catch-up 會從當下狀態重新 reconcile 每個 contribution，不依賴事件記錄。`--include-unconsumed` 可明確選用此規則（旗標開啟時會被拒絕）。
+- **旗標開啟時**只刪除早於保留窗且已消費的事件。未消費事件只要仍有屬於 active contributor 的 pending delivery，或尚未建立任何 delivery，就會保留；唯有全部 pending delivery 都屬於已離開或 rights-frozen 的 contributor 時才移除——這些人不會自行 reconcile，其副本已標示「不再更新」。
+- delivery 會先於 event 刪除（`FK … ON DELETE RESTRICT`）。工作分批且可重複執行，適合排成每週工作。
+- 輸出會標明模式：`Publication retention: deleted events=<n> deliveries=<n> cutoff=<iso> mode=flag-off|flag-on`。
 
 ## catch-up 後的 contributor 狀態
 
