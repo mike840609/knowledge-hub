@@ -7,6 +7,7 @@ import {
   folderNameProblem,
   movedNode,
   organizeFailure,
+  placedNode,
   renamedFolder,
   reorderedNode,
   restoredDocument,
@@ -49,6 +50,11 @@ describe("what a move says", () => {
   it("says a reorder by direction and by where the node is now, counting from one", () => {
     expect(reorderedNode("Runbook", "up", 0, 5)).toBe("Moved “Runbook” up. Position 1 of 5.");
     expect(reorderedNode("Runbook", "down", 3, 5)).toBe("Moved “Runbook” down. Position 4 of 5.");
+  });
+
+  it("says where a dropped row landed, counting from one", () => {
+    expect(placedNode("Runbook", 2, 7)).toBe("Placed “Runbook”. Position 3 of 7.");
+    expect(placedNode('He said "hi"', 0, 1)).toBe('Placed “He said "hi"”. Position 1 of 1.');
   });
 
   it("says when there was nowhere further to go", () => {

@@ -250,7 +250,7 @@ Design-language §18 claimed document archive never existed. Service existed; on
 - During request until replacement tree arrives, **retain last direction only**, compute next against new tree. Held key makes one round-trip per step, release stops; down then up reverses rather than dropping up. Give up after3s.
 - Restore focus explicitly after move for browsers unlike Chromium; unit simulates lost focus. Announce `Moved “B” up. Position 1 of 3.` in remounted polite live region so identical messages repeat. **Not role=status**, unique toast region required by existing E2E.
 - **No macOS/Windows physical verification** required by A2.4; unavailable environments. Linux Chromium passed. No apparent tree Option/Alt conflict is inference, not measurement.
-- Exclude drag, dialog search, reorder Undo.
+- Exclude drag, dialog search, reorder Undo. (Drag is no longer excluded: [tree drag reorder](2026-10-31-tree-drag-reorder-design.md), 2026-10-31.)
 
 ## 8. Slice B: recents and favorites
 
@@ -333,7 +333,7 @@ Route follows ID-not-authority:
 | 1 | B in batch1 | **Defer**, B.0 recents/all-favorites only | B.1–B.4 migration/API/sync/rollout excluded |
 | 2 | Repair damage | **Read-only report first, decide after counts** |0.10 report only, no repair/write code |
 | 3 | Archive naming | **Archive** | Archive/Restore everywhere, no Delete |
-| 4 | Drag organization | **Defer**, Move dialog/Alt arrows first | No drag A-2; assess usage later |
+| 4 | Drag organization | **Defer**, Move dialog/Alt arrows first | No drag A-2; assess usage later. **Superseded 2026-10-31:** [tree drag reorder](2026-10-31-tree-drag-reorder-design.md) |
 | 5 | Code languages | **Defaults common+dockerfile/groovy/protobuf** | Verify common in C.1, amend specification if mismatch |
 
 **Decided 2026-09-30**
