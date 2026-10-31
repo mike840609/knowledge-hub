@@ -8,8 +8,9 @@ export const dynamic = "force-dynamic";
 
 /**
  * The Shares shell: one 56rem header, one 64rem tab bar drawn once, and the tab
- * body below it. Proving access here keeps a 404 from ever wearing the "Shares"
- * header, and the cached helpers make the page's own check free.
+ * body below it. Only the unread badge suspends; replacing the navigation itself
+ * would reset its optimistic selection during a tab transition. Access is checked
+ * before drawing the shell, and the cached helpers avoid repeated queries.
  */
 export default async function SharesLayout({ children, params }: { children: ReactNode; params: Promise<{ workspaceId: string }> }) {
   const { workspaceId } = await params;
@@ -26,8 +27,11 @@ export default async function SharesLayout({ children, params }: { children: Rea
       </div>
       <div className="kh-page-wide">
         <div className="mt-4">
-          <Suspense fallback={<SharesNavigation workspaceId={workspaceId} />}>
-            <FollowedCountNavigation workspaceId={workspaceId} />
+          <Suspense fallback={null}>
+            <SharesNavigation
+              workspaceId={workspaceId}
+              discussionsBadge={<Suspense fallback={null}><FollowedCountBadge /></Suspense>}
+            />
           </Suspense>
         </div>
         {children}
@@ -36,12 +40,14 @@ export default async function SharesLayout({ children, params }: { children: Rea
   );
 }
 
-async function FollowedCountNavigation({ workspaceId }: { workspaceId: string }) {
+async function FollowedCountBadge() {
   let unread = 0;
   try {
     unread = (await getFollowedDiscussions()).filter(item => item.linkAvailable && item.unread > 0).length;
   } catch {
     // The badge is optional; a failure here must not take the page down.
   }
-  return <SharesNavigation workspaceId={workspaceId} discussionsUnread={unread} />;
+  return unread > 0
+    ? <span aria-label={`${unread} unread`} className="ml-1 tabular-nums text-caption text-kh-text-muted">{unread}</span>
+    : null;
 }

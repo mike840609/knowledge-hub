@@ -1,7 +1,7 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { tabClasses, tabListClasses } from "@/components/ui/tab";
 
@@ -16,14 +16,22 @@ export function parseSharesTab(tab: string | null): SharesTab {
  * can render it once, marks the clicked tab before the server answers, and warms
  * the two sibling pages so a switch is a content swap rather than a wait.
  */
-export function SharesNavigation({ workspaceId, discussionsUnread = 0 }: { workspaceId: string; discussionsUnread?: number }) {
+export function SharesNavigation({ workspaceId, discussionsBadge }: { workspaceId: string; discussionsBadge?: React.ReactNode }) {
   const params = useSearchParams();
+  const router = useRouter();
   const derived = parseSharesTab(params.get("tab"));
   const [optimistic, setOptimistic] = useState<{ from: SharesTab; to: SharesTab } | null>(null);
   const active = optimistic && derived === optimistic.from ? optimistic.to : derived;
   useEffect(() => {
     if (optimistic && derived !== optimistic.from) setOptimistic(null);
   }, [derived, optimistic]);
+  // Inbox can mark all followed discussions read without leaving this route.
+  // Refresh the server-projected badge (and list) when notifications change.
+  useEffect(() => {
+    const refresh = () => router.refresh();
+    window.addEventListener("kh:notification-changed", refresh);
+    return () => window.removeEventListener("kh:notification-changed", refresh);
+  }, [router]);
 
   const sections = [
     { id: "mine", label: "My shares", href: `/w/${workspaceId}/shares` },
@@ -47,9 +55,7 @@ export function SharesNavigation({ workspaceId, discussionsUnread = 0 }: { works
         >
           <TabLabel onSettled={() => setOptimistic(null)}>
             {section.label}
-            {section.id === "discussions" && discussionsUnread > 0 && (
-              <span aria-label={`${discussionsUnread} unread`} className="ml-1 tabular-nums text-caption text-kh-text-muted">{discussionsUnread}</span>
-            )}
+            {section.id === "discussions" && discussionsBadge}
           </TabLabel>
         </Link>
       ))}

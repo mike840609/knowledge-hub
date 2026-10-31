@@ -8,9 +8,9 @@ import { SharesNavigation, parseSharesTab } from "@/components/knowledge/shares-
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const state = vi.hoisted(() => ({ pending: false }));
+const state = vi.hoisted(() => ({ pending: false, refresh: vi.fn() }));
 
-vi.mock("next/navigation", () => ({ useSearchParams: vi.fn() }));
+vi.mock("next/navigation", () => ({ useSearchParams: vi.fn(), useRouter: () => ({ refresh: state.refresh }) }));
 vi.mock("next/link", () => ({
   default: ({ href, children, prefetch, onClick, ...rest }: { href: string; children: ReactNode; prefetch?: boolean; onClick?: (event: MouseEvent<HTMLAnchorElement>) => void } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href">) =>
     <a href={href} data-prefetch={prefetch ? "true" : undefined} onClick={event => { event.preventDefault(); onClick?.(event); }} {...rest}>{children}</a>,
@@ -23,7 +23,8 @@ afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi
 
 async function mount(tab: string | null, unread = 0) {
   vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams(tab ? `tab=${tab}` : "") as unknown as ReturnType<typeof useSearchParams>);
-  await act(async () => root.render(<SharesNavigation workspaceId="ws" discussionsUnread={unread} />));
+  const discussionsBadge = unread > 0 ? <span aria-label={`${unread} unread`}>{unread}</span> : null;
+  await act(async () => root.render(<SharesNavigation workspaceId="ws" discussionsBadge={discussionsBadge} />));
   const link = (name: string) => [...host.querySelectorAll("a")].find(node => node.textContent?.startsWith(name))!;
   return { mine: link("My shares"), saved: link("Saved shares"), discussions: link("Discussions") };
 }
@@ -59,6 +60,20 @@ it("marks the label while a navigation is pending", async () => {
   state.pending = true;
   await mount(null);
   expect(host.querySelector(".opacity-60")).not.toBeNull();
+});
+
+it("preserves an in-flight optimistic tab when the deferred badge arrives", async () => {
+  const tabs = await mount(null);
+  await act(async () => tabs.saved.click());
+  await act(async () => root.render(<SharesNavigation workspaceId="ws" discussionsBadge={<span aria-label="3 unread">3</span>} />));
+  expect(tabs.saved.getAttribute("aria-current")).toBe("page");
+  expect(tabs.discussions.textContent).toContain("3");
+});
+
+it("refreshes the server badge after Inbox notification changes", async () => {
+  await mount(null);
+  await act(async () => window.dispatchEvent(new Event("kh:notification-changed")));
+  expect(state.refresh).toHaveBeenCalledTimes(1);
 });
 
 it("reverts the optimistic tab when a navigation settles without changing the URL", async () => {

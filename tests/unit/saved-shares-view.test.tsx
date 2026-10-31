@@ -38,3 +38,14 @@ it("refresh can show a share re-saved on another device after local removal",asy
  vi.stubGlobal("fetch",async()=>new Response(null,{status:204}));await mount();await act(async()=>host.querySelector<HTMLButtonElement>('button[aria-label="Remove saved share: A useful guide"]')!.click());expect(host.textContent).not.toContain("A useful guide");
  await mount({...model,items:[]});await mount({...model,items:[{...model.items[0],savedAt:new Date(Date.now()+1000)}]});expect(host.textContent).toContain("A useful guide");
 });
+
+it("keeps the focused saved-share search when a stale result is rendered",async()=>{
+ await mount({...model,query:{q:"guidebook",status:"all",page:1}});
+ const input=host.querySelector<HTMLInputElement>("#saved-shares-query")!;
+ await act(async()=>input.focus());
+ await mount({...model,query:{q:"guide",status:"all",page:1}});
+ expect(input.value).toBe("guidebook");
+ await act(async()=>input.blur());
+ await mount({...model,query:{q:"other",status:"all",page:1}});
+ expect(input.value).toBe("other");
+});

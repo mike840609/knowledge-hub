@@ -93,3 +93,18 @@ it("shows no count when the list is empty", async () => {
     expect(host.textContent).toContain("No active share links.");
   } finally { await act(async () => root.unmount()); host.remove(); }
 });
+
+it("keeps the focused search draft when an older server query arrives", async () => {
+  const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+  const model = (q: string) => ({ items: [], query: { q, status: "all" as const, page: 1 }, hasNext: false });
+  try {
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={model("guidebook")} />));
+    const input = host.querySelector<HTMLInputElement>("#shares-query")!;
+    await act(async () => input.focus());
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={model("guide")} />));
+    expect(input.value).toBe("guidebook");
+    await act(async () => input.blur());
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={model("other")} />));
+    expect(input.value).toBe("other");
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});
