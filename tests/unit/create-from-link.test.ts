@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createHrefForNode, createLinksFor, newDocumentHref } from "@/lib/create-from-link";
+import { createHrefForNode, createLinksFor, mayCreateFromLink, newDocumentHref } from "@/lib/create-from-link";
 import type { DocumentLinkView, OutgoingLinkView } from "@/modules/knowledge/application/knowledge-link-service";
 import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
 import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
@@ -51,6 +51,15 @@ describe("titleForNewDocument", () => {
       expect(resolution, `[[${link.target}]] → "${title}"`).toMatchObject({ status: "RESOLVED", documentId: "new" });
     }
     expect(made).toBeGreaterThan(10);
+  });
+});
+
+describe("mayCreateFromLink", () => {
+  it("is a My Space writer's, and nobody else's", () => {
+    expect(mayCreateFromLink(true, "PERSONAL")).toBe(true);
+    expect(mayCreateFromLink(true, "TEAM")).toBe(false);
+    expect(mayCreateFromLink(false, "PERSONAL")).toBe(false);
+    expect(mayCreateFromLink(false, "TEAM")).toBe(false);
   });
 });
 

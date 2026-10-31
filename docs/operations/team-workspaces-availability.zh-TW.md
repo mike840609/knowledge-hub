@@ -71,7 +71,7 @@ Contributor 的狀態決定維運要期待什麼、以及由什麼解除：
 ## 已知限制
 
 - Folder Sync source 的 root 沒有 tree node。匯入會把文件直接放在 source 之下，因此 My Space 只對 synced source 內的資料夾提供「發佈到團隊」，不對 source root 本身提供。發佈整個 synced source 屬於設計後續；服務端仍接受任何傳入的自有 folder node。
-- 團隊的 `/w/<workspaceId>/knowledge/new` 對可寫入的成員仍可由 URL 開啟，因為保留的 composer 流程會用到它；團隊的任何介面都不提供新增文件、資料夾、匯入或複製的入口。發佈仍是從介面加入團隊內容的唯一路徑，建立請求仍會由服務端判權並拒絕。這是已記錄的殘留，不是隱藏能力。
+- 團隊的 `/w/<workspaceId>/knowledge/new` 對可寫入的成員仍可由 URL 開啟，因為保留的 composer 流程會用到它；團隊的任何介面都不提供新增文件、資料夾、匯入或複製的入口，團隊文件中的未解析 `[[wikilink]]` 即使對編輯者也會以純文字呈現，讀者頁、Links 面板與圖譜都不提供「Create」入口。發佈仍是從介面加入團隊內容的唯一路徑，建立請求仍會由服務端判權並拒絕。這是已記錄的殘留，不是隱藏能力。
 
 ## Unpublish、restore 與 rename
 
