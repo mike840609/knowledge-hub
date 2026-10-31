@@ -1,6 +1,7 @@
 import { evaluateWorkspaceCapabilities } from "@/modules/workspaces/application/workspace-authorization";
 import { ROLE_WORKSPACE_CAPABILITIES } from "@/modules/workspaces/domain/workspace-capability";
-import { WorkspaceAccessDeniedError } from "@/modules/workspaces/domain/errors";
+import { WorkspaceAccessDeniedError, WorkspaceArchivedError, WorkspaceNotFoundError } from "@/modules/workspaces/domain/errors";
+import type { Workspace } from "@/modules/workspaces/domain/workspace";
 import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
 import {
   DocumentNotFoundError,
@@ -79,9 +80,15 @@ export async function publicationWriteRightsAllow(
   publication: Publication,
   contribution: Contribution,
   judge: RightsJudge,
+  lockedWorkspace?: Workspace,
 ): Promise<boolean> {
   if (contribution.leftAt !== null) return false;
-  const workspace = await repositories.workspaces.findById(publication.teamWorkspaceId);
+  // A caller that already holds the Workspace shared lock passes that locked
+  // row: a consistent read here could still see a pre-archive snapshot while
+  // the locking read sees ARCHIVED, which would let a write slip past the
+  // freeze/pending rule.
+  const workspace = lockedWorkspace
+    ?? await repositories.workspaces.findById(publication.teamWorkspaceId);
   if (!workspace || workspace.workspaceType !== "TEAM" || workspace.lifecycleState !== "ACTIVE") return false;
 
   if (judge.kind === "CALLER") {
@@ -100,8 +107,11 @@ export async function requirePublicationWriteRights(
   publication: Publication,
   contribution: Contribution,
   judge: RightsJudge,
+  lockedWorkspace?: Workspace,
 ): Promise<void> {
-  if (!(await publicationWriteRightsAllow(repositories, publication, contribution, judge))) {
+  if (!(await publicationWriteRightsAllow(
+    repositories, publication, contribution, judge, lockedWorkspace,
+  ))) {
     throw new WorkspaceAccessDeniedError("Updating this publication requires source.manage in its active team.");
   }
 }
@@ -151,13 +161,22 @@ export async function bindPublicationProjection(
   }
   if (source.status !== "ACTIVE") throw new SourceArchivedError("This publication is archived.");
 
+  // Defense in depth: the reconciler already judges rights against the locked
+  // Workspace, but a direct binder call must not write into an archived team.
+  // Source → Workspace; no second Source lock is taken after this point.
+  const workspace = await repositories.workspaces.lockSharedById(publication.teamWorkspaceId);
+  if (!workspace || workspace.workspaceType !== "TEAM") throw new WorkspaceNotFoundError();
+  if (workspace.lifecycleState !== "ACTIVE") {
+    throw new WorkspaceArchivedError("Restore the Team workspace before mutating its publications.");
+  }
+
   const contributions = await repositories.publications.listContributions(publication.id);
   const contribution = contributions.find((candidate) => candidate.id === input.contributionId);
   if (!contribution || contribution.publicationId !== publication.id) {
     throw new NotFoundError("Publication contribution was not found.");
   }
 
-  await requirePublicationWriteRights(repositories, publication, contribution, input.judge);
+  await requirePublicationWriteRights(repositories, publication, contribution, input.judge, workspace);
 
   const authority: PublicationAuthority = {
     [AUTHORITY]: true,

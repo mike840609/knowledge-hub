@@ -357,6 +357,36 @@ describe("publication API: commands", () => {
     expect((await sourceRow(sourceId)).status).toBe("ACTIVE");
   });
 
+  it("refuses publication commands on an archived team", async () => {
+    const teamId = await teamWithRoles("Archived API Team", [
+      { user: fixture.mike, role: "OWNER" },
+      { user: fixture.ann, role: "EDITOR" },
+    ]);
+    const tree = await createFolderTree(fixture.ann, unique("api-archived-team"), [
+      { relative: "a.md", title: "Archived API A", markdown: "a" },
+    ]);
+    const published = await publishTree(
+      fixture.ann, teamId, tree, unique("Archived API Publication"));
+    const sourceId = await publicationSourceId(published.publicationId);
+    const now = new Date();
+    await fixture.uow.run((repositories) => repositories.workspaces.setWorkspaceLifecycle(
+      teamId, "ARCHIVED", fixture.mike.identity.id, now, now));
+
+    as(fixture.mike);
+    await expectError(
+      await unpublish(request(), ofPublication(published.publicationId)),
+      409,
+      "WORKSPACE_ARCHIVED",
+    );
+    as(fixture.ann);
+    await expectError(
+      await rename(request({ name: unique("Archived API Renamed") }), ofPublication(published.publicationId)),
+      409,
+      "WORKSPACE_ARCHIVED",
+    );
+    expect((await sourceRow(sourceId)).status).toBe("ACTIVE");
+  });
+
   it("names both restore conflicts", async () => {
     const first = await createFolderTree(fixture.mike, unique("api-restore-a"), [
       { relative: "a.md", title: "Restore A", markdown: "a" },

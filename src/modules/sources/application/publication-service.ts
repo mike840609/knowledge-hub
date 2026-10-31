@@ -9,7 +9,7 @@ import {
 } from "@/modules/knowledge/domain/errors";
 import type { KnowledgeTreeNode } from "@/modules/knowledge/domain/tree-node";
 import { evaluateWorkspaceCapabilities } from "@/modules/workspaces/application/workspace-authorization";
-import { WorkspaceAccessDeniedError, WorkspaceNotFoundError } from "@/modules/workspaces/domain/errors";
+import { WorkspaceAccessDeniedError, WorkspaceArchivedError, WorkspaceNotFoundError } from "@/modules/workspaces/domain/errors";
 import type { Workspace } from "@/modules/workspaces/domain/workspace";
 import type { WorkspaceCapability } from "@/modules/workspaces/domain/workspace-capability";
 import { uuidv7 } from "@/shared/ids/uuidv7";
@@ -436,6 +436,9 @@ export class PublicationService {
         ) {
           throw new SourceArchivedError("This publication is archived.");
         }
+        // Source → Workspace: the shared lock revalidates the team lifecycle
+        // after the Source lock, before any contribution state write.
+        await lockActiveTeamWorkspace(repositories, publication.teamWorkspaceId);
 
         const folder = await requireOwnedFolder(repositories, caller, input.folderNodeId);
         const contributions = await repositories.publications.listContributions(publication.id);
@@ -516,6 +519,9 @@ export class PublicationService {
       // leave on a hidden team writes nothing.
       await requireTeamRead(repositories, caller, publication.teamWorkspaceId);
       await repositories.sources.lockById(publication.sourceId);
+      // An archived team refuses contribution mutations for everyone, before
+      // any state write; the Source lock keeps the publication route stable.
+      await lockActiveTeamWorkspace(repositories, publication.teamWorkspaceId);
 
       const contributions = await repositories.publications.listContributions(publicationId);
       const contribution = contributions.find((candidate) => candidate.userId === caller.identity.id);
@@ -540,6 +546,9 @@ export class PublicationService {
       // reach that write, exactly as status refuses to report it.
       await requireTeamRead(repositories, caller, routed.teamWorkspaceId);
       await repositories.sources.lockById(routed.sourceId);
+      // Resume is a contribution state change, so an archived team refuses it
+      // even though an archived publication already has nothing to resume.
+      await lockActiveTeamWorkspace(repositories, routed.teamWorkspaceId);
       const publication = await repositories.publications.findBySourceId(routed.sourceId);
       if (!publication || publication.id !== publicationId) {
         throw new NotFoundError("Publication was not found.");
@@ -747,6 +756,10 @@ export class PublicationService {
     if (!publication || publication.id !== publicationId) {
       throw new NotFoundError("Publication was not found.");
     }
+    // Source → Workspace: an archived team blocks every lifecycle command
+    // (admin and creator alike) before any write, not only through the
+    // capability check in `requirePublicationLifecycleRights`.
+    await lockActiveTeamWorkspace(repositories, publication.teamWorkspaceId);
     return publication;
   }
 }
@@ -767,9 +780,23 @@ async function reuseRacedJoin(
     if (!publication) return null;
     await requireActiveTeamWithSourceManage(repositories, caller, publication.teamWorkspaceId);
     if (publication.kind !== "FOLDER" || publication.status !== "ACTIVE") return null;
+    // The winner's row is re-read under the same Source → Workspace order the
+    // ordinary join uses, so an archive that won the race still refuses the
+    // resume/state write below.
+    const source = await repositories.sources.lockById(publication.sourceId);
+    if (!source || source.sourceType !== "PUBLICATION" || source.status !== "ACTIVE") return null;
+    const lockedPublication = await repositories.publications.findBySourceId(source.id);
+    if (
+      !lockedPublication
+      || lockedPublication.id !== publication.id
+      || lockedPublication.status !== "ACTIVE"
+    ) {
+      return null;
+    }
+    await lockActiveTeamWorkspace(repositories, lockedPublication.teamWorkspaceId);
     const folder = await requireOwnedFolder(repositories, caller, input.folderNodeId);
 
-    const contributions = await repositories.publications.listContributions(publication.id);
+    const contributions = await repositories.publications.listContributions(lockedPublication.id);
     const existing = contributions.find((candidate) => candidate.userId === caller.identity.id);
     if (!existing) return null;
     if (existing.origin.kind !== "FOLDER" || existing.origin.folderNodeId !== folder.id) {
@@ -788,7 +815,7 @@ async function reuseRacedJoin(
     }
 
     const reconciled = await reconcileContribution(repositories, {
-      publicationId: publication.id,
+      publicationId: lockedPublication.id,
       contributionId: existing.id,
       judge: { kind: "CALLER", caller },
       now: new Date(),
@@ -806,6 +833,28 @@ async function requireTeamRead(
   if (!workspace || workspace.workspaceType !== "TEAM") throw new WorkspaceNotFoundError();
   const capabilities = await evaluateWorkspaceCapabilities(repositories, caller, teamWorkspaceId);
   if (!capabilities.has("document.read")) throw new WorkspaceNotFoundError();
+}
+
+/**
+ * The Workspace shared write lock every publication mutation holds after its
+ * Source lock (spec §14.2 amendment; plan Transaction and Concurrency Rules).
+ * Governance still takes the row FOR UPDATE, so an archive waits for an
+ * in-flight publication write and a publication write sees the archived state
+ * instead of acting on the pre-lock routing read.
+ *
+ * Order is Source → Workspace. Never take another existing Source lock after
+ * this returns.
+ */
+async function lockActiveTeamWorkspace(
+  repositories: SourceRepositories,
+  teamWorkspaceId: string,
+): Promise<Workspace> {
+  const workspace = await repositories.workspaces.lockSharedById(teamWorkspaceId);
+  if (!workspace || workspace.workspaceType !== "TEAM") throw new WorkspaceNotFoundError();
+  if (workspace.lifecycleState !== "ACTIVE") {
+    throw new WorkspaceArchivedError("Restore the Team workspace before mutating its publications.");
+  }
+  return workspace;
 }
 
 async function requireActiveTeamWithSourceManage(
@@ -876,6 +925,10 @@ async function requirePublicationLifecycleRights(
   publication: Publication,
   contributions: readonly Contribution[],
 ): Promise<void> {
+  // `lockPublication` has already taken the team's shared Workspace lock and
+  // refused an ARCHIVED team, so even an admin cannot mutate an archived
+  // team's publications. The admin branch below is an authority check only;
+  // the creator branch keeps its own ACTIVE revalidation as defense in depth.
   const workspace = await repositories.workspaces.findById(publication.teamWorkspaceId);
   if (!workspace || workspace.workspaceType !== "TEAM") throw new WorkspaceNotFoundError();
   const capabilities = await evaluateWorkspaceCapabilities(

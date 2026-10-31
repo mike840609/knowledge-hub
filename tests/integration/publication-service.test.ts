@@ -6,6 +6,7 @@ import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
 import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
+import { TeamWorkspaceService } from "@/modules/workspaces/application/team-workspace-service";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { createPublicationFixture, type PublicationFixture } from "../fixtures/publications";
 
@@ -874,5 +875,72 @@ describe("publication service: list", () => {
     // The second publication's metadata was never read at all.
     expect(counting.publicationIds()).toEqual([first.publicationId]);
     expect(counting.publicationIds()).not.toContain(second.publicationId);
+  });
+});
+
+describe("publication service: team archive race", () => {
+  it("rolls back when the team archives between the active check and reconcile", async () => {
+    const teamId = uuidv7();
+    const now = new Date();
+    await fixture.uow.run(async (repositories) => {
+      await repositories.workspaces.insert(createTeamWorkspaceInsert({
+        id: teamId, name: `Publish Race ${teamId}`, createdBy: fixture.mike.identity.id, now,
+      }));
+      await repositories.workspaceMemberships.insert(createDirectMembership({
+        workspaceId: teamId, userId: fixture.mike.identity.id, role: "OWNER", now,
+      }));
+    });
+    const tree = await createFolderTree(fixture.mike, unique("publish-race"), [
+      { relative: "a.md", title: "Publish Race A", markdown: "a" },
+    ]);
+    const name = unique("Publish Race Publication");
+
+    // Archive after the service's active-team check but before its first team
+    // write: the reconciler then locks an ARCHIVED workspace, loses rights and
+    // the whole publish transaction rolls back.
+    let archived = false;
+    const racingUow: SourceUnitOfWork = {
+      run: (work) => fixture.uow.run(async (repositories) => {
+        const sources = repositories.sources;
+        const wrapped = new Proxy(repositories, {
+          get(target, property, receiver) {
+            if (property !== "sources") return Reflect.get(target, property, receiver);
+            return new Proxy(sources, {
+              get(sourceTarget, sourceProperty, sourceReceiver) {
+                if (sourceProperty !== "insert") {
+                  return Reflect.get(sourceTarget, sourceProperty, sourceReceiver);
+                }
+                return async (source: Parameters<typeof sources.insert>[0]) => {
+                  if (!archived) {
+                    archived = true;
+                    await new TeamWorkspaceService(fixture.uow)
+                      .archiveTeamWorkspace(fixture.mike, teamId);
+                  }
+                  await sources.insert(source);
+                };
+              },
+            });
+          },
+        });
+        return work(wrapped);
+      }),
+      runWithCreatorQuotaLock: (creatorId, timeoutSeconds, work) =>
+        fixture.uow.runWithCreatorQuotaLock(creatorId, timeoutSeconds, work),
+    };
+
+    await expect(new PublicationService(racingUow).publish(fixture.mike, {
+      teamWorkspaceId: teamId,
+      name,
+      origin: { kind: "FOLDER", folderNodeId: tree.folderNodeId },
+    })).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
+
+    expect(await sourceCount(teamId, name)).toBe(0);
+    const rows = await fixture.pool.query<{ n: unknown }[]>(
+      `SELECT COUNT(*) AS n FROM publications p
+       JOIN knowledge_sources s ON s.id = p.source_id
+       WHERE s.workspace_id = ? AND s.name = ?`,
+      [teamId, name],
+    );
+    expect(Number(rows[0]?.n ?? 0)).toBe(0);
   });
 });

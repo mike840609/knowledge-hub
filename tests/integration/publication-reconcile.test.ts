@@ -4,10 +4,13 @@ import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/
 import { bindSourceProjection } from "@/modules/sources/application/source-knowledge-projection-service";
 import { updateSourceLocator } from "@/modules/sources/application/source-entry-mapping-service";
 import { reconcileContribution } from "@/modules/sources/application/publication-reconciler";
+import { bindPublicationProjection } from "@/modules/sources/application/publication-write-authority";
 import type { DocumentBinding, RightsJudge } from "@/modules/sources/domain/publication";
 import { publicationError } from "@/modules/sources/domain/publication-errors";
 import type { SourceRepositories, SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
+import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
 import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
+import { TeamWorkspaceService } from "@/modules/workspaces/application/team-workspace-service";
 import { createPublicationFixture, type PublicationFixture } from "../fixtures/publications";
 
 let fixture: PublicationFixture;
@@ -1349,6 +1352,92 @@ describe("eligibility, placement and rights", () => {
 
     const result = await reconcile(publication.publication.id, publication.contributionId, mikeJudge());
     expect(result.state).toBe("SKIPPED");
+    expect(await publicationDocuments(publication.publication.id)).toHaveLength(0);
+  });
+});
+
+describe("archived team", () => {
+  async function createArchivedTeamPublication(label: string) {
+    const teamId = uuidv7();
+    const now = new Date();
+    await fixture.uow.run(async (repositories) => {
+      await repositories.workspaces.insert(createTeamWorkspaceInsert({
+        id: teamId, name: `Reconcile ${label} ${teamId}`, createdBy: fixture.mike.identity.id, now,
+      }));
+      await repositories.workspaceMemberships.insert(createDirectMembership({
+        workspaceId: teamId, userId: fixture.mike.identity.id, role: "OWNER", now,
+      }));
+      await repositories.workspaceMemberships.insert(createDirectMembership({
+        workspaceId: teamId, userId: fixture.ann.identity.id, role: "EDITOR", now,
+      }));
+    });
+
+    const mikeFolder = await fixture.createFolder(fixture.mike, `reconcile/${label}-mike`, `${label}-mike`);
+    await fixture.createSyncedOriginal(fixture.mike, {
+      parentId: mikeFolder.treeNodeId,
+      sourcePath: `reconcile/${label}-mike/a.md`,
+      title: `Reconcile ${label} Mike`,
+      markdown: "mike",
+    });
+    const publication = await fixture.createPublication({
+      teamWorkspaceId: teamId,
+      name: `Reconcile ${label}`,
+      kind: "FOLDER",
+      creator: fixture.mike,
+      origin: { kind: "FOLDER", folderNodeId: mikeFolder.treeNodeId },
+    });
+
+    const annFolder = await fixture.createFolder(fixture.ann, `reconcile/${label}-ann`, `${label}-ann`);
+    await fixture.createSyncedOriginal(fixture.ann, {
+      parentId: annFolder.treeNodeId,
+      sourcePath: `reconcile/${label}-ann/a.md`,
+      title: `Reconcile ${label} Ann`,
+      markdown: "ann",
+    });
+    const annContributionId = await addAnnContribution(publication, {
+      kind: "FOLDER", folderNodeId: annFolder.treeNodeId,
+    });
+
+    await new TeamWorkspaceService(fixture.uow).archiveTeamWorkspace(fixture.mike, teamId);
+    return { publication, annContributionId };
+  }
+
+  it("freezes a caller and pends a no-caller without writing team documents", async () => {
+    const { publication, annContributionId } =
+      await createArchivedTeamPublication("archived-rights");
+
+    const frozen = await reconcile(publication.publication.id, publication.contributionId, mikeJudge());
+    expect(frozen.state).toBe("FROZEN");
+    expect(frozen.report).toEqual({
+      created: 0, updated: 0, moved: 0, archived: 0, restored: 0, notices: [],
+    });
+    expect(await publicationDocuments(publication.publication.id)).toHaveLength(0);
+    const mikeContribution = (await fixture.uow.run((repositories) =>
+      repositories.publications.listContributions(publication.publication.id)))
+      .find((candidate) => candidate.id === publication.contributionId)!;
+    expect(mikeContribution.rightsFrozenAt).not.toBeNull();
+
+    const pending = await reconcile(publication.publication.id, annContributionId, NO_CALLER);
+    expect(pending.state).toBe("PENDING");
+    expect(pending.report).toEqual({
+      created: 0, updated: 0, moved: 0, archived: 0, restored: 0, notices: [],
+    });
+    expect(await publicationDocuments(publication.publication.id)).toHaveLength(0);
+    const annContribution = (await fixture.uow.run((repositories) =>
+      repositories.publications.listContributions(publication.publication.id)))
+      .find((candidate) => candidate.id === annContributionId)!;
+    expect(annContribution.rightsFrozenAt).toBeNull();
+    expect(annContribution.pendingCatchUp).toBe(true);
+  });
+
+  it("refuses the projection binder on an archived team", async () => {
+    const { publication } = await createArchivedTeamPublication("archived-binder");
+
+    await expect(fixture.uow.run((repositories) => bindPublicationProjection(repositories, {
+      publicationId: publication.publication.id,
+      contributionId: publication.contributionId,
+      judge: mikeJudge(),
+    }))).rejects.toMatchObject({ code: "WORKSPACE_ARCHIVED" });
     expect(await publicationDocuments(publication.publication.id)).toHaveLength(0);
   });
 });

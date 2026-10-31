@@ -1,4 +1,4 @@
-import { WorkspaceAccessDeniedError } from "@/modules/workspaces/domain/errors";
+import { WorkspaceAccessDeniedError, WorkspaceNotFoundError } from "@/modules/workspaces/domain/errors";
 import { NotFoundError, SourceNotFoundError } from "@/modules/knowledge/domain/errors";
 import type { KnowledgeRevision } from "@/modules/knowledge/domain/revision";
 import {
@@ -187,6 +187,14 @@ export async function reconcileContribution(
     return { state: "SKIPPED", report: emptyReport() };
   }
 
+  // Source → Workspace. The shared lock is held through the rights check and
+  // every write below, so governance's FOR UPDATE archive waits for this
+  // reconciliation. An ARCHIVED team is deliberately not an error here: the
+  // spec wants CALLER frozen / NO_CALLER pending, so `publicationWriteRightsAllow`
+  // judges it and the rule below records the outcome without writing copies.
+  const workspace = await repositories.workspaces.lockSharedById(publication.teamWorkspaceId);
+  if (!workspace || workspace.workspaceType !== "TEAM") throw new WorkspaceNotFoundError();
+
   const contributions = await repositories.publications.listContributions(publication.id);
   const contribution = contributions.find((candidate) => candidate.id === input.contributionId);
   if (!contribution || contribution.publicationId !== publication.id) {
@@ -197,7 +205,8 @@ export async function reconcileContribution(
   if (input.judge.kind === "CALLER" && input.judge.caller.identity.id !== contribution.userId) {
     throw new WorkspaceAccessDeniedError("A caller can only reconcile their own contribution.");
   }
-  const allowed = await publicationWriteRightsAllow(repositories, publication, contribution, input.judge);
+  const allowed = await publicationWriteRightsAllow(
+    repositories, publication, contribution, input.judge, workspace);
   if (!allowed) {
     if (input.judge.kind === "CALLER") {
       const frozenAt = contribution.rightsFrozenAt ?? input.now;

@@ -3,6 +3,7 @@ import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { reconcileContribution } from "@/modules/sources/application/publication-reconciler";
 import { PublicationService } from "@/modules/sources/application/publication-service";
 import { bindSourceProjection } from "@/modules/sources/application/source-knowledge-projection-service";
+import { TeamWorkspaceService } from "@/modules/workspaces/application/team-workspace-service";
 import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
 import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
 import { uuidv7 } from "@/shared/ids/uuidv7";
@@ -592,5 +593,137 @@ describe("publication lifecycle: restore", () => {
     expect((rejected[0] as PromiseRejectedResult).reason)
       .toMatchObject({ code: "PUBLICATION_NAME_TAKEN" });
     expect(await activeNameCount(fixture.teamWorkspaceId, name)).toBe(1);
+  });
+});
+
+describe("publication lifecycle: archived team", () => {
+  it("refuses admin and creator unpublish, rename and restore and writes nothing", async () => {
+    const teamId = await createTeamWithRoles("Archived Lifecycle Team", [
+      { userId: fixture.mike.identity.id, role: "OWNER" },
+      { userId: fixture.ann.identity.id, role: "EDITOR" },
+    ]);
+    const activeTree = await createFolderTree(fixture.ann, unique("archived-team-active"), [
+      { relative: "a.md", title: "Archived Team A", markdown: "a" },
+    ]);
+    const active = await service.publish(fixture.ann, {
+      teamWorkspaceId: teamId,
+      name: unique("Archived Team Active"),
+      origin: { kind: "FOLDER", folderNodeId: activeTree.folderNodeId },
+    });
+    const archivedTree = await createFolderTree(fixture.ann, unique("archived-team-restore"), [
+      { relative: "b.md", title: "Archived Team B", markdown: "b" },
+    ]);
+    const archived = await service.publish(fixture.ann, {
+      teamWorkspaceId: teamId,
+      name: unique("Archived Team Restore"),
+      origin: { kind: "FOLDER", folderNodeId: archivedTree.folderNodeId },
+    });
+    await service.unpublish(fixture.ann, archived.publicationId);
+
+    const activeSource = (await fixture.uow.run((repositories) =>
+      repositories.publications.findById(active.publicationId)))!.sourceId;
+    const archivedSource = (await fixture.uow.run((repositories) =>
+      repositories.publications.findById(archived.publicationId)))!.sourceId;
+    const before = {
+      activeStatus: await sourceStatus(activeSource),
+      activeName: await sourceName(activeSource),
+      archivedStatus: await sourceStatus(archivedSource),
+      archivedName: await sourceName(archivedSource),
+      documents: (await fixture.uow.run((repositories) =>
+        repositories.publications.listDocuments(active.publicationId))).length,
+    };
+
+    await new TeamWorkspaceService(fixture.uow).archiveTeamWorkspace(fixture.mike, teamId);
+
+    for (const caller of [fixture.mike, fixture.ann]) {
+      await expect(service.unpublish(caller, active.publicationId))
+        .rejects.toMatchObject({ code: "WORKSPACE_ARCHIVED" });
+      await expect(service.rename(caller, active.publicationId, unique("Archived Team Renamed")))
+        .rejects.toMatchObject({ code: "WORKSPACE_ARCHIVED" });
+      await expect(service.restore(caller, archived.publicationId))
+        .rejects.toMatchObject({ code: "WORKSPACE_ARCHIVED" });
+    }
+
+    expect({
+      activeStatus: await sourceStatus(activeSource),
+      activeName: await sourceName(activeSource),
+      archivedStatus: await sourceStatus(archivedSource),
+      archivedName: await sourceName(archivedSource),
+      documents: (await fixture.uow.run((repositories) =>
+        repositories.publications.listDocuments(active.publicationId))).length,
+    }).toEqual(before);
+    expect((await fixture.uow.run((repositories) =>
+      repositories.publications.findById(active.publicationId)))?.status).toBe("ACTIVE");
+    expect((await fixture.uow.run((repositories) =>
+      repositories.publications.findById(archived.publicationId)))?.status).toBe("ARCHIVED");
+  });
+
+  it("refuses leave and resume and leaves contribution state unchanged", async () => {
+    const teamId = await createTeamWithRoles("Archived Team Members", [
+      { userId: fixture.mike.identity.id, role: "OWNER" },
+      { userId: fixture.ann.identity.id, role: "EDITOR" },
+    ]);
+    const mikeTree = await createFolderTree(fixture.mike, unique("archived-team-mike"), [
+      { relative: "a.md", title: "Archived Team Mike", markdown: "mike" },
+    ]);
+    const annTree = await createFolderTree(fixture.ann, unique("archived-team-ann"), [
+      { relative: "a.md", title: "Archived Team Ann", markdown: "ann" },
+    ]);
+
+    const joinedPublication = await service.publish(fixture.mike, {
+      teamWorkspaceId: teamId,
+      name: unique("Archived Team Joined"),
+      origin: { kind: "FOLDER", folderNodeId: mikeTree.folderNodeId },
+    });
+    const joined = await service.join(fixture.ann, {
+      publicationId: joinedPublication.publicationId,
+      folderNodeId: annTree.folderNodeId,
+      acknowledgeLowOverlap: true,
+    });
+
+    const leftMikeTree = await createFolderTree(fixture.mike, unique("archived-team-mike-left"), [
+      { relative: "b.md", title: "Archived Team Mike Left", markdown: "mike left" },
+    ]);
+    const leftAnnTree = await createFolderTree(fixture.ann, unique("archived-team-ann-left"), [
+      { relative: "b.md", title: "Archived Team Ann Left", markdown: "ann left" },
+    ]);
+    const leftPublication = await service.publish(fixture.mike, {
+      teamWorkspaceId: teamId,
+      name: unique("Archived Team Left"),
+      origin: { kind: "FOLDER", folderNodeId: leftMikeTree.folderNodeId },
+    });
+    const left = await service.join(fixture.ann, {
+      publicationId: leftPublication.publicationId,
+      folderNodeId: leftAnnTree.folderNodeId,
+      acknowledgeLowOverlap: true,
+    });
+    await service.leave(fixture.ann, leftPublication.publicationId);
+    const leftBefore = await contributionOf(leftPublication.publicationId, fixture.ann.identity.id);
+
+    await new TeamWorkspaceService(fixture.uow).archiveTeamWorkspace(fixture.mike, teamId);
+
+    await expect(service.leave(fixture.ann, joinedPublication.publicationId))
+      .rejects.toMatchObject({ code: "WORKSPACE_ARCHIVED" });
+    const joinedAfter = await contributionOf(joinedPublication.publicationId, fixture.ann.identity.id);
+    expect(joinedAfter?.id).toBe(joined.contributionId);
+    expect(joinedAfter?.leftAt).toBeNull();
+    expect(joinedAfter?.rightsFrozenAt).toBeNull();
+
+    await expect(service.resume(fixture.ann, leftPublication.publicationId))
+      .rejects.toMatchObject({ code: "WORKSPACE_ARCHIVED" });
+    const leftAfter = await contributionOf(leftPublication.publicationId, fixture.ann.identity.id);
+    expect(leftAfter?.id).toBe(left.contributionId);
+    expect(leftAfter?.leftAt).toEqual(leftBefore?.leftAt);
+    expect(leftAfter?.rightsFrozenAt).toEqual(leftBefore?.rightsFrozenAt);
+
+    // Joining a new origin on an archived team is refused before any row.
+    const otherTree = await createFolderTree(fixture.ann, unique("archived-team-join"), [
+      { relative: "c.md", title: "Archived Team C", markdown: "c" },
+    ]);
+    await expect(service.join(fixture.ann, {
+      publicationId: joinedPublication.publicationId,
+      folderNodeId: otherTree.folderNodeId,
+      acknowledgeLowOverlap: true,
+    })).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
   });
 });
