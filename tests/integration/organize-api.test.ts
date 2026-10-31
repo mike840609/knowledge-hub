@@ -12,7 +12,7 @@ import { ensureDefaultHubSource } from "@/modules/sources/application/ensure-def
 import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
 import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
 import { uuidv7 } from "@/shared/ids/uuidv7";
-import { buildKnowledgeTree, reorderStep } from "@/lib/knowledge-navigation";
+import { buildKnowledgeTree, dropPlacement, reorderStep } from "@/lib/knowledge-navigation";
 import { createDocumentForAnySource } from "../fixtures/knowledge";
 
 const injected = vi.hoisted(() => ({ caller: null as unknown, services: null as unknown }));
@@ -618,6 +618,57 @@ describe("the step the tree asks for, against the real service", () => {
     }
     // A run that mostly bounced off the ends would prove little.
     expect(moves).toBeGreaterThan(30);
+  });
+});
+
+describe("the place a drop asks for, against the real service", () => {
+  it("lands where the pointer drew it, with an archived sibling hidden", async () => {
+    const w = await world();
+    const docs: Record<string, string> = {};
+    for (const title of ["A", "B", "C", "D"]) docs[title] = (await makeDocument(w, title)).documentId;
+    await hub.archiveDocument(w.owner, docs.B);
+    const nodes: Record<string, string> = {};
+    for (const title of ["A", "C", "D"]) nodes[title] = await nodeOf(w, docs[title]);
+
+    const model = ["A", "C", "D"];
+    // Seeded, so a failure is the same failure next time (mulberry32, as above).
+    let state = 11;
+    const random = () => {
+      state = (state + 0x6d2b79f5) | 0;
+      let t = Math.imul(state ^ (state >>> 15), 1 | state);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const next = (bound: number) => Math.floor(random() * bound);
+    let moves = 0;
+    as(w.owner);
+    for (let round = 0; round < 40; round += 1) {
+      const dragged = model[next(model.length)];
+      let target = model[next(model.length)];
+      while (target === dragged) target = model[next(model.length)];
+      const zone = next(2) === 0 ? "before" : "after";
+      const view = await queries.listTree(w.owner, w.notes);
+      const placement = dropPlacement(view, nodes[dragged], nodes[target], zone);
+      if (placement?.kind !== "reorder") throw new Error(`Round ${round}: expected a reorder for ${dragged} ${zone} ${target}.`);
+      // `index` is where it lands among the siblings in view after the drag is taken out.
+      model.splice(model.indexOf(dragged), 1);
+      model.splice(placement.index, 0, dragged);
+      expect((await patchTreeNode(request({ position: placement.position }, "PATCH"), ofNode(nodes[dragged]))).status).toBe(204);
+      expect((await queries.listTree(w.owner, w.notes)).map((item) => item.label)).toEqual(model);
+      moves += 1;
+    }
+    // A run that mostly bounced off the ends would prove little.
+    expect(moves).toBeGreaterThan(20);
+  });
+
+  it("moves a document between a folder's children", async () => {
+    const { w, a, d, folder } = await arranged();
+    as(w.owner);
+    const view = await queries.listTree(w.owner, w.notes);
+    const placement = dropPlacement(view, await nodeOf(w, a.documentId), await nodeOf(w, d.documentId), "before");
+    expect(placement).toMatchObject({ kind: "move", parentId: folder, position: 0 });
+    expect((await patchTreeNode(request({ parentId: folder, position: 0 }, "PATCH"), ofNode(await nodeOf(w, a.documentId)))).status).toBe(204);
+    expect(await order(w, w.notes, folder)).toEqual([{ label: "A", position: 0 }, { label: "D", position: 1 }]);
   });
 });
 
