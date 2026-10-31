@@ -34,6 +34,7 @@ export function useTreeDrag(input: Input) {
   const busy = useRef(false);
   const operation = useRef(0);
   const expected = useRef<{ id: string; parentId: string | null; position: number | undefined; oldParent: string | null; oldPosition: number } | null>(null);
+  const itemsAtDrop = useRef(input.items);
   const awaitingResponse = useRef(false);
   const refreshed = useRef(false);
   const focusWaiting = useRef(false);
@@ -52,17 +53,21 @@ export function useTreeDrag(input: Input) {
   }, []);
   useEffect(() => {
     const wanted = expected.current;
-    const row = wanted && input.items.find((item) => item.id === wanted.id);
+    // A successful append can leave all positions unchanged. Only a new tree snapshot,
+    // not a re-render of the old one, can confirm that its refresh has arrived.
+    if (!busy.current || !wanted || input.items === itemsAtDrop.current) return;
+    const row = input.items.find((item) => item.id === wanted.id);
     const changed = row && wanted && (row.parentId !== wanted.oldParent || row.position !== wanted.oldPosition);
     const appended = wanted?.position === undefined || wanted.position === Number.MAX_SAFE_INTEGER;
     const atDestination = row && wanted && row.parentId === wanted.parentId && (appended
       ? input.items.every((item) => item.parentId !== wanted.parentId || item.id === row.id || item.position < row.position)
       : row.position === wanted.position);
-    if (changed && atDestination) {
+    if ((changed || appended) && atDestination) {
       if (awaitingResponse.current) refreshed.current = true;
-      else if (focusWaiting.current && wanted) {
+      else if (focusWaiting.current) {
         focusWaiting.current = false;
         busy.current = false;
+        expected.current = null;
         input.onRefreshed(wanted.id);
       }
     }
@@ -144,6 +149,7 @@ export function useTreeDrag(input: Input) {
         cleanup(); return;
       }
       busy.current = true; awaitingResponse.current = true; refreshed.current = false;
+      itemsAtDrop.current = input.items;
       expected.current = { id: source.id, parentId: placement.kind === "move" ? placement.parentId : source.parentId,
         position: placement.position, oldParent: source.parentId, oldPosition: source.position };
       const currentOperation = operation.current;
@@ -163,7 +169,11 @@ export function useTreeDrag(input: Input) {
       } finally {
         if (operation.current === currentOperation) {
           awaitingResponse.current = false;
-          if (!succeeded || refreshed.current) busy.current = false;
+          if (!succeeded || refreshed.current) {
+            busy.current = false;
+            focusWaiting.current = false;
+            expected.current = null;
+          }
           cleanup();
         }
       }
