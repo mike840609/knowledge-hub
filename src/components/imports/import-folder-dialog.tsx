@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog } from "@base-ui-components/react/dialog";
 import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
 import { DialogCloseButton } from "@/components/ui/dialog-close";
@@ -19,6 +19,17 @@ export function ImportFolderDialog({
 }): React.JSX.Element {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!busy) return;
+    const blockSearch = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    window.addEventListener("keydown", blockSearch, true);
+    return () => window.removeEventListener("keydown", blockSearch, true);
+  }, [busy]);
 
   return (
     <Dialog.Root open onOpenChange={(next) => { if (!next && !busy) router.back(); }}>

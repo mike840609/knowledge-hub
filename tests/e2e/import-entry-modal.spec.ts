@@ -144,6 +144,9 @@ for (const stage of ["entries", "finalize"] as const) {
     const close = dialog.getByRole("button", { name: "Close dialog" });
     await expect(close).toBeDisabled();
     await page.keyboard.press("Escape");
+    await page.keyboard.press("Control+k");
+    await page.keyboard.press("Meta+k");
+    await expect(page.getByRole("combobox")).toHaveCount(0);
     await page.mouse.click(5, 5);
     await expect(dialog).toBeVisible();
     const deleted = page.waitForResponse((response) => response.request().method() === "DELETE" && /\/api\/source-imports\/[^/]+$/.test(new URL(response.url()).pathname));
@@ -156,3 +159,34 @@ for (const stage of ["entries", "finalize"] as const) {
     await expect(dialog).toBeHidden();
   });
 }
+
+
+test("cancels promptly during session creation and abandons the late response", async ({ page }) => {
+  const ws = await personalWorkspaceId(page);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  let arrived!: () => void;
+  const reached = new Promise<void>((resolve) => { arrived = resolve; });
+  await page.route(`**/api/workspaces/${ws}/source-imports`, async (route) => {
+    const response = await route.fetch();
+    arrived();
+    await gate;
+    await route.fulfill({ response });
+  });
+  await page.goto(`/w/${ws}/sources`);
+  await openImport(page);
+  const dialog = page.getByRole("dialog", { name: "Import folder" });
+  await dialog.getByRole("button", { name: "English", exact: true }).click();
+  await reached;
+  const close = dialog.getByRole("button", { name: "Close dialog" });
+  await expect(close).toBeDisabled();
+  await dialog.getByRole("button", { name: "Cancel import" }).click();
+  await expect(close).toBeEnabled();
+  const deleted = page.waitForResponse((response) => response.request().method() === "DELETE" && /\/api\/source-imports\/[^/]+$/.test(new URL(response.url()).pathname));
+  release();
+  const response = await deleted;
+  expect(await response.json()).toEqual({ abandoned: true });
+  await expect(dialog).toBeVisible();
+  await close.click();
+  await expect(dialog).toBeHidden();
+});

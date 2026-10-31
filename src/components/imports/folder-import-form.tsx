@@ -371,14 +371,32 @@ export async function runFolderImport(input: {
   if (selection.staged.length === 0) throw Object.assign(new Error("No files remain after exclusions. Nothing was synced."), { code: "INVALID_IMPORT_MANIFEST" });
   const manifest = await buildManifest(selection.staged, limits, signal);
   assertAllowed();
-  const session = target.kind === "new"
-    ? await postJson(`/api/workspaces/${target.workspaceId}/source-imports`, {
+  const creation = target.kind === "new"
+    ? postJson(`/api/workspaces/${target.workspaceId}/source-imports`, {
       sourceName: sourceName.trim() || selection.rootName,
       rootName: selection.rootName,
       manifest,
       importScope: { paths: exclusions, excludedCount },
     })
-    : await postJson(`/api/sources/${target.sourceId}/source-imports`, { rootName: selection.rootName, manifest, importScope: { paths: exclusions, excludedCount }, expectedSourceVersion: savedScope!.syncVersion });
+    : postJson(`/api/sources/${target.sourceId}/source-imports`, { rootName: selection.rootName, manifest, importScope: { paths: exclusions, excludedCount }, expectedSourceVersion: savedScope!.syncVersion });
+  // Do not abort the non-idempotent create request: it may already have made a
+  // session. Let the UI cancel immediately and clean up any late response.
+  const session = signal ? await new Promise<Awaited<typeof creation>>((resolve, reject) => {
+    const cancel = () => {
+      void creation.then((result) => {
+        if (result.ok && result.body && typeof result.body === "object" && "snapshotId" in result.body && typeof result.body.snapshotId === "string") {
+          return bestEffortAbandonImport(result.body.snapshotId);
+        }
+      }).catch(() => {});
+      reject(Object.assign(new Error("Import was cancelled."), { code: "IMPORT_CANCELLED" }));
+    };
+    if (signal.aborted) { cancel(); return; }
+    signal.addEventListener("abort", cancel, { once: true });
+    creation.then(
+      (result) => { signal.removeEventListener("abort", cancel); resolve(result); },
+      (error) => { signal.removeEventListener("abort", cancel); reject(error); },
+    );
+  }) : await creation;
   if (!session.ok || !session.body || typeof session.body !== "object" || !("snapshotId" in session.body)) {
     const failure = readErrorCode(session.body, "Creating the import session failed.");
     onProgress({ kind: "ERROR", code: failure.code, message: failure.message });

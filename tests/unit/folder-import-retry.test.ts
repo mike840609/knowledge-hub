@@ -46,6 +46,28 @@ describe("folder import retries and cancellation", () => {
     ]);
   });
 
+  it("cancels promptly during session creation and abandons a late session", async () => {
+    vi.useRealTimers();
+    const controller = new AbortController();
+    let finish!: (response: Response) => void;
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => { finish = resolve; }))
+      .mockResolvedValue(response({ abandoned: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    const importing = runFolderImport({ ...input, signal: controller.signal });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    controller.abort();
+    const outcome = await Promise.race([
+      importing.then(() => "resolved", (error: { code?: string }) => error.code),
+      new Promise<string>((resolve) => setTimeout(() => resolve("still waiting"), 100)),
+    ]);
+    expect(outcome).toBe("IMPORT_CANCELLED");
+    finish(response({ snapshotId: "late-snapshot" }, 201));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/source-imports/late-snapshot");
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: "DELETE" });
+  });
+
   it.each(["network", "body"])("retries the same finalize when its %s response is lost", async (failure) => {
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(response({ snapshotId: "snapshot" }, 201))
