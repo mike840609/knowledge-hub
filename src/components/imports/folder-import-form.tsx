@@ -436,9 +436,12 @@ function statusText(state: ImportUiState, now: number): string | null {
 export function FolderImportForm({
   target,
   limits = DEFAULT_CLIENT_LIMITS,
+  onBusyChange,
 }: {
   target: FolderImportTarget;
   limits?: FolderImportClientLimits;
+  /** Reports PREPARING/UPLOADING/FINALIZING so a host dialog can lock dismissal. */
+  onBusyChange?: (busy: boolean) => void;
 }): React.JSX.Element {
   const router = useRouter();
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -505,6 +508,9 @@ export function FolderImportForm({
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [state.kind]);
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
   const status = statusText(state, now);
 
   function reportImportError(error: unknown): void {

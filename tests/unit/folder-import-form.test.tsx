@@ -204,6 +204,26 @@ describe("folder import directory picker", () => {
     renderForm();
     expect(container.textContent).not.toContain("Forget remembered folder");
   });
+
+  it("reports when an import is busy so a host can lock dismissal", async () => {
+    vi.mocked(isDirectoryPickerSupported).mockReturnValue(true);
+    Object.defineProperty(window, "showDirectoryPicker", {
+      value: vi.fn().mockResolvedValue({ name: "Notes" }),
+      configurable: true,
+    });
+    let release!: (files: File[]) => void;
+    vi.mocked(collectHandleFiles).mockReturnValue(new Promise((resolve) => { release = resolve; }));
+    const onBusyChange = vi.fn();
+
+    act(() => {
+      root.render(<FolderImportForm target={{ kind: "new", workspaceId: "w1" }} onBusyChange={onBusyChange} />);
+    });
+    await clickChooseFolder();
+    expect(onBusyChange).toHaveBeenLastCalledWith(true);
+
+    await act(async () => { release([]); });
+    expect(onBusyChange).toHaveBeenLastCalledWith(false);
+  });
 });
 
 it("enforces runtime asset limits in the native directory picker before reading or creating a snapshot", async () => {
