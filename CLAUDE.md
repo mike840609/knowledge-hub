@@ -41,14 +41,15 @@ and `e2e`. `make verify` covers everything except the two DB-backed jobs.
 
 ### Package manager
 
-npm and `package-lock.json` are canonical. CI, Vercel, and deployment use npm; do not
-replace the lockfile or add pnpm-only fields to `package.json`.
+pnpm 12 is the default local package manager; `pnpm-workspace.yaml` and `pnpm-lock.yaml` are
+committed. Use `pnpm install` locally. npm is the fallback when pnpm is unavailable, and the
+package manager for CI, Vercel, and deployment (`npm ci`, `package-lock.json`); do not replace
+`package-lock.json` or switch those to pnpm.
 
-pnpm 12 is an optional local accelerator for reusing one dependency store across Git
-worktrees. Setup, caveats, and the switch back to npm are in the README's
-[Optional: local pnpm](README.md#optional-local-pnpm). Keep `pnpm-workspace.yaml` and
-`pnpm-lock.yaml` out of Git, keep the `patch-package` postinstall, and never pass
-`--ignore-scripts` to `pnpm install`.
+When dependencies change, refresh `package-lock.json` first (`npm install --package-lock-only`),
+then `pnpm import && pnpm install`, and commit both lockfiles. Setup, settings, layout
+switching, and caveats are in the README's [Local pnpm](README.md#local-pnpm). Keep the
+`patch-package` postinstall and never pass `--ignore-scripts` to `pnpm install`.
 
 ## Architecture
 
