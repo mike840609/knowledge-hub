@@ -35,7 +35,7 @@ export function FollowedDiscussionsView({ workspaceId, items, filter, filterErro
     finally { pending.current = false; setBusy(null); }
   }
   return <>
-    <form ref={filterForm} action={`/w/${workspaceId}/shares`} method="get" aria-label="Filter discussions" className="mt-4 flex flex-wrap items-center gap-2">
+    <form ref={filterForm} action={`/w/${workspaceId}/shares`} method="get" aria-label="Filter discussions" className="mt-3 flex flex-wrap items-center gap-2">
       <Input type="hidden" name="tab" value="discussions"/>
       <label className="sr-only" htmlFor="discussions-status">Discussion status</label>
       <SelectMenu id="discussions-status" name="status" value={status} onValueChange={(value) => applyAndSearch(filterForm.current, () => setStatus(value))} options={[{ value: "all", label: "All" }, { value: "unread", label: "Unread" }]}/>

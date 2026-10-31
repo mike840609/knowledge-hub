@@ -32,7 +32,7 @@ export function SavedSharesView({ workspaceId,model,filterError }: { workspaceId
     finally{pending.current=false;setBusy(null);}
   }
   return <>
-    <form ref={filterForm} action={base} method="get" aria-label="Filter saved shares" className="mt-4 flex flex-wrap items-center gap-2">
+    <form ref={filterForm} action={base} method="get" aria-label="Filter saved shares" className="mt-3 flex flex-wrap items-center gap-2">
       <Input type="hidden" name="tab" value="saved"/>
       <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-auto"><label className="sr-only" htmlFor="saved-shares-query">Find saved shares</label><Search size={15} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-kh-text-muted"/><Input id="saved-shares-query" name="q" defaultValue={model.query.q} placeholder="Find title or sharing person…" maxLength={200} className="kh-search-field"/></div>
       <label className="sr-only" htmlFor="saved-shares-status">Saved share status</label><SelectMenu id="saved-shares-status" name="status" value={status} onValueChange={(value)=>applyAndSearch(filterForm.current,()=>setStatus(value))} options={[{value:"all",label:"All statuses"},{value:"available",label:"Available"},{value:"unavailable",label:"Unavailable"}]}/>
