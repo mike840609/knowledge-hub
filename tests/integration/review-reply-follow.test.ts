@@ -252,3 +252,17 @@ describe("the Inbox badge counts a reader's followed discussions as the Inbox li
     expect([await badge(), await listed()]).toEqual([0, 0]);
   });
 });
+
+describe("batched review lookups", () => {
+  it("reads several threads and current revisions in one call each", async () => {
+    const f = await fixture();
+    const first = await f.start();
+    const second = await f.start();
+    const missing = randomUUID();
+    const threads = await f.uow.run(r => r.reviewThreads.findByIds([first.id, second.id, missing]));
+    expect(threads.map(thread => thread.id).sort()).toEqual([first.id, second.id].sort());
+    const revisions = await f.uow.run(r => r.revisions.findCurrentByIds([f.documentId, missing]));
+    expect(revisions.map(revision => ({ id: revision.id, documentId: revision.documentId })))
+      .toEqual([{ id: f.revisionId, documentId: f.documentId }]);
+  });
+});
