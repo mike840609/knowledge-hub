@@ -160,7 +160,7 @@ pnpm run db:seed
 pnpm run dev
 ```
 
-若要切回 npm，執行 `rm -rf node_modules .next && npm ci`。`pnpm import` 會保留 npm 解析的版本；`patches/next+15.5.25.patch` 仍在使用時，`next` 要維持 15.5.25。若檔案系統支援 clone/reflink（APFS、Btrfs），worktree 之間也會共用磁碟區塊；若只能 copy，pnpm 會退回複製，節省空間會縮小。`package-lock.json` 變更後要重新執行 `pnpm import`。不要對 `pnpm install` 加上 `--ignore-scripts`：它會同時跳過依賴的 build scripts 與套用 Next.js patch 的 `postinstall`。若已經加了，請重新執行不帶旗標的 `pnpm install`；`pnpm exec patch-package` 只會還原 patch，不會補跑被跳過的依賴 build。若 pnpm 回報 `ERR_PNPM_IGNORED_BUILDS`，確認該套件確實需要 build script 後，把它加入 `allowBuilds`。`pnpm store status` 可能會在已套用 patch 的安裝中回報 `next` 被修改；在 `clone-or-copy` 下，共用的 store 本身沒有被改動。
+若要切回 npm，執行 `rm -rf node_modules .next && npm ci`。`pnpm import` 會優先採用 `package-lock.json` 記錄的版本；`patches/next+15.5.25.patch` 仍在使用時，請確認 `next` 仍解析為 15.5.25。若檔案系統支援 clone/reflink（APFS、Btrfs），worktree 之間也會共用磁碟區塊；若只能 copy，pnpm 會退回複製，節省空間會縮小。`package-lock.json` 變更後要重新執行 `pnpm import`。不要對 `pnpm install` 加上 `--ignore-scripts`：它會同時跳過依賴的 build scripts 與套用 Next.js patch 的 `postinstall`。若已經加了，單純重跑 `pnpm install` 會回報「Already up to date」，不會重跑根目錄的 `postinstall`；請執行 `pnpm install --force`（或 `rm -rf node_modules .next && pnpm install`）。若只要分開補跑，先 `pnpm rebuild` 補回被跳過的依賴 build，再 `pnpm exec patch-package` 還原 patch。若 pnpm 警告有 build script 被忽略（或在啟用 `strictDepBuilds` 時回報 `ERR_PNPM_IGNORED_BUILDS`），確認該套件確實需要 build script 後，把它加入 `allowBuilds`，或執行 `pnpm approve-builds`。在已套用 patch 的安裝中，`pnpm store status` 會以非零狀態回報 `next`（`ERR_PNPM_MODIFIED_DEPENDENCY`）；這是預期行為，在 `clone-or-copy` 下共用的 store 本身沒有被改動。
 
 ### 第一次使用
 
@@ -303,7 +303,7 @@ KM_E2E_PERSONAL_ONLY=true npm run test:e2e -- personal-workspace.spec.ts
 
 ### Next.js patch
 
-`npm ci`（或 `pnpm install`）的 postinstall 會使用 `patch-package` 套用 [`patches/next+15.5.25.patch`](patches/next+15.5.25.patch)，修正內附 React（`19.2.0-canary-0bdb9206-20250818`）的兩個問題：一是頁面導覽時遺失 render ping；二是另一個導覽仍在載入時，若有 redirect 或其他錯誤在 render 中送達（例如「Browse documents」還在轉址時就點了另一份文件），React 的錯誤復原會把 Next 的 `Router` 只 render 一半就 commit，下一次 render 拋出 React #310（Rendered more hooks than during the previous render），整頁變成「Application error」。此修正即 [facebook/react#36911](https://github.com/facebook/react/pull/36911) 的那一個條件，套用於四個 `react-dom` client 與 profiling build。請勿跳過 install scripts；若已使用 `--ignore-scripts`，請重新執行不帶旗標的安裝。若只要還原 patch，pnpm layout 使用 `pnpm exec patch-package`，npm layout 使用 `npx patch-package`。
+`npm ci`（或 `pnpm install`）的 postinstall 會使用 `patch-package` 套用 [`patches/next+15.5.25.patch`](patches/next+15.5.25.patch)，修正內附 React（`19.2.0-canary-0bdb9206-20250818`）的兩個問題：一是頁面導覽時遺失 render ping；二是另一個導覽仍在載入時，若有 redirect 或其他錯誤在 render 中送達（例如「Browse documents」還在轉址時就點了另一份文件），React 的錯誤復原會把 Next 的 `Router` 只 render 一半就 commit，下一次 render 拋出 React #310（Rendered more hooks than during the previous render），整頁變成「Application error」。此修正即 [facebook/react#36911](https://github.com/facebook/react/pull/36911) 的那一個條件，套用於四個 `react-dom` client 與 profiling build。請勿跳過 install scripts；若 npm 安裝時用了 `--ignore-scripts`，請執行 `npm ci`；若 pnpm 安裝時用了，請執行 `pnpm install --force`（單純重跑 `pnpm install` 不會在已是最新的目錄重跑根目錄 `postinstall`）。若只要還原 patch，pnpm layout 使用 `pnpm exec patch-package`，npm layout 使用 `npx patch-package`。
 
 第二個修正已對照 #36911 的上游 diff；[vercel/next.js#95368](https://github.com/vercel/next.js/pull/95368) 將它帶進 Next canary（React `ec0fca31-20260701`）。這兩個 PR 引用的 issue（vercel/next.js#63121、#78396，facebook/react#33580）只讀過摘要，未在此重現。`next/dist/compiled/react-dom-experimental` 的 experimental React 未修補：只有在 `next.config.ts` 啟用 experimental React 功能時才會載入，本專案沒有啟用。
 

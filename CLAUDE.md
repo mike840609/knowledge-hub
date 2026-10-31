@@ -83,12 +83,14 @@ To switch back to npm, run `rm -rf node_modules .next && npm ci`. Keep `next` at
 shared store and `patch-package` would modify that store for every project on the machine.
 Do not commit pnpm files, edit `package.json`/`package-lock.json` for pnpm, switch the
 postinstall away from `patch-package`, or pass `--ignore-scripts` to `pnpm install`. If
-`--ignore-scripts` was used, rerun `pnpm install` without it; `pnpm exec patch-package`
-restores only the patch, not the skipped dependency builds. `publicHoistPattern` exists
+`--ignore-scripts` was used, run `pnpm install --force` (or
+`rm -rf node_modules .next && pnpm install`); a plain `pnpm install` will not rerun the
+root `postinstall`. `pnpm rebuild && pnpm exec patch-package` restores the dependency
+builds and patch separately. `publicHoistPattern` exists
 because the repository imports `mdast-util-to-hast`, `mdast-util-gfm`, and
 `@next/eslint-plugin-next` without declaring them; declaring them is the durable fix.
-`pnpm store status` may report `next` as modified while the installed copy is patched;
-with `clone-or-copy`, the shared store itself is unchanged.
+In a patched layout, `pnpm store status` exits non-zero with `ERR_PNPM_MODIFIED_DEPENDENCY`
+for `next`; that is expected, and with `clone-or-copy` the shared store itself is unchanged.
 
 ## Architecture
 
