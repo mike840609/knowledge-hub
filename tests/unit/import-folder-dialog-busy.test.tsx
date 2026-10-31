@@ -71,6 +71,7 @@ it("locks dismissal from the real form while the folder scan is running", async 
   await act(async () => { chooseFolderButton().click(); });
   await act(async () => {});
   expect(closeButton().disabled).toBe(true);
+  expect(document.querySelector('a[href="/help#format-reference"]')).toBeNull();
 
   act(() => closeButton().click());
   act(() => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
@@ -78,6 +79,7 @@ it("locks dismissal from the real form while the folder scan is running", async 
 
   await act(async () => { release([]); });
   expect(closeButton().disabled).toBe(false);
+  expect(document.querySelector('a[href="/help#format-reference"]')).not.toBeNull();
   act(() => closeButton().click());
   expect(state.back).toHaveBeenCalledOnce();
 });

@@ -28,12 +28,16 @@ export function ImportFolderDialog({
           <Dialog.Title className="text-title font-semibold">Import folder</Dialog.Title>
           <Dialog.Description className="mt-1 text-body text-kh-text-muted">
             Your local files stay unchanged.{" "}
-            <Link
-              className="rounded-md text-kh-link underline-offset-4 hover:underline kh-focus-ring"
-              href="/help#format-reference"
-            >
-              Folder format guide
-            </Link>
+            {busy ? (
+              <span>Folder format guide</span>
+            ) : (
+              <Link
+                className="rounded-md text-kh-link underline-offset-4 hover:underline kh-focus-ring"
+                href="/help#format-reference"
+              >
+                Folder format guide
+              </Link>
+            )}
           </Dialog.Description>
           <div className="mt-5">
             {canImport ? (

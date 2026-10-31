@@ -448,17 +448,17 @@ export default async function InterceptedWorkspaceSourceImportPage({
 
 Do not modify `src/app/w/[workspaceId]/sources/import/page.tsx`; it remains the full-page fallback.
 
-- [ ] **Step 4: Run the new e2e and the existing direct-load e2e**
+- [x] **Step 4: Run the new e2e and the existing direct-load e2e**
 
 Run: `npm run test:e2e -- tests/e2e/import-entry-modal.spec.ts tests/e2e/sample-wiki-import.spec.ts`
 Expected: PASS. The existing sample-wiki tests still open `/sources/import` directly and must see the full page.
 
-- [ ] **Step 5: Run the type check**
+- [x] **Step 5: Run the type check**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 6: Run the linter**
+- [x] **Step 6: Run the linter**
 
 Run: `npm run lint`
 Expected: PASS.
@@ -480,3 +480,10 @@ git commit -m "feat(import): open folder import over Sources"
 - `FolderImportForm` accepts `replaceOnComplete`; `ImportFolderDialog` passes it. A successful modal import replaces the transient `/sources/import` history entry with the Preview, so Back returns to Sources instead of reopening the form.
 - `tests/unit/import-folder-dialog-busy.test.tsx` drives the real form and dialog together and proves the busy lock on the close button and Escape.
 - Minor, deferred: the `onBusyChange` effect runs after paint, so the close control can be enabled for roughly one frame at the PREPARING transition; no upload has started in that window. `Dialog.Root` also stays `open` because dismissal depends on `router.back()`.
+
+## Follow-up verification (2026-10-31)
+
+- The implementation commits are present through `149fe0a7`; unchecked historical steps above do not indicate verified RED runs.
+- Full unit suite: 312 files, 3,568 tests passed. Typecheck and lint passed. The two planned E2E files passed all 14 tests against a fresh production build.
+- Review found that the format guide could navigate away during an import. The dialog now makes the guide unavailable while busy and restores it when idle; the real-form busy test covers this.
+- The previously noted one-frame busy-state delay remains deferred.
