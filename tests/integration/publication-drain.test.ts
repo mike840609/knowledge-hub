@@ -108,6 +108,42 @@ function failingUow(base: SourceUnitOfWork, options: FailureOptions): SourceUnit
   };
 }
 
+/** Counts full publication-source tree reads made inside `run`. */
+function countingTreeReads(base: SourceUnitOfWork): {
+  uow: SourceUnitOfWork;
+  reads: () => number;
+} {
+  let reads = 0;
+  return {
+    reads: () => reads,
+    uow: {
+      async run<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
+        return base.run(async (repositories) => {
+          const tree = new Proxy(repositories.tree, {
+            get(target, property, receiver) {
+              if (property === "listBySource") {
+                return async (sourceId: string) => {
+                  reads += 1;
+                  return target.listBySource(sourceId);
+                };
+              }
+              return Reflect.get(target, property, receiver);
+            },
+          });
+          const wrapped = new Proxy(repositories, {
+            get(target, property, receiver) {
+              return property === "tree" ? tree : Reflect.get(target, property, receiver);
+            },
+          });
+          return work(wrapped);
+        });
+      },
+      runWithCreatorQuotaLock: (creatorId, timeoutSeconds, work) =>
+        base.runWithCreatorQuotaLock(creatorId, timeoutSeconds, work),
+    },
+  };
+}
+
 /** The import must commit even when the display-only notice lookup throws. */
 function noticeFailingUow(base: SourceUnitOfWork): SourceUnitOfWork {
   return {
@@ -175,6 +211,12 @@ async function publicationDocuments(publicationId: string) {
   return fixture.uow.run((repositories) => repositories.publications.listDocuments(publicationId));
 }
 
+async function contributionOf(publicationId: string, userId: string) {
+  const contributions = await fixture.uow.run((repositories) =>
+    repositories.publications.listContributions(publicationId));
+  return contributions.find((contribution) => contribution.userId === userId);
+}
+
 async function eventRows(documentId: string): Promise<{ id: string; consumed_at: Date | null }[]> {
   return fixture.pool.query<{ id: string; consumed_at: Date | null }[]>(
     "SELECT id, consumed_at FROM publication_events WHERE document_id = ? ORDER BY created_at, id",
@@ -239,13 +281,14 @@ async function adoptExternalId(caller: CallerContext, sourceId: string, document
 async function knownEntryInput(
   documentId: string,
   content: { title: string; markdown: string },
+  sourceId = fixture.mikeFolderSourceId,
 ) {
   return fixture.uow.run(async (repositories) => {
-    const source = await repositories.sources.findById(fixture.mikeFolderSourceId);
+    const source = await repositories.sources.findById(sourceId);
     const entry = await repositories.entries.findByDocumentId(documentId);
     if (!source || !entry) throw new Error("Fixture source entry is missing.");
     return {
-      sourceId: fixture.mikeFolderSourceId,
+      sourceId,
       basedOnVersion: source.syncVersion,
       entryId: entry.id,
       documentId,
@@ -560,6 +603,134 @@ describe("publication drain", () => {
       repositories.publications.listContributions(publication.publication.id)))[0];
     expect(contribution.rightsFrozenAt).toBeNull();
     expect(contribution.pendingCatchUp).toBe(false);
+  });
+
+  it("reconciles a restored group-only contributor on a no-op save even with no delivery left", async () => {
+    const path = `restore-nodelivery-${uuidv7()}`;
+    const mike = await folderWithDocuments(fixture.mike, `${path}/mike`, [
+      { name: "a.md", text: "# Mike\n\nmike\n" },
+    ]);
+    const publication = await publishFolder(
+      fixture.mike, fixture.groupTeamWorkspaceId, `Restore ${path}`, mike.folderNodeId);
+    await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+
+    const ann = await folderWithDocuments(fixture.ann, `${path}/ann`, [
+      { name: "ann.md", text: "# Ann\n\nv1\n", title: "Ann" },
+    ]);
+    const service = new PublicationService(fixture.uow);
+    const joined = await service.join(fixture.ann, {
+      publicationId: publication.publication.id,
+      folderNodeId: ann.folderNodeId,
+      acknowledgeLowOverlap: true,
+    });
+    await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.ann } });
+    const annOriginal = ann.documents["ann.md"];
+    const annTeamDocument = (await publicationDocuments(publication.publication.id))
+      .find((document) => document.creatorContributionId === joined.contributionId)!;
+    expect(annTeamDocument).toBeDefined();
+    expect(await currentTitle(annTeamDocument.teamDocumentId)).toBe("Ann");
+
+    // Archive, change her original, and let her own drain consume the event as
+    // SKIPPED: after this point no delivery row is left to reconcile.
+    await service.unpublish(fixture.mike, publication.publication.id);
+    const v2 = await fixture.uow.run(async (repositories) => {
+      const { bindSourceProjection } = await import(
+        "@/modules/sources/application/source-knowledge-projection-service"
+      );
+      return bindSourceProjection(repositories, {
+        id: fixture.annFolderSourceId,
+        workspaceId: fixture.annPersonalWorkspaceId,
+      }).projectRevision(fixture.ann, {
+        documentId: annOriginal.documentId,
+        expectedCurrentRevisionId: annOriginal.revisionId,
+        title: "Ann v2",
+        markdown: "# Ann\n\nv2\n",
+        metadata: {},
+      });
+    });
+    expect(v2.changed).toBe(true);
+    const skipped = await drainPublicationEvents(fixture.uow, {
+      judge: { kind: "CALLER", caller: fixture.ann },
+    });
+    expect(skipped.failed).toBe(0);
+    const pendingDeliveries = await fixture.pool.query<{ total: unknown }[]>(
+      `SELECT COUNT(*) AS total FROM publication_event_deliveries
+       WHERE contribution_id = ? AND processed_at IS NULL`,
+      [joined.contributionId],
+    );
+    expect(Number(pendingDeliveries[0]?.total ?? 0)).toBe(0);
+
+    // The restorer cannot judge group-derived rights, so she is pending and her
+    // team copy is still stale.
+    await service.restore(fixture.mike, publication.publication.id);
+    expect(await currentTitle(annTeamDocument.teamDocumentId)).toBe("Ann");
+    expect((await contributionOf(publication.publication.id, fixture.ann.identity.id))?.pendingCatchUp)
+      .toBe(true);
+    expect((await service.status(fixture.ann, publication.publication.id)).pending).toBe(true);
+
+    // A no-op save still has to reconcile the pending contribution itself.
+    let scheduled: (() => Promise<void>) | undefined;
+    const sources = withPostCommitDrain(
+      new SourceApplicationService(fixture.uow),
+      ["applyKnownEntry"],
+      (caller) => {
+        schedulePublicationDrain(caller, {
+          schedule: (task) => { scheduled = task; },
+          drain: (captured) => drainPublicationEvents(fixture.uow, {
+            judge: { kind: "CALLER", caller: captured },
+          }),
+        });
+      },
+    );
+    const noop = await sources.applyKnownEntry(
+      fixture.ann,
+      await knownEntryInput(
+        annOriginal.documentId,
+        { title: "Ann v2", markdown: "# Ann\n\nv2\n" },
+        fixture.annFolderSourceId,
+      ),
+    );
+    expect(noop.changed).toBe(false);
+    expect(scheduled).toBeTypeOf("function");
+    await scheduled?.();
+
+    expect(await currentTitle(annTeamDocument.teamDocumentId)).toBe("Ann v2");
+    const recovered = await contributionOf(publication.publication.id, fixture.ann.identity.id);
+    expect(recovered?.pendingCatchUp).toBe(false);
+    expect(recovered?.rightsFrozenAt).toBeNull();
+    expect((await service.status(fixture.ann, publication.publication.id)).pending).toBe(false);
+  });
+
+  it("reads the publication tree a bounded number of times regardless of document count", async () => {
+    const path = `tree-reads-${uuidv7()}`;
+    const single = await folderWithDocuments(fixture.mike, `${path}/single`, [
+      { name: "one.md", text: "# One\n\none\n" },
+    ]);
+    await publishFolder(
+      fixture.mike, fixture.teamWorkspaceId, `Tree reads one ${path}`, single.folderNodeId);
+
+    const singleCount = countingTreeReads(fixture.uow);
+    await drainPublicationEvents(singleCount.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+
+    const many = await folderWithDocuments(fixture.mike, `${path}/many`, [
+      { name: "docs/a.md", text: "# A\n\na\n" },
+      { name: "docs/b.md", text: "# B\n\nb\n" },
+      { name: "docs/nested/c.md", text: "# C\n\nc\n" },
+      { name: "docs/nested/d.md", text: "# D\n\nd\n" },
+      { name: "other/e.md", text: "# E\n\ne\n" },
+      { name: "other/f.md", text: "# F\n\nf\n" },
+    ]);
+    const manyPublication = await publishFolder(
+      fixture.mike, fixture.teamWorkspaceId, `Tree reads many ${path}`, many.folderNodeId);
+
+    const manyCount = countingTreeReads(fixture.uow);
+    await drainPublicationEvents(manyCount.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+
+    // The projection's tx-local view plus the one post-apply read; no per-copy,
+    // per-placement or per-folder full read.
+    expect(manyCount.reads()).toBe(singleCount.reads());
+    expect(manyCount.reads()).toBeLessThanOrEqual(2);
+    expect(await publicationDocuments(manyPublication.publication.id)).toHaveLength(6);
   });
 
   it("leaves events inserted during a batch visible to the next run", async () => {

@@ -392,6 +392,55 @@ describe("publication document paths", () => {
   });
 });
 
+describe("publication document views", () => {
+  it("carries the creator contribution's state for every member, not just its maintainer", async () => {
+    const original = await fixture.createHubOriginal(fixture.mike, "View source", "view");
+    const publication = await fixture.createPublication({
+      name: "View Publication",
+      kind: "DOCUMENT",
+      creator: fixture.mike,
+      origin: { kind: "DOCUMENT", documentId: original.documentId },
+    });
+    const created = await fixture.createTeamDocument({
+      publication,
+      creatorContributionId: publication.contributionId,
+      originalDocumentId: original.documentId,
+      sourcePath: "view.md",
+    });
+
+    const [initial] = await fixture.uow.run((repositories) =>
+      repositories.publications.listDocumentViews(publication.publication.id));
+    expect(initial).toMatchObject({
+      teamDocumentId: created.teamDocumentId,
+      creatorUserId: fixture.mike.identity.id,
+      creatorName: "Mike",
+      leftAt: null,
+      rightsFrozenAt: null,
+      pendingCatchUp: false,
+    });
+
+    const leftAt = new Date("2026-10-20T00:00:00Z");
+    await fixture.uow.run((repositories) => repositories.publications.setContributionState(
+      publication.contributionId,
+      { leftAt, rightsFrozenAt: null, pendingCatchUp: true },
+    ));
+    const [left] = await fixture.uow.run((repositories) =>
+      repositories.publications.listDocumentViews(publication.publication.id));
+    expect(left.leftAt?.getTime()).toBe(leftAt.getTime());
+    expect(left.pendingCatchUp).toBe(true);
+
+    const frozenAt = new Date("2026-10-21T00:00:00Z");
+    await fixture.uow.run((repositories) => repositories.publications.setContributionState(
+      publication.contributionId,
+      { leftAt: null, rightsFrozenAt: frozenAt, pendingCatchUp: false },
+    ));
+    const [frozen] = await fixture.uow.run((repositories) =>
+      repositories.publications.listDocumentViews(publication.publication.id));
+    expect(frozen.rightsFrozenAt?.getTime()).toBe(frozenAt.getTime());
+    expect(frozen.leftAt).toBeNull();
+  });
+});
+
 describe("publication event progress", () => {
   it("one delivery completing leaves the root event unconsumed while another is pending", async () => {
     const original = await fixture.createHubOriginal(fixture.mike, "Delivery source", "delivery");

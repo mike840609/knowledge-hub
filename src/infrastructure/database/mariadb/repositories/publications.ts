@@ -140,6 +140,24 @@ export class MariaDbPublicationRepository implements PublicationRepository {
     }));
   }
 
+  async listFlaggedContributions(
+    userId: string,
+    limit: number,
+  ): Promise<{ publicationId: string; contributionId: string }[]> {
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT id, publication_id FROM publication_contributors
+       WHERE user_id = ? AND left_at IS NULL
+         AND (pending_catch_up = 1 OR rights_frozen_at IS NOT NULL)
+       ORDER BY created_at, id
+       LIMIT ?`,
+      [userId, limit],
+    );
+    return rows.map((row) => ({
+      publicationId: String(row.publication_id),
+      contributionId: String(row.id),
+    }));
+  }
+
   async insertContribution(contribution: Contribution): Promise<void> {
     const now = new Date();
     await this.connection.query(
@@ -181,7 +199,7 @@ export class MariaDbPublicationRepository implements PublicationRepository {
   async listDocumentViews(publicationId: string): Promise<PublicationDocumentView[]> {
     const rows = await this.connection.query<DbRow[]>(
       `SELECT pd.team_document_id, pd.source_path, d.status, d.updated_at,
-              c.user_id, u.name
+              c.user_id, c.left_at, c.rights_frozen_at, c.pending_catch_up, u.name
        FROM publication_documents pd
        JOIN knowledge_documents d ON d.id = pd.team_document_id
        JOIN publication_contributors c ON c.id = pd.creator_contribution_id
@@ -197,6 +215,9 @@ export class MariaDbPublicationRepository implements PublicationRepository {
       creatorUserId: String(row.user_id),
       creatorName: String(row.name),
       updatedAt: asDate(row.updated_at),
+      leftAt: asNullableDate(row.left_at),
+      rightsFrozenAt: asNullableDate(row.rights_frozen_at),
+      pendingCatchUp: Number(row.pending_catch_up) === 1,
     }));
   }
 
@@ -558,6 +579,44 @@ export class MariaDbPublicationRepository implements PublicationRepository {
     if (!row) return null;
     const parsed = typeof row.report_json === "string" ? JSON.parse(row.report_json) : row.report_json;
     return parsed as ReconcileReport;
+  }
+
+  /**
+   * One bounded retention batch. Ids are selected first so the two deletes
+   * never reference the table they are modifying, and the delivery delete runs
+   * before the event delete to satisfy the RESTRICT foreign key.
+   */
+  async purgeConsumedEvents(
+    cutoff: Date,
+    limit: number,
+  ): Promise<{ events: number; deliveries: number }> {
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT e.id FROM publication_events e
+       WHERE e.consumed_at IS NOT NULL AND e.consumed_at <= ?
+         AND NOT EXISTS (
+           SELECT 1 FROM publication_event_deliveries d
+           WHERE d.event_id = e.id AND d.processed_at IS NULL
+         )
+       ORDER BY e.consumed_at, e.id
+       LIMIT ?`,
+      [cutoff, limit],
+    );
+    if (rows.length === 0) return { events: 0, deliveries: 0 };
+    const ids = rows.map((row) => String(row.id));
+    const placeholders = ids.map(() => "?").join(", ");
+    const deliveries = await this.connection.query(
+      `DELETE FROM publication_event_deliveries
+       WHERE event_id IN (${placeholders}) AND processed_at IS NOT NULL`,
+      ids,
+    );
+    const events = await this.connection.query(
+      `DELETE FROM publication_events WHERE id IN (${placeholders})`,
+      ids,
+    );
+    return {
+      events: Number((events as { affectedRows?: number }).affectedRows ?? 0),
+      deliveries: Number((deliveries as { affectedRows?: number }).affectedRows ?? 0),
+    };
   }
 
   /**

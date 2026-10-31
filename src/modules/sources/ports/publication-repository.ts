@@ -27,6 +27,17 @@ export interface PublicationRepository {
    * read must not pre-filter so left/archived rows are visibly skipped.
    */
   listAllContributions(): Promise<{ publicationId: string; contributionId: string }[]>;
+  /**
+   * The caller's own contributions whose state still asks for reconciliation
+   * (`pending_catch_up` or a rights freeze), bounded and left-excluded. A
+   * caller-scoped drain uses this after its events: a restore can pend a
+   * contribution without leaving any delivery row, and only the contributor's
+   * own request may judge their group-derived rights.
+   */
+  listFlaggedContributions(
+    userId: string,
+    limit: number,
+  ): Promise<{ publicationId: string; contributionId: string }[]>;
   insertContribution(contribution: Contribution): Promise<void>;
   setContributionState(
     id: string,
@@ -114,4 +125,15 @@ export interface PublicationRepository {
   completeDelivery(eventId: string, contributionId: string, outcome: "APPLIED" | "SKIPPED"): Promise<void>;
   saveReport(contributionId: string, report: ReconcileReport): Promise<void>;
   findReport(contributionId: string): Promise<ReconcileReport | null>;
+  /**
+   * Retention for the event log: one bounded batch of consumed events at or
+   * older than `cutoff` whose deliveries are all processed, plus those
+   * processed deliveries (deleted first, because the FK is RESTRICT).
+   * Unconsumed events, events with a pending delivery, and the deliveries of
+   * retained events are never touched.
+   */
+  purgeConsumedEvents(
+    cutoff: Date,
+    limit: number,
+  ): Promise<{ events: number; deliveries: number }>;
 }

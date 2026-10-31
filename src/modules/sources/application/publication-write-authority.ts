@@ -15,6 +15,7 @@ import { fingerprintRevisionContent } from "@/modules/knowledge/domain/content";
 import { isRevisionContentUnchanged as unchangedRevision } from "@/modules/knowledge/domain/revision";
 import { normalizeFolderName, orderSiblingsByPosition } from "@/modules/knowledge/domain/tree-rules";
 import { placeNodeAtIndex, renumberSiblingPositions } from "@/modules/knowledge/application/internal/tree-transaction";
+import type { TreeViewNode } from "@/modules/knowledge/ports/tree-repository";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import type {
   Contribution,
@@ -117,6 +118,11 @@ function requireFolderName(name: string): string {
  * authorized publication source. Reads publication, contribution and source
  * under the Source lock, then judges the contributor's rights. No nested unit
  * of work is opened; the owning orchestration commits once.
+ *
+ * Projection cost is bounded independently of the publication size: one
+ * tx-local tree read per bind, maintained in memory by `copy`, `ensureFolder`,
+ * `place`, `setDocumentStatus` and `pruneEmptyFolders`. No projection command
+ * re-reads the whole source.
  */
 export async function bindPublicationProjection(
   repositories: SourceRepositories,
@@ -154,12 +160,25 @@ export async function bindPublicationProjection(
     actorId: contribution.userId,
   };
 
+  /**
+   * The tx-local tree view for this bind (same contract as
+   * `executeFolderImportPlan`): one full read per projection, and every write
+   * below maintains it in memory alongside the database write. Without it a
+   * folder publish would re-read the whole source for every copy, placement
+   * and folder segment — quadratic in the number of documents.
+   */
+  const treeView: TreeViewNode[] = await repositories.tree.listBySource(authority.sourceId);
+
   function requireSameSource(node: { sourceId: string } | null): void {
     if (!node || node.sourceId !== authority.sourceId) throw new DocumentNotFoundError();
   }
 
-  async function nodes(): Promise<Awaited<ReturnType<SourceRepositories["tree"]["listBySource"]>>> {
-    return repositories.tree.listBySource(authority.sourceId);
+  function nodeOf(documentId: string): TreeViewNode | undefined {
+    return treeView.find((node) => node.documentId === documentId);
+  }
+
+  function pushNode(node: TreeViewNode): void {
+    treeView.push(node);
   }
 
   async function requireOriginalInContribution(originalDocumentId: string): Promise<void> {
@@ -247,10 +266,9 @@ export async function bindPublicationProjection(
       await requireOriginalInContribution(input.originalDocumentId);
       if (!input.nodeName.trim()) throw new ValidationError("A copied document needs a non-empty name.");
       const original = await currentRevision(input.originalDocumentId);
-      const allNodes = await nodes();
-      requireActiveParent(allNodes, authority.sourceId, input.parentId);
+      requireActiveParent(treeView, authority.sourceId, input.parentId);
 
-      const siblings = allNodes.filter((node) => node.parentId === input.parentId);
+      const siblings = treeView.filter((node) => node.parentId === input.parentId);
       const index = siblings.length;
       const now = new Date();
       const documentId = uuidv7();
@@ -282,7 +300,23 @@ export async function bindPublicationProjection(
         archivedBy: null,
         archivedAt: null,
       });
-      await placeNodeAtIndex(repositories, authority.sourceId, treeNodeId, input.parentId, index, authority.actorId);
+      pushNode({
+        id: treeNodeId,
+        sourceId: authority.sourceId,
+        parentId: input.parentId,
+        nodeType: "DOCUMENT",
+        name: null,
+        documentId,
+        position: index,
+        status: "ACTIVE",
+        updatedBy: authority.actorId,
+        archivedBy: null,
+        archivedAt: null,
+        title: original.title,
+        documentStatus: "ACTIVE",
+        currentRevisionId: null,
+      });
+      await placeNodeAtIndex(repositories, authority.sourceId, treeNodeId, input.parentId, index, authority.actorId, treeView);
 
       await repositories.publications.insertDocument({
         teamDocumentId: documentId,
@@ -333,21 +367,21 @@ export async function bindPublicationProjection(
       const creator = requireCreatorAuthority(teamDocument);
       const stored = await repositories.documents.findById(input.teamDocumentId);
       requireSameSource(stored);
-      const node = await repositories.tree.findByDocumentId(input.teamDocumentId);
+      const node = nodeOf(input.teamDocumentId);
       if (!node || node.sourceId !== authority.sourceId) throw new TreeNodeNotFoundError();
-      const allNodes = await nodes();
-      requireActiveParent(allNodes, authority.sourceId, input.parentId);
+      requireActiveParent(treeView, authority.sourceId, input.parentId);
       if (!input.nodeName.trim()) throw new ValidationError("A placed document needs a non-empty name.");
       const previousParentId = node.parentId;
       if (previousParentId !== input.parentId) {
         await repositories.tree.updateParent(node.id, input.parentId, creator.userId);
+        node.parentId = input.parentId;
       }
-      const siblings = orderSiblingsByPosition(allNodes.filter((candidate) => candidate.parentId === input.parentId && candidate.id !== node.id));
+      const siblings = orderSiblingsByPosition(treeView.filter((candidate) => candidate.parentId === input.parentId && candidate.id !== node.id));
       // A document node stores no name (its title is the revision's); `nodeName`
       // is the placement label the caller must supply, never persisted here.
-      await placeNodeAtIndex(repositories, authority.sourceId, node.id, input.parentId, siblings.length, creator.userId);
+      await placeNodeAtIndex(repositories, authority.sourceId, node.id, input.parentId, siblings.length, creator.userId, treeView);
       if (previousParentId !== input.parentId) {
-        await renumberSiblingPositions(repositories, authority.sourceId, previousParentId, creator.userId);
+        await renumberSiblingPositions(repositories, authority.sourceId, previousParentId, creator.userId, treeView);
       }
     },
 
@@ -359,16 +393,18 @@ export async function bindPublicationProjection(
       if (stored?.status === status) return;
       await repositories.documents.updateStatus(teamDocumentId, status, creator.userId);
       await repositories.tree.updateStatusForDocument(teamDocumentId, status, creator.userId);
+      for (const node of treeView) {
+        if (node.documentId === teamDocumentId) node.status = status;
+      }
     },
 
     async ensureFolder(parentId, name) {
       const normalized = requireFolderName(name);
-      const allNodes = await nodes();
-      requireActiveParent(allNodes, authority.sourceId, parentId);
-      const existing = allNodes.find((node) =>
+      requireActiveParent(treeView, authority.sourceId, parentId);
+      const existing = treeView.find((node) =>
         node.parentId === parentId && node.nodeType === "FOLDER" && node.status === "ACTIVE" && node.name === normalized);
       if (existing) return existing.id;
-      const siblings = allNodes.filter((node) => node.parentId === parentId);
+      const siblings = treeView.filter((node) => node.parentId === parentId);
       const treeNodeId = uuidv7();
       await repositories.tree.insert({
         id: treeNodeId,
@@ -383,18 +419,34 @@ export async function bindPublicationProjection(
         archivedBy: null,
         archivedAt: null,
       });
-      await placeNodeAtIndex(repositories, authority.sourceId, treeNodeId, parentId, siblings.length, authority.actorId);
+      pushNode({
+        id: treeNodeId,
+        sourceId: authority.sourceId,
+        parentId,
+        nodeType: "FOLDER",
+        name: normalized,
+        documentId: null,
+        position: siblings.length,
+        status: "ACTIVE",
+        updatedBy: authority.actorId,
+        archivedBy: null,
+        archivedAt: null,
+        title: null,
+        documentStatus: null,
+        currentRevisionId: null,
+      });
+      await placeNodeAtIndex(repositories, authority.sourceId, treeNodeId, parentId, siblings.length, authority.actorId, treeView);
       return treeNodeId;
     },
 
     async pruneEmptyFolders() {
       for (;;) {
-        const allNodes = await nodes();
-        const activeChildren = new Set(allNodes.filter((node) => node.status === "ACTIVE" && node.parentId !== null).map((node) => node.parentId!));
-        const empty = allNodes.filter((node) => node.nodeType === "FOLDER" && node.status === "ACTIVE" && !activeChildren.has(node.id));
+        const activeChildren = new Set(treeView.filter((node) => node.status === "ACTIVE" && node.parentId !== null).map((node) => node.parentId!));
+        const empty = treeView.filter((node) => node.nodeType === "FOLDER" && node.status === "ACTIVE" && !activeChildren.has(node.id));
         if (empty.length === 0) return;
         for (const folder of empty) {
           await repositories.tree.updateStatus(folder.id, "ARCHIVED", authority.actorId);
+          folder.status = "ARCHIVED";
         }
       }
     },

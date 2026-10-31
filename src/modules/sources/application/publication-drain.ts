@@ -133,6 +133,14 @@ async function deliverContribution(
  * drains every eligible target: direct members apply, group-only contributors
  * stay pending, and an existing rights freeze is never cleared.
  *
+ * A caller drain also reconciles its own contributions flagged
+ * `pending_catch_up`/rights-frozen in one bounded query. A restore can pend a
+ * contribution without leaving any delivery row (events written while the
+ * publication was archived were already consumed as SKIPPED), so without this
+ * pass a no-op save/sync would leave the team copy stale forever. Only the
+ * contributor's own request reaches this path, so it is also the rights pass
+ * that may clear a freeze.
+ *
  * Prepare happens once per run so events inserted while this batch is being
  * processed remain visible to the next run. Each contribution is reconciled at
  * most once per batch; the reconciler is state-based, so late or repeated
@@ -159,6 +167,7 @@ export async function drainPublicationEvents(
 
   let remaining = batchSize;
   const attempted = new Set<string>();
+  const reconciledContributions = new Set<string>();
   while (remaining > 0) {
     const now = clock();
     const rows = await uow.run((repositories) =>
@@ -174,6 +183,7 @@ export async function drainPublicationEvents(
     remaining -= fresh.length;
 
     for (const batch of groupByContribution(fresh)) {
+      reconciledContributions.add(batch.contributionId);
       const state = await deliverContribution(uow, batch, input.judge, now, retryDelayMs);
       const count = batch.rows.length;
       if (state === "APPLIED") summary.applied += count;
@@ -182,6 +192,26 @@ export async function drainPublicationEvents(
       else if (state === "FAILED") summary.failed += count;
       // SKIPPED (left, archived publication) completes the delivery but has no
       // counter in the result contract.
+    }
+  }
+
+  // One bounded pass for the caller's own flagged contributions that had no
+  // delivery to carry them (the restore/no-event case). Each is counted once.
+  if (userId !== undefined) {
+    const flagged = await uow.run((repositories) =>
+      repositories.publications.listFlaggedContributions(userId, batchSize));
+    const now = clock();
+    for (const contribution of flagged) {
+      if (reconciledContributions.has(contribution.contributionId)) continue;
+      const state = await deliverContribution(uow, {
+        contributionId: contribution.contributionId,
+        publicationId: contribution.publicationId,
+        rows: [],
+      }, input.judge, now, retryDelayMs);
+      if (state === "APPLIED") summary.applied += 1;
+      else if (state === "PENDING") summary.pending += 1;
+      else if (state === "FROZEN") summary.frozen += 1;
+      else if (state === "FAILED") summary.failed += 1;
     }
   }
   return summary;

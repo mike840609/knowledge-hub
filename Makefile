@@ -44,6 +44,10 @@ db-reindex-links: db-up ## Index document links (backfill after migration 012, o
 db-catch-up-publications: db-up ## Reconcile Team publications after reopening Team workspaces. Idempotent.
 	npm run db:catch-up-publications
 
+.PHONY: db-purge-publication-events
+db-purge-publication-events: db-up ## Delete consumed publication events and deliveries older than the retention window.
+	npm run db:purge-publication-events
+
 .PHONY: db-report-escaped-wikilinks
 db-report-escaped-wikilinks: db-up ## List documents that may have lost wikilinks to the old editor (read-only; changes nothing).
 	npm run db:report-escaped-wikilinks

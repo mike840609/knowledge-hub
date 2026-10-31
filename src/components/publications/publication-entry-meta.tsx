@@ -59,15 +59,14 @@ export function contributionState(
 }
 
 /**
- * One team copy's state from the caller's point of view: only the copy's own
- * maintainer is affected by that contributor leaving or being frozen.
+ * One team copy's state from any team member's point of view. The state is the
+ * copy's maintainer's, joined onto the view, so it reads the same for the
+ * maintainer and for everyone else; `ownContribution` is never consulted.
  */
 export function documentPublicationState(
-  document: Pick<PublicationDocumentView, "creatorUserId">,
-  own: Pick<Contribution, "userId" | "leftAt" | "rightsFrozenAt" | "pendingCatchUp"> | null,
+  document: Pick<PublicationDocumentView, "leftAt" | "rightsFrozenAt" | "pendingCatchUp">,
 ): PublicationContributionState {
-  if (own === null || document.creatorUserId !== own.userId) return "ACTIVE";
-  return contributionState(own);
+  return contributionState(document);
 }
 
 export function publicationTreeMeta(item: PublicationListItem): PublicationTreeMeta {
@@ -83,7 +82,7 @@ export function publicationTreeMeta(item: PublicationListItem): PublicationTreeM
       document.teamDocumentId,
       {
         maintainerName: document.creatorName,
-        state: documentPublicationState(document, item.ownContribution),
+        state: documentPublicationState(document),
       } satisfies PublicationDocumentMeta,
     ])),
   };

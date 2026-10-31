@@ -38,6 +38,21 @@ make db-catch-up-publications
 - Voluntary leave, rights-based freezes, and unpublished or admin-archived publications are preserved and never revived by catch-up.
 - The output is `applied=<n> pending=<n> skipped=<n> failed=<n>`. It exits 1 if any contribution failed and 0 otherwise, and it is safe to rerun.
 
+## Publication event retention
+
+Every personal revision, move and lifecycle write records a `publication_events` row, including while `KM_TEAM_WORKSPACES_ENABLED` is off. Those rows are consumed asynchronously, so the event and delivery tables grow unless an operator trims them.
+
+```bash
+make db-purge-publication-events
+# or: npm run db:purge-publication-events
+# window: --days N, or KM_PUBLICATION_RETENTION_DAYS (default 30)
+```
+
+- The job deletes only events that are already consumed and older than the window **and** whose deliveries are all processed; it removes those processed deliveries first (`FK … ON DELETE RESTRICT`).
+- Unconsumed events, events with a pending delivery, and every delivery of a retained event are never deleted, so a behind publication stays detectable.
+- It does not consult the Team feature flag (events are recorded with it off too). It is batched and idempotent, so it is safe to rerun and suitable for a weekly schedule.
+- The output is `Publication retention: deleted events=<n> deliveries=<n> cutoff=<iso>`.
+
 ## Contributor states after a catch-up
 
 A contributor's state explains what an operator should expect and what clears it:

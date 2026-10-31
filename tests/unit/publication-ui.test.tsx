@@ -235,6 +235,7 @@ describe("team tree metadata", () => {
   const document: PublicationDocumentView = {
     teamDocumentId: "td1", sourcePath: "docs/a.md", status: "ACTIVE",
     creatorUserId: "u2", creatorName: "Mike", updatedAt: new Date("2026-10-28T00:00:00Z"),
+    leftAt: null, rightsFrozenAt: null, pendingCatchUp: false,
   };
   const item: PublicationListItem = {
     publication: { id: "p1", sourceId: "s1", teamWorkspaceId: "t1", name: "HCM KM", kind: "FOLDER", creatorUserId: "u2", status: "ACTIVE" },
@@ -261,6 +262,45 @@ describe("team tree metadata", () => {
     expect(publicationTreeMeta({ ...item, ownContribution: { ...item.ownContribution!, leftAt: new Date() } }).state).toBe("LEFT");
     expect(publicationTreeMeta({ ...item, ownContribution: { ...item.ownContribution!, rightsFrozenAt: new Date() } }).state).toBe("FROZEN");
     expect(publicationTreeMeta({ ...item, ownContribution: { ...item.ownContribution!, pendingCatchUp: true } }).state).toBe("PENDING");
+  });
+
+  it("shows another maintainer's left, frozen and pending state to a viewer who does not own it", () => {
+    // Ann reads Mike's documents: her own contribution (or none) says nothing
+    // about whether Mike's copy is still updated.
+    const viewer: PublicationListItem = {
+      ...item,
+      canJoin: false,
+      ownContribution: { id: "c3", userId: "u3", leftAt: null, rightsFrozenAt: null, pendingCatchUp: false },
+    };
+    const leftState = publicationTreeMeta({
+      ...viewer,
+      documents: [{ ...document, leftAt: new Date("2026-10-20T00:00:00Z") }],
+    });
+    expect(leftState.documents.td1.state).toBe("LEFT");
+    expect(leftState.documents.td1.maintainerName).toBe("Mike");
+
+    const frozenState = publicationTreeMeta({
+      ...viewer,
+      ownContribution: null,
+      documents: [{ ...document, rightsFrozenAt: new Date("2026-10-20T00:00:00Z") }],
+    });
+    expect(frozenState.documents.td1.state).toBe("FROZEN");
+
+    const pendingState = publicationTreeMeta({
+      ...viewer,
+      ownContribution: null,
+      documents: [{ ...document, pendingCatchUp: true }],
+    });
+    expect(pendingState.documents.td1.state).toBe("PENDING");
+
+    // The viewer's own pending contribution never labels Mike's copy.
+    const ownPending = publicationTreeMeta({
+      ...viewer,
+      ownContribution: { id: "c3", userId: "u3", leftAt: null, rightsFrozenAt: null, pendingCatchUp: true },
+      documents: [document],
+    });
+    expect(ownPending.state).toBe("PENDING");
+    expect(ownPending.documents.td1.state).toBe("ACTIVE");
   });
 
   it("labels a left contribution as no longer updated and a pending one as waiting", async () => {

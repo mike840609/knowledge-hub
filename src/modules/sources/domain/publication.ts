@@ -62,6 +62,10 @@ export type DocumentBinding = {
  * A team copy as the team tree lists it: who maintains it (the document's
  * creator) and when it last changed. `status` is the team document's own
  * lifecycle; the source's lifecycle gates the whole publication.
+ *
+ * The creator contribution's three state fields are joined in because 「不再更新」
+ * and 「等待同步」 describe the maintainer, not the viewer. Every team member must
+ * see them; the viewer's own contribution only drives their menu.
  */
 export type PublicationDocumentView = {
   teamDocumentId: string;
@@ -70,6 +74,9 @@ export type PublicationDocumentView = {
   creatorUserId: string;
   creatorName: string;
   updatedAt: Date;
+  leftAt: Date | null;
+  rightsFrozenAt: Date | null;
+  pendingCatchUp: boolean;
 };
 
 /**

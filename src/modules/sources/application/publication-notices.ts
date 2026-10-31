@@ -195,6 +195,17 @@ export async function collectPublicationNotices(
     const teamDocumentByOriginal = new Map(
       bindings.map((binding) => [binding.originalDocumentId, binding.teamDocumentId]),
     );
+    // Indexed once per publication: the proposal loop below only does lookups,
+    // so notice cost is O(documents + originals), not O(documents × originals).
+    const documentByTeamDocumentId = new Map(
+      documents.map((document) => [document.teamDocumentId, document]),
+    );
+    const documentByPath = new Map<string, (typeof documents)[number]>();
+    for (const document of documents) {
+      if (document.sourcePath !== null && !documentByPath.has(document.sourcePath)) {
+        documentByPath.set(document.sourcePath, document);
+      }
+    }
 
     for (const original of input.originals) {
       if (!original.active) continue;
@@ -206,7 +217,7 @@ export async function collectPublicationNotices(
         : teamDocumentByOriginal.get(original.documentId);
       const bound = boundTeamDocumentId === undefined
         ? undefined
-        : documents.find((document) => document.teamDocumentId === boundTeamDocumentId);
+        : documentByTeamDocumentId.get(boundTeamDocumentId);
 
       if (bound && bound.creatorContributionId !== contribution.id) {
         push(notice(publication.id, "MAINTAINED_BY_OTHER", {
@@ -217,7 +228,7 @@ export async function collectPublicationNotices(
       }
 
       if (!bound && membership.relativePath !== null) {
-        const holder = documents.find((document) => document.sourcePath === membership.relativePath);
+        const holder = documentByPath.get(membership.relativePath);
         if (holder && holder.creatorContributionId !== contribution.id) {
           push(notice(publication.id, "MAINTAINED_BY_OTHER", {
             originalDocumentId: original.documentId,
@@ -235,9 +246,10 @@ export async function collectPublicationNotices(
         && membership.relativePath !== null
         && membership.relativePath !== bound.sourcePath
       ) {
-        const holder = documents.find((document) =>
-          document.teamDocumentId !== bound.teamDocumentId
-          && document.sourcePath === membership.relativePath);
+        const candidate = documentByPath.get(membership.relativePath);
+        const holder = candidate !== undefined && candidate.teamDocumentId !== bound.teamDocumentId
+          ? candidate
+          : undefined;
         // The creator's own archived holder is reattached, not blocked.
         const reattachable = holder !== undefined
           && holder.creatorContributionId === contribution.id

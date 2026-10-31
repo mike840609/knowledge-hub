@@ -40,6 +40,21 @@ make db-catch-up-publications
 - 自願離開、因權限被 freeze、以及已 unpublish 或被 admin 封存的 publication 都會保留，catch-up 不會自動恢復。
 - 輸出為 `applied=<n> pending=<n> skipped=<n> failed=<n>`。有任何 contribution 失敗時 exit 1，否則 exit 0，且可安全重跑。
 
+## Publication 事件保留
+
+每一次個人 revision、移動與 lifecycle 寫入都會記錄一筆 `publication_events`，即使 `KM_TEAM_WORKSPACES_ENABLED` 關閉也一樣。這些事件是非同步消費的，因此若維運不清除，event 與 delivery 兩張表會持續成長。
+
+```bash
+make db-purge-publication-events
+# 或：npm run db:purge-publication-events
+# 保留窗：--days N，或 KM_PUBLICATION_RETENTION_DAYS（預設 30）
+```
+
+- 只刪除「已被消費、早於保留窗，且所有 delivery 都已處理」的事件；先用 `FK … ON DELETE RESTRICT` 安全順序刪除其已處理的 delivery，再刪事件。
+- 未被消費的事件、仍有 pending delivery 的事件，以及被保留事件的所有 delivery 都不會刪除，因此落後的 publication 仍可被偵測。
+- 此工作不看 Team 功能旗標（旗標關閉時仍會記錄事件），分批且可重複執行，適合排成每週工作。
+- 輸出為 `Publication retention: deleted events=<n> deliveries=<n> cutoff=<iso>`。
+
 ## catch-up 後的 contributor 狀態
 
 Contributor 的狀態決定維運要期待什麼、以及由什麼解除：
