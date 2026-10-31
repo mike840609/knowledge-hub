@@ -393,6 +393,85 @@ describe("team discussion in the Inbox", () => {
     expect(notificationHref(regained)).toBe(teamHref(fixture.teamWorkspaceId, doc.publication.sourceId, doc.documentId, thread.id));
   });
 
+
+  it("does not let 101 revoked team events hide an older readable unread event", async () => {
+    const creator = await addMember(fixture.teamWorkspaceId, "EventPagingCreator", "EDITOR");
+    const commenter = await addMember(fixture.teamWorkspaceId, "EventPagingCommenter", "EDITOR");
+    const good = await publishedDocument({ creator: creator.caller });
+    await service.createForOwner(commenter.caller, {
+      documentId: good.documentId, expectedRevisionId: good.revisionId, anchor: good.anchor,
+      body: "Readable event beyond the page", idempotencyKey: randomUUID(),
+    });
+    const goodId = (await eventsOf(good.documentId))[0].id;
+
+    await fixture.uow.run((r) => r.workspaceMemberships.insert(createDirectMembership({
+      workspaceId: fixture.groupTeamWorkspaceId, userId: creator.identity.id, role: "EDITOR", now: new Date(),
+    })));
+    const revoked = await publishedDocument({ teamId: fixture.groupTeamWorkspaceId, creator: creator.caller });
+    await service.createForOwner(fixture.mike, {
+      documentId: revoked.documentId, expectedRevisionId: revoked.revisionId, anchor: revoked.anchor,
+      body: "Revoked team comment", idempotencyKey: randomUUID(),
+    });
+    const seedId = (await eventsOf(revoked.documentId))[0].id;
+    await fixture.uow.run(async (r) => {
+      const seed = await r.shareCommentEvents.findById(creator.identity.id, seedId);
+      if (!seed) throw new Error("Missing seeded team event");
+      const after = Date.now() + 60_000;
+      for (let i = 0; i < 101; i += 1) {
+        await r.shareCommentEvents.insert({
+          ...seed, id: uuidv7(), createdAt: new Date(after + i * 1000), readAt: null,
+        });
+      }
+    });
+    await removeMember(fixture.groupTeamWorkspaceId, creator.identity.id);
+
+    const unread = await service.listUnreadForOwner(creator.caller);
+    expect(entryFrom(unread, goodId)?.excerpt).toBe("Readable event beyond the page");
+    expect(await service.countUnreadForOwner(creator.caller)).toEqual({ count: 1 });
+  });
+
+  it("does not let 101 revoked team mentions hide an older readable mention", async () => {
+    const mentioned = await addMember(fixture.teamWorkspaceId, "MentionPagingReader", "EDITOR");
+    const writer = await addMember(fixture.teamWorkspaceId, "MentionPagingWriter", "EDITOR");
+    const good = await publishedDocument({ creator: writer.caller });
+    const goodThread = await service.createForOwner(writer.caller, {
+      documentId: good.documentId, expectedRevisionId: good.revisionId, anchor: good.anchor,
+      body: "@MentionPagingReader older and readable", idempotencyKey: randomUUID(),
+      mentions: [mentioned.identity.id],
+    });
+    const goodCommentId = await commentIdOf(goodThread.id);
+
+    await fixture.uow.run((r) => r.workspaceMemberships.insert(createDirectMembership({
+      workspaceId: fixture.groupTeamWorkspaceId, userId: mentioned.identity.id, role: "EDITOR", now: new Date(),
+    })));
+    const revoked = await publishedDocument({ teamId: fixture.groupTeamWorkspaceId, creator: fixture.mike });
+    const revokedThread = await service.createForOwner(fixture.mike, {
+      documentId: revoked.documentId, expectedRevisionId: revoked.revisionId, anchor: revoked.anchor,
+      body: "@MentionPagingReader revoked team", idempotencyKey: randomUUID(),
+      mentions: [mentioned.identity.id],
+    });
+    const seedCommentId = await commentIdOf(revokedThread.id);
+    await fixture.uow.run(async (r) => {
+      const seed = await r.reviewComments.findById(seedCommentId);
+      const mention = (await r.reviewMentions.findByThreads(mentioned.identity.id, [revokedThread.id]))
+        .find((row) => row.commentId === seedCommentId);
+      if (!seed || !mention) throw new Error("Missing seeded team mention");
+      const after = Date.now() + 60_000;
+      for (let i = 0; i < 101; i += 1) {
+        const id = uuidv7();
+        const createdAt = new Date(after + i * 1000);
+        await r.reviewComments.insert({ ...seed, id, createdAt, idempotencyKey: randomUUID() });
+        await r.reviewMentions.insertMany([{ ...mention, commentId: id, createdAt, readAt: null }]);
+      }
+    });
+    await removeMember(fixture.groupTeamWorkspaceId, mentioned.identity.id);
+
+    const unread = await service.listUnreadForOwner(mentioned.caller);
+    expect(entryFrom(unread, `mention:${goodCommentId}`)?.excerpt).toContain("older and readable");
+    expect(await service.countUnreadForOwner(mentioned.caller)).toEqual({ count: 1 });
+    expect((await mentionRowsOf(seedCommentId))[0].read_at).toBeNull();
+  });
+
   it("keeps team entries out of My Shares per-share counts", async () => {
     const creator = await addMember(fixture.teamWorkspaceId, "CountsCreator", "EDITOR");
     const commenter = await addMember(fixture.teamWorkspaceId, "CountsCommenter", "EDITOR");
