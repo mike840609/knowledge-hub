@@ -12,7 +12,8 @@ export interface ShareCommentEventRepository {
   insert(event: ShareCommentEvent): Promise<void>;
   /** The caller's own row by id: a personal owner row or one naming them as the team recipient. */
   findById(recipientUserId: string, eventId: string): Promise<ShareCommentEvent | null>;
-  listUnreadByRecipient(recipientUserId: string): Promise<ShareCommentEvent[]>;
+  /** Cursor past unread rows that are no longer accessible without clearing their read state. */
+  listUnreadByRecipient(recipientUserId: string, before?: { createdAt: Date; id: string }, limit?: number): Promise<ShareCommentEvent[]>;
   /** Unread rows delivered to the caller as a team recipient, for access-judged bulk marking. */
   listUnreadTeamByRecipient(recipientUserId: string): Promise<ShareCommentEvent[]>;
   listUnreadCountsByRecipient(recipientUserId: string): Promise<ShareDocumentUnreadCount[]>;
