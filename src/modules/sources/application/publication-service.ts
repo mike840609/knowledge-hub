@@ -649,11 +649,12 @@ export class PublicationService {
         }
       });
     } catch (error) {
-      if (isIntegrityViolation(error)) {
+      if (isIntegrityViolation(error) || isWorkspaceBusy(error)) {
         // The transaction that lost the race is rolled back, so inspect the
         // committed winner in a fresh one before naming the outcome. The
         // generated active-name key and the binding claim key are both
-        // uniqueness violations at the driver level.
+        // uniqueness violations at the driver level; a concurrent restore can
+        // also surface as a lock wait/deadlock (WORKSPACE_BUSY).
         const conflict = await this.lostRestoreConflict(publicationId);
         if (conflict?.kind === "NAME") throw nameTaken();
         if (conflict?.kind === "ORIGINAL") {
@@ -721,11 +722,13 @@ export class PublicationService {
         await repositories.sources.updateName(publication.sourceId, next, caller.identity.id);
       });
     } catch (error) {
-      if (isIntegrityViolation(error)) {
+      if (isIntegrityViolation(error) || isWorkspaceBusy(error)) {
         // The transaction that lost the race is gone; the active-name key is
         // the only uniqueness rule this write can violate, so re-read it in a
-        // fresh transaction. Anything else (for example affected-0-rows)
-        // stays the original failure rather than a fabricated name conflict.
+        // fresh transaction. A concurrent rename can also surface as a lock
+        // wait/deadlock (WORKSPACE_BUSY). Anything else (for example
+        // affected-0-rows) stays the original failure rather than a
+        // fabricated name conflict.
         const taken = await this.uow.run(async (repositories) => {
           const publication = await repositories.publications.findById(publicationId);
           return publication === null
@@ -1139,4 +1142,8 @@ function originalTaken(documentId: string, publicationName?: string): Error {
 
 function isIntegrityViolation(error: unknown): boolean {
   return error instanceof DomainError && error.code === "INTEGRITY_VIOLATION";
+}
+
+function isWorkspaceBusy(error: unknown): boolean {
+  return error instanceof DomainError && error.code === "WORKSPACE_BUSY";
 }
