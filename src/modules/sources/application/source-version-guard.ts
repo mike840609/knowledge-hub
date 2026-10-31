@@ -2,7 +2,7 @@ import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-i
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
-import { IntegrityViolationError, VersionConflictError, SourceNotFoundError, NotFoundError, SourceEntryConflictError, ValidationError } from "@/modules/knowledge/domain/errors";
+import { IntegrityViolationError, VersionConflictError, SourceNotFoundError, NotFoundError, SourceEntryConflictError, SourceReadOnlyError, ValidationError } from "@/modules/knowledge/domain/errors";
 import { MAX_FOLDER_NAME_LENGTH } from "@/modules/knowledge/domain/tree-rules";
 import type { ContentInput } from "@/modules/knowledge/domain/content";
 import { fingerprintRevisionContent } from "@/modules/knowledge/domain/content";
@@ -12,6 +12,7 @@ import type { KnowledgeAsset } from "../domain/asset";
 import { SourceImportError, type ImportErrorCode } from "../domain/import-errors";
 import { bindSourceProjection } from "./source-knowledge-projection-service";
 import { requireSourceManagedSource } from "@/modules/knowledge/application/internal/tree-transaction";
+import { recordPersonalPublicationEvent } from "@/modules/knowledge/application/internal/publication-event-recording";
 import { archiveSourceEntry, updateSourceLocator } from "./source-entry-mapping-service";
 
 export type KnownSourceApplyInput = {
@@ -64,6 +65,17 @@ function normalizedSourceName(value: string): string {
   return trimmed;
 }
 
+/**
+ * Source lifecycle and rename belong to the publication mechanism for a
+ * publication source (unpublish/restore/rename have their own rules and
+ * callers). The generic commands refuse it outright.
+ */
+function requireOrdinarySource(source: { sourceType: string }): void {
+  if (source.sourceType === "PUBLICATION") {
+    throw new SourceReadOnlyError("Publication sources are archived, restored and renamed by the publication lifecycle.");
+  }
+}
+
 export class SourceApplicationService implements SourceLifecycleCommands {
   private readonly unitOfWork: SourceUnitOfWork;
 
@@ -78,7 +90,7 @@ export class SourceApplicationService implements SourceLifecycleCommands {
         await syncCallerIdentity(repositories.users, caller);
         const source = await repositories.sources.lockById(input.sourceId);
         if (!source) throw new SourceNotFoundError();
-        await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
+        const workspace = await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
         await requireSourceManagedSource(repositories, caller, input.sourceId);
         const projection = bindSourceProjection(repositories, { id: source.id, workspaceId: source.workspaceId });
         const resultVersion = await repositories.sources.guardAndAdvanceVersion(input.sourceId, input.basedOnVersion, caller.identity.id);
@@ -112,6 +124,13 @@ export class SourceApplicationService implements SourceLifecycleCommands {
         };
         const entryChanged = desiredEntry.externalId !== entry.externalId || desiredEntry.sourcePath !== entry.sourcePath || desiredEntry.contentHash !== entry.contentHash || desiredEntry.status !== entry.status || desiredEntry.archivedBy !== entry.archivedBy || desiredEntry.archivedAt !== entry.archivedAt;
         if (entryChanged) await repositories.entries.update({ ...desiredEntry, lastSeenAt: now });
+        // A same-hash save writes no revision, but moving the file is still a
+        // placement change the team has to see.
+        if (desiredEntry.sourcePath !== entry.sourcePath) {
+          await recordPersonalPublicationEvent(repositories, workspace, {
+            documentId: null, treeNodeId: entry.treeNodeId, sourceId: null, kind: "TREE", at: now,
+          });
+        }
         if (input.failurePoint === "entry") throw new Error("Injected source apply failure after SourceEntry update.");
         if (input.asset) {
           if (input.asset.sourceId !== input.sourceId) throw new NotFoundError("Asset metadata belongs to a different source.");
@@ -135,7 +154,7 @@ export class SourceApplicationService implements SourceLifecycleCommands {
         await syncCallerIdentity(repositories.users, caller);
         const source = await repositories.sources.lockById(input.sourceId);
         if (!source) throw new SourceNotFoundError();
-        await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
+        const workspace = await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
         await requireSourceManagedSource(repositories, caller, input.sourceId);
         const projection = bindSourceProjection(repositories, { id: source.id, workspaceId: source.workspaceId });
         const resultVersion = await repositories.sources.guardAndAdvanceVersion(input.sourceId, input.basedOnVersion, caller.identity.id);
@@ -145,6 +164,13 @@ export class SourceApplicationService implements SourceLifecycleCommands {
         await projection.archiveProjectedDocument(caller, input.documentId);
         await archiveSourceEntry(repositories, caller, input.sourceId, input.entryId);
         await updateSourceLocator(repositories, caller, input.sourceId, input.entryId, input.sourcePath, entry.contentHash);
+        // Archiving an already-archived document writes no lifecycle event, so
+        // a path change here would otherwise be the one unrecorded mutation.
+        if (entry.status === "ARCHIVED" && input.sourcePath !== entry.sourcePath) {
+          await recordPersonalPublicationEvent(repositories, workspace, {
+            documentId: null, treeNodeId: entry.treeNodeId, sourceId: null, kind: "TREE", at: new Date(),
+          });
+        }
         const now = new Date();
         await repositories.syncRuns.insert({ id: runId, sourceId: input.sourceId, triggeredBy: caller.identity.id, basedOnVersion: input.basedOnVersion, resultVersion, status: "APPLIED", summary: input.summary ?? { archived: true }, startedAt: now, completedAt: new Date() });
         return { runId, resultVersion };
@@ -165,6 +191,7 @@ export class SourceApplicationService implements SourceLifecycleCommands {
       await syncCallerIdentity(repositories.users, caller);
       const source = await repositories.sources.lockById(sourceId);
       if (!source) throw new SourceNotFoundError();
+      requireOrdinarySource(source);
       await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
       if (source.name === next) return;
       await repositories.sources.updateName(sourceId, next, caller.identity.id);
@@ -180,9 +207,15 @@ export class SourceApplicationService implements SourceLifecycleCommands {
       await syncCallerIdentity(repositories.users, caller);
       const source = await repositories.sources.lockById(sourceId);
       if (!source) throw new SourceNotFoundError();
-      await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
+      requireOrdinarySource(source);
+      const workspace = await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
       if (source.status === status) return;
       await repositories.sources.updateStatus(sourceId, status, caller.identity.id);
+      // Whole-source lifecycle: the target is the Source itself, and the
+      // consumer expands it to every original inside.
+      await recordPersonalPublicationEvent(repositories, workspace, {
+        documentId: null, treeNodeId: null, sourceId, kind: "SOURCE", at: new Date(),
+      });
     });
   }
 

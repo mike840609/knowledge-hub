@@ -41,14 +41,16 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       const dialog = page.getByRole("dialog");
       await dialog.getByLabel("Team name").fill("UI closure team");
       await dialog.getByRole("button", { name: "Create team", exact: true }).click();
-      await expect(page.getByRole("link", { name: "Import knowledge", exact: true })).toBeVisible();
+      // Publishing is the only UI way content enters a team.
+      await expect(page.getByRole("link", { name: "Import knowledge", exact: true })).toHaveCount(0);
+      await expect(page.getByText(/團隊的內容從成員的 My Space 發佈而來/)).toBeVisible();
       const workspaceId = new URL(page.url()).pathname.split("/")[2]!;
       await page.goto(`/w/${workspaceId}/settings/groups`);
       await expect(page.getByText("No SSO group mappings yet.")).toBeVisible();
       await page.locator("summary").filter({hasText:"Add group mapping"}).click();
-      await expectOptions(page.getByLabel("New group role"), ["ADMIN", "EDITOR", "VIEWER"]);
+      await expectOptions(page.getByLabel("New group role"), ["管理員（ADMIN）", "成員（EDITOR）"]);
       await page.getByLabel("External group ID").fill("phase3-ui-viewers");
-      await chooseOption(page.getByLabel("New group role"), "VIEWER");
+      await chooseOption(page.getByLabel("New group role"), "EDITOR");
       await page.getByRole("button", { name: "Add group mapping", exact: true }).click();
       await expect(page.getByRole("cell", { name: "phase3-ui-viewers", exact: true })).toBeVisible();
       await page.goto(`/w/${workspaceId}/settings/members`);
@@ -56,8 +58,8 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       await page.getByLabel("Search existing users").fill("P3-105");
       await page.getByRole("button", { name: "Search", exact: true }).click();
       await chooseOption(page.getByLabel("User to add"), phase3UserId("viewer"));
-      await expectOptions(page.getByLabel("New member role"), ["OWNER", "ADMIN", "EDITOR", "VIEWER"]);
-      await chooseOption(page.getByLabel("New member role"), "VIEWER");
+      await expectOptions(page.getByLabel("New member role"), ["管理員（ADMIN）", "成員（EDITOR）"]);
+      await chooseOption(page.getByLabel("New member role"), "EDITOR");
       await page.getByRole("button", { name: "Add member", exact: true }).click();
       await expect(page.getByRole("row").filter({ hasText: "Phase3 viewer" })).toContainText("Group access not evaluated");
       await page.screenshot({ path: testInfo.outputPath("phase3-members.png"), fullPage: true });
@@ -86,12 +88,12 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       await grant(owner.context.request, id, "viewer", "VIEWER");
       await admin.page.goto(`/w/${id}/settings/groups`);
       await admin.page.locator("summary").filter({hasText:"Add group mapping"}).click();
-      await expectOptions(admin.page.getByLabel("New group role"), ["EDITOR", "VIEWER"]);
+      await expectOptions(admin.page.getByLabel("New group role"), ["成員（EDITOR）"]);
       await admin.page.goto(`/w/${id}/settings/members`);
       await admin.page.locator("summary").filter({hasText:"Add member"}).click();
       await admin.page.getByLabel("Search existing users").fill("P3-102");
       await admin.page.getByRole("button", { name: "Search", exact: true }).click();
-      await expectOptions(admin.page.getByLabel("New member role"), ["EDITOR", "VIEWER"]);
+      await expectOptions(admin.page.getByLabel("New member role"), ["成員（EDITOR）"]);
       const denied = await admin.context.request.post(`/api/workspaces/${id}/archive`);
       expect(denied.status()).toBe(403);
       await viewer.page.goto(`/w/${id}/knowledge`);

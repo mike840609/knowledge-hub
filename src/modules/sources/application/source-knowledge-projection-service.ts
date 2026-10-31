@@ -11,6 +11,7 @@ import {
   InvalidSourceMappingError,
   RevisionConflictError,
   SourceEntryConflictError,
+  SourceReadOnlyError,
   TreeCycleError,
   TreeNodeNotFoundError,
   ValidationError,
@@ -34,6 +35,12 @@ import {
   requireLockedSourceNode,
   requireSourceManagedSource,
 } from "@/modules/knowledge/application/internal/tree-transaction";
+import {
+  recordManyPersonalPublicationEvents,
+  recordPersonalPublicationEvent,
+  workspaceOfSource,
+} from "@/modules/knowledge/application/internal/publication-event-recording";
+import type { PublicationEventInput } from "@/modules/knowledge/ports/publication-event-repository";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import type { SourceRepositories } from "../ports/unit-of-work";
 import {
@@ -112,6 +119,9 @@ async function requireBoundSource(
   // this connection under the Source X-lock. Only the cheap in-memory
   // workspaceId equality check repeats per command (no DB, no new locks).
   if (hints?.boundPolicy) {
+    if (hints.boundPolicy.sourceType === "PUBLICATION") {
+      throw new SourceReadOnlyError("Publication content is written only by the publication mechanism.");
+    }
     if (hints.boundPolicy.workspaceId !== bound.workspaceId || hints.boundPolicy.id !== bound.id) {
       throw new InvalidSourceMappingError("Bound source workspace changed during projection.");
     }
@@ -194,6 +204,23 @@ export function bindSourceProjection(
     if (node) node.currentRevisionId = revisionId;
   }
 
+  // Every command in this binding writes one source, so the Workspace that
+  // says whether it is a personal original is resolved once per Apply, on this
+  // connection, and reused for every event.
+  let boundWorkspace: Promise<Awaited<ReturnType<typeof workspaceOfSource>>> | undefined;
+  function workspace(): Promise<Awaited<ReturnType<typeof workspaceOfSource>>> {
+    boundWorkspace ??= workspaceOfSource(repositories, bound.workspaceId);
+    return boundWorkspace;
+  }
+
+  async function recordEvent(event: PublicationEventInput): Promise<void> {
+    await recordPersonalPublicationEvent(repositories, await workspace(), event);
+  }
+
+  async function recordEvents(events: readonly PublicationEventInput[]): Promise<void> {
+    await recordManyPersonalPublicationEvents(repositories, await workspace(), events);
+  }
+
   function pushViewNode(node: TreeViewNode): void {
     hints?.treeView?.push(node);
   }
@@ -234,6 +261,18 @@ export function bindSourceProjection(
     if (previousParentId !== newParentId) {
       await renumberSiblingPositions(repositories, source.id, previousParentId, caller.identity.id, hints?.treeView);
     }
+    // Moves create no revision; the target node is what the team learns about.
+    // When the node leaves its previous parent, that parent is a second target:
+    // a contribution publishing the old folder (or an ancestor) must reconcile
+    // and archive the copy, which the moved node's new ancestry cannot signal.
+    const at = new Date();
+    const events: PublicationEventInput[] = [
+      { documentId: null, treeNodeId: node.id, sourceId: null, kind: "TREE", at },
+    ];
+    if (previousParentId !== null && previousParentId !== newParentId) {
+      events.push({ documentId: null, treeNodeId: previousParentId, sourceId: null, kind: "TREE", at });
+    }
+    await recordEvents(events);
   }
 
   async function archiveLinkedFolderEntry(caller: CallerContext, treeNodeId: string): Promise<void> {
@@ -300,6 +339,9 @@ export function bindSourceProjection(
       if (!stored || stored.documentId !== documentId || stored.treeNodeId !== treeNodeId) {
         throw new InvalidSourceMappingError("Projected document mapping is incomplete.");
       }
+      await recordEvent({
+        documentId, treeNodeId: null, sourceId: null, kind: "REVISION", revisionId, at: now,
+      });
       return { documentId, revisionId, treeNodeId };
     },
 
@@ -390,6 +432,10 @@ export function bindSourceProjection(
       if (shifted.length > 0) await repositories.tree.updatePositions(shifted, actor);
       await repositories.documents.assertCompleteMany(documents.map((document) => document.id));
       await repositories.entries.insertMany(entries);
+      await recordEvents(revisions.map((revision, index) => ({
+        documentId: documents[index].id, treeNodeId: null, sourceId: null, kind: "REVISION" as const,
+        revisionId: revision.id, at: now,
+      })));
       return results;
     },
 
@@ -418,6 +464,9 @@ export function bindSourceProjection(
       await repositories.links.replaceForDocument({ documentId: document.id, revisionId, links: (hints?.linksOf ?? extractDocumentLinks)(content.markdown) });
       syncViewCurrentRevision(document.id, revisionId);
       await repositories.documents.assertComplete(document.id);
+      await recordEvent({
+        documentId: document.id, treeNodeId: null, sourceId: null, kind: "REVISION", revisionId, at: new Date(),
+      });
       return { revisionId, revisionNo, changed: true };
     },
 
@@ -461,6 +510,7 @@ export function bindSourceProjection(
       if (!stored || stored.treeNodeId !== treeNodeId || stored.documentId !== null) {
         throw new InvalidSourceMappingError("Projected folder mapping is incomplete.");
       }
+      await recordEvent({ documentId: null, treeNodeId, sourceId: null, kind: "TREE", at: new Date() });
       return { treeNodeId };
     },
 
@@ -479,6 +529,7 @@ export function bindSourceProjection(
       if (linked && linked.sourceId === source.id) {
         await repositories.entries.update({ ...linked, updatedBy: caller.identity.id, lastSeenAt: new Date() });
       }
+      await recordEvent({ documentId: null, treeNodeId: node.id, sourceId: null, kind: "TREE", at: new Date() });
     },
 
     async archiveProjectedFolder(caller, nodeId) {
@@ -496,6 +547,7 @@ export function bindSourceProjection(
       await repositories.tree.updateStatus(node.id, "ARCHIVED", caller.identity.id);
       syncViewNode(node.id, { status: "ARCHIVED" });
       await archiveLinkedFolderEntry(caller, node.id);
+      await recordEvent({ documentId: null, treeNodeId: node.id, sourceId: null, kind: "LIFECYCLE", at: new Date() });
     },
 
     async restoreProjectedFolder(caller, nodeId) {
@@ -509,6 +561,7 @@ export function bindSourceProjection(
       await repositories.tree.updateStatus(node.id, "ACTIVE", caller.identity.id);
       syncViewNode(node.id, { status: "ACTIVE" });
       await restoreLinkedFolderEntry(caller, node.id);
+      await recordEvent({ documentId: null, treeNodeId: node.id, sourceId: null, kind: "LIFECYCLE", at: new Date() });
     },
 
     async moveProjectedNode(caller, input) {
@@ -537,6 +590,7 @@ export function bindSourceProjection(
       await repositories.tree.updateStatusForDocument(document.id, "ARCHIVED", caller.identity.id);
       syncViewDocumentStatus(document.id, "ARCHIVED");
       await archiveLinkedDocumentEntry(caller, document.id);
+      await recordEvent({ documentId: document.id, treeNodeId: null, sourceId: null, kind: "LIFECYCLE", at: new Date() });
     },
 
     async restoreProjectedDocument(caller, documentId) {
@@ -556,6 +610,7 @@ export function bindSourceProjection(
       await repositories.tree.updateStatusForDocument(document.id, "ACTIVE", caller.identity.id);
       syncViewDocumentStatus(document.id, "ACTIVE");
       await restoreLinkedDocumentEntry(caller, document.id);
+      await recordEvent({ documentId: document.id, treeNodeId: null, sourceId: null, kind: "LIFECYCLE", at: new Date() });
     },
 
     async restoreProjectedDocumentToParent(caller, input) {
@@ -585,6 +640,7 @@ export function bindSourceProjection(
       await repositories.tree.updateStatusForDocument(document.id, "ACTIVE", caller.identity.id);
       syncViewDocumentStatus(document.id, "ACTIVE");
       await restoreLinkedDocumentEntry(caller, document.id);
+      await recordEvent({ documentId: document.id, treeNodeId: null, sourceId: null, kind: "LIFECYCLE", at: new Date() });
     },
   };
 }

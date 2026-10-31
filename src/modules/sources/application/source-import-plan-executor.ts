@@ -1,5 +1,9 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { renumberSiblingPositions, requireSourceManagedSource } from "@/modules/knowledge/application/internal/tree-transaction";
+import {
+  recordPersonalPublicationEvent,
+  workspaceOfSource,
+} from "@/modules/knowledge/application/internal/publication-event-recording";
 import type { TreeViewNode } from "@/modules/knowledge/ports/tree-repository";
 import { importError } from "@/modules/sources/domain/import-errors";
 import type { FolderImportPlan, RevisionPayload, RevisionReference } from "@/modules/sources/domain/import-plan";
@@ -69,6 +73,7 @@ export async function executeFolderImportPlan(
   // write. No command path may re-read the tree from the database while the
   // view is in scope; post-Apply verification reads stay on the database.
   const boundPolicy = await requireSourceManagedSource(repositories, caller, source.id);
+  const workspace = await workspaceOfSource(repositories, source.workspaceId);
   const treeView: TreeViewNode[] = await repositories.tree.listBySource(source.id);
   const projection = bindSourceProjection(repositories, { id: source.id, workspaceId: source.workspaceId }, { boundPolicy, treeView, linksOf: options.linksOf });
   const current = await repositories.importCanonicalState.load(source.id);
@@ -170,6 +175,7 @@ export async function executeFolderImportPlan(
   for (const action of plan.documents.updateLocator) {
     const entry = await repositories.entries.findById(action.entryId);
     if (!entry || entry.sourceId !== source.id || entry.entryType !== "DOCUMENT") throw importError("IMPORT_PLAN_ENTRY_MISSING", "Document SourceEntry referenced by the plan is unavailable.");
+    const moved = entry.sourcePath !== action.sourcePath;
     await repositories.entries.update({
       ...entry,
       sourcePath: action.sourcePath,
@@ -177,6 +183,13 @@ export async function executeFolderImportPlan(
       updatedBy: caller.identity.id,
       lastSeenAt: now(),
     });
+    // The plan's path-only update is a rename the team has to see; the other
+    // Apply steps (create/revise/move/archive) are recorded by the projection.
+    if (moved) {
+      await recordPersonalPublicationEvent(repositories, workspace, {
+        documentId: null, treeNodeId: entry.treeNodeId, sourceId: null, kind: "TREE", at: now(),
+      });
+    }
   }
   failAt(options, "after-revisions");
 

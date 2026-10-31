@@ -53,6 +53,22 @@ export class MariaDbEntryRepository implements EntryRepository {
     return rows[0] ? mapEntry(rows[0]) : null;
   }
 
+  async findSourcePathByDocumentId(documentId: string): Promise<string | null> {
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT CASE WHEN s.source_type = 'PUBLICATION' THEN pd.source_path ELSE e.source_path END AS source_path
+       FROM knowledge_documents d
+       JOIN knowledge_sources s ON s.id = d.source_id
+       LEFT JOIN source_entries e ON e.document_id = d.id AND e.entry_type = 'DOCUMENT'
+       LEFT JOIN publication_documents pd ON pd.team_document_id = d.id
+       WHERE d.id = ?
+       LIMIT 1`,
+      [documentId],
+    );
+    return rows[0]?.source_path === null || rows[0]?.source_path === undefined
+      ? null
+      : String(rows[0].source_path);
+  }
+
   async insert(entry: SourceEntry): Promise<void> {
     await this.connection.query(
       `INSERT INTO source_entries (id, source_id, external_id, source_path, entry_type, content_hash, document_id, tree_node_id, status, updated_by, archived_by, archived_at, first_seen_at, last_seen_at)

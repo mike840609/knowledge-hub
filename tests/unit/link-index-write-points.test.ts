@@ -26,10 +26,11 @@ describe("revision writers and the link index", () => {
     .filter((file) => !file.includes(`${path.sep}infrastructure${path.sep}`))
     .filter((file) => /\.revisions\.insert(Many)?\(/.test(readFileSync(file, "utf8")));
 
-  it("finds the four writers this was written against", () => {
+  it("finds the writers this was written against", () => {
     expect(writers.map((file) => path.basename(file)).sort()).toEqual([
       "create-document.ts",
       "create-revision.ts",
+      "publication-write-authority.ts",
       "source-knowledge-projection-service.ts",
     ]);
   });

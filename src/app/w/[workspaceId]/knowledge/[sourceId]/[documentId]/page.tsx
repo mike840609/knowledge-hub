@@ -83,7 +83,9 @@ export default async function KnowledgeDocumentPage({
     !isHistorical && revisionNo === undefined && explorer.source.status === "ACTIVE" &&
     shell.access.workspace.lifecycleState !== "ARCHIVED";
   // A new document goes to the workspace's own Notes whatever this one is (a synced source's document
-  // included), so what decides whether a broken link offers to make it is the capability to write here.
+  // included), so what decides whether a broken link offers to make it is the capability to write here
+  // — and, for a team, nothing does: publishing is that workspace's only way in, so the inspector
+  // renders an unresolved wikilink as plain text (`mayCreateFromLink`).
   const canCreate = shell?.access.actions.canWrite === true;
   const breadcrumb = explorer
     ? [...documentLocation(workspaceId, sourceId, explorer.source.name, explorer.tree, documentId), { label: selectedRevision.title }]
@@ -103,6 +105,7 @@ export default async function KnowledgeDocumentPage({
   const inspectorData = documentInspectorData({
     workspaceId,
     workspaceName: shell?.workspace.name,
+    workspaceType: shell?.workspace.type ?? "TEAM",
     sourceId,
     sourceName: explorer?.source.name,
     sourcePath: model.sourcePath,
@@ -156,8 +159,9 @@ export default async function KnowledgeDocumentPage({
       <div className="kh-reading-column py-6">
         {isHistorical && <RevisionRestore documentId={documentId} href={`/w/${workspaceId}/knowledge/${sourceId}/${documentId}`} historical={selectedRevision} current={view.currentRevision} editable={!sourceManaged && view.status === "ACTIVE" && explorer?.source.status === "ACTIVE"} />}
         {shell?.workspace.type === "PERSONAL" ? <ReadRevisionMarker workspaceId={workspaceId} documentId={documentId} revisionId={selectedRevision.id}/> : null}
-        {/* The owner's discussions go beside the article they are about, so the panel holds it. */}
-        {shell?.workspace.type === "PERSONAL" && !isHistorical
+        {/* Discussions go beside the article they are about: the personal owner's, and a team
+            member's on a published team document. A historical revision is a snapshot. */}
+        {(shell?.workspace.type === "PERSONAL" || explorer?.source.sourceType === "PUBLICATION") && !isHistorical
           ? <OwnerReviewPanel key={documentId} readOnly={view.status !== "ACTIVE" || explorer?.source.status !== "ACTIVE"} documentId={documentId} revisionId={view.currentRevision.id} markdown={view.currentRevision.markdown}>{viewer}</OwnerReviewPanel>
           : viewer}
         {linkView ? <BacklinksFooter view={linkView} /> : null}

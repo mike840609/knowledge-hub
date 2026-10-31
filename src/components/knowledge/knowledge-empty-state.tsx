@@ -39,9 +39,11 @@ export function KnowledgeEmptyState() {
         icon={FileText} illustration={<Illustration kind="start" importFirst={first?.id !== "create.document"} />}
         title="No documents yet"
         description={
-          actions.length > 0
-            ? "Imported folders stay read-only here; documents you write stay editable."
-            : "You can read this workspace; adding to it needs edit access."
+          access.workspace.type === "TEAM"
+            ? "團隊的內容從成員的 My Space 發佈而來。在 My Space 的資料夾或文件選「發佈到團隊」。"
+            : actions.length > 0
+              ? "Imported folders stay read-only here; documents you write stay editable."
+              : "You can read this workspace; adding to it needs edit access."
         }
         action={<WorkspaceContentActions workspaceId={access.workspace.id} />}
         hint={

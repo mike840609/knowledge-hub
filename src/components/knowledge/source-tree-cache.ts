@@ -1,6 +1,14 @@
 import type { KnowledgeTreeItem, SourceView } from '@/modules/knowledge/application/knowledge-query-service';
+import type { PublicationListItem } from '@/modules/sources/application/publication-service';
 export type SourceCollection = { source: SourceView; tree: KnowledgeTreeItem[] };
-export type TreeLoadState = { status: 'loading' | 'error' } | { status: 'loaded'; tree: KnowledgeTreeItem[] };
+export type TreeLoadState =
+  | { status: 'loading' | 'error' }
+  | {
+    status: 'loaded';
+    tree: KnowledgeTreeItem[];
+    /** A publication's per-document maintainers, returned with its lazy tree. */
+    publication?: PublicationListItem;
+  };
 /** One cache per server snapshot. Pending responses never cross snapshot/workspace boundaries. */
 export class SourceTreeCache {
   private states: Record<string, TreeLoadState>;
@@ -29,7 +37,13 @@ export class SourceTreeCache {
         if (!response.ok) throw new Error('Tree unavailable');
         const body = await response.json();
         if (!Array.isArray(body.tree)) throw new Error('Invalid tree response');
-        this.put(id, { status: 'loaded', tree: body.tree });
+        this.put(id, {
+          status: 'loaded',
+          tree: body.tree,
+          ...(body.publication && typeof body.publication === 'object'
+            ? { publication: body.publication as PublicationListItem }
+            : {}),
+        });
       } catch { if (!controller.signal.aborted) this.put(id, { status: 'error' }); }
       finally { this.pending.delete(id); this.controllers.delete(controller); }
     })();

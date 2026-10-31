@@ -37,6 +37,7 @@ export type ActionId =
   | "document.copy-link"
   | "document.duplicate"
   | "document.share"
+  | "document.publish"
   | "document.favorite"
   | "document.details"
   | "document.backlinks"
@@ -48,6 +49,7 @@ export type ActionId =
   | "folder.rename"
   | "folder.move"
   | "folder.share"
+  | "folder.publish"
   | "folder.archive"
   | "folder.restore";
 
@@ -127,7 +129,9 @@ export type ActionEffect =
   | { kind: "create-folder"; sourceId: string | null; parentId: string | null; parentLabel: string | null }
   | { kind: "folder-command"; command: FolderCommand; nodeId: string; sourceId: string; label: string }
   /** Asks for a place — a folder, or the top level — and moves the node there, last. */
-  | { kind: "move"; sourceId: string; label: string; node: { type: "document"; documentId: string } | { type: "folder"; nodeId: string } };
+  | { kind: "move"; sourceId: string; label: string; node: { type: "document"; documentId: string } | { type: "folder"; nodeId: string } }
+  /** Asks the publish dialog to open for one of the caller's own origins. */
+  | { kind: "publish"; origin: { kind: "DOCUMENT"; documentId: string; label: string } | { kind: "FOLDER"; folderNodeId: string; label: string } };
 
 /**
  * Collapse or expand the navigation. The one binding for it: the app shell reads the key from here, the
@@ -308,6 +312,9 @@ export function availableActions(context: ActionContext): readonly Action[] {
     effect: { kind: "toggle-nav" },
   });
 
+  // Publishing is the one way content enters a team, so the Hub's own authoring
+  // entry points stay in My Space only. Team workspaces keep the four roles and
+  // their capability bundles in code; it is the surfaces that stop offering them.
   if (can.canWrite && confirmed) {
     actions.push({
       id: "create.document",
@@ -416,6 +423,28 @@ export function availableActions(context: ActionContext): readonly Action[] {
           documentId: target.documentId,
           sourceId: target.sourceId,
         },
+      });
+    }
+    // Publishing is the one way into a team, and only My Space's owner can do it
+    // for their own origin. A historical revision is a reading view, so it is
+    // not an origin.
+    if (
+      context.workspaceType === "PERSONAL" &&
+      context.isPersonalOwner &&
+      confirmed &&
+      target.status === "ACTIVE" &&
+      target.sourceStatus === "ACTIVE" &&
+      target.revision === "CURRENT"
+    ) {
+      actions.push({
+        id: "document.publish",
+        label: "發佈到團隊",
+        group: "document",
+        icon: "share",
+        keywords: ["publish", "team", "發佈", "團隊", target.label],
+        section: "edit",
+        surfaces: ["palette", "row"],
+        effect: { kind: "publish", origin: { kind: "DOCUMENT", documentId: target.documentId, label: target.label } },
       });
     }
     actions.push({
@@ -532,6 +561,16 @@ export function availableActions(context: ActionContext): readonly Action[] {
   // the caller owns the My Space the folder is in, and the folder's own state and its source's.
   if (folder && context.workspaceType === "PERSONAL" && context.isPersonalOwner && confirmed && folder.status === "ACTIVE" && folder.sourceStatus === "ACTIVE") {
     actions.push({
+      id: "folder.publish",
+      label: "發佈到團隊",
+      group: "folder",
+      icon: "share",
+      keywords: ["publish", "team", "發佈", "團隊", folder.label],
+      section: "edit",
+      surfaces: ["row"],
+      effect: { kind: "publish", origin: { kind: "FOLDER", folderNodeId: folder.nodeId, label: folder.label } },
+    });
+    actions.push({
       id: "folder.share",
       label: "Share link…",
       group: "folder",
@@ -613,9 +652,22 @@ export function availableActions(context: ActionContext): readonly Action[] {
   return actions;
 }
 
+/** The Hub's own authoring entry points; a team has none of them (publishing is the way in). */
+const TEAM_HIDDEN_AUTHORING: ReadonlySet<ActionId> = new Set([
+  "create.document",
+  "create.folder",
+  "create.import",
+  "document.duplicate",
+  "folder.new-document",
+  "folder.new-folder",
+]);
+
 /** The actions one surface may show, in registry order. */
 export function actionsFor(surface: ActionSurface, context: ActionContext): readonly Action[] {
-  return availableActions(context).filter((action) => action.surfaces.includes(surface));
+  const hideAuthoring = context.workspaceType === "TEAM";
+  return availableActions(context).filter((action) =>
+    action.surfaces.includes(surface)
+    && !(hideAuthoring && TEAM_HIDDEN_AUTHORING.has(action.id)));
 }
 
 /** The row menu's sections, in the order they are drawn. */

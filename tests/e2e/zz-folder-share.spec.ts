@@ -54,12 +54,12 @@ test.describe("folder share link", () => {
     await openKnowledge(page, workspaceId);
     const owner = new URL(page.url()).origin;
 
-    // Share from the folder's menu: "Share link…" leads it, and the dialog is for the folder.
+    // Share from the folder's menu; publishing now leads the My Space folder menu, so select by name.
     const menu = page.getByRole("menu");
     // An open folder's treeitem holds its children, so its centre is a child row: click its own row, at the top.
     await row(page, names.folder).click({ button: "right", position: { x: 60, y: 10 } });
-    await expect(menu.getByRole("menuitem").first()).toHaveAccessibleName("Share link…");
-    await menu.getByRole("menuitem", { name: "Share link…" }).click();
+    await expect(menu.getByRole("menuitem", { name: "發佈到團隊", exact: true })).toBeVisible();
+    await menu.getByRole("menuitem", { name: "Share link…", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: `Share folder ${names.folder}` });
     await expect(dialog.getByText("every document in this folder and its subfolders")).toBeVisible();
     await dialog.getByLabel(/Label/).fill("for readers");

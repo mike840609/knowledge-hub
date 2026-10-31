@@ -14,6 +14,12 @@ import { isUuid } from "@/shared/ids/uuidv7";
  * which document to go back to on Cancel. Both are the same kind of input: a title the create request
  * would refuse (empty, too long) is left out, and `from` is followed only if it names a document of
  * this workspace that the reader can read — otherwise Cancel goes to the list, as ever.
+ *
+ * A Team workspace keeps this page reachable by URL for the retained composer
+ * flow, but no team surface offers an entry to it (and `document.duplicate` is
+ * hidden too): publishing is the only UI path. That URL-only residual is
+ * documented in the verification record; the create request is still
+ * authorized and refused in words by the service.
  */
 export default async function NewNotePage({
   params,

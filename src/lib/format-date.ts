@@ -52,6 +52,24 @@ function formatter(
   return built;
 }
 
+/** A zh-TW formatter for the one Chinese surface; the same caching and fallback as `formatter`. */
+function zhFormatter(
+  cache: Map<string, Intl.DateTimeFormat>,
+  timeZone: string,
+  options: Intl.DateTimeFormatOptions,
+): Intl.DateTimeFormat {
+  const cached = cache.get(timeZone);
+  if (cached) return cached;
+  let built: Intl.DateTimeFormat;
+  try {
+    built = new Intl.DateTimeFormat("zh-TW", { ...options, timeZone });
+  } catch {
+    built = new Intl.DateTimeFormat("zh-TW", { ...options, timeZone: SSR_TIME_ZONE });
+  }
+  cache.set(timeZone, built);
+  return built;
+}
+
 /** Medium date with a short time — the default for anything with an edit history. */
 export function formatDateTime(value: Date, timeZone: string): string {
   return formatter(dateTimeFormats, timeZone, { dateStyle: "medium", timeStyle: "short" }).format(value);
@@ -100,5 +118,33 @@ export function formatShortTime(value: Date, now: number, timeZone: string): str
   const year = formatter(yearFormats, timeZone, { year: "numeric" });
   if (year.format(value) !== year.format(new Date(now))) return formatDate(value, timeZone);
   return formatter(monthDayFormats, timeZone, { month: "short", day: "numeric" }).format(value);
+}
+
+/**
+ * The same compact relative time in Traditional Chinese, for the one surface
+ * that is Chinese throughout: a team publication's update line. The locale is
+ * a constant here too, so the server and client first render agree.
+ */
+export function formatRelativeTimeZhTw(elapsedMs: number): string {
+  if (elapsedMs < MINUTE) return "剛剛";
+  if (elapsedMs < HOUR) return `${Math.floor(elapsedMs / MINUTE)} 分鐘前`;
+  if (elapsedMs < DAY) return `${Math.floor(elapsedMs / HOUR)} 小時前`;
+  return `${Math.floor(elapsedMs / DAY)} 天前`;
+}
+
+const zhMonthDayFormats = new Map<string, Intl.DateTimeFormat>();
+const zhYearFormats = new Map<string, Intl.DateTimeFormat>();
+const zhYearMonthDayFormats = new Map<string, Intl.DateTimeFormat>();
+
+/** 「剛剛」「6 天前」「10/12」: relative inside a week, then the month and day. */
+export function formatShortTimeZhTw(value: Date, now: number, timeZone: string): string {
+  if (Math.max(0, now - value.getTime()) < WEEK) {
+    return formatRelativeTimeZhTw(Math.max(0, now - value.getTime()));
+  }
+  const year = zhFormatter(zhYearFormats, timeZone, { year: "numeric" });
+  const sameYear = year.format(value) === year.format(new Date(now));
+  return sameYear
+    ? zhFormatter(zhMonthDayFormats, timeZone, { month: "numeric", day: "numeric" }).format(value)
+    : zhFormatter(zhYearMonthDayFormats, timeZone, { year: "numeric", month: "numeric", day: "numeric" }).format(value);
 }
 

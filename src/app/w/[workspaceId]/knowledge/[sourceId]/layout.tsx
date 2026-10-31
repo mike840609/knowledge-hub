@@ -33,6 +33,7 @@ export default async function SourceExplorerLayout({
       sources={model.sources}
       collections={model.collections}
       includeArchived={model.includeArchived}
+      publications={model.publications}
     >
       {children}
     </KnowledgeLayout>

@@ -19,9 +19,16 @@ const teamTitles = [
   "server persona controls Team creation; browser claims cannot elevate a noncreator",
   "real grant changes propagate between independent fixed server sessions",
   "owner shares, an anonymous reader follows the edits, and revoking ends it",
+  "Mike syncs a folder into My Space and publishes it as a team folder publication",
+  "Ann reads the publication and comments; Mike's Inbox names the comment and opens the team document",
+  "Mike's later save reaches the team copy without any team write",
+  "Ann joins with a newer copy: Mike's copy is not overwritten and her new path is created",
+  "an archived team document is reattached by its creator's own path, keeping its discussion",
+  "removed from the team, Mike's Inbox entry names nothing and opens nothing",
+  "unpublish archives the whole publication and a later save does not resurrect it",
 ];
 describe("smoke catalog", () => {
-  test("Team smoke selects exactly the eight approved flows", () => {
+  test("Team smoke selects exactly the fifteen approved flows", () => {
     expect(catalog("@smoke-team").map(t => t.title).sort()).toEqual([...teamTitles].sort());
   });
   test("Personal smoke selects routing and all rollout cases", () => {

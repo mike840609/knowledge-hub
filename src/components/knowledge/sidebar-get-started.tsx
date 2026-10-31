@@ -5,6 +5,9 @@ import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledg
 
 /** The ways to put a first document in a workspace, in the order offered; Personal leads with the import. */
 export function startActions(context: Omit<ActionContext, "onboarding">): Action[] {
+  // Publishing is the only way content enters a team; the Hub's own authoring
+  // entry points are My Space's alone, whatever a TEAM role's capabilities are.
+  if (context.workspaceType === "TEAM") return [];
   const actions = [...actionsFor("empty", { ...context, onboarding: true })];
   if (context.workspaceType === "PERSONAL") actions.sort((a, b) => Number(b.id === "create.import") - Number(a.id === "create.import"));
   return actions;
@@ -13,6 +16,19 @@ export function startActions(context: Omit<ActionContext, "onboarding">): Action
 /** Archived documents count: a workspace whose documents are all archived is not one with nothing in it. */
 export function hasNoDocuments(collections: { tree: KnowledgeTreeItem[] }[]): boolean {
   return collections.every(({ tree }) => tree.every((item) => item.type !== "document"));
+}
+
+/**
+ * An empty workspace's start actions, or null where there is nothing to offer.
+ * A team has no authoring entry points, and an empty list is not the same as
+ * "no permission": the team empty state already says content arrives by
+ * publishing, so this must not fall through to the edit-access line.
+ */
+export function emptyWorkspaceActions(
+  context: Omit<ActionContext, "onboarding">,
+): Action[] | null {
+  const actions = startActions(context);
+  return actions.length > 0 ? actions : null;
 }
 
 /**

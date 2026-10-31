@@ -1,6 +1,6 @@
 import { GraphExplorer, type GraphFilters } from "@/components/knowledge/graph-explorer";
 import { graphViewFrom } from "@/components/knowledge/graph-model";
-import { createHrefForNode } from "@/lib/create-from-link";
+import { createHrefForNode, mayCreateFromLink } from "@/lib/create-from-link";
 import { PageHeader } from "@/components/shell/page-header";
 import { StatusMessage } from "@/components/ui/status-message";
 import { firstSearchParam, type SearchParamValue } from "@/lib/search-params";
@@ -40,8 +40,10 @@ export default async function WorkspaceGraphPage({
     return <StatusMessage title="Not found or no access" description="This content does not exist or you do not have access to it." />;
   }
 
-  // Whether an unresolved node offers to make its document is the reader's capability; what happens when it is followed is the create request's.
-  const canWrite = shell.access.actions.canWrite === true;
+  // Whether an unresolved node offers to make its document is the reader's capability — in My Space
+  // only, since a team takes content from publishing alone. What happens when it is followed is the
+  // create request's.
+  const canWrite = mayCreateFromLink(shell.access.actions.canWrite === true, shell.workspace.type);
   const data = graphViewFrom(workspaceId, graph, (node) => createHrefForNode(workspaceId, node, canWrite));
   const filters: GraphFilters = {
     sourceId: sourceParam && graph.sources.some((source) => source.id === sourceParam) ? sourceParam : null,

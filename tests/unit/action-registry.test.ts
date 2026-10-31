@@ -139,8 +139,10 @@ describe("action registry — surfaces", () => {
     expect(ids(actionsFor("palette", context({ target: target() })))).toContain("document.details");
   });
 
-  it("gives the empty state the two things a reader can start with", () => {
-    expect(ids(actionsFor("empty", context()))).toEqual(["create.document", "create.import"]);
+  it("gives the empty state the two things a reader can start with — in My Space", () => {
+    expect(ids(actionsFor("empty", context({ workspaceType: "PERSONAL" })))).toEqual(["create.document", "create.import"]);
+    // A team has no authoring entry points: publishing from My Space is the one way in.
+    expect(ids(actionsFor("empty", context()))).toEqual([]);
   });
 
   it("says \"your first\" only where that is true: a personal workspace, at its empty state", () => {
@@ -208,7 +210,7 @@ describe("action registry — hrefs", () => {
 });
 
 describe("action registry — palette matching", () => {
-  const actions = actionsFor("palette", context({ target: target() }));
+  const actions = actionsFor("palette", context({ workspaceType: "PERSONAL", target: target() }));
 
   it("matches a label", () => {
     expect(ids(matchActions(actions, "settings"))).toEqual(["navigate.settings"]);
@@ -452,10 +454,11 @@ describe("action registry — duplicating a document", () => {
     expect(offered).toEqual(expected);
   });
 
-  it("is on a row and in the palette, and names the document it copies", () => {
-    expect(ids(actionsFor("row", context({ target: target() })))).toContain("document.duplicate");
-    expect(ids(actionsFor("palette", context({ target: target() })))).toContain("document.duplicate");
-    const duplicate = availableActions(context({ target: target() })).find((action) => action.id === "document.duplicate");
+  it("is on a row and in the palette in My Space, and names the document it copies", () => {
+    const personal = context({ workspaceType: "PERSONAL", target: target() });
+    expect(ids(actionsFor("row", personal))).toContain("document.duplicate");
+    expect(ids(actionsFor("palette", personal))).toContain("document.duplicate");
+    const duplicate = availableActions(personal).find((action) => action.id === "document.duplicate");
     expect(duplicate?.effect).toEqual({
       kind: "command",
       command: "document.duplicate",
@@ -463,6 +466,12 @@ describe("action registry — duplicating a document", () => {
       sourceId: "s1",
       label: "Onboarding",
     });
+  });
+
+  it("is hidden by every team surface", () => {
+    const team = context({ target: target() });
+    expect(ids(actionsFor("row", team))).not.toContain("document.duplicate");
+    expect(ids(actionsFor("palette", team))).not.toContain("document.duplicate");
   });
 
   it("is found by the words a reader would use for it", () => {
@@ -561,7 +570,7 @@ describe("action registry — folder.share (folder share spec §8)", () => {
 
   it("is the only folder action a read-only source's folder is offered", () => {
     const readOnly = context({ workspaceType: "PERSONAL", can: { ...allCapabilities, canWrite: false }, folder: folder({ ownership: "SOURCE_MANAGED" }) });
-    expect(ids(availableActions(readOnly)).filter((id) => id.startsWith("folder."))).toEqual(["folder.share"]);
+    expect(ids(availableActions(readOnly)).filter((id) => id.startsWith("folder."))).toEqual(["folder.publish", "folder.share"]);
   });
 
   it("is not on offer where there is no folder", () => {
@@ -601,7 +610,7 @@ describe("action registry — a folder's actions (daily-driver spec §7.2)", () 
     const withFolder = context({ folder: folder() });
     expect(ids(actionsFor("palette", withFolder)).filter((id) => FOLDER_ACTIONS.includes(id))).toEqual([]);
     expect(ids(actionsFor("empty", withFolder)).filter((id) => FOLDER_ACTIONS.includes(id))).toEqual([]);
-    expect(ids(actionsFor("row", withFolder))).toEqual(["folder.new-document", "folder.new-folder", "folder.rename", "folder.move", "folder.archive"]);
+    expect(ids(actionsFor("row", { ...withFolder, workspaceType: "PERSONAL" }))).toEqual(["folder.publish", "folder.share", "folder.new-document", "folder.new-folder", "folder.rename", "folder.move", "folder.archive"]);
   });
 
   it("names its targets: New document goes to the new-document page with the folder, the rest carry the folder's identity", () => {
@@ -715,9 +724,11 @@ describe("action registry — the row menu's sections (frontend-design-language 
       "document.open-new-tab": "open-in",
       "document.copy-link": "open",
       "document.share": "edit",
+      "document.publish": "edit",
       "document.favorite": "edit",
       "document.duplicate": "edit",
       "document.move": "edit",
+      "folder.publish": "edit",
       "folder.share": "edit",
       "folder.new-document": "edit",
       "folder.new-folder": "edit",
@@ -735,7 +746,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
   it("groups an editable document: open, change, open in, export, remove, each in its own order", () => {
     expect(sectionsOf(context({ ...personal, target: target() }))).toEqual([
       ["document.copy-link"],
-      ["document.share", "document.favorite", "document.duplicate", "document.move"],
+      ["document.share", "document.publish", "document.favorite", "document.duplicate", "document.move"],
       ["document.open-side-peek", "document.open-new-tab"],
       ["document.agent-context", "document.export"],
       ["document.archive"],
@@ -745,7 +756,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
   it("leaves out Copy for Agent where it is not offered, without leaving a hole", () => {
     expect(sectionsOf(context({ target: target() }))).toEqual([
       ["document.copy-link"],
-      ["document.favorite", "document.duplicate", "document.move"],
+      ["document.favorite", "document.move"],
       ["document.open-side-peek", "document.open-new-tab"],
       ["document.export"],
       ["document.archive"],
@@ -756,7 +767,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
     const sections = sectionsOf(context({ ...personal, target: target({ ownership: "SOURCE_MANAGED" }) }));
     expect(sections).toEqual([
       ["document.copy-link"],
-      ["document.share", "document.favorite"],
+      ["document.share", "document.publish", "document.favorite"],
       ["document.open-side-peek", "document.open-new-tab"],
       ["document.agent-context", "document.export"],
     ]);
@@ -783,9 +794,10 @@ describe("action registry — the row menu's sections (frontend-design-language 
     ]);
   });
 
-  it("groups a folder: what to make or change, then Archive alone", () => {
+  it("groups a folder: what to change in a team, then Archive alone", () => {
+    // A team offers no new document or folder: publishing is its only way in.
     expect(sectionsOf(context({ folder: folder() }))).toEqual([
-      ["folder.new-document", "folder.new-folder", "folder.rename", "folder.move"],
+      ["folder.rename", "folder.move"],
       ["folder.archive"],
     ]);
   });
@@ -826,7 +838,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
     const rows = actionsFor("row", context({ ...personal, target: target() }));
     const shuffled = [...rows].reverse();
     const sections = rowMenuSections(shuffled).map(ids);
-    expect(sections.map((section) => section.length)).toEqual([1, 4, 2, 2, 1]);
+    expect(sections.map((section) => section.length)).toEqual([1, 5, 2, 2, 1]);
     expect(sections[0]).toEqual(["document.copy-link"]);
   });
 
@@ -848,6 +860,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
       "document.export",
       "document.copy-link",
       "document.share",
+      "document.publish",
       "document.favorite",
       "document.duplicate",
       "document.details",

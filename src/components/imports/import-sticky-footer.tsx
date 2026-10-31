@@ -9,6 +9,8 @@ import type { ImportPreview } from "@/modules/sources/application/reconcile-impo
 import { adoptPendingHandle } from "@/components/imports/folder-handle-store";
 import { buttonClasses } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import type { PublicationNotice } from "@/modules/sources/domain/publication";
+import { refreshPublicationStatuses } from "@/components/publications/maintained-by-notice";
 
 export type ApplyFailure = { code: string; message: string; latchStale: boolean };
 
@@ -134,6 +136,11 @@ export function ImportStickyFooter({
         if (failure.latchStale) setVersionConflict(true);
         setState({ kind: "ERROR", code: failure.code, message: failure.message });
         return;
+      }
+      const applied = body as { publicationNotices?: PublicationNotice[] };
+      if (applied.publicationNotices?.length) {
+        // A finished sync may have cleared a blocked path or left a catch-up pending.
+        await refreshPublicationStatuses(applied.publicationNotices.map((notice) => notice.publicationId));
       }
       await openResult(body as {sourceId:string;runId?:string|null});
     } catch {

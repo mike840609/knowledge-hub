@@ -62,7 +62,7 @@ describe("action registry — document.open-side-peek", () => {
     ).map(ids);
     expect(sections).toEqual([
       ["document.copy-link"],
-      ["document.share", "document.favorite", "document.duplicate", "document.move"],
+      ["document.share", "document.publish", "document.favorite", "document.duplicate", "document.move"],
       ["document.open-side-peek", "document.open-new-tab"],
       ["document.agent-context", "document.export"],
       ["document.archive"],

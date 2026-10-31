@@ -8,6 +8,7 @@ import { SourceArchivedError, SourceNotFoundError, SourceReadOnlyError } from ".
 import { normalizeTreePosition } from "../../domain/tree-rules";
 import type { KnowledgeRepositories } from "../../ports/unit-of-work";
 import { assertActiveFolderAncestry } from "../tree-validation";
+import { recordPersonalPublicationEvent } from "./publication-event-recording";
 import { placeNodeAtIndex } from "./tree-transaction";
 
 export type CreateHubDocumentInput = RevisionContentInput & {
@@ -35,7 +36,7 @@ export async function createDocumentInTransaction(
   if (!source) throw new SourceNotFoundError();
   if (source.status !== "ACTIVE") throw new SourceArchivedError();
   if (source.ownership !== "HUB_MANAGED") throw new SourceReadOnlyError();
-  await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "content-write");
+  const workspace = await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "content-write");
   let position: number | undefined;
   if (input.position !== undefined) {
     position = normalizeTreePosition(input.position);
@@ -61,6 +62,11 @@ export async function createDocumentInTransaction(
   // Same transaction as the revision: an index row exists for every current
   // revision, which is what lets "no links" and "not indexed yet" differ.
   await repositories.links.replaceForDocument({ documentId, revisionId, links: extractDocumentLinks(content.markdown) });
+  // Same transaction as the revision: the team learns of a personal original
+  // exactly when the content it describes became current.
+  await recordPersonalPublicationEvent(repositories, workspace, {
+    documentId, treeNodeId: null, sourceId: null, kind: "REVISION", revisionId, at: now,
+  });
   await repositories.tree.insert({
     id: treeNodeId, sourceId: source.id, parentId: input.parentId, nodeType: "DOCUMENT",
     name: null, documentId, position: index, status: "ACTIVE",

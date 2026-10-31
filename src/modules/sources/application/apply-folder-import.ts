@@ -6,7 +6,12 @@ import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
 import { importError } from "@/modules/sources/domain/import-errors";
 import { hashImportPlan, hashReadyImportSnapshot } from "@/modules/sources/domain/import-integrity";
-import type { ImportDiffSummary } from "@/modules/sources/domain/import-plan";
+import type {
+  CanonicalDocumentLocation,
+  FolderImportPlan,
+  ImportDiffSummary,
+} from "@/modules/sources/domain/import-plan";
+import type { PublicationNotice } from "@/modules/sources/domain/publication";
 import type { KnowledgeSource } from "@/modules/sources/domain/source";
 import type { SyncRun } from "@/modules/sources/domain/sync-run";
 import type { SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
@@ -17,9 +22,27 @@ import { captureAppliedChanges } from "./record-sync-run-changes";
 import type { ImportMemoryBudget } from "./import-memory-budget";
 import { requireKnownSnapshotWorkspaceRead } from "./import-snapshot-access";
 import { translateKnownSnapshotAccessError } from "./import-snapshot-access";
+import {
+  publicationNoticesForPlan,
+  publicationNoticesForSnapshot,
+} from "./publication-notices";
+
+type AppliedNoticeContext = {
+  sourceId: string;
+  current: { documents: readonly CanonicalDocumentLocation[] };
+  plan: FolderImportPlan;
+};
 
 export type ApplyFolderImportResult =
-  | { kind: "APPLIED"; sourceId: string; resultVersion: number; runId: string | null; alreadyApplied: boolean }
+  | {
+    kind: "APPLIED";
+    sourceId: string;
+    resultVersion: number;
+    runId: string | null;
+    alreadyApplied: boolean;
+    /** Display-only: another contributor maintains one of the applied paths. */
+    publicationNotices?: PublicationNotice[];
+  }
   | { kind: "VERSION_CONFLICT"; sourceId: string; snapshotVersion: number; currentVersion: number };
 
 type Options = { now?: () => Date; failurePoint?: ImportApplyFailurePoint; memoryBudget?: ImportMemoryBudget };
@@ -90,12 +113,50 @@ export class ApplyFolderImportService {
 
   async apply(caller: CallerContext, snapshotId: string, riskAcknowledgment?: ImportRiskAcknowledgment): Promise<ApplyFolderImportResult> {
     const budget = this.memoryBudget;
-    if (!budget) return this.applyNow(caller, snapshotId, riskAcknowledgment);
-    const bytes = await this.uow.run((repositories) => repositories.importSnapshotEntries.markdownBytes(snapshotId));
-    return budget.run(bytes, () => this.applyNow(caller, snapshotId, riskAcknowledgment));
+    const noticeContexts: AppliedNoticeContext[] = [];
+    const capture = (context: AppliedNoticeContext): void => {
+      noticeContexts.push(context);
+    };
+    const result = budget
+      ? await budget.run(
+        await this.uow.run((repositories) => repositories.importSnapshotEntries.markdownBytes(snapshotId)),
+        () => this.applyNow(caller, snapshotId, riskAcknowledgment, capture),
+      )
+      : await this.applyNow(caller, snapshotId, riskAcknowledgment, capture);
+    if (result.kind !== "APPLIED") return result;
+
+    // A display-only read after the import committed. It reuses the canonical
+    // rows Apply already loaded (no second Markdown load) and must never turn a
+    // successful import into a failure.
+    const publicationNotices = await this.uow.run(async (repositories) => {
+      const context = noticeContexts[0];
+      if (context) {
+        return publicationNoticesForPlan(repositories, caller, {
+          ...context,
+          includePathReserved: true,
+        });
+      }
+      const snapshot = await repositories.importSnapshots.findById(snapshotId);
+      if (!snapshot) return [];
+      return publicationNoticesForSnapshot(repositories, caller, snapshot, {
+        includePathReserved: true,
+      });
+    }).catch((error: unknown) => {
+      console.error(
+        "Publication notices could not be resolved after import.",
+        error instanceof Error ? error.name : "UnknownError",
+      );
+      return [];
+    });
+    return { ...result, publicationNotices };
   }
 
-  private async applyNow(caller: CallerContext, snapshotId: string, riskAcknowledgment?: ImportRiskAcknowledgment): Promise<ApplyFolderImportResult> {
+  private async applyNow(
+    caller: CallerContext,
+    snapshotId: string,
+    riskAcknowledgment?: ImportRiskAcknowledgment,
+    captureNoticeContext?: (context: AppliedNoticeContext) => void,
+  ): Promise<ApplyFolderImportResult> {
     const failedAttempt: { value: FailedAttempt | null } = { value: null };
     const linksOf = await this.linksBeforeLocking(caller, snapshotId);
     try {
@@ -163,6 +224,7 @@ export class ApplyFolderImportService {
           if(safety.highRisk && (riskAcknowledgment?.planHash!==snapshot.planHash || riskAcknowledgment?.sourceName!==source.name)) throw importError("IMPORT_RISK_CONFIRMATION_REQUIRED","Confirm the source name before applying these archive changes.",{safety});
           failedAttempt.value = { sourceId: source.id, basedOnVersion, summary: snapshot.summary, provenance, callerId: caller.identity.id };
           const before=await repositories.importCanonicalState.load(source.id);
+          captureNoticeContext?.({ sourceId: source.id, current: before, plan: snapshot.plan });
           await executeFolderImportPlan(repositories, caller, source, snapshot.plan, { stagingEntriesByUploadKey, failurePoint: this.failurePoint, now: this.now, linksOf });
           if (this.failurePoint === "before-run") throw importError("TEST_IMPORT_FAILURE", "Injected import failure before SyncRun.");
           const resultVersion = await repositories.sources.guardAndAdvanceVersion(source.id, basedOnVersion, caller.identity.id, snapshot.importScope?.paths);
@@ -210,6 +272,7 @@ export class ApplyFolderImportService {
         };
         await repositories.sources.insert(source);
         const before={documents:[],folders:[],assets:[]};
+        captureNoticeContext?.({ sourceId: source.id, current: before, plan: snapshot.plan });
         await executeFolderImportPlan(repositories, caller, source, snapshot.plan, { stagingEntriesByUploadKey, failurePoint: this.failurePoint, now: this.now, linksOf });
         if (this.failurePoint === "before-run") throw importError("TEST_IMPORT_FAILURE", "Injected import failure before SyncRun.");
         const resultVersion = await repositories.sources.guardAndAdvanceVersion(source.id, 0, caller.identity.id, snapshot.importScope?.paths);
