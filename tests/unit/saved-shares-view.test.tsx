@@ -14,7 +14,7 @@ const model:SavedShareList={query:{q:"",status:"all",page:1},hasNext:false,items
 const mount=async(value=model)=>{await act(async()=>root.render(<SavedSharesView workspaceId="reader" model={value}/>));};
 it("separates saved shares, preserves route filters and links only to the public reader",async()=>{
  await mount({...model,query:{q:"guide",status:"all",page:2},hasNext:true});
- expect(host.querySelector('a[aria-current="page"]')?.textContent).toBe("Saved shares");expect(host.querySelector('a[href="/w/reader/shares"]')).not.toBeNull();expect(host.querySelector('a[href="/s/live-token"]')).not.toBeNull();
+ expect(host.querySelector('a[href="/s/live-token"]')).not.toBeNull();
  expect(host.querySelector('input[name="tab"]')?.getAttribute("value")).toBe("saved");const next=[...host.querySelectorAll("a")].find(x=>x.textContent==="Next");expect(next?.getAttribute("href")).toContain("tab=saved");expect(next?.getAttribute("href")).toContain("page=3");
  expect(host.textContent).not.toContain("Revoke");expect(host.textContent).not.toContain("Views");expect(host.textContent).not.toContain("Favorite");
 });

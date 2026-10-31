@@ -12,8 +12,8 @@ const state = vi.hoisted(() => ({ pending: false }));
 
 vi.mock("next/navigation", () => ({ useSearchParams: vi.fn() }));
 vi.mock("next/link", () => ({
-  default: ({ href, children, prefetch: _prefetch, onClick, ...rest }: { href: string; children: ReactNode; prefetch?: boolean; onClick?: (event: MouseEvent<HTMLAnchorElement>) => void } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href">) =>
-    <a href={href} onClick={event => { event.preventDefault(); onClick?.(event); }} {...rest}>{children}</a>,
+  default: ({ href, children, prefetch, onClick, ...rest }: { href: string; children: ReactNode; prefetch?: boolean; onClick?: (event: MouseEvent<HTMLAnchorElement>) => void } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href">) =>
+    <a href={href} data-prefetch={prefetch ? "true" : undefined} onClick={event => { event.preventDefault(); onClick?.(event); }} {...rest}>{children}</a>,
   useLinkStatus: () => ({ pending: state.pending }),
 }));
 

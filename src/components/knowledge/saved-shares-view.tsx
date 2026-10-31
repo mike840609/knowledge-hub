@@ -3,18 +3,16 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bookmark, Search } from "lucide-react";
-import { PageHeader } from "@/components/shell/page-header";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { Timestamp } from "@/components/ui/timestamp";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Illustration } from "@/components/knowledge/illustration";
-import { SharesNavigation } from "./shares-navigation";
 import { applyAndSearch, LiveSearch } from "@/components/search/live-search-submit";
 import { navigateListRows } from "@/lib/list-row-navigation";
 import type { SavedShareList } from "@/modules/knowledge/domain/saved-share";
-export function SavedSharesView({ workspaceId,model,filterError,discussionsUnread=0 }: { workspaceId:string;model:SavedShareList;filterError?:string;discussionsUnread?:number }) {
+export function SavedSharesView({ workspaceId,model,filterError }: { workspaceId:string;model:SavedShareList;filterError?:string }) {
   const router=useRouter(),pending=useRef(false);
   const [status,setStatus]=useState<string>(model.query.status);
   const filterForm=useRef<HTMLFormElement>(null);
@@ -33,9 +31,7 @@ export function SavedSharesView({ workspaceId,model,filterError,discussionsUnrea
     catch{setError("Could not remove this saved share. Try again.");}
     finally{pending.current=false;setBusy(null);}
   }
-  return <main className="kh-page pb-6">
-    <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" description="Keep articles shared with you within reach. Saving a link does not extend its access or add it to your workspace favorites."/>
-    <SharesNavigation workspaceId={workspaceId} discussionsUnread={discussionsUnread}/>
+  return <>
     <form ref={filterForm} action={base} method="get" aria-label="Filter saved shares" className="mt-4 flex flex-wrap items-center gap-2">
       <Input type="hidden" name="tab" value="saved"/>
       <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-auto"><label className="sr-only" htmlFor="saved-shares-query">Find saved shares</label><Search size={15} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-kh-text-muted"/><Input id="saved-shares-query" name="q" defaultValue={model.query.q} placeholder="Find title or sharing person…" maxLength={200} className="kh-search-field"/></div>
@@ -58,5 +54,5 @@ export function SavedSharesView({ workspaceId,model,filterError,discussionsUnrea
       </div>
     </li>)}</ul>
     {(model.query.page>1||model.hasNext)&&<nav aria-label="Saved share pages" className="mt-4 flex gap-4 text-body-sm"><span className="text-kh-text-muted">Page {model.query.page}</span>{model.query.page>1&&<Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page-1)}>Previous</Link>}{model.hasNext&&<Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page+1)}>Next</Link>}</nav>}
-  </main>;
+  </>;
 }

@@ -1,5 +1,4 @@
 "use client";
-import { SharesNavigation } from "./shares-navigation";
 import { Illustration } from "@/components/knowledge/illustration";
 
 
@@ -13,7 +12,6 @@ import { Copy, MoreHorizontal, Search } from "lucide-react";
 import { MenuRoot, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
 import { buttonClasses } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
-import { PageHeader } from "@/components/shell/page-header";
 import { Input } from "@/components/ui/input";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -29,7 +27,7 @@ import type { ManagedShareLink, ShareManagementQuery, ShareManagementStatus } fr
 const labels: Record<ShareManagementStatus, string> = { active: "Active", expired: "Expired", revoked: "Revoked", unavailable: "Unavailable" };
 type UnreadShareCount = { documentId: string; unreadCount: number; latestThreadId: string };
 export type ShareManagementModel = { query: ShareManagementQuery; items: ManagedShareLink[]; hasNext: boolean };
-export function ShareManagementView({ workspaceId, model, filterError, hasDocuments = true, discussionsUnread = 0 }: { workspaceId: string; model: ShareManagementModel; filterError?: string; hasDocuments?: boolean; discussionsUnread?: number }) {
+export function ShareManagementView({ workspaceId, model, filterError, hasDocuments = true }: { workspaceId: string; model: ShareManagementModel; filterError?: string; hasDocuments?: boolean }) {
   const router = useRouter(), toast = useToast();
   const [origin, setOrigin] = useState("");
   const [status, setStatus] = useState<string>(model.query.status);
@@ -96,9 +94,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
     if (await writeLinkToClipboard(item.path)) { toast({ message: "Link copied." }); setError(null); }
     else { setDetails(item.id); setManualCopy({ id: item.id }); setError({ code: "COPY_FAILED", message: "Clipboard unavailable. The link is selected; copy it manually." }); }
   }
-  return <main className="kh-page pb-6">
-    <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" description="Manage links to your documents. Anyone holding an active link can read its latest saved content without signing in." />
-    <SharesNavigation workspaceId={workspaceId} discussionsUnread={discussionsUnread} />
+  return <>
     <form ref={filterForm} action={`/w/${workspaceId}/shares`} method="get" className="mt-4 flex flex-wrap items-center gap-2" aria-label="Filter shares">
       <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-auto">
         <label htmlFor="shares-query" className="sr-only">Find shares</label>
@@ -160,5 +156,5 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
     </ul>
     <ConfirmDialog open={!!confirmedItem} onOpenChange={open => { if (!open) setConfirming(null); }} title="Revoke share link?" description={<>Revoke “{confirmedItem?.label ?? "Untitled link"}” for {confirmedItem?.title}? Anyone holding this link will lose access. This cannot be undone.</>} cancelLabel="Keep" confirmLabel="Confirm revoke" onConfirm={() => { if (confirming) void revoke(confirming); }} />
     {model.query.page > 1 || model.hasNext ? <nav aria-label="Share pages" className="mt-4 flex items-center gap-4 text-body"><span className="text-kh-text-muted">Page {model.query.page}</span>{model.query.page > 1 ? <Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page - 1)}>Previous</Link> : null}{model.hasNext ? <Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page + 1)}>Next</Link> : null}</nav> : null}
-  </main>;
+  </>;
 }
