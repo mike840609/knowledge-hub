@@ -98,7 +98,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
   }
   return <main className="kh-page pb-6">
     <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" description="Manage links to your documents. Anyone holding an active link can read its latest saved content without signing in." />
-    <SharesNavigation workspaceId={workspaceId} active="mine" discussionsUnread={discussionsUnread} />
+    <SharesNavigation workspaceId={workspaceId} discussionsUnread={discussionsUnread} />
     <form ref={filterForm} action={`/w/${workspaceId}/shares`} method="get" className="mt-4 flex flex-wrap items-center gap-2" aria-label="Filter shares">
       <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-auto">
         <label htmlFor="shares-query" className="sr-only">Find shares</label>

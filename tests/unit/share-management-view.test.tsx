@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, vi, afterEach } from "vitest";
 import { ShareManagementView } from "@/components/knowledge/share-management-view";
 import type { ManagedShareLink } from "@/modules/knowledge/domain/share-management";
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }), useSearchParams: () => new URLSearchParams() }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => vi.fn() }));
 vi.mock("@/components/shell/use-workspace-authorization", () => ({ requestWorkspaceAccessCheck: vi.fn() }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

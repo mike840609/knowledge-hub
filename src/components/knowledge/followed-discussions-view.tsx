@@ -38,7 +38,7 @@ export function FollowedDiscussionsView({ workspaceId, items, filter, unread, fi
   }
   return <main className="kh-page pb-6">
     <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" description="Discussions you follow on shared articles. Following never extends a link's access."/>
-    <SharesNavigation workspaceId={workspaceId} active="discussions" discussionsUnread={unread}/>
+    <SharesNavigation workspaceId={workspaceId} discussionsUnread={unread}/>
     <form ref={filterForm} action={`/w/${workspaceId}/shares`} method="get" aria-label="Filter discussions" className="mt-4 flex flex-wrap items-center gap-2">
       <Input type="hidden" name="tab" value="discussions"/>
       <label className="sr-only" htmlFor="discussions-status">Discussion status</label>

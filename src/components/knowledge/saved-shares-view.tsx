@@ -35,7 +35,7 @@ export function SavedSharesView({ workspaceId,model,filterError,discussionsUnrea
   }
   return <main className="kh-page pb-6">
     <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" description="Keep articles shared with you within reach. Saving a link does not extend its access or add it to your workspace favorites."/>
-    <SharesNavigation workspaceId={workspaceId} active="saved" discussionsUnread={discussionsUnread}/>
+    <SharesNavigation workspaceId={workspaceId} discussionsUnread={discussionsUnread}/>
     <form ref={filterForm} action={base} method="get" aria-label="Filter saved shares" className="mt-4 flex flex-wrap items-center gap-2">
       <Input type="hidden" name="tab" value="saved"/>
       <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-auto"><label className="sr-only" htmlFor="saved-shares-query">Find saved shares</label><Search size={15} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-kh-text-muted"/><Input id="saved-shares-query" name="q" defaultValue={model.query.q} placeholder="Find title or sharing person…" maxLength={200} className="kh-search-field"/></div>
