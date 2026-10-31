@@ -239,4 +239,96 @@ describe("tree dragging", () => {
     act(() => { rowFor("A").dispatchEvent(event); });
     expect(event.defaultPrevented).toBe(true);
   });
+  it("ignores an old keyboard refusal after a newer keyboard request starts", async () => {
+    vi.useFakeTimers();
+    try {
+      let finishFirst: (value: boolean) => void = () => {};
+      const onReorder = vi.fn()
+        .mockImplementationOnce(() => new Promise<boolean>((resolve) => { finishFirst = resolve; }))
+        .mockImplementation(() => new Promise<boolean>(() => {}));
+      render({ onReorder });
+      const press = (label: string, key: string) => rowFor(label).dispatchEvent(new KeyboardEvent("keydown", { key, altKey: true, bubbles: true, cancelable: true }));
+      act(() => { press("B", "ArrowDown"); vi.advanceTimersByTime(3000); press("C", "ArrowUp"); });
+      expect(onReorder).toHaveBeenCalledTimes(2);
+      await act(async () => { finishFirst(false); });
+      const event = new Event("dragstart", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "dataTransfer", { value: { effectAllowed: "", setData: vi.fn() } });
+      act(() => { rowFor("A").dispatchEvent(event); });
+      expect(event.defaultPrevented).toBe(true);
+    } finally { vi.useRealTimers(); }
+  });
+  it("blocks keyboard sorting during an active drag", () => {
+    const onReorder = vi.fn(async () => true);
+    render({ onReorder });
+    const target = rowFor("B");
+    target.getBoundingClientRect = () => ({ top: 0, bottom: 20, height: 20, left: 0, right: 100, width: 100, x: 0, y: 0, toJSON: () => ({}) });
+    const fire = (row: HTMLElement, type: string) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperties(event, { dataTransfer: { value: { effectAllowed: "", setData: vi.fn() } }, clientY: { value: 19 } });
+      row.dispatchEvent(event);
+    };
+    act(() => { fire(rowFor("A"), "dragstart"); target.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true, cancelable: true })); fire(target, "drop"); });
+    expect(onReorder).toHaveBeenCalledTimes(1);
+    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:A", position: 1 });
+  });
+  it("announces a slow successful drop when no newer operation has started", async () => {
+    vi.useFakeTimers();
+    try {
+      let finish: (value: boolean) => void = () => {};
+      render({ onReorder: () => new Promise<boolean>((resolve) => { finish = resolve; }) });
+      const target = rowFor("B");
+      target.getBoundingClientRect = () => ({ top: 0, bottom: 20, height: 20, left: 0, right: 100, width: 100, x: 0, y: 0, toJSON: () => ({}) });
+      const fire = (row: HTMLElement, type: string) => {
+        const event = new Event(type, { bubbles: true, cancelable: true });
+        Object.defineProperties(event, { dataTransfer: { value: { effectAllowed: "", setData: vi.fn() } }, clientY: { value: 19 } });
+        row.dispatchEvent(event);
+      };
+      act(() => { fire(rowFor("A"), "dragstart"); fire(target, "drop"); vi.advanceTimersByTime(3000); });
+      await act(async () => { finish(true); });
+      expect(said()).toContain("Placed “A”. Position 2 of 3.");
+    } finally { vi.useRealTimers(); }
+  });
+  it("announces a slow successful keyboard reorder when no newer operation has started", async () => {
+    vi.useFakeTimers();
+    try {
+      let finish: (value: boolean) => void = () => {};
+      render({ onReorder: () => new Promise<boolean>((resolve) => { finish = resolve; }) });
+      act(() => { rowFor("B").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true, cancelable: true })); vi.advanceTimersByTime(3000); });
+      await act(async () => { finish(true); });
+      expect(said()).toContain("Moved “B” down. Position 3 of 3.");
+    } finally { vi.useRealTimers(); }
+  });
+  it("restores focus after the refreshed tree arrives following a move response", async () => {
+    let finish: (value: boolean) => void = () => {};
+    const folder: KnowledgeTreeItem = { type: "folder", id: "n:F", parentId: null, label: "F", position: 1, status: "ACTIVE" };
+    const { rerender } = render({ items: [doc("A", 0), folder], onMove: () => new Promise<boolean>((resolve) => { finish = resolve; }), folderActions: () => [moveAction("folder.move")] });
+    act(() => { rowFor("F").querySelector("button")!.click(); });
+    const target = rowFor("F").querySelector<HTMLElement>("[data-row-node-id]")!;
+    target.getBoundingClientRect = () => ({ top: 0, bottom: 20, height: 20, left: 0, right: 100, width: 100, x: 0, y: 0, toJSON: () => ({}) });
+    const fire = (row: HTMLElement, type: string) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperties(event, { dataTransfer: { value: { effectAllowed: "", setData: vi.fn() } }, clientY: { value: 10 } });
+      row.dispatchEvent(event);
+    };
+    act(() => { fire(rowFor("A"), "dragstart"); fire(target, "drop"); });
+    await act(async () => { finish(true); });
+    rerender({ items: [folder, doc("A", 0, "n:F")] });
+    expect(document.activeElement).toBe(rowFor("A"));
+  });
+  it("ignores a late keyboard reply after a refresh starts the queued step", async () => {
+    let finishFirst: (value: boolean) => void = () => {};
+    const onReorder = vi.fn()
+      .mockImplementationOnce(() => new Promise<boolean>((resolve) => { finishFirst = resolve; }))
+      .mockImplementation(() => new Promise<boolean>(() => {}));
+    const { rerender } = render({ onReorder });
+    const press = (key: string) => rowFor("B").dispatchEvent(new KeyboardEvent("keydown", { key, altKey: true, bubbles: true, cancelable: true }));
+    act(() => { press("ArrowDown"); press("ArrowUp"); });
+    rerender({ items: [doc("A", 0), doc("C", 1), doc("B", 2)] });
+    expect(onReorder).toHaveBeenCalledTimes(2);
+    await act(async () => { finishFirst(false); });
+    const event = new Event("dragstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: { effectAllowed: "", setData: vi.fn() } });
+    act(() => { rowFor("A").dispatchEvent(event); });
+    expect(event.defaultPrevented).toBe(true);
+  });
 });

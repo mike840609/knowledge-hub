@@ -353,6 +353,7 @@ export function KnowledgeTree({
   // put back on the row then too, since a row that has changed its place in the list may have been
   // taken out of the page and put back, which drops focus.
   const reordering = useRef(false);
+  const reorderOperation = useRef(0);
   const expectedReorder = useRef<{ id: string; parentId: string | null; position: number } | null>(null);
   const reorderGiveUp = useRef<number | undefined>(undefined);
   const queuedReorder = useRef<{ id: string; direction: -1 | 1 } | null>(null);
@@ -360,17 +361,18 @@ export function KnowledgeTree({
   const [announcement, setAnnouncement] = useState({ text: "", sequence: 0 });
   const announce = (text: string) => setAnnouncement((previous) => ({ text, sequence: previous.sequence + 1 }));
   const drag = useTreeDrag({
-    items, filtering, isKeyboardBusy: () => reordering.current,
+    items, filtering, isKeyboardBusy: () => reordering.current, onDragStarted: () => { reorderOperation.current++; },
     canMove: (id) => { const item = itemById.get(id); if (!item || item.status === "ARCHIVED") return false; return (item.type === "document" ? documentActions(item) : folderActions(item)).some((action) => action.id === "document.move" || action.id === "folder.move"); },
     isCollapsed: (id) => effectiveCollapsed.has(id), onReorder, onMove,
     onPlaced: (id, parentId, refreshed) => {
-      focusAfterReorder.current = id;
       if (parentId) expandFrom(parentId);
       if (refreshed) {
+        focusAfterReorder.current = id;
         const row = Array.from(treeRef.current?.querySelectorAll<HTMLElement>("[data-node-id]") ?? []).find((element) => element.dataset.nodeId === id);
         if (row) { row.focus(); focusAfterReorder.current = null; }
       }
     },
+    onRefreshed: (id) => { focusAfterReorder.current = id; },
     announce, expandFolder: expandFrom, treeRef,
   });
   useEffect(() => () => window.clearTimeout(reorderGiveUp.current), []);
@@ -415,15 +417,20 @@ export function KnowledgeTree({
       return;
     }
     reordering.current = true;
+    drag.invalidatePending();
+    const operation = ++reorderOperation.current;
     expectedReorder.current = { id: item.id, parentId: item.parentId, position: step.position };
     // If the tree never arrives, the next key press is not lost for good.
     window.clearTimeout(reorderGiveUp.current);
     reorderGiveUp.current = window.setTimeout(() => {
+      if (reorderOperation.current !== operation) return;
       reordering.current = false;
       expectedReorder.current = null;
       queuedReorder.current = null;
     }, 3000);
-    if (await onReorder({ nodeId: item.id, position: step.position })) {
+    const ok = await onReorder({ nodeId: item.id, position: step.position });
+    if (reorderOperation.current !== operation) return;
+    if (ok) {
       focusAfterReorder.current = item.id;
       announce(reorderedNode(item.label, direction < 0 ? "up" : "down", step.index, step.count));
     } else {

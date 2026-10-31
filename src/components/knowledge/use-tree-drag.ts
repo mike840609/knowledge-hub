@@ -9,9 +9,10 @@ import type { MoveNodeInput } from "./use-tree-mutations";
 export type TreeDragIndicator = { kind: "line"; top: number; left: number; width: number } | { kind: "into"; nodeId: string } | null;
 
 type Input = {
-  items: KnowledgeTreeItem[]; filtering: boolean; canMove: (id: string) => boolean; isKeyboardBusy: () => boolean;
+  items: KnowledgeTreeItem[]; filtering: boolean; canMove: (id: string) => boolean; isKeyboardBusy: () => boolean; onDragStarted: () => void;
   isCollapsed: (id: string) => boolean; onReorder: (input: { nodeId: string; position: number }) => Promise<boolean>;
   onMove: (input: MoveNodeInput) => Promise<boolean>; onPlaced: (id: string, parentId: string | null, refreshed: boolean) => void;
+  onRefreshed: (id: string) => void;
   announce: (text: string) => void; expandFolder: (id: string) => void; treeRef: RefObject<HTMLUListElement | null>;
 };
 
@@ -26,6 +27,7 @@ export function useTreeDrag(input: Input) {
   const expected = useRef<{ id: string; parentId: string | null; position: number | undefined; oldParent: string | null; oldPosition: number } | null>(null);
   const awaitingResponse = useRef(false);
   const refreshed = useRef(false);
+  const focusWaiting = useRef(false);
   const pointerY = useRef<number | null>(null);
   const frame = useRef<number | undefined>(undefined);
   const expandTimer = useRef<number | undefined>(undefined);
@@ -48,9 +50,14 @@ export function useTreeDrag(input: Input) {
     const atDestination = row && wanted && row.parentId === wanted.parentId && (appended
       ? input.items.every((item) => item.parentId !== wanted.parentId || item.id === row.id || item.position < row.position)
       : row.position === wanted.position);
-    if (busy.current && changed && atDestination) {
+    if (changed && atDestination) {
       if (awaitingResponse.current) refreshed.current = true;
-      else { busy.current = false; window.clearTimeout(giveUp.current); }
+      else if (focusWaiting.current && wanted) {
+        focusWaiting.current = false;
+        busy.current = false;
+        window.clearTimeout(giveUp.current);
+        input.onRefreshed(wanted.id);
+      }
     }
   }, [input.items]);
   const zoneFor = (event: DragEvent<HTMLElement>, item: KnowledgeTreeItem): DropZone => {
@@ -76,6 +83,9 @@ export function useTreeDrag(input: Input) {
       if (!enabled || busy.current || input.isKeyboardBusy() || !input.canMove(nodeId) || input.filtering) {
         event.preventDefault(); if (input.filtering) input.announce(CLEAR_FILTER_TO_REORDER); return;
       }
+      operation.current++;
+      focusWaiting.current = false;
+      input.onDragStarted();
       event.stopPropagation(); event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("application/x-kh-tree-node", nodeId);
       destinations.current = new Set(moveDestinations(input.items, nodeId).map((destination) => destination.id));
@@ -109,6 +119,7 @@ export function useTreeDrag(input: Input) {
     onDrop: async (event: DragEvent<HTMLElement>) => {
       if (!dragging.current || busy.current) return;
       event.stopPropagation(); event.preventDefault();
+      if (input.isKeyboardBusy()) { cleanup(); return; }
       const source = input.items.find((entry) => entry.id === dragging.current);
       const target = input.items.find((entry) => entry.id === nodeId);
       if (!source || !target) { cleanup(); return; }
@@ -118,9 +129,9 @@ export function useTreeDrag(input: Input) {
       busy.current = true; awaitingResponse.current = true; refreshed.current = false;
       expected.current = { id: source.id, parentId: placement.kind === "move" ? placement.parentId : source.parentId,
         position: placement.position, oldParent: source.parentId, oldPosition: source.position };
-      const currentOperation = ++operation.current;
+      const currentOperation = operation.current;
       giveUp.current = window.setTimeout(() => {
-        if (operation.current === currentOperation) { operation.current++; busy.current = false; awaitingResponse.current = false; }
+        if (operation.current === currentOperation) busy.current = false;
       }, 3000);
       let succeeded = false;
       try {
@@ -130,6 +141,7 @@ export function useTreeDrag(input: Input) {
           : await input.onMove({ nodeId: source.id, label: source.label, from: { parentId: source.parentId, position: source.position }, to: { parentId, label: input.items.find((entry) => entry.id === parentId)?.label ?? null, position: placement.position } });
         if (operation.current !== currentOperation) return;
         succeeded = ok;
+        if (ok && !refreshed.current) focusWaiting.current = true;
         if (ok) { if (placement.kind === "reorder") input.announce(placedNode(source.label, placement.index, placement.count)); input.onPlaced(source.id, parentId, refreshed.current); }
       } finally {
         if (operation.current === currentOperation) {
@@ -141,5 +153,6 @@ export function useTreeDrag(input: Input) {
     },
     onDragEnd: () => cleanup(),
   });
-  return { rowProps, indicator, draggingId, isBusy: () => busy.current };
+  return { rowProps, indicator, draggingId, isBusy: () => busy.current || dragging.current !== null,
+    invalidatePending: () => { operation.current++; focusWaiting.current = false; } };
 }
