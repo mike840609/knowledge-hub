@@ -48,6 +48,26 @@ describe("publication sources and names", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("refuses a publication row attached to a non-publication source", async () => {
+    await expect(
+      fixture.uow.run((repositories) => repositories.publications.insert({
+        id: uuidv7(),
+        sourceId: fixture.mikeFolderSourceId,
+        teamWorkspaceId: fixture.mikePersonalWorkspaceId,
+        name: "Not a publication source",
+        kind: "FOLDER",
+        creatorUserId: fixture.mike.identity.id,
+        status: "ACTIVE",
+      })),
+    ).rejects.toMatchObject({ code: "INTEGRITY_VIOLATION" });
+
+    const rows = await fixture.pool.query<{ n: unknown }[]>(
+      "SELECT COUNT(*) AS n FROM publications WHERE source_id = ?",
+      [fixture.mikeFolderSourceId],
+    );
+    expect(Number(rows[0]?.n ?? 0)).toBe(0);
+  });
+
   it("stores PUBLICATION as a source-managed type and reads its name, workspace and status from the source", async () => {
     const folder = await fixture.createFolder(fixture.mike, "repo/other", "other");
     const created = await fixture.createPublication({
@@ -269,6 +289,47 @@ describe("publication claims", () => {
   });
 });
 
+describe("publication contribution state", () => {
+  it("round-trips two set fields while the third stays clear, and lists archived publications on request", async () => {
+    const folder = await fixture.createFolder(fixture.mike, `repo/state-${uuidv7()}`, "state");
+    const publication = await fixture.createPublication({
+      name: `State ${uuidv7()}`,
+      kind: "FOLDER",
+      creator: fixture.mike,
+      origin: { kind: "FOLDER", folderNodeId: folder.treeNodeId },
+    });
+    const leftAt = new Date("2026-10-31T08:30:00Z");
+
+    await fixture.uow.run((repositories) => repositories.publications.setContributionState(
+      publication.contributionId,
+      { leftAt, rightsFrozenAt: null, pendingCatchUp: true },
+    ));
+
+    const own = await fixture.uow.run((repositories) =>
+      repositories.publications.listByContributor(fixture.mike.identity.id));
+    const row = own.find((contribution) => contribution.id === publication.contributionId);
+    expect(row).toMatchObject({ leftAt, rightsFrozenAt: null, pendingCatchUp: true });
+
+    const listed = await fixture.uow.run((repositories) =>
+      repositories.publications.listContributions(publication.publication.id));
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toMatchObject({ leftAt, rightsFrozenAt: null, pendingCatchUp: true });
+
+    // The active list hides an archived publication; includeArchived returns it.
+    const active = await fixture.uow.run((repositories) =>
+      repositories.publications.listByTeam(fixture.teamWorkspaceId));
+    expect(active.some((candidate) => candidate.id === publication.publication.id)).toBe(true);
+    await fixture.uow.run((repositories) => repositories.publications.setPublicationStatus(
+      publication.publication.id, "ARCHIVED", fixture.mike.identity.id));
+    const hidden = await fixture.uow.run((repositories) =>
+      repositories.publications.listByTeam(fixture.teamWorkspaceId));
+    expect(hidden.some((candidate) => candidate.id === publication.publication.id)).toBe(false);
+    const withArchived = await fixture.uow.run((repositories) =>
+      repositories.publications.listByTeam(fixture.teamWorkspaceId, true));
+    expect(withArchived.some((candidate) => candidate.id === publication.publication.id)).toBe(true);
+  });
+});
+
 describe("publication document paths", () => {
   it("reserves archived paths; accepts multiple NULL paths", async () => {
     const original = await fixture.createHubOriginal(fixture.mike, "Path source", "path");
@@ -379,7 +440,7 @@ describe("publication document paths", () => {
       originalDocumentId: original.documentId, sourcePath: "b.md",
     });
 
-    await fixture.uow.run((repositories) => repositories.publications.applyPaths([
+    await fixture.uow.run((repositories) => repositories.publications.applyPaths(publication.publication.id, [
       { teamDocumentId: first.teamDocumentId, fromPath: "a.md", toPath: "b.md" },
       { teamDocumentId: second.teamDocumentId, fromPath: "b.md", toPath: "a.md" },
     ]));
@@ -389,6 +450,83 @@ describe("publication document paths", () => {
       [first.teamDocumentId, "b.md"],
       [second.teamDocumentId, "a.md"],
     ].sort());
+  });
+
+  it("cannot clear or rewrite another publication's path reservation", async () => {
+    const original = await fixture.createHubOriginal(fixture.mike, "Scope source", "scope");
+    const firstFolder = await fixture.createFolder(fixture.mike, `repo/scope-a-${uuidv7()}`, "scope-a");
+    const secondFolder = await fixture.createFolder(fixture.mike, `repo/scope-b-${uuidv7()}`, "scope-b");
+    const first = await fixture.createPublication({
+      name: `Scope A ${uuidv7()}`,
+      kind: "FOLDER",
+      creator: fixture.mike,
+      origin: { kind: "FOLDER", folderNodeId: firstFolder.treeNodeId },
+    });
+    const second = await fixture.createPublication({
+      name: `Scope B ${uuidv7()}`,
+      kind: "FOLDER",
+      creator: fixture.mike,
+      origin: { kind: "FOLDER", folderNodeId: secondFolder.treeNodeId },
+    });
+    const firstDocument = await fixture.createTeamDocument({
+      publication: first, creatorContributionId: first.contributionId,
+      originalDocumentId: original.documentId, sourcePath: "shared.md",
+    });
+    const secondDocument = await fixture.createTeamDocument({
+      publication: second, creatorContributionId: second.contributionId,
+      originalDocumentId: original.documentId, sourcePath: "shared.md",
+    });
+
+    // A move routed through the first publication names the second one's
+    // document; the publication scope must leave that reservation untouched.
+    await fixture.uow.run((repositories) => repositories.publications.applyPaths(first.publication.id, [
+      { teamDocumentId: secondDocument.teamDocumentId, fromPath: "shared.md", toPath: "stolen.md" },
+    ]));
+
+    const secondDocuments = await fixture.uow.run((repositories) =>
+      repositories.publications.listDocuments(second.publication.id));
+    expect(secondDocuments.map((document) => document.sourcePath)).toEqual(["shared.md"]);
+    const firstDocuments = await fixture.uow.run((repositories) =>
+      repositories.publications.listDocuments(first.publication.id));
+    expect(firstDocuments.map((document) => document.sourcePath)).toEqual(["shared.md"]);
+    expect(firstDocument.teamDocumentId).not.toBe(secondDocument.teamDocumentId);
+  });
+});
+
+describe("publication document metadata", () => {
+  it("answers findDocument only for the publication source that owns the team document", async () => {
+    const original = await fixture.createHubOriginal(fixture.mike, "Metadata source", "metadata");
+    const folder = await fixture.createFolder(fixture.mike, `repo/metadata-${uuidv7()}`, "metadata");
+    const publication = await fixture.createPublication({
+      name: `Metadata ${uuidv7()}`,
+      kind: "FOLDER",
+      creator: fixture.mike,
+      origin: { kind: "FOLDER", folderNodeId: folder.treeNodeId },
+    });
+    const document = await fixture.createTeamDocument({
+      publication, creatorContributionId: publication.contributionId,
+      originalDocumentId: original.documentId, sourcePath: "notes/a.md",
+    });
+    const otherFolder = await fixture.createFolder(fixture.mike, `repo/other-meta-${uuidv7()}`, "other-meta");
+    const other = await fixture.createPublication({
+      name: `Other Metadata ${uuidv7()}`,
+      kind: "FOLDER",
+      creator: fixture.mike,
+      origin: { kind: "FOLDER", folderNodeId: otherFolder.treeNodeId },
+    });
+
+    const found = await fixture.uow.run((repositories) =>
+      repositories.publications.findDocument(document.teamDocumentId, publication.sourceId));
+    expect(found).toEqual({
+      creatorUserId: fixture.mike.identity.id,
+      publicationId: publication.publication.id,
+      sourcePath: "notes/a.md",
+    });
+
+    // The same row cannot be read through a different publication's source.
+    await expect(fixture.uow.run((repositories) =>
+      repositories.publications.findDocument(document.teamDocumentId, other.sourceId)))
+      .resolves.toBeNull();
   });
 });
 

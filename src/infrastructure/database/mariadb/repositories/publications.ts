@@ -108,10 +108,26 @@ export class MariaDbPublicationRepository implements PublicationRepository {
 
   async insert(publication: Publication): Promise<void> {
     const now = new Date();
-    await this.connection.query(
-      "INSERT INTO publications (id, source_id, kind, creator_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-      [publication.id, publication.sourceId, publication.kind, publication.creatorUserId, now, now],
+    // The source must already be a team-owned PUBLICATION source. INSERT …
+    // SELECT makes that a property of the write itself instead of trusting the
+    // caller's earlier reads.
+    const result = await this.connection.query(
+      `INSERT INTO publications (id, source_id, kind, creator_user_id, created_at, updated_at)
+       SELECT ?, s.id, ?, ?, ?, ?
+       FROM knowledge_sources s
+       WHERE s.id = ?
+         AND s.workspace_id = ?
+         AND s.source_type = 'PUBLICATION'
+         AND s.ownership = 'SOURCE_MANAGED'`,
+      [
+        publication.id, publication.kind, publication.creatorUserId, now, now,
+        publication.sourceId, publication.teamWorkspaceId,
+      ],
     );
+    if (Number((result as { affectedRows?: number }).affectedRows ?? 0) !== 1) {
+      throw new IntegrityViolationError(
+        "A publication row must attach to a team-owned PUBLICATION source.");
+    }
   }
 
   async listContributions(publicationId: string): Promise<Contribution[]> {
@@ -250,13 +266,17 @@ export class MariaDbPublicationRepository implements PublicationRepository {
     return latest;
   }
 
-  async findDocument(teamDocumentId: string): Promise<{ creatorUserId: string; publicationId: string; sourcePath: string | null } | null> {
+  async findDocument(
+    teamDocumentId: string,
+    sourceId: string,
+  ): Promise<{ creatorUserId: string; publicationId: string; sourcePath: string | null } | null> {
     const rows = await this.connection.query<DbRow[]>(
       `SELECT pd.publication_id, pd.source_path, c.user_id
        FROM publication_documents pd
+       JOIN publications p ON p.id = pd.publication_id AND p.source_id = ?
        JOIN publication_contributors c ON c.id = pd.creator_contribution_id
        WHERE pd.team_document_id = ?`,
-      [teamDocumentId],
+      [sourceId, teamDocumentId],
     );
     const row = rows[0];
     return row
@@ -416,22 +436,25 @@ export class MariaDbPublicationRepository implements PublicationRepository {
     );
   }
 
-  async applyPaths(moves: readonly PlannedMove[]): Promise<void> {
+  async applyPaths(publicationId: string, moves: readonly PlannedMove[]): Promise<void> {
     if (moves.length === 0) return;
     const ids = moves.map((move) => move.teamDocumentId);
     const placeholders = ids.map(() => "?").join(", ");
     // Clear every applied path first: a swap would otherwise trip the unique
-    // index as each row is written.
+    // index as each row is written. Both statements are scoped to the
+    // publication, so a stale or forged team document id can never clear or
+    // rewrite another publication's reservation.
     await this.connection.query(
       `UPDATE publication_documents SET source_path = NULL, updated_at = CURRENT_TIMESTAMP(6)
-       WHERE team_document_id IN (${placeholders})`,
-      ids,
+       WHERE publication_id = ? AND team_document_id IN (${placeholders})`,
+      [publicationId, ...ids],
     );
     for (const move of moves) {
       if (move.toPath === null) continue;
       await this.connection.query(
-        "UPDATE publication_documents SET source_path = ?, updated_at = CURRENT_TIMESTAMP(6) WHERE team_document_id = ?",
-        [move.toPath, move.teamDocumentId],
+        `UPDATE publication_documents SET source_path = ?, updated_at = CURRENT_TIMESTAMP(6)
+         WHERE publication_id = ? AND team_document_id = ?`,
+        [move.toPath, publicationId, move.teamDocumentId],
       );
     }
   }
@@ -599,6 +622,9 @@ export class MariaDbPublicationRepository implements PublicationRepository {
    * One bounded retention batch. Ids are selected first so the two deletes
    * never reference the table they are modifying, and the delivery delete runs
    * before the event delete to satisfy the RESTRICT foreign key.
+   *
+   * The selection locks the event rows first (`FOR UPDATE`), the same order
+   * `completeDelivery` takes, so a concurrent drain and purge cannot deadlock.
    */
   async purgeEvents(
     cutoff: Date,
@@ -611,7 +637,7 @@ export class MariaDbPublicationRepository implements PublicationRepository {
          WHERE e.created_at <= ?
             OR (e.consumed_at IS NOT NULL AND e.consumed_at <= ?)
          ORDER BY e.created_at, e.id
-         LIMIT ?`,
+         LIMIT ? FOR UPDATE`,
         [cutoff, cutoff, limit],
       )
       : await this.connection.query<DbRow[]>(
@@ -633,7 +659,7 @@ export class MariaDbPublicationRepository implements PublicationRepository {
                AND c.rights_frozen_at IS NULL
            )
          ORDER BY e.created_at, e.id
-         LIMIT ?`,
+         LIMIT ? FOR UPDATE`,
         [cutoff, limit],
       );
     if (rows.length === 0) return { events: 0, deliveries: 0 };

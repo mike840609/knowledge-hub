@@ -350,5 +350,39 @@ describe("publication events for personal originals", () => {
     });
     expect(await addedSince(beforeTeamWrite)).toEqual([]);
     expect(await events({ documentId: teamDocument.documentId })).toHaveLength(0);
+
+    // A team FOLDER_SYNC source is a team write too, even though it uses the
+    // same projection commands a personal sync uses.
+    const teamFolderSourceId = uuidv7();
+    await fixture.uow.run((repositories) => repositories.sources.insert({
+      id: teamFolderSourceId, name: "Team Repo", workspaceId: fixture.teamWorkspaceId,
+      sourceType: "FOLDER_SYNC", ownership: "SOURCE_MANAGED", status: "ACTIVE", syncVersion: 0,
+      createdBy: fixture.mike.identity.id, updatedBy: fixture.mike.identity.id,
+      archivedBy: null, archivedAt: null, createdAt: new Date(), updatedAt: new Date(),
+    }));
+    const beforeTeamFolderWrite = await eventIds();
+    const teamFolderDocument = await fixture.uow.run(async (repositories) => {
+      const projection = bindSourceProjection(repositories, {
+        id: teamFolderSourceId,
+        workspaceId: fixture.teamWorkspaceId,
+      });
+      const folder = await projection.projectFolder(fixture.mike, {
+        sourceId: teamFolderSourceId,
+        mapping: { sourceEntryId: uuidv7(), externalId: null, sourcePath: "team/repo" },
+        parentId: null,
+        name: "Team Repo",
+      });
+      return projection.projectDocument(fixture.mike, {
+        sourceId: teamFolderSourceId,
+        parentId: folder.treeNodeId,
+        title: "Team sync",
+        markdown: "team sync body",
+        metadata: {},
+        mapping: { sourceEntryId: uuidv7(), externalId: null, sourcePath: "team/repo/a.md" },
+      });
+    });
+    expect(await addedSince(beforeTeamFolderWrite)).toEqual([]);
+    expect(await events({ documentId: teamFolderDocument.documentId })).toHaveLength(0);
+    expect(await events({ sourceId: teamFolderSourceId })).toHaveLength(0);
   });
 });

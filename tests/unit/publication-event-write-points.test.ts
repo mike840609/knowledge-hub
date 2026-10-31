@@ -33,6 +33,9 @@ function names(files: readonly string[]): string[] {
 /** A writer records through the port directly or through the personal-original helper. */
 const RECORDS = /(publicationEvents\.record(Many)?|recordPersonalPublicationEvent|recordManyPersonalPublicationEvents)\(/;
 
+/** Revision event payloads, counted per writer rather than just detected once. */
+const RECORD_CALLS = /kind: "REVISION"/g;
+
 /** The team publication writer is the one writer that must never record a personal event. */
 const TEAM_PUBLICATION_WRITER = "publication-write-authority.ts";
 
@@ -54,9 +57,15 @@ describe("revision writers record a publication event", () => {
 
   it("records one event per revision insert, in the writer's own transaction", () => {
     for (const file of writers) {
-      const source = read(file);
       if (path.basename(file) === TEAM_PUBLICATION_WRITER) continue;
-      expect(source, `${file}: revision insert without a publication event`).toMatch(RECORDS);
+      const source = read(file);
+      const singleInserts = source.match(/\.revisions\.insert\(/g)?.length ?? 0;
+      const bulkInserts = source.match(/\.revisions\.insertMany\(/g)?.length ?? 0;
+      const eventCalls = source.match(RECORD_CALLS)?.length ?? 0;
+      expect(
+        eventCalls,
+        `${file}: ${singleInserts} single + ${bulkInserts} bulk revision inserts, ${eventCalls} event calls`,
+      ).toBe(singleInserts + bulkInserts);
     }
   });
 
@@ -106,7 +115,7 @@ describe("tree, document and lifecycle writers record a publication event", () =
 });
 
 describe("sources-side originals record a publication event", () => {
-  const entryWriters = moduleFiles.filter((file) => /entries\.update\(|entries\.insertMany\(/.test(read(file)));
+  const entryWriters = moduleFiles.filter((file) => /entries\.(update|insert|insertMany)\(/.test(read(file)));
 
   it("finds the writers this was written against", () => {
     expect(names(entryWriters)).toEqual([

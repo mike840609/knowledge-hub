@@ -29,7 +29,10 @@ export class MariaDbSourcePolicyRepository implements SourcePolicyPort {
   async listByWorkspaceId(workspaceId: string, options: { includeArchived?: boolean } = {}): Promise<SourcePolicy[]> {
     return this.mapAll(await this.sources.findByWorkspaceId(workspaceId, options));
   }
-  async findPublicationDocument(documentId: string): Promise<{ creatorUserId: string; publicationId: string; sourcePath: string | null } | null> {
-    return this.publications.findDocument(documentId);
+  async findPublicationDocument(
+    documentId: string,
+    sourceId: string,
+  ): Promise<{ creatorUserId: string; publicationId: string; sourcePath: string | null } | null> {
+    return this.publications.findDocument(documentId, sourceId);
   }
 }

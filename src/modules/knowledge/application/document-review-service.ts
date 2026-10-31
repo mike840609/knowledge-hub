@@ -687,7 +687,7 @@ export class DocumentReviewService {
     // no discussion body, anchor quote or moderation acts on it, not even for its creator.
     if(!this.teamsEnabled() || s.workspace.workspaceType!=="TEAM" || s.workspace.lifecycleState!=="ACTIVE"
       || s.source.sourceType!=="PUBLICATION" || s.document.status!=="ACTIVE" || s.source.status!=="ACTIVE") throw new ShareLinkNotFoundError();
-    const publication=await r.sourcePolicy.findPublicationDocument(s.document.id);
+    const publication=await r.sourcePolicy.findPublicationDocument(s.document.id,s.source.id);
     if(!publication) throw new ShareLinkNotFoundError();
     const capabilities=await capabilityOf(s.workspace.id);
     if(!capabilities.has("document.read")) throw new ShareLinkNotFoundError();

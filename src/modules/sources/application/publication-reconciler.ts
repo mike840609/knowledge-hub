@@ -492,7 +492,7 @@ async function applyReconciliation(
     }
   }
   const { applied, blocked } = planPublicationMoves(planned, held);
-  if (applied.length > 0) await repositories.publications.applyPaths(applied);
+  if (applied.length > 0) await repositories.publications.applyPaths(publication.id, applied);
   for (const move of applied) {
     const document = documentOf(move.teamDocumentId);
     if (!document) continue;

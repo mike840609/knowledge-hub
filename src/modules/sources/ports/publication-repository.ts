@@ -63,8 +63,11 @@ export interface PublicationRepository {
    * documents appear; the caller falls back to the source's timestamp.
    */
   latestDocumentUpdatedAtByTeam(teamId: string): Promise<Map<string, Date>>;
-  /** The publication-side metadata of one team document, joined to its creator's contribution. */
-  findDocument(teamDocumentId: string): Promise<{ creatorUserId: string; publicationId: string; sourcePath: string | null } | null>;
+  /** The publication-side metadata of one team document, joined to its creator's contribution and anchored to the owning publication source. */
+  findDocument(
+    teamDocumentId: string,
+    sourceId: string,
+  ): Promise<{ creatorUserId: string; publicationId: string; sourcePath: string | null } | null>;
   listBindings(contributionId: string): Promise<DocumentBinding[]>;
   bind(binding: DocumentBinding): Promise<void>;
   /**
@@ -95,10 +98,11 @@ export interface PublicationRepository {
   insertDocument(document: PublicationDocument): Promise<void>;
   /**
    * Writes final paths for applied moves. The caller holds the publication
-   * Source lock. Applied documents are cleared first so a legal swap is not
-   * rejected row-by-row by the unique path index.
+   * Source lock and names the publication, so no move can touch another
+   * publication's reservation. Applied documents are cleared first so a legal
+   * swap is not rejected row-by-row by the unique path index.
    */
-  applyPaths(moves: readonly PlannedMove[]): Promise<void>;
+  applyPaths(publicationId: string, moves: readonly PlannedMove[]): Promise<void>;
   /** Archives/restores the publication source and keeps the claim keys in step. */
   setPublicationStatus(publicationId: string, status: "ACTIVE" | "ARCHIVED", actorId: string): Promise<void>;
   /**

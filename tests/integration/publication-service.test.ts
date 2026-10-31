@@ -716,6 +716,88 @@ describe("publication service: leave and resume", () => {
       acknowledgeLowOverlap: true,
     })).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });
+
+  it("refuses to resume a left contribution while the publication is archived", async () => {
+    const mikeTree = await createFolderTree(fixture.mike, unique("resume-archived-mike"), [
+      { relative: "a.md", title: "Resume Archived Mike", markdown: "mike" },
+    ]);
+    const published = await service.publish(fixture.mike, {
+      teamWorkspaceId: fixture.teamWorkspaceId,
+      name: unique("Resume Archived Publication"),
+      origin: { kind: "FOLDER", folderNodeId: mikeTree.folderNodeId },
+    });
+    const annTree = await createFolderTree(fixture.ann, unique("resume-archived-ann"), [
+      { relative: "a.md", title: "Resume Archived Ann", markdown: "ann" },
+    ]);
+    const joined = await service.join(fixture.ann, {
+      publicationId: published.publicationId,
+      folderNodeId: annTree.folderNodeId,
+    });
+    await service.leave(fixture.ann, published.publicationId);
+
+    await service.unpublish(fixture.mike, published.publicationId);
+
+    // An archived publication has no active contribution state to resume:
+    // leave it LEFT rather than clearing the marker on a dead publication.
+    await expect(service.resume(fixture.ann, published.publicationId))
+      .rejects.toMatchObject({ code: "SOURCE_ARCHIVED" });
+    let contributions = await fixture.uow.run((repositories) =>
+      repositories.publications.listContributions(published.publicationId));
+    expect(contributions.find((contribution) => contribution.id === joined.contributionId)?.leftAt)
+      .not.toBeNull();
+
+    // Restoring the publication makes the same resume meaningful again.
+    await service.restore(fixture.mike, published.publicationId);
+    const report = await service.resume(fixture.ann, published.publicationId);
+    expect(report).toBeTruthy();
+    contributions = await fixture.uow.run((repositories) =>
+      repositories.publications.listContributions(published.publicationId));
+    expect(contributions.find((contribution) => contribution.id === joined.contributionId)?.leftAt)
+      .toBeNull();
+  });
+});
+
+describe("publication service: non-members", () => {
+  it("hides join, leave and resume and writes nothing", async () => {
+    const outsiderTeamId = uuidv7();
+    const now = new Date();
+    await fixture.uow.run(async (repositories) => {
+      await repositories.workspaces.insert(createTeamWorkspaceInsert({
+        id: outsiderTeamId, name: unique("Outsider Team"), createdBy: fixture.mike.identity.id, now,
+      }));
+      await repositories.workspaceMemberships.insert(createDirectMembership({
+        workspaceId: outsiderTeamId, userId: fixture.mike.identity.id, role: "OWNER", now,
+      }));
+    });
+    const mikeTree = await createFolderTree(fixture.mike, unique("outsider-mike"), [
+      { relative: "a.md", title: "Outsider Mike", markdown: "mike" },
+    ]);
+    const published = await service.publish(fixture.mike, {
+      teamWorkspaceId: outsiderTeamId,
+      name: unique("Outsider Publication"),
+      origin: { kind: "FOLDER", folderNodeId: mikeTree.folderNodeId },
+    });
+    const annTree = await createFolderTree(fixture.ann, unique("outsider-ann"), [
+      { relative: "a.md", title: "Outsider Ann", markdown: "ann" },
+    ]);
+
+    const before = await fixture.uow.run((repositories) =>
+      repositories.publications.listContributions(published.publicationId));
+    await expect(service.join(fixture.ann, {
+      publicationId: published.publicationId,
+      folderNodeId: annTree.folderNodeId,
+      acknowledgeLowOverlap: true,
+    })).rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND" });
+    await expect(service.leave(fixture.ann, published.publicationId))
+      .rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND" });
+    await expect(service.resume(fixture.ann, published.publicationId))
+      .rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND" });
+
+    const after = await fixture.uow.run((repositories) =>
+      repositories.publications.listContributions(published.publicationId));
+    expect(after).toEqual(before);
+    expect(after.some((contribution) => contribution.userId === fixture.ann.identity.id)).toBe(false);
+  });
 });
 
 /** Records which publication IDs had their document metadata loaded. */

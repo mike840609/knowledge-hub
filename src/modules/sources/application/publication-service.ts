@@ -544,6 +544,12 @@ export class PublicationService {
       if (!publication || publication.id !== publicationId) {
         throw new NotFoundError("Publication was not found.");
       }
+      // Resuming is a state change on a live publication. An archived
+      // publication has nothing to resume, so refuse before clearing `leftAt`
+      // rather than reviving a contribution on a source nobody can see.
+      if (publication.status !== "ACTIVE") {
+        throw new SourceArchivedError("This publication is archived.");
+      }
 
       const contributions = await repositories.publications.listContributions(publication.id);
       const contribution = contributions.find((candidate) => candidate.userId === caller.identity.id);
