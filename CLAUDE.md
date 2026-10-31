@@ -39,6 +39,18 @@ CI (`.github/workflows/phase2-dev-gate.yml`) runs four jobs on every PR to
 `main`: `unit` (which also runs typecheck and lint), `build`, `integration`
 and `e2e`. `make verify` covers everything except the two DB-backed jobs.
 
+### Package manager
+
+pnpm 12 is the default local package manager; `pnpm-workspace.yaml` and `pnpm-lock.yaml` are
+committed. Use `pnpm install` locally. npm is the fallback when pnpm is unavailable, and the
+package manager for CI, Vercel, and deployment (`npm ci`, `package-lock.json`); do not replace
+`package-lock.json` or switch those to pnpm.
+
+When dependencies change, refresh `package-lock.json` first (`npm install --package-lock-only`),
+then `pnpm import && pnpm install`, and commit both lockfiles. Setup, settings, layout
+switching, and caveats are in the README's [Local pnpm](README.md#local-pnpm). Keep the
+`patch-package` postinstall and never pass `--ignore-scripts` to `pnpm install`.
+
 ## Architecture
 
 A Next.js modular monolith over MariaDB, layered so that the web app is one

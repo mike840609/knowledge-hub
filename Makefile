@@ -7,13 +7,28 @@
 COMPOSE := docker compose
 ENV_FILE := .env
 
+# pnpm is the default local package manager; npm is the fallback.
+PNPM := $(shell command -v pnpm 2>/dev/null)
+ifneq ($(PNPM),)
+RUN := pnpm
+else
+RUN := npm
+endif
+
 .PHONY: help
 help: ## Show this help.
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 .PHONY: setup
-setup: ## Install dependencies and create .env from example (first time).
-	npm ci
+setup: ## Install dependencies (pnpm 12 when present, npm otherwise) and create .env from example (first time).
+	@major=$$(pnpm --version 2>/dev/null | cut -d. -f1); \
+	if command -v pnpm >/dev/null 2>&1 && [ -n "$$major" ] && [ "$$major" -ge 12 ] 2>/dev/null; then \
+	  echo "Installing dependencies with pnpm $$(pnpm --version)"; \
+	  pnpm install; \
+	else \
+	  echo "pnpm 12 not found; installing dependencies with npm ci"; \
+	  npm ci; \
+	fi
 	@if [ ! -f $(ENV_FILE) ]; then cp .env.example $(ENV_FILE) && echo "Created $(ENV_FILE) from .env.example."; else echo "$(ENV_FILE) already exists, leaving it alone."; fi
 
 .PHONY: browsers
@@ -34,19 +49,19 @@ db-logs: ## Tail MariaDB logs.
 
 .PHONY: db-migrate
 db-migrate: db-up ## Apply schema migrations to the dev database.
-	npm run db:migrate
+	$(RUN) run db:migrate
 
 .PHONY: db-reindex-links
 db-reindex-links: db-up ## Index document links (backfill after migration 012, or repair). Idempotent.
-	npm run db:reindex-document-links
+	$(RUN) run db:reindex-document-links
 
 .PHONY: db-report-escaped-wikilinks
 db-report-escaped-wikilinks: db-up ## List documents that may have lost wikilinks to the old editor (read-only; changes nothing).
-	npm run db:report-escaped-wikilinks
+	$(RUN) run db:report-escaped-wikilinks
 
 .PHONY: db-seed
 db-seed: db-migrate ## Load dev fixtures (idempotent, safe to re-run).
-	npm run db:seed
+	$(RUN) run db:seed
 
 .PHONY: bootstrap
 bootstrap: setup db-seed ## First-time setup: install, start DB, migrate, seed.
@@ -54,7 +69,7 @@ bootstrap: setup db-seed ## First-time setup: install, start DB, migrate, seed.
 
 .PHONY: dev
 dev: db-up ## Start the dev server at http://127.0.0.1:3000/knowledge.
-	npm run dev
+	$(RUN) run dev
 
 # A second local user on a second port, for trying what takes two people (sharing, comments).
 # The identity is this server's configuration, as it is for `make dev`; the browser chooses nothing.
@@ -62,43 +77,43 @@ dev: db-up ## Start the dev server at http://127.0.0.1:3000/knowledge.
 dev-reviewer: db-up ## Start a second dev server as "Local Reviewer" at http://127.0.0.1:3001.
 	KM_LOCAL_ID=0199f000-0000-7000-8000-000000000002 KM_LOCAL_EMP_ID=LOCAL-0002 \
 	KM_LOCAL_NAME="Local Reviewer" KM_LOCAL_ORG_CODE=LOCAL \
-	KM_NEXT_DIST_DIR=.next-dev-reviewer npm run dev -- --port 3001
+	KM_NEXT_DIST_DIR=.next-dev-reviewer $(RUN) run dev -- --port 3001
 
 .PHONY: build
 build: ## Production build.
-	npm run build
+	$(RUN) run build
 
 .PHONY: start
 start: db-up ## Serve the production build (run 'make build' first).
-	npm run start
+	$(RUN) run start
 
 .PHONY: lint
 lint: ## ESLint.
-	npm run lint
+	$(RUN) run lint
 
 .PHONY: typecheck
 typecheck: ## TypeScript check.
-	npm run typecheck
+	$(RUN) run typecheck
 
 .PHONY: test-unit
 test-unit: ## Unit tests (no database needed).
-	npm run test:unit
+	$(RUN) run test:unit
 
 .PHONY: test-integration
 test-integration: db-up ## Integration tests (needs MariaDB; uses root creds from .env.example defaults).
-	npm run test:integration
+	$(RUN) run test:integration
 
 .PHONY: test-e2e
 test-e2e: db-up ## E2E tests: provisions an isolated DB, builds, runs Playwright (needs 'make browsers' once).
-	npm run test:e2e
+	$(RUN) run test:e2e
 
 .PHONY: guide-screenshots
 guide-screenshots: db-up ## Regenerate the user guide's screenshots from the sample wiki (needs 'make browsers' once).
-	KM_GUIDE_CAPTURE=$(CURDIR)/src/components/help/screens npm run test:e2e -- tests/e2e/user-guide-screenshots.spec.ts
+	KM_GUIDE_CAPTURE=$(CURDIR)/src/components/help/screens $(RUN) run test:e2e -- tests/e2e/user-guide-screenshots.spec.ts
 
 .PHONY: test-mermaid-assumptions
 test-mermaid-assumptions: ## What the reader assumes of Mermaid, checked in Chromium; run before changing its version (needs 'make browsers' once).
-	npm run test:mermaid-assumptions
+	$(RUN) run test:mermaid-assumptions
 
 .PHONY: verify
 verify: test-unit typecheck lint build ## Local mirror of the CI DB-free gate.
@@ -113,5 +128,5 @@ db-reset: ## DANGER: wipe the dev database volume, then re-migrate + reseed.
 	@echo "Wiping MariaDB data volume..."
 	$(COMPOSE) down -v
 	$(COMPOSE) up -d --wait mariadb
-	npm run db:migrate
-	npm run db:seed
+	$(RUN) run db:migrate
+	$(RUN) run db:seed

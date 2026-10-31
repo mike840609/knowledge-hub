@@ -33,6 +33,10 @@ vercel link          # or import mike840609/knowledge-hub in the Vercel dashboar
 ```
 
 - Framework preset: **Next.js**. Root directory: the repository root. Production branch: `main`.
+- Package manager: keep **npm**. `vercel.json` pins `installCommand: npm ci`; the local pnpm
+  workflow in the README is not used by deployments. Do not switch the Vercel project to pnpm.
+  `pnpm-lock.yaml` is committed for local development, but Vercel must keep resolving from
+  `package-lock.json`.
 - Project → Settings → General → **Node.js Version**: choose **22.x** or **24.x**. Leave
   `package.json`'s `engines.node` at `>=20.19.0 <25`; the platform setting chooses the runtime.
 - Preview deployments are skipped by `vercel.json`'s `ignoreCommand`; no preview environment
