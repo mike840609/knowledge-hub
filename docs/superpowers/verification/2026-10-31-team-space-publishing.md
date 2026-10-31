@@ -2,7 +2,7 @@
 
 Date: 2026-10-31 (Asia/Taipei).
 Branch: `docs/team-space-publishing`.
-HEAD during the post-fix gates: `7b8f43dd` (the final whole-branch review fix wave). The feature was originally recorded at `f256bf7d` plus this task's working tree; after the final review, commit `7b8f43dd` fixed five Important findings (team-visible “no longer updated”, pending no-delivery reconcile, quadratic projection/notice reads, and event retention) and the focused team e2e, `make verify`, full integration and team smoke were re-run. This record is committed after that run.
+HEAD during the post-fix gates: `493db35f` (the independent pre-merge review fix wave). The feature was originally recorded at `f256bf7d`; `7b8f43dd` fixed five Important findings from the final whole-branch review, and the focused team e2e, `make verify`, full integration and team smoke were re-run on it. The independent pre-merge review then found four Critical/Important issues; `493db35f` fixed them and unit, integration, typecheck and lint were rerun (counts below). The browser e2e rows below remain the `7b8f43dd` evidence: the new fixes change event targeting, retention operators, read scoping and team UI visibility, and no e2e flow moves a document out of a published folder.
 Spec: `docs/superpowers/specs/2026-10-30-team-space-publishing-design.md`. Plan: `docs/superpowers/plans/2026-10-31-team-space-publishing.md`.
 
 ## Scope
@@ -22,10 +22,13 @@ Environment: macOS, Node v24.6.0, Playwright 1.63.0 with the installed Chromium,
 | `npm run test:integration` | **PASS (post-fix)** — **112 files / 1,135 tests passed**. |
 | `npm run test:e2e:smoke` | **PASS (post-fix)** — **15 tests passed**, 42.3s browser stage; 0 failed/flaky/skipped; includes all seven new team flows. |
 | `npm run test:e2e:smoke:personal` | **FAIL (pre-existing, not this feature)** — 3 passed, 1 failed: `personal-workspace.spec.ts` → after “Restore revision 1”, the editor shows the recovered draft (“Persistent draft body”) instead of the restored “Original body”. Reproduced identically at `main` `2aada14f` with the same command (3 passed, 1 failed), where none of this feature's code exists. No product or unrelated test was changed to hide it. |
+| `npm run test:unit` / `npm run test:integration` / `tsc --noEmit` / `eslint .` (independent review wave, `493db35f`) | **PASS** — unit **341 files / 4,083 tests**; integration **112 files / 1,143 tests**; typecheck and lint clean. |
 
 `make verify` initially failed only `tests/unit/e2e-smoke-selection.test.ts`, whose catalog pins the approved Team smoke flows; the seven new approved flows are now declared there. Nothing product-side was corrected by that change.
 
 The final whole-branch review found no Critical issues and five Important ones: team-visible “no longer updated”, reconcile of a pending contribution with no delivery, quadratic publication projection, quadratic sync-notice matching, and missing event/delivery retention. Commit `7b8f43dd` fixed all five and added the retention script; the team e2e, `make verify`, full integration and team smoke were then re-run on that commit and all passed. The commits after these post-fix runs change only this record.
+
+The independent pre-merge review then found one Critical issue (a move out of a published folder never archived the team copy) and three Important ones (default-off retention growth, explorer-wide document reads, and team authoring reachability), plus this record's integration test count was inconsistent between two lines. Commit `493db35f` fixed all of them, and the unit and integration totals above are that commit's exact counts.
 
 ## End-to-end cases
 
@@ -44,7 +47,7 @@ The final whole-branch review found no Critical issues and five Important ones: 
 - `tests/unit/publication-event-write-points.test.ts` — 11 tests passed: revision, move and lifecycle writers record a publication event in their own transaction; the team publication writer records none.
 - `tests/unit/link-index-write-points.test.ts` — 2 tests passed: every revision writer still replaces link edges, including the publication projection.
 - `tests/unit/share-link-single-exception.test.ts` — 11 tests passed: the anonymous share-link exceptions are unchanged; team review adds none.
-- Personal review, follow and mention regressions in the integration run: `document-review-service` 25, `review-reply-follow` 16, `review-mentions` 45, `share-comment-notify` 12, `folder-share-mentions` 8 — all passed. The full integration suite (1,131 tests) also covers the publication service, reconciliation, lifecycle, lock order, drain, links, Inbox and API contracts.
+- Personal review, follow and mention regressions in the integration run: `document-review-service` 25, `review-reply-follow` 16, `review-mentions` 45, `share-comment-notify` 12, `folder-share-mentions` 8 — all passed. The full integration suite (1,135 tests on `7b8f43dd`; 1,143 after the independent review fixes) also covers the publication service, reconciliation, lifecycle, lock order, drain, links, Inbox and API contracts.
 - `tests/unit/e2e-smoke-selection.test.ts` — 4 tests passed after declaring the new `@smoke-team` flows.
 
 ## Flag and rollout
