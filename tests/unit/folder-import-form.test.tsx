@@ -115,7 +115,7 @@ describe("folder import directory picker", () => {
     await clickChooseFolder();
 
     expect(showDirectoryPicker).toHaveBeenCalledWith({ mode: "read" });
-    expect(collectHandleFiles).toHaveBeenCalledWith(handle);
+    expect(collectHandleFiles).toHaveBeenCalledWith(handle, expect.any(AbortSignal));
     expect(rememberFolderHandle).toHaveBeenCalledWith("s1", handle, "Notes");
     expect(push).toHaveBeenCalledWith("/w/w1/sources/imports/snap-1");
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
@@ -171,7 +171,7 @@ describe("folder import directory picker", () => {
     await clickChooseFolder();
 
     expect(showDirectoryPicker).toHaveBeenCalledWith({ mode: "read" });
-    expect(collectHandleFiles).toHaveBeenCalledWith(handle);
+    expect(collectHandleFiles).toHaveBeenCalledWith(handle, expect.any(AbortSignal));
     expect(stashPendingHandle).toHaveBeenCalledWith("snap-new", handle, "Notes");
     expect(rememberFolderHandle).not.toHaveBeenCalled();
     expect(push).toHaveBeenCalledWith("/w/w1/sources/imports/snap-new");
@@ -203,6 +203,26 @@ describe("folder import directory picker", () => {
     vi.mocked(getRememberedFolderMeta).mockReturnValue(null);
     renderForm();
     expect(container.textContent).not.toContain("Forget remembered folder");
+  });
+
+  it("reports when an import is busy so a host can lock dismissal", async () => {
+    vi.mocked(isDirectoryPickerSupported).mockReturnValue(true);
+    Object.defineProperty(window, "showDirectoryPicker", {
+      value: vi.fn().mockResolvedValue({ name: "Notes" }),
+      configurable: true,
+    });
+    let release!: (files: File[]) => void;
+    vi.mocked(collectHandleFiles).mockReturnValue(new Promise((resolve) => { release = resolve; }));
+    const onBusyChange = vi.fn();
+
+    act(() => {
+      root.render(<FolderImportForm target={{ kind: "new", workspaceId: "w1" }} onBusyChange={onBusyChange} />);
+    });
+    await clickChooseFolder();
+    expect(onBusyChange).toHaveBeenLastCalledWith(true);
+
+    await act(async () => { release([]); });
+    expect(onBusyChange).toHaveBeenLastCalledWith(false);
   });
 });
 

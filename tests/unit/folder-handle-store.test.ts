@@ -397,6 +397,23 @@ describe("folder-handle-store", () => {
     expect(files.map(relativePathOf).sort()).toEqual(["repo/docs/a.md", "repo/readme.md"]);
   });
 
+  it("stops walking after cancellation while a file is being read", async () => {
+    const controller = new AbortController();
+    let finish!: (file: File) => void;
+    const nextFile = vi.fn();
+    const handle = makeDirHandle("wiki", []);
+    handle.values = async function* () {
+      yield { kind: "file", name: "slow.md", getFile: () => new Promise<File>((resolve) => { finish = resolve; }) } as FileSystemFileHandle;
+      yield { kind: "file", name: "next.md", getFile: nextFile } as unknown as FileSystemFileHandle;
+    };
+    const collecting = collectHandleFiles(handle, controller.signal);
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    controller.abort();
+    finish(new File(["x"], "slow.md"));
+    await expect(collecting).rejects.toMatchObject({ code: "IMPORT_CANCELLED" });
+    expect(nextFile).not.toHaveBeenCalled();
+  });
+
   it("collectHandleFiles walks nested folders and prefixes webkitRelativePath with the root name", async () => {
     const handle = makeDirHandle("wiki", [
       { kind: "file", name: "top.md", content: "# top" },

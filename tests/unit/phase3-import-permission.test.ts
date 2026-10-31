@@ -194,6 +194,7 @@ describe("folder import stops writes when authorization changes", () => {
 
     await expect(importing).rejects.toMatchObject({ code: "IMPORT_CANCELLED" });
     expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeUndefined();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(fetchMock.mock.calls.map(([url, init]) => [String(url), init?.method ?? "GET"])).toEqual([
       ["/api/workspaces/workspace/source-imports", "POST"],
       ["/api/source-imports/snapshot", "DELETE"],

@@ -5,11 +5,12 @@ type ManifestLocale = { label: string; sourceName: string; root: string; files: 
 
 const BASE = "/sample-wiki";
 
-async function fetchOk(fetcher: typeof fetch, url: string, what: string): Promise<Response> {
+async function fetchOk(fetcher: typeof fetch, url: string, what: string, signal?: AbortSignal): Promise<Response> {
   let response: Response;
   try {
-    response = await fetcher(url);
-  } catch {
+    response = await fetcher(url, { signal });
+  } catch (error) {
+    if (signal?.aborted) throw error;
     throw new Error(`Could not load ${what} (${url}). Check your connection and try again.`);
   }
   if (!response.ok) throw new Error(`Could not load ${what} (${url}): HTTP ${response.status}.`);
@@ -23,8 +24,8 @@ const UNREADABLE =
  * A proxy that answers 200 with a login page, or a manifest of the wrong
  * shape, is one failure to the reader: say so in one sentence.
  */
-async function readManifestEntry(fetcher: typeof fetch, locale: SampleLocale): Promise<ManifestLocale> {
-  const response = await fetchOk(fetcher, `${BASE}/manifest.json`, "the sample wiki manifest");
+async function readManifestEntry(fetcher: typeof fetch, locale: SampleLocale, signal?: AbortSignal): Promise<ManifestLocale> {
+  const response = await fetchOk(fetcher, `${BASE}/manifest.json`, "the sample wiki manifest", signal);
   let manifest: { locales?: Partial<Record<SampleLocale, ManifestLocale>> } | null;
   try {
     manifest = await response.json();
@@ -52,12 +53,12 @@ async function readManifestEntry(fetcher: typeof fetch, locale: SampleLocale): P
  * flow, exactly like a picked folder: `webkitRelativePath` is `<root>/<path>`.
  * Either every file loads or this throws; there is no partial result.
  */
-export async function loadSampleWiki(locale: SampleLocale, fetcher: typeof fetch = fetch): Promise<SampleWiki> {
-  const entry = await readManifestEntry(fetcher, locale);
+export async function loadSampleWiki(locale: SampleLocale, fetcher: typeof fetch = fetch, signal?: AbortSignal): Promise<SampleWiki> {
+  const entry = await readManifestEntry(fetcher, locale, signal);
   const files = await Promise.all(
     entry.files.map(async (relativePath) => {
       const url = `${BASE}/${locale}/${relativePath.split("/").map(encodeURIComponent).join("/")}`;
-      const response = await fetchOk(fetcher, url, relativePath);
+      const response = await fetchOk(fetcher, url, relativePath, signal);
       // A proxy's login page answers 200 too; importing it as Markdown would be worse than failing.
       if (/^text\/html\b/i.test(response.headers.get("content-type") ?? "")) throw new Error(UNREADABLE);
       // Raw bytes, so a sample file is byte-identical to a picked one (BOM included).

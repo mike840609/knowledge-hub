@@ -97,6 +97,19 @@ function assertNotCancelled(signal?: AbortSignal): void {
   }
 }
 
+// A cancelled getFile() cannot be interrupted by the browser. Serialize native
+// scans across form instances so a new import waits for that read to settle.
+let folderScanTail: Promise<void> = Promise.resolve();
+
+function queueFolderScan(handle: FileSystemDirectoryHandle, signal: AbortSignal): Promise<File[]> {
+  const scan = folderScanTail.then(() => {
+    assertNotCancelled(signal);
+    return collectHandleFiles(handle, signal);
+  });
+  folderScanTail = scan.then(() => {}, () => {});
+  return scan;
+}
+
 async function buildManifest(
   staged: StagedFile[],
   limits: FolderImportClientLimits,
@@ -371,14 +384,32 @@ export async function runFolderImport(input: {
   if (selection.staged.length === 0) throw Object.assign(new Error("No files remain after exclusions. Nothing was synced."), { code: "INVALID_IMPORT_MANIFEST" });
   const manifest = await buildManifest(selection.staged, limits, signal);
   assertAllowed();
-  const session = target.kind === "new"
-    ? await postJson(`/api/workspaces/${target.workspaceId}/source-imports`, {
+  const creation = target.kind === "new"
+    ? postJson(`/api/workspaces/${target.workspaceId}/source-imports`, {
       sourceName: sourceName.trim() || selection.rootName,
       rootName: selection.rootName,
       manifest,
       importScope: { paths: exclusions, excludedCount },
     })
-    : await postJson(`/api/sources/${target.sourceId}/source-imports`, { rootName: selection.rootName, manifest, importScope: { paths: exclusions, excludedCount }, expectedSourceVersion: savedScope!.syncVersion });
+    : postJson(`/api/sources/${target.sourceId}/source-imports`, { rootName: selection.rootName, manifest, importScope: { paths: exclusions, excludedCount }, expectedSourceVersion: savedScope!.syncVersion });
+  // Do not abort the non-idempotent create request: it may already have made a
+  // session. Let the UI cancel immediately and clean up any late response.
+  const session = signal ? await new Promise<Awaited<typeof creation>>((resolve, reject) => {
+    const cancel = () => {
+      void creation.then((result) => {
+        if (result.ok && result.body && typeof result.body === "object" && "snapshotId" in result.body && typeof result.body.snapshotId === "string") {
+          return bestEffortAbandonImport(result.body.snapshotId);
+        }
+      }).catch(() => {});
+      reject(Object.assign(new Error("Import was cancelled."), { code: "IMPORT_CANCELLED" }));
+    };
+    if (signal.aborted) { cancel(); return; }
+    signal.addEventListener("abort", cancel, { once: true });
+    creation.then(
+      (result) => { signal.removeEventListener("abort", cancel); resolve(result); },
+      (error) => { signal.removeEventListener("abort", cancel); reject(error); },
+    );
+  }) : await creation;
   if (!session.ok || !session.body || typeof session.body !== "object" || !("snapshotId" in session.body)) {
     const failure = readErrorCode(session.body, "Creating the import session failed.");
     onProgress({ kind: "ERROR", code: failure.code, message: failure.message });
@@ -436,9 +467,15 @@ function statusText(state: ImportUiState, now: number): string | null {
 export function FolderImportForm({
   target,
   limits = DEFAULT_CLIENT_LIMITS,
+  onBusyChange,
+  replaceOnComplete = false,
 }: {
   target: FolderImportTarget;
   limits?: FolderImportClientLimits;
+  /** Reports PREPARING/UPLOADING/FINALIZING so a host dialog can lock dismissal. */
+  onBusyChange?: (busy: boolean) => void;
+  /** Replace the transient modal history entry with the Preview instead of adding a stop. */
+  replaceOnComplete?: boolean;
 }): React.JSX.Element {
   const router = useRouter();
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -447,12 +484,13 @@ export function FolderImportForm({
   allowedRef.current = allowed;
   const mountedRef = useRef(false);
   const activeImportRef = useRef<AbortController | null>(null);
+  const cancelSampleRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     // React Strict Mode intentionally runs setup → cleanup → setup once in
     // development. Resetting this flag in setup makes that probe harmless;
     // permission state stays exclusively in allowedRef.
     mountedRef.current = true;
-    const cancel = () => activeImportRef.current?.abort();
+    const cancel = () => { activeImportRef.current?.abort(); cancelSampleRef.current?.(); };
     window.addEventListener("pagehide", cancel);
     return () => {
       mountedRef.current = false;
@@ -496,7 +534,7 @@ export function FolderImportForm({
     }
   }, [rememberedSourceId]);
   const [sampleLoading, setSampleLoading] = useState(false);
-  const busy = state.kind === "PREPARING" || state.kind === "UPLOADING" || state.kind === "FINALIZING";
+  const busy = sampleLoading || state.kind === "PREPARING" || state.kind === "UPLOADING" || state.kind === "FINALIZING";
   // Ticks once a second while finalizing so the elapsed time moves; idle otherwise.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -505,6 +543,9 @@ export function FolderImportForm({
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [state.kind]);
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
   const status = statusText(state, now);
 
   function reportImportError(error: unknown): void {
@@ -515,6 +556,12 @@ export function FolderImportForm({
     if (!mountedRef.current) return;
     if (code === "IMPORT_CANCELLED") { setState({ kind: "IDLE" }); return; }
     setState({ kind: "ERROR", code, message: error instanceof Error ? error.message : "Importing the folder failed." });
+  }
+
+  function goToPreview(snapshotId: string): void {
+    const href = `/w/${target.workspaceId}/sources/imports/${snapshotId}`;
+    if (replaceOnComplete) router.replace(href);
+    else router.push(href);
   }
 
   async function handleFiles(files: FileList | File[] | null, sourceNameOverride?: string): Promise<void> {
@@ -536,7 +583,7 @@ export function FolderImportForm({
         excludedPaths: parseExcludedPaths(exclusionText), expectedSourceVersion: scopeVersion,
       });
       assertAllowed();
-      router.push(`/w/${target.workspaceId}/sources/imports/${snapshotId}`);
+      goToPreview(snapshotId);
     } catch (error) {
       reportImportError(error);
     } finally {
@@ -572,7 +619,11 @@ export function FolderImportForm({
     try {
       checkActive();
       setState({ kind: "PREPARING" });
-      const files = await collectHandleFiles(handle);
+      const files = await new Promise<File[]>((resolve, reject) => {
+        const cancelled = () => reject(Object.assign(new Error("Import was cancelled."), { code: "IMPORT_CANCELLED" }));
+        controller.signal.addEventListener("abort", cancelled, { once: true });
+        queueFolderScan(handle, controller.signal).then(resolve, reject).finally(() => controller.signal.removeEventListener("abort", cancelled));
+      });
       checkActive();
       if (files.length === 0) { setState({ kind: "IDLE" }); return; }
       setSelection({ name: handle.name || "Selected folder", count: files.length });
@@ -585,7 +636,7 @@ export function FolderImportForm({
         await stashPendingHandle(snapshotId, handle, handle.name);
         checkActive();
       }
-      router.push(`/w/${target.workspaceId}/sources/imports/${snapshotId}`);
+      goToPreview(snapshotId);
     } catch (error) {
       reportImportError(error);
     } finally {
@@ -665,10 +716,10 @@ export function FolderImportForm({
         }}
       />
       {target.kind === "new" ? (
-        <SampleWikiImport disabled={busy} onLoadingChange={setSampleLoading} onLoaded={(sample) => handleFiles(sample.files, sample.sourceName)} />
+        <SampleWikiImport disabled={busy} onLoadingChange={setSampleLoading} onCancelReady={(cancel) => { cancelSampleRef.current = cancel; }} onLoaded={(sample) => handleFiles(sample.files, sample.sourceName)} />
       ) : null}
       {status ? <p role="status" className="mt-3 text-body text-kh-text-muted">{status}</p> : null}
-      {busy ? <Button variant="secondary" className="mt-3" onClick={() => activeImportRef.current?.abort()}>Cancel import</Button> : null}
+      {busy ? <Button variant="secondary" className="mt-3" onClick={() => { cancelSampleRef.current?.(); activeImportRef.current?.abort(); }}>Cancel import</Button> : null}
       {state.kind === "ERROR" ? <p className="mt-2 text-body"><Link href="/help#troubleshooting" className="kh-focus-ring rounded-md text-kh-link hover:underline">Sync troubleshooting</Link></p> : null}
       {state.kind === "ERROR" ? <details className="mt-2 text-caption text-kh-text-muted"><summary className="cursor-pointer rounded-md kh-focus-ring">Technical details</summary><code>{state.code}</code></details> : null}
     </div>
