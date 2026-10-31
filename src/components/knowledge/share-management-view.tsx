@@ -31,8 +31,10 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
   const router = useRouter(), toast = useToast();
   const [origin, setOrigin] = useState("");
   const [status, setStatus] = useState<string>(model.query.status);
+  const [query, setQuery] = useState<string>(model.query.q);
   const filterForm = useRef<HTMLFormElement>(null);
   useEffect(() => setStatus(model.query.status), [model.query.status]);
+  useEffect(() => setQuery(model.query.q), [model.query.q]);
   const [unreadCounts, setUnreadCounts] = useState<UnreadShareCount[]>([]);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -100,7 +102,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
       <div className="relative basis-full sm:w-72 sm:flex-none">
         <label htmlFor="shares-query" className="sr-only">Find shares</label>
         <Search size={15} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-kh-text-muted" />
-        <Input id="shares-query" name="q" defaultValue={model.query.q} maxLength={200} placeholder="Find shares…" className="kh-search-field" />
+        <Input id="shares-query" name="q" value={query} onChange={event => setQuery(event.target.value)} maxLength={200} placeholder="Find shares…" className="kh-search-field" />
       </div>
       <label htmlFor="shares-status" className="sr-only">Status</label>
       <SelectMenu id="shares-status" name="status" value={status} onValueChange={(value) => applyAndSearch(filterForm.current, () => setStatus(value))} options={[{ value: "all", label: "All statuses" }, ...Object.entries(labels).map(([value, label]) => ({ value, label }))]} />

@@ -15,8 +15,10 @@ import type { SavedShareList } from "@/modules/knowledge/domain/saved-share";
 export function SavedSharesView({ workspaceId,model,filterError }: { workspaceId:string;model:SavedShareList;filterError?:string }) {
   const router=useRouter(),pending=useRef(false);
   const [status,setStatus]=useState<string>(model.query.status);
+  const [query,setQuery]=useState<string>(model.query.q);
   const filterForm=useRef<HTMLFormElement>(null);
   useEffect(()=>setStatus(model.query.status),[model.query.status]);
+  useEffect(()=>setQuery(model.query.q),[model.query.q]);
   const [busy,setBusy]=useState<string|null>(null),[error,setError]=useState(""),[removed,setRemoved]=useState(new Set<string>());
   // Optimistic removals belong to this server snapshot; a refresh may contain a re-saved link.
   useEffect(()=>setRemoved(new Set()),[model.items]);
@@ -34,7 +36,7 @@ export function SavedSharesView({ workspaceId,model,filterError }: { workspaceId
   return <>
     <form ref={filterForm} action={base} method="get" aria-label="Filter saved shares" className="mt-3 flex flex-wrap items-center gap-2">
       <Input type="hidden" name="tab" value="saved"/>
-      <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-auto"><label className="sr-only" htmlFor="saved-shares-query">Find saved shares</label><Search size={15} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-kh-text-muted"/><Input id="saved-shares-query" name="q" defaultValue={model.query.q} placeholder="Find title or sharing person…" maxLength={200} className="kh-search-field"/></div>
+      <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-auto"><label className="sr-only" htmlFor="saved-shares-query">Find saved shares</label><Search size={15} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-kh-text-muted"/><Input id="saved-shares-query" name="q" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Find title or sharing person…" maxLength={200} className="kh-search-field"/></div>
       <label className="sr-only" htmlFor="saved-shares-status">Saved share status</label><SelectMenu id="saved-shares-status" name="status" value={status} onValueChange={(value)=>applyAndSearch(filterForm.current,()=>setStatus(value))} options={[{value:"all",label:"All statuses"},{value:"available",label:"Available"},{value:"unavailable",label:"Unavailable"}]}/>
       <LiveSearch/>
       {filtered&&<Link className="kh-focus-ring rounded-md text-body-sm text-kh-link" href={clear}>Clear filters</Link>}

@@ -28,11 +28,11 @@ export default async function SharesPage({ params, searchParams }: { params: Pro
     }
     if(tab==="saved") {
       const model=await s.savedShares.list(caller,workspaceId,input);
-      return <SavedSharesView key={JSON.stringify(model.query)} workspaceId={workspaceId} model={model}/>;
+      return <SavedSharesView workspaceId={workspaceId} model={model}/>;
     }
     const model=await s.shares.listManagement(caller,workspaceId,input);
     const hasDocuments=model.items.length>0||(await s.queries.listDocumentSummaries(caller,workspaceId,{includeArchived:true})).length>0;
-    return <ShareManagementView hasDocuments={hasDocuments} key={JSON.stringify(model.query)} workspaceId={workspaceId} model={model}/>;
+    return <ShareManagementView hasDocuments={hasDocuments} workspaceId={workspaceId} model={model}/>;
   } catch(error) {
     if(error instanceof ValidationError) return tab==="discussions"?<FollowedDiscussionsView workspaceId={workspaceId} items={[]} filter="all" filterError={error.message}/>:tab==="saved"?<SavedSharesView workspaceId={workspaceId} filterError={error.message} model={{query:{q:input.q??"",status:"all",page:1},items:[],hasNext:false}}/>:<ShareManagementView workspaceId={workspaceId} filterError={error.message} model={{query:{q:input.q??"",status:"all",page:1},items:[],hasNext:false}}/>;
     if(sharesNotFound(error))notFound();
