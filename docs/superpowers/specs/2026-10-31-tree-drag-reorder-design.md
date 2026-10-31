@@ -166,8 +166,11 @@ The destination folder is opened after the drop if it was not already open
 the moved row — both through the mechanisms the Move dialog and keyboard reorder
 already use (`REVEAL_FOLDER_EVENT` / `expandFrom`, `focusAfterReorder`).
 
-**While a request is in flight** a second drag is ignored until the refreshed
-tree arrives, with the same 3-second give-up the keyboard uses.
+**While a request is in flight** a second drag is ignored until the request
+settles and the refreshed tree confirms the new place (or the request fails).
+A UI timeout never stands in for a completed write: a second PATCH sent while
+the first is still pending could commit after it and overwrite it. The keyboard
+path holds the same lock and queues its next step instead of sending it.
 
 ## Position math
 

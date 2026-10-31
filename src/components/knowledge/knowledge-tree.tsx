@@ -355,7 +355,6 @@ export function KnowledgeTree({
   const reordering = useRef(false);
   const reorderOperation = useRef(0);
   const expectedReorder = useRef<{ id: string; parentId: string | null; position: number } | null>(null);
-  const reorderGiveUp = useRef<number | undefined>(undefined);
   const queuedReorder = useRef<{ id: string; direction: -1 | 1 } | null>(null);
   const focusAfterReorder = useRef<string | null>(null);
   const [announcement, setAnnouncement] = useState({ text: "", sequence: 0 });
@@ -375,7 +374,6 @@ export function KnowledgeTree({
     onRefreshed: (id) => { focusAfterReorder.current = id; },
     announce, expandFolder: expandFrom, treeRef,
   });
-  useEffect(() => () => window.clearTimeout(reorderGiveUp.current), []);
   useEffect(() => {
     const expected = expectedReorder.current;
     if (reordering.current && expected) {
@@ -384,7 +382,6 @@ export function KnowledgeTree({
     }
     reordering.current = false;
     expectedReorder.current = null;
-    window.clearTimeout(reorderGiveUp.current);
     const queued = queuedReorder.current;
     queuedReorder.current = null;
     const item = queued ? itemById.get(queued.id) : undefined;
@@ -420,24 +417,19 @@ export function KnowledgeTree({
     drag.invalidatePending();
     const operation = ++reorderOperation.current;
     expectedReorder.current = { id: item.id, parentId: item.parentId, position: step.position };
-    // If the tree never arrives, the next key press is not lost for good.
-    window.clearTimeout(reorderGiveUp.current);
-    reorderGiveUp.current = window.setTimeout(() => {
-      if (reorderOperation.current !== operation) return;
-      reordering.current = false;
-      expectedReorder.current = null;
-      queuedReorder.current = null;
-    }, 3000);
+    // The refreshed tree may arrive before the request resolves. The row that will move is known
+    // now, so the focus effect can put focus back on it as soon as that tree lands; waiting for the
+    // promise would leave a tree that already arrived with nothing to focus.
+    focusAfterReorder.current = item.id;
     const ok = await onReorder({ nodeId: item.id, position: step.position });
     if (reorderOperation.current !== operation) return;
     if (ok) {
-      focusAfterReorder.current = item.id;
       announce(reorderedNode(item.label, direction < 0 ? "up" : "down", step.index, step.count));
     } else {
+      focusAfterReorder.current = null;
       reordering.current = false;
       expectedReorder.current = null;
       queuedReorder.current = null;
-      window.clearTimeout(reorderGiveUp.current);
     }
   }
 

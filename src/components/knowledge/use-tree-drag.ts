@@ -41,7 +41,6 @@ export function useTreeDrag(input: Input) {
   const frame = useRef<number | undefined>(undefined);
   const expandTimer = useRef<number | undefined>(undefined);
   const expandFor = useRef<string | null>(null);
-  const giveUp = useRef<number | undefined>(undefined);
   const clearExpand = () => { window.clearTimeout(expandTimer.current); expandFor.current = null; };
   const cleanup = () => {
     dragging.current = null; pointerY.current = null; setDraggingId(null); updateIndicator(null);
@@ -49,7 +48,7 @@ export function useTreeDrag(input: Input) {
   };
   useEffect(() => {
     setEnabled(typeof window.matchMedia === "function" && window.matchMedia("(hover: hover) and (pointer: fine)").matches);
-    return () => { window.cancelAnimationFrame(frame.current ?? 0); window.clearTimeout(expandTimer.current); window.clearTimeout(giveUp.current); };
+    return () => { window.cancelAnimationFrame(frame.current ?? 0); window.clearTimeout(expandTimer.current); };
   }, []);
   useEffect(() => {
     const wanted = expected.current;
@@ -64,7 +63,6 @@ export function useTreeDrag(input: Input) {
       else if (focusWaiting.current && wanted) {
         focusWaiting.current = false;
         busy.current = false;
-        window.clearTimeout(giveUp.current);
         input.onRefreshed(wanted.id);
       }
     }
@@ -149,9 +147,9 @@ export function useTreeDrag(input: Input) {
       expected.current = { id: source.id, parentId: placement.kind === "move" ? placement.parentId : source.parentId,
         position: placement.position, oldParent: source.parentId, oldPosition: source.position };
       const currentOperation = operation.current;
-      giveUp.current = window.setTimeout(() => {
-        if (operation.current === currentOperation) busy.current = false;
-      }, 3000);
+      // The lock is released only when the request settles and the refreshed tree confirms the new
+      // place (or the request fails). A UI timeout must never stand in for a completed write: a
+      // second PATCH sent while this one is still pending could commit after it and overwrite it.
       let succeeded = false;
       try {
         const parentId = placement.kind === "move" ? placement.parentId : source.parentId;
@@ -165,7 +163,7 @@ export function useTreeDrag(input: Input) {
       } finally {
         if (operation.current === currentOperation) {
           awaitingResponse.current = false;
-          if (!succeeded || refreshed.current) { window.clearTimeout(giveUp.current); busy.current = false; }
+          if (!succeeded || refreshed.current) busy.current = false;
           cleanup();
         }
       }

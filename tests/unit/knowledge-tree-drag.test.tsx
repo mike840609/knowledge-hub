@@ -146,6 +146,18 @@ describe("tree dragging", () => {
     await act(async () => { finish(true); });
     expect(document.activeElement).toBe(rowFor("A"));
   });
+  it("restores keyboard focus when the refreshed tree arrives before the reorder response", async () => {
+    let finish: (value: boolean) => void = () => {};
+    const onReorder = vi.fn(() => new Promise<boolean>((resolve) => { finish = resolve; }));
+    const { rerender } = render({ onReorder });
+    act(() => { rowFor("B").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true, cancelable: true })); });
+    // The refreshed tree lands while the PATCH is still unresolved; focus must follow the row now,
+    // not wait for a promise whose effect will never run again.
+    rerender({ items: [doc("A", 0), doc("C", 1), doc("B", 2)] });
+    expect(document.activeElement).toBe(rowFor("B"));
+    await act(async () => { finish(true); });
+    expect(document.activeElement).toBe(rowFor("B"));
+  });
   it("focuses a moved row after its collapsed destination opens", async () => {
     let finish: (value: boolean) => void = () => {};
     const onMove = vi.fn(() => new Promise<boolean>((resolve) => { finish = resolve; }));
@@ -164,7 +176,7 @@ describe("tree dragging", () => {
     await act(async () => { finish(true); });
     expect(document.activeElement).toBe(rowFor("A"));
   });
-  it("does not cancel a newer drag when a timed-out request finishes", async () => {
+  it("refuses a new drag while a request is unresolved, and still reports the slow success", async () => {
     vi.useFakeTimers();
     try {
       let finish: (value: boolean) => void = () => {};
@@ -177,14 +189,18 @@ describe("tree dragging", () => {
         const event = new Event(type, { bubbles: true, cancelable: true });
         Object.defineProperties(event, { dataTransfer: { value: transfer }, clientY: { value: y } });
         row.dispatchEvent(event);
+        return event;
       };
       act(() => { fire(rowFor("A"), "dragstart"); fire(target, "drop", 19); });
-      act(() => { vi.advanceTimersByTime(3000); fire(rowFor("C"), "dragstart"); });
-      expect(rowFor("C").className).toContain("kh-tree-drag-source");
+      // A UI timeout is not a completed write: the next drag must stay refused while the PATCH is
+      // unresolved, or a late first PATCH could commit after the second and overwrite it.
+      let second: Event | undefined;
+      act(() => { vi.advanceTimersByTime(3000); second = fire(rowFor("C"), "dragstart"); });
+      expect(second?.defaultPrevented).toBe(true);
+      expect(rowFor("C").className).not.toContain("kh-tree-drag-source");
       await act(async () => { finish(true); });
-      expect(rowFor("C").className).toContain("kh-tree-drag-source");
-      act(() => { fire(target, "drop"); });
-      expect(onReorder).toHaveBeenCalledTimes(2);
+      expect(onReorder).toHaveBeenCalledTimes(1);
+      expect(said()).toContain("Placed “A”. Position 2 of 3.");
     } finally { vi.useRealTimers(); }
   });
   it("does not mistake another row changing for the drop refresh", async () => {
@@ -239,25 +255,26 @@ describe("tree dragging", () => {
     act(() => { rowFor("A").dispatchEvent(event); });
     expect(event.defaultPrevented).toBe(true);
   });
-  it("ignores an old keyboard refusal after a newer keyboard request starts", async () => {
-    vi.useFakeTimers();
-    try {
-      let finishFirst: (value: boolean) => void = () => {};
-      const onReorder = vi.fn()
-        .mockImplementationOnce(() => new Promise<boolean>((resolve) => { finishFirst = resolve; }))
-        .mockImplementation(() => new Promise<boolean>(() => {}));
-      render({ onReorder });
-      const press = (label: string, key: string) => rowFor(label).dispatchEvent(new KeyboardEvent("keydown", { key, altKey: true, bubbles: true, cancelable: true }));
-      act(() => { press("B", "ArrowDown"); vi.advanceTimersByTime(3000); press("C", "ArrowUp"); });
-      expect(onReorder).toHaveBeenCalledTimes(2);
-      await act(async () => { finishFirst(false); });
-      const event = new Event("dragstart", { bubbles: true, cancelable: true });
-      Object.defineProperty(event, "dataTransfer", { value: { effectAllowed: "", setData: vi.fn() } });
-      act(() => { rowFor("A").dispatchEvent(event); });
-      expect(event.defaultPrevented).toBe(true);
-    } finally { vi.useRealTimers(); }
+  it("ignores an old keyboard refusal after a queued newer request starts", async () => {
+    let finishFirst: (value: boolean) => void = () => {};
+    const onReorder = vi.fn()
+      .mockImplementationOnce(() => new Promise<boolean>((resolve) => { finishFirst = resolve; }))
+      .mockImplementation(() => new Promise<boolean>(() => {}));
+    const { rerender } = render({ onReorder });
+    const press = (label: string, key: string) => rowFor(label).dispatchEvent(new KeyboardEvent("keydown", { key, altKey: true, bubbles: true, cancelable: true }));
+    act(() => { press("B", "ArrowDown"); press("C", "ArrowUp"); });
+    // The second key is queued behind the unresolved request, not sent on top of it.
+    expect(onReorder).toHaveBeenCalledTimes(1);
+    rerender({ items: [doc("A", 0), doc("C", 1), doc("B", 2)] });
+    expect(onReorder).toHaveBeenCalledTimes(2);
+    expect(onReorder).toHaveBeenLastCalledWith({ nodeId: "n:C", position: 0 });
+    await act(async () => { finishFirst(false); });
+    const event = new Event("dragstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: { effectAllowed: "", setData: vi.fn() } });
+    act(() => { rowFor("A").dispatchEvent(event); });
+    expect(event.defaultPrevented).toBe(true);
   });
-  it("blocks keyboard sorting during an active drag", () => {
+  it("blocks keyboard sorting during an active drag", async () => {
     const onReorder = vi.fn(async () => true);
     render({ onReorder });
     const target = rowFor("B");
@@ -267,7 +284,7 @@ describe("tree dragging", () => {
       Object.defineProperties(event, { dataTransfer: { value: { effectAllowed: "", setData: vi.fn() } }, clientY: { value: 19 } });
       row.dispatchEvent(event);
     };
-    act(() => { fire(rowFor("A"), "dragstart"); target.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true, cancelable: true })); fire(target, "drop"); });
+    await act(async () => { fire(rowFor("A"), "dragstart"); target.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true, cancelable: true })); fire(target, "drop"); });
     expect(onReorder).toHaveBeenCalledTimes(1);
     expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:A", position: 1 });
   });
