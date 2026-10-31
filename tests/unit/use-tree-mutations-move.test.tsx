@@ -81,4 +81,19 @@ describe("the move request", () => {
     expect(await move(input, "toast")).toEqual({ ok: false, message: "no" });
     expect(toast).toHaveBeenCalledWith({ message: "no", tone: "danger" });
   });
+
+  it("toasts where it went, with an Undo that puts it back where it was", async () => {
+    await move({ ...input, to: { parentId: "f1", label: "F", position: 2 } });
+
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({
+      message: "Moved “B” to “F”.",
+      undo: expect.objectContaining({ label: "Undo" }),
+    }));
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+
+    const undo = toast.mock.calls[0][0].undo as { run: () => Promise<void> };
+    await undo.run();
+    expect(request).toHaveBeenLastCalledWith("/api/tree-nodes/n1", "PATCH", { parentId: null, position: 0 });
+    expect(mocks.refresh).toHaveBeenCalledTimes(2);
+  });
 });
