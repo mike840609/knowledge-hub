@@ -437,11 +437,14 @@ export function FolderImportForm({
   target,
   limits = DEFAULT_CLIENT_LIMITS,
   onBusyChange,
+  replaceOnComplete = false,
 }: {
   target: FolderImportTarget;
   limits?: FolderImportClientLimits;
   /** Reports PREPARING/UPLOADING/FINALIZING so a host dialog can lock dismissal. */
   onBusyChange?: (busy: boolean) => void;
+  /** Replace the transient modal history entry with the Preview instead of adding a stop. */
+  replaceOnComplete?: boolean;
 }): React.JSX.Element {
   const router = useRouter();
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -523,6 +526,12 @@ export function FolderImportForm({
     setState({ kind: "ERROR", code, message: error instanceof Error ? error.message : "Importing the folder failed." });
   }
 
+  function goToPreview(snapshotId: string): void {
+    const href = `/w/${target.workspaceId}/sources/imports/${snapshotId}`;
+    if (replaceOnComplete) router.replace(href);
+    else router.push(href);
+  }
+
   async function handleFiles(files: FileList | File[] | null, sourceNameOverride?: string): Promise<void> {
     if (!files || files.length === 0) return;
     const controller = new AbortController();
@@ -542,7 +551,7 @@ export function FolderImportForm({
         excludedPaths: parseExcludedPaths(exclusionText), expectedSourceVersion: scopeVersion,
       });
       assertAllowed();
-      router.push(`/w/${target.workspaceId}/sources/imports/${snapshotId}`);
+      goToPreview(snapshotId);
     } catch (error) {
       reportImportError(error);
     } finally {
@@ -591,7 +600,7 @@ export function FolderImportForm({
         await stashPendingHandle(snapshotId, handle, handle.name);
         checkActive();
       }
-      router.push(`/w/${target.workspaceId}/sources/imports/${snapshotId}`);
+      goToPreview(snapshotId);
     } catch (error) {
       reportImportError(error);
     } finally {

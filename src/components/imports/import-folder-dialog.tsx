@@ -41,6 +41,7 @@ export function ImportFolderDialog({
                 target={{ kind: "new", workspaceId }}
                 limits={limits}
                 onBusyChange={setBusy}
+                replaceOnComplete
               />
             ) : (
               <p role="status" className="text-body text-kh-text-muted">
