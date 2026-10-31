@@ -68,6 +68,21 @@ test("a client navigation from Knowledge keeps the full page", async ({ page }) 
   await expect(page.getByRole("heading", { level: 1, name: "Import folder", exact: true })).toBeVisible();
 });
 
+test("a global import action from Preview opens the full page", async ({ page }) => {
+  const ws = await personalWorkspaceId(page);
+  await page.goto(`/w/${ws}/sources`);
+  await openImport(page);
+  const dialog = page.getByRole("dialog", { name: "Import folder", exact: true });
+  await dialog.getByRole("group", { name: "Try with a sample wiki" }).getByRole("button", { name: "English", exact: true }).click();
+  await expect(page).toHaveURL(/\/sources\/imports\//, { timeout: 15_000 });
+  const field = await openPalette(page);
+  await field.fill("Import knowledge");
+  await page.getByRole("listbox", { name: "Actions and documents" }).getByRole("option", { name: /Import (knowledge|your first knowledge source)/ }).first().click();
+  await expect(page).toHaveURL(new RegExp(`/w/${ws}/sources/import$`));
+  await expect(page.getByRole("dialog", { name: "Import folder", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 1, name: "Import folder", exact: true })).toBeVisible();
+});
+
 test("Back from Preview after a modal import returns to Sources", async ({ page }) => {
   const ws = await personalWorkspaceId(page);
   await page.goto(`/w/${ws}/sources`);
