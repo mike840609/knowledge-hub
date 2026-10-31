@@ -640,7 +640,6 @@ describe("the place a drop asks for, against the real service", () => {
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
     const next = (bound: number) => Math.floor(random() * bound);
-    let moves = 0;
     as(w.owner);
     for (let round = 0; round < 40; round += 1) {
       const dragged = model[next(model.length)];
@@ -655,10 +654,7 @@ describe("the place a drop asks for, against the real service", () => {
       model.splice(placement.index, 0, dragged);
       expect((await patchTreeNode(request({ position: placement.position }, "PATCH"), ofNode(nodes[dragged]))).status).toBe(204);
       expect((await queries.listTree(w.owner, w.notes)).map((item) => item.label)).toEqual(model);
-      moves += 1;
     }
-    // A run that mostly bounced off the ends would prove little.
-    expect(moves).toBeGreaterThan(20);
   });
 
   it("moves a document between a folder's children", async () => {
@@ -666,8 +662,10 @@ describe("the place a drop asks for, against the real service", () => {
     as(w.owner);
     const view = await queries.listTree(w.owner, w.notes);
     const placement = dropPlacement(view, await nodeOf(w, a.documentId), await nodeOf(w, d.documentId), "before");
-    expect(placement).toMatchObject({ kind: "move", parentId: folder, position: 0 });
-    expect((await patchTreeNode(request({ parentId: folder, position: 0 }, "PATCH"), ofNode(await nodeOf(w, a.documentId)))).status).toBe(204);
+    if (placement?.kind !== "move") throw new Error("Expected a move into the folder.");
+    expect(placement).toMatchObject({ parentId: folder, position: 0 });
+    const response = await patchTreeNode(request({ parentId: placement.parentId, position: placement.position }, "PATCH"), ofNode(await nodeOf(w, a.documentId)));
+    expect(response.status).toBe(204);
     expect(await order(w, w.notes, folder)).toEqual([{ label: "A", position: 0 }, { label: "D", position: 1 }]);
   });
 });

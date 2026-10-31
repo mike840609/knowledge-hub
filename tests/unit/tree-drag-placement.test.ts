@@ -22,6 +22,11 @@ describe("dropPlacement", () => {
     expect(dropPlacement(items, "n:A", "n:F", "into")).toEqual({ kind: "move", parentId: "n:F", index: 1, count: 2 });
   });
 
+  it("moves into another folder after a child, with no adjustment for the parent it left", () => {
+    const items = [doc("A", 0), folder("F", 1), doc("D", 0, "n:F"), doc("E", 2, "n:F")];
+    expect(dropPlacement(items, "n:A", "n:D", "after")).toEqual({ kind: "move", parentId: "n:F", position: 1, index: 1, count: 3 });
+  });
+
   it("appends into the folder it is already in as a same-parent reorder", () => {
     const items = [doc("A", 0), folder("F", 1), doc("D", 0, "n:F")];
     expect(dropPlacement(items, "n:D", "n:F", "into")).toEqual({ kind: "reorder", position: Number.MAX_SAFE_INTEGER, index: 0, count: 1 });
