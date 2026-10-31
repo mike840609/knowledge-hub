@@ -134,6 +134,10 @@ async function commentOn(page: Page, passage: string, body: string): Promise<voi
   // Hovering before they exist is a no-op, leaving the button at opacity 0.
   const article = page.locator("[data-review-document]");
   await expect(article).toBeVisible();
+  // The article is server-rendered; the paragraph comment control is only
+  // rendered after the review panel's fetch resolves. Wait for that ready
+  // state before hovering, exactly as the canonical paragraph-comment spec does.
+  await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
   const target = article.locator("p").filter({ hasText: passage }).first();
   await expect(target).toBeVisible();
   await target.hover();
