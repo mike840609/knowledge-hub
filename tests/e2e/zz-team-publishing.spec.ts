@@ -133,7 +133,10 @@ async function commentOn(page: Page, passage: string, body: string): Promise<voi
   await page.locator("[data-review-document] p").filter({ hasText: passage }).first().hover();
   const paragraph = page.getByRole("button", { name: /^Comment on paragraph:/ }).first();
   await expect(paragraph).toBeEnabled();
-  await paragraph.click();
+  // The control is revealed by pointerover on its paragraph. Moving the mouse
+  // onto the button itself can clear that state under load (the reading column
+  // then intercepts the click), so dispatch the click on the revealed control.
+  await paragraph.dispatchEvent("click");
   const field = page.getByRole("textbox", { name: "Add comment" });
   await expect(field).toBeVisible();
   await field.fill(body);

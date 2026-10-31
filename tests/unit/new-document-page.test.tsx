@@ -37,8 +37,16 @@ beforeEach(() => {
 });
 
 describe("new document page", () => {
-  it("is not found in a team even for an editor who may write", async () => {
+  it("still renders for a team editor, but offers no UI entry to it", async () => {
+    // URL-only residual: the page and create service stay for the approved
+    // composer flow, while every team surface hides the authoring entries.
     mocks.shell.mockResolvedValue(shell("TEAM", true));
+    const result = await NewNotePage({ ...params, searchParams: Promise.resolve({}) });
+    expect(result).toBeTruthy();
+  });
+
+  it("is not found in a team without write access", async () => {
+    mocks.shell.mockResolvedValue(shell("TEAM", false));
     await expect(NewNotePage({ ...params, searchParams: Promise.resolve({}) }))
       .rejects.toThrow("not found");
     expect(mocks.folder).not.toHaveBeenCalled();

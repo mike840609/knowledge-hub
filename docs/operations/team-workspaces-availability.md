@@ -69,6 +69,7 @@ A contributor's state explains what an operator should expect and what clears it
 ## Known limits
 
 - A Folder Sync source's root has no tree node. The import places its documents directly under the source, so My Space offers 「發佈到團隊」 for a folder inside a synced source, not for the source root itself. Publishing the whole synced source is a design follow-up; the service still accepts any owned folder node it is given.
+- Team `/w/<workspaceId>/knowledge/new` is URL-reachable for a member who can write, because the retained composer flow uses it; no team surface offers a new-document, folder, import or duplicate entry. Publishing is the only UI path to add team content, and the create request is still authorized and refused by the service. This is a documented residual, not a hidden capability.
 
 ## Unpublish, restore and rename
 
