@@ -36,11 +36,18 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
     );
     return rows[0] ? map(rows[0]) : null;
   }
-  async listUnreadByRecipient(recipientUserId: string): Promise<ShareCommentEvent[]> {
+  async listUnreadByRecipient(
+    recipientUserId: string,
+    before?: { createdAt: Date; id: string },
+    limit = 100,
+  ): Promise<ShareCommentEvent[]> {
+    const cursor = before ? "AND (e.created_at < ? OR (e.created_at = ? AND e.id < ?))" : "";
     const rows = await this.connection.query<DbRow[]>(
       `SELECT e.* FROM share_comment_events e JOIN workspaces w ON w.id=e.workspace_id
-       WHERE ${OWNED} AND e.read_at IS NULL ORDER BY e.created_at DESC, e.id DESC LIMIT 100`,
-      [recipientUserId, recipientUserId],
+       WHERE ${OWNED} AND e.read_at IS NULL ${cursor} ORDER BY e.created_at DESC, e.id DESC LIMIT ?`,
+      before
+        ? [recipientUserId, recipientUserId, before.createdAt, before.createdAt, before.id, limit]
+        : [recipientUserId, recipientUserId, limit],
     );
     return rows.map(map);
   }
