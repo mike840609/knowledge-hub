@@ -103,9 +103,9 @@ export function ResultListSkeleton() {
 const NOTIFICATION_ROW_WIDTHS = ["w-3/4", "w-2/3", "w-4/5"];
 
 /** A discussion notification: title, one line of context, then its metadata. */
-export function NotificationListSkeleton({ compact = false }: { compact?: boolean }) {
+export function NotificationListSkeleton() {
   return (
-    <div className={compact ? "space-y-3 px-4 py-3" : "space-y-3 py-3"}>
+    <div className="space-y-3 py-3">
       <LoadingStatus>Loading comments</LoadingStatus>
       <div aria-hidden="true" className="space-y-4">
         {NOTIFICATION_ROW_WIDTHS.map((width, index) => (
