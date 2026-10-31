@@ -138,7 +138,7 @@ allowBuilds:
   unrs-resolver: true
 ```
 
-`publicHoistPattern` 對應此 repository 目前依賴的 root hoisting。`packageImportMethod: clone-or-copy` 是必要的：若省略，pnpm 可能從共用 store hardlink 套件，`patch-package` 就會修改該 store，影響所有使用它的專案。下方的 `pnpm store status` 說明只在這個設定成立時有效。請不要把這個檔案和 `pnpm-lock.yaml` 提交進 Git，例如：
+`publicHoistPattern` 對應此 repository 目前依賴的 root hoisting：它匯入 `mdast-util-to-hast`、`mdast-util-gfm` 與 `@next/eslint-plugin-next` 時並未宣告這些依賴；正式解是把這些依賴宣告進 `package.json`。`packageImportMethod: clone-or-copy` 是必要的：若省略，pnpm 可能從共用 store hardlink 套件，`patch-package` 就會修改該 store，影響所有使用它的專案。下方的 `pnpm store status` 說明只在這個設定成立時有效。請不要把這個檔案和 `pnpm-lock.yaml` 提交進 Git，例如：
 
 ```bash
 exclude="$(git rev-parse --path-format=absolute --git-common-dir)/info/exclude"

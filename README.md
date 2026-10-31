@@ -140,7 +140,7 @@ allowBuilds:
   unrs-resolver: true
 ```
 
-`publicHoistPattern` matches the root hoisting this repository currently relies on. `packageImportMethod: clone-or-copy` is required: without it pnpm may hardlink packages from the shared store, and `patch-package` would then modify that store for every project that uses it. The `pnpm store status` note below only holds with this setting. Keep this file and `pnpm-lock.yaml` out of Git, for example:
+`publicHoistPattern` matches the root hoisting this repository currently relies on: it imports `mdast-util-to-hast`, `mdast-util-gfm`, and `@next/eslint-plugin-next` without declaring them; declaring them is the durable fix. `packageImportMethod: clone-or-copy` is required: without it pnpm may hardlink packages from the shared store, and `patch-package` would then modify that store for every project that uses it. The `pnpm store status` note below only holds with this setting. Keep this file and `pnpm-lock.yaml` out of Git, for example:
 
 ```bash
 exclude="$(git rev-parse --path-format=absolute --git-common-dir)/info/exclude"
