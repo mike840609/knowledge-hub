@@ -356,6 +356,8 @@ export function KnowledgeTree({
   const reorderOperation = useRef(0);
   const expectedReorder = useRef<{ id: string; parentId: string | null; position: number } | null>(null);
   const queuedReorder = useRef<{ id: string; direction: -1 | 1 } | null>(null);
+  const reorderReplySeen = useRef(false);
+  const [reorderReplyVersion, markReorderReply] = useState(0);
   const focusAfterReorder = useRef<string | null>(null);
   const [announcement, setAnnouncement] = useState({ text: "", sequence: 0 });
   const announce = (text: string) => setAnnouncement((previous) => ({ text, sequence: previous.sequence + 1 }));
@@ -376,18 +378,20 @@ export function KnowledgeTree({
   });
   useEffect(() => {
     const expected = expectedReorder.current;
-    if (reordering.current && expected) {
-      const row = itemById.get(expected.id);
-      if (!row || row.parentId !== expected.parentId || row.position !== expected.position) return;
-    }
+    // A matching tree may arrive before the PATCH response. Never start a queued
+    // write until both the server reply and the refreshed position are confirmed.
+    if (!reordering.current || !expected || !reorderReplySeen.current) return;
+    const row = itemById.get(expected.id);
+    if (!row || row.parentId !== expected.parentId || row.position !== expected.position) return;
     reordering.current = false;
+    reorderReplySeen.current = false;
     expectedReorder.current = null;
     const queued = queuedReorder.current;
     queuedReorder.current = null;
     const item = queued ? itemById.get(queued.id) : undefined;
     if (queued && item) void reorder(item, queued.direction);
-    // The dependency is "the tree arrived"; `reorder` reads the render this effect is in, which is that one.
-  }, [items]);
+    // Recheck on either event: the refreshed tree or the response settling.
+  }, [items, reorderReplyVersion]);
 
   useEffect(() => {
     const id = focusAfterReorder.current;
@@ -414,6 +418,7 @@ export function KnowledgeTree({
       return;
     }
     reordering.current = true;
+    reorderReplySeen.current = false;
     drag.invalidatePending();
     const operation = ++reorderOperation.current;
     expectedReorder.current = { id: item.id, parentId: item.parentId, position: step.position };
@@ -424,10 +429,13 @@ export function KnowledgeTree({
     const ok = await onReorder({ nodeId: item.id, position: step.position });
     if (reorderOperation.current !== operation) return;
     if (ok) {
+      reorderReplySeen.current = true;
+      markReorderReply((version) => version + 1);
       announce(reorderedNode(item.label, direction < 0 ? "up" : "down", step.index, step.count));
     } else {
       focusAfterReorder.current = null;
       reordering.current = false;
+      reorderReplySeen.current = false;
       expectedReorder.current = null;
       queuedReorder.current = null;
     }
