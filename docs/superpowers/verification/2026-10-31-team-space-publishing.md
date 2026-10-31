@@ -2,7 +2,7 @@
 
 Date: 2026-10-31 (Asia/Taipei).
 Branch: `docs/team-space-publishing`.
-HEAD during the recorded gates: `f256bf7d` plus this task's working tree (new e2e spec, fixtures, documentation and the smoke-catalog update). The work is committed as `test: verify team publishing workflow and rollout`.
+HEAD during the post-fix gates: `7b8f43dd` (the final whole-branch review fix wave). The feature was originally recorded at `f256bf7d` plus this task's working tree; after the final review, commit `7b8f43dd` fixed five Important findings (team-visible “no longer updated”, pending no-delivery reconcile, quadratic projection/notice reads, and event retention) and the focused team e2e, `make verify`, full integration and team smoke were re-run. This record is committed after that run.
 Spec: `docs/superpowers/specs/2026-10-30-team-space-publishing-design.md`. Plan: `docs/superpowers/plans/2026-10-31-team-space-publishing.md`.
 
 ## Scope
@@ -17,15 +17,15 @@ Environment: macOS, Node v24.6.0, Playwright 1.63.0 with the installed Chromium,
 
 | Command | Result |
 | --- | --- |
-| `npm run test:e2e -- tests/e2e/zz-team-publishing.spec.ts` | **PASS** — 7 tests, 25.8s in the browser stage; 102.42s including build; zero failed, flaky or skipped. |
-| `make verify` | **PASS** — unit **339 files / 4,077 tests passed**; `tsc --noEmit` clean; ESLint clean; production build compiled. |
-| `npm run test:integration` | **PASS** — **111 files / 1,131 tests passed**. |
-| `npm run test:e2e:smoke` | **PASS** — **15 tests passed**, 0 failed/flaky/skipped; includes all seven new team flows. |
+| `npm run test:e2e -- tests/e2e/zz-team-publishing.spec.ts` | **PASS (post-fix)** — 7 tests, 32.2s in the browser stage; 119.90s including build; zero failed, flaky or skipped. |
+| `make verify` | **PASS (post-fix)** — unit **340 files / 4,080 tests passed**; `tsc --noEmit` clean; ESLint clean; production build compiled. |
+| `npm run test:integration` | **PASS (post-fix)** — **112 files / 1,135 tests passed**. |
+| `npm run test:e2e:smoke` | **PASS (post-fix)** — **15 tests passed**, 42.3s browser stage; 0 failed/flaky/skipped; includes all seven new team flows. |
 | `npm run test:e2e:smoke:personal` | **FAIL (pre-existing, not this feature)** — 3 passed, 1 failed: `personal-workspace.spec.ts` → after “Restore revision 1”, the editor shows the recovered draft (“Persistent draft body”) instead of the restored “Original body”. Reproduced identically at `main` `2aada14f` with the same command (3 passed, 1 failed), where none of this feature's code exists. No product or unrelated test was changed to hide it. |
 
 `make verify` initially failed only `tests/unit/e2e-smoke-selection.test.ts`, whose catalog pins the approved Team smoke flows; the seven new approved flows are now declared there. Nothing product-side was corrected by that change.
 
-All recorded gates ran on the final product behaviour and the final e2e assertions. The commits after the gate runs change only this record, the operations documentation and one e2e comment; no product or test behaviour differs from what was run.
+The final whole-branch review found no Critical issues and five Important ones: team-visible “no longer updated”, reconcile of a pending contribution with no delivery, quadratic publication projection, quadratic sync-notice matching, and missing event/delivery retention. Commit `7b8f43dd` fixed all five and added the retention script; the team e2e, `make verify`, full integration and team smoke were then re-run on that commit and all passed. The commits after these post-fix runs change only this record.
 
 ## End-to-end cases
 
