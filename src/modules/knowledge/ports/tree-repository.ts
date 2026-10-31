@@ -1,3 +1,4 @@
+import type { TreeChainNode } from "../domain/document-share-link";
 import type { KnowledgeTreeNode } from "../domain/tree-node";
 
 export type TreeViewNode = KnowledgeTreeNode & { title: string | null; pageIcon?: string | null; documentStatus: "ACTIVE" | "ARCHIVED" | null; currentRevisionId: string | null };
@@ -17,8 +18,12 @@ export interface TreeRepository {
   insert(node: KnowledgeTreeNode): Promise<void>;
   insertMany(nodes: readonly KnowledgeTreeNode[]): Promise<void>;
   findById(id: string): Promise<KnowledgeTreeNode | null>;
+  /** The one node that places a document (`uq_tree_one_document`), or null. */
+  findByDocumentId(documentId: string): Promise<KnowledgeTreeNode | null>;
   lockById(id: string): Promise<KnowledgeTreeNode | null>;
   listBySource(sourceId: string): Promise<TreeViewNode[]>;
+  /** The ACTIVE descendants of one folder, in `listBySource`'s projection and sibling order; the folder itself is not included. */
+  listSubtree(sourceId: string, folderNodeId: string): Promise<TreeViewNode[]>;
   updateParent(nodeId: string, parentId: string | null, actorId: string): Promise<void>;
   updateName(nodeId: string, name: string, actorId: string): Promise<void>;
   updatePosition(nodeId: string, position: number, actorId: string): Promise<void>;
@@ -27,4 +32,8 @@ export interface TreeRepository {
   updateStatus(nodeId: string, status: "ACTIVE" | "ARCHIVED", actorId: string): Promise<void>;
   updateStatusForDocument(documentId: string, status: "ACTIVE" | "ARCHIVED", actorId: string): Promise<void>;
   hasDescendant(nodeId: string, possibleDescendantId: string): Promise<boolean>;
+  /** The node, then each parent in turn through `parent_id`, at most 1000 nodes; empty when the node does not exist. */
+  listChain(nodeId: string): Promise<TreeChainNode[]>;
+  /** Each named document's chain (its node, then parents upward), for many documents in few statements. */
+  listChainsByDocumentIds(documentIds: readonly string[], sourceId: string): Promise<Map<string, TreeChainNode[]>>;
 }

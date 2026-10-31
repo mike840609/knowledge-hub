@@ -72,6 +72,7 @@ describe("review remains separate from SOURCE_MANAGED Folder Sync", () => {
     expect(JSON.stringify(outdated)).not.toContain("Stable selected passage.");
     expect((await f.reviews.queryForOwner(f.caller, f.documentId)).threads[0].originalAnchor.exact).toBe(input.anchor.exact);
     const markdown = await f.shares.readShared(f.token);
+    if (markdown.kind !== "DOCUMENT") throw new Error("expected a document link");
     expect(markdown.markdown).toBe("# Review\n\nReplacement text only.\n");
     expect(markdown.markdown).not.toContain(input.body);
   });

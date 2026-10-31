@@ -48,6 +48,13 @@ export async function ownerReviewHttp(request: Request, operation:(service:Docum
   const { workspaceHttp } = await import("./workspace-http");
   return workspaceHttp(async (services,caller)=>operation(services.reviews,caller),status);
 }
+/** The document a folder link's page is reading (folder share spec §6): absent on a document link's page, else a string the service judges. */
+export const SHARE_REVIEW_DOCUMENT = ["documentId"] as const;
+export async function shareReviewDocument(body:Record<string,unknown>):Promise<string|undefined> {
+  if(body.documentId===undefined || typeof body.documentId==="string") return body.documentId;
+  const { DomainError } = await import("@/shared/domain/errors");
+  throw new DomainError("INVALID_REQUEST","Provide documentId as a string.");
+}
 export async function reviewBody(request:Request):Promise<Record<string,unknown>> {
   const { DomainError } = await import("@/shared/domain/errors");
   let value:unknown;try {value=await request.json();}catch {throw new DomainError("INVALID_REQUEST","Provide a valid JSON object.");}

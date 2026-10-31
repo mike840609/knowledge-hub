@@ -101,7 +101,12 @@ function DocumentLink({
   );
 }
 
-export function MarkdownAnchor({ links, ...props }: AnchorProps & { links?: RenderedLinks }) {
+/**
+ * `unresolvedAsText`: a link that `links` does not resolve reads as its text, exactly as with no
+ * `links` at all. A shared folder page is given only the links that land inside the folder, and
+ * must not tell a link that leaves it from one that goes nowhere (folder share spec §5).
+ */
+export function MarkdownAnchor({ links, unresolvedAsText = false, ...props }: AnchorProps & { links?: RenderedLinks; unresolvedAsText?: boolean }) {
   const wikiTarget = props[WIKILINK_TARGET];
   const anchor = props[WIKILINK_ANCHOR];
   const { children } = props;
@@ -121,6 +126,7 @@ export function MarkdownAnchor({ links, ...props }: AnchorProps & { links?: Rend
     if (!links) return <span>{children}</span>;
     const resolved = links[linkLookupKey("WIKI", wikiTarget)];
     if (!resolved || resolved.status === "UNRESOLVED") {
+      if (unresolvedAsText) return <span>{children}</span>;
       return (
         <UnresolvedLink what={`No document titled “${wikiTarget}” in this workspace`} createHref={resolved?.status === "UNRESOLVED" ? resolved.createHref : undefined}>
           {children}
@@ -141,6 +147,7 @@ export function MarkdownAnchor({ links, ...props }: AnchorProps & { links?: Rend
     if (!links) return <span>{children}</span>;
     const resolved = links[linkLookupKey("PATH", document.target)];
     if (!resolved || resolved.status === "UNRESOLVED") {
+      if (unresolvedAsText) return <span>{children}</span>;
       return <UnresolvedLink what={`No document at “${document.target}” in this source`}>{children}</UnresolvedLink>;
     }
     return (
@@ -204,11 +211,13 @@ function ResponsiveTable({ children }: { children?: React.ReactNode }) {
  * `links` says where each `[[wikilink]]` and relative `.md` link goes. Without
  * it — a shared page, or anywhere the reader is not in the workspace — those
  * read as plain text rather than as links into content the reader may not
- * have, and nothing is looked up.
+ * have, and nothing is looked up. `unresolvedAsText` reads a link `links` does
+ * not resolve the same way (see `MarkdownAnchor`).
  */
 export function MarkdownBase({
   markdown,
   links,
+  unresolvedAsText,
   remarkPlugins = [],
   rehypePlugins,
   pre = ScrollablePre,
@@ -216,6 +225,7 @@ export function MarkdownBase({
 }: {
   markdown: string;
   links?: RenderedLinks;
+  unresolvedAsText?: boolean;
   /** Run after this file's own: what the reader shows and the editor does not (callouts). */
   remarkPlugins?: PluggableList;
   rehypePlugins?: PluggableList;
@@ -232,7 +242,7 @@ export function MarkdownBase({
         remarkPlugins={[remarkGfm, remarkReviewPaths, remarkHeadingIds, remarkKnowledgeLinks, remarkKnownHtml, ...remarkPlugins]}
         rehypePlugins={rehypePlugins}
         components={{
-          a: (props: AnchorProps) => <LinkedImageScope><MarkdownAnchor {...props} links={links} /></LinkedImageScope>,
+          a: (props: AnchorProps) => <LinkedImageScope><MarkdownAnchor {...props} links={links} unresolvedAsText={unresolvedAsText} /></LinkedImageScope>,
           // Image URL policy (issue #20, see markdown-image-policy.ts):
           // default-deny remote images — only relative Knowledge Hub asset
           // URLs and same-origin absolute URLs render via MarkdownImage;

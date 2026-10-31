@@ -12,8 +12,8 @@ const thread = (overrides: Partial<ReviewThread> = {}): ReviewThread => ({
 const comment = (id: string, author: string, minute: number, overrides: Partial<ReviewComment> = {}): ReviewComment => ({
   ...hidden, id, threadId: "t", authorUserId: author, body: `body ${id}`, createdAt: at(minute), editedAt: null, deletedAt: null, idempotencyKey: id, requestHash: id, ...overrides,
 });
-const summarize = (comments: ReviewComment[], overrides: { seenAt?: Date; linkValid?: boolean; thread?: Partial<ReviewThread> } = {}) =>
-  summarizeFollowedThread({ thread: thread(overrides.thread), comments, userId: "reader", seenAt: overrides.seenAt ?? at(1), linkValid: overrides.linkValid ?? true });
+const summarize = (comments: ReviewComment[], overrides: { seenAt?: Date; linkValid?: boolean; thread?: Partial<ReviewThread>; excludeCommentIds?: ReadonlySet<string> } = {}) =>
+  summarizeFollowedThread({ thread: thread(overrides.thread), comments, userId: "reader", seenAt: overrides.seenAt ?? at(1), linkValid: overrides.linkValid ?? true, excludeCommentIds: overrides.excludeCommentIds });
 
 describe("a followed discussion's replies, as the follower's Inbox reads them", () => {
   it("counts replies by others after the follower last saw it, and names the latest", () => {
@@ -22,6 +22,13 @@ describe("a followed discussion's replies, as the follower's Inbox reads them", 
   });
   it("never counts the follower's own words, but still names the latest", () => {
     expect(summarize([comment("a", "reader", 0), comment("b", "reader", 5)])).toMatchObject({ unread: 0, latestReply: null, latest: { id: "b" } });
+  });
+  it("leaves an excluded reply out of unread, and names the previous reply as latest", () => {
+    const comments = [comment("a", "reader", 0), comment("b", "owner", 2), comment("c", "other", 3)];
+    expect(summarize(comments, { excludeCommentIds: new Set(["c"]) })).toMatchObject({ unread: 1, latestReply: { id: "b" }, latest: { id: "c" } });
+  });
+  it("has no latest reply when the only reply is excluded", () => {
+    expect(summarize([comment("a", "reader", 0), comment("b", "owner", 2)], { excludeCommentIds: new Set(["b"]) })).toMatchObject({ unread: 0, latestReply: null });
   });
   it("names the latest reply by others apart from the latest comment", () => {
     expect(summarize([comment("a", "reader", 0), comment("b", "owner", 2), comment("c", "reader", 3)])).toMatchObject({ unread: 1, latestReply: { id: "b" }, latest: { id: "c" } });

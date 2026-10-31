@@ -19,6 +19,7 @@ function context(overrides: Partial<ActionContext> = {}): ActionContext {
   return {
     workspaceId: "w1",
     workspaceType: "TEAM",
+    isPersonalOwner: true,
     can: { ...allCapabilities },
     confirmed: true,
     ...overrides,

@@ -238,7 +238,7 @@ test("a folder row's menu is its actions, a rule, then Archive alone", async ({ 
   await row(page, folder).click({ button: "right" });
   await expect(page.getByRole("menu")).toBeVisible(ROUND_TRIP);
   const shape = await menuShape(page.getByRole("menu"));
-  expect(shape).toEqual(["New document here", "New folder here", "Rename folder", "Move folder…", RULE, "Archive folder"]);
+  expect(shape).toEqual(["Share link…", "New document here", "New folder here", "Rename folder", "Move folder…", RULE, "Archive folder"]);
   expectRulesOnlyBetweenItems(shape);
 });
 

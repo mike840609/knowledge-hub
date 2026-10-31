@@ -169,3 +169,35 @@ describe("MariaDbUserRepository account writes", () => {
     });
   });
 });
+
+describe("MariaDbUserRepository.searchExisting", () => {
+  it("matches name_en case-insensitively", async () => {
+    const users = new MariaDbUserRepository(pool);
+    const user = { id: uuidv7(), emp_id: "E1234", name: "陳小明", org_code: "RD" };
+    await users.insert(user, null, "Ming Chen");
+
+    for (const query of ["ming", "CHEN"]) {
+      const found = (await users.searchExisting(query, 10)).find(row => row.id === user.id);
+      expect(found?.nameEn).toBe("Ming Chen");
+    }
+  });
+
+  it("matches name and emp_id, emp_id case-insensitively", async () => {
+    const users = new MariaDbUserRepository(pool);
+    const user = { id: uuidv7(), emp_id: "E5678", name: "林大華", org_code: "RD" };
+    await users.insert(user, null, "Dahua Lin");
+
+    for (const query of ["大華", "E567", "e567"]) {
+      expect((await users.searchExisting(query, 10)).some(row => row.id === user.id)).toBe(true);
+    }
+  });
+
+  it("returns nameEn null when absent", async () => {
+    const users = new MariaDbUserRepository(pool);
+    const user = { id: uuidv7(), emp_id: "E9999", name: "無英文名", org_code: "RD" };
+    await users.insert(user);
+
+    const found = (await users.searchExisting("無英文名", 10)).find(row => row.id === user.id);
+    expect(found?.nameEn).toBeNull();
+  });
+});

@@ -69,6 +69,17 @@ it("sends an active draft back to the document page", async () => {
   expect(mocks.redirect).toHaveBeenCalledWith("/w/ws/knowledge/src/doc");
 });
 
+it("keeps an active draft on the recovery page when writing permission is lost", async () => {
+  mocks.model.mockResolvedValue({
+    draft: { key: "draft:doc", title: "Draft", markdown: "Body", updatedAt: "2026-10-24T00:00:00.000Z", metadata: {}, metadataMayDiffer: false },
+    document: { documentId: "doc", sourceId: "src", status: "ACTIVE", sourceStatus: "ACTIVE", ownership: "HUB_MANAGED", title: "Draft" },
+    canRestore: false, canWrite: false, sourceArchived: false, workspaceArchived: false, folderArchived: false, treeNodeMissing: false,
+  });
+  const result = await DraftRecoveryPage({ params: Promise.resolve({ workspaceId: "ws", sourceId: "src", documentId: "doc" }) });
+  expect(renderToStaticMarkup(result as ReactElement)).toContain("do not have permission");
+  expect(mocks.redirect).not.toHaveBeenCalled();
+});
+
 it("redirects a stale recovery URL to an active document when the draft is gone", async () => {
   mocks.model.mockResolvedValue({
     draft: null,

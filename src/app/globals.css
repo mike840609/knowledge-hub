@@ -178,6 +178,14 @@ input[type="search"]::-webkit-search-cancel-button:hover {
     @apply outline-none focus-visible:ring-2 focus-visible:ring-kh-focus;
   }
 
+  /* A shared page's first stop: off-screen until focused, then at the top-left. */
+  .kh-skip-link {
+    @apply kh-focus-ring fixed left-4 top-4 z-50 -translate-y-24 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-body text-kh-text shadow-popover;
+  }
+  .kh-skip-link:focus {
+    @apply translate-y-0;
+  }
+
   .kh-interactive-row {
     @apply kh-focus-ring rounded-md transition-colors hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover;
   }
@@ -739,15 +747,17 @@ input[type="search"]::-webkit-search-cancel-button:hover {
    itself and closes itself. */
 .kh-share-page .kh-review-entry,
 .kh-share-page .kh-review-document,
-.kh-share-page > footer {
+:is(.kh-share-page, .kh-share-folder-body) > footer {
   /* Centred, as `mx-auto` would, but as a length: a margin cannot slide from `auto`. */
   margin-inline: max(0px, calc((100% - theme("maxWidth.reading")) / 2)) auto;
   transition: margin-inline-start 120ms ease-out;
 }
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) :is(.kh-review-entry, .kh-review-document),
+.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-folder-body > footer,
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) > footer {
   margin-inline-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.reading") - 320px)));
 }
+.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-folder-body > footer,
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) > footer { max-width: calc(theme("maxWidth.reading") + 320px); }
 /* The outline hangs off the column's left edge where the centred column leaves room for it (82rem:
    224px, a w-52 rail and its edge), else it is a disclosure above the Comments row. With the
@@ -764,6 +774,35 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 @media (max-width: 87.99rem) {
   .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-outline-rail { display: none; }
   .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-outline > .kh-outline-inline { display: block; }
+}
+/* A shared folder page (folder share spec §4): the folder's tree is a rail pinned under the bar at
+   the window's left, and everything else centres in the room beside it. The outline hangs off the
+   column's left edge only where that room holds column and outline both (256 + 860 + 2 x 224 =
+   1564px, 98rem), else it is the disclosure above the title. Below `sm` the tree is behind a button
+   in the bar and the page is the shared document page it always was. */
+.kh-share-folder { --kh-tree-rail: 16rem; }
+@media (min-width: 640px) {
+  .kh-share-folder-body { padding-inline-start: var(--kh-tree-rail); }
+  /* The bar with Comments is the review panel's, so it sits inside the body; it spans the window as
+     the bar of a folder with no document does, its tree button and brand over the tree's column. */
+  .kh-share-folder-bar { margin-inline-start: calc(-1 * var(--kh-tree-rail)); }
+  /* Two classes: the plain `.kh-share-page` room below is declared later and would otherwise win. */
+  .kh-share-page.kh-share-folder { --kh-outline-room: calc((100vw - var(--kh-tree-rail) - theme("maxWidth.reading")) / 2); }
+}
+@media (min-width: 82rem) and (max-width: 97.99rem) {
+  .kh-share-folder .kh-share-outline-rail { display: none; }
+  .kh-share-folder .kh-share-outline > .kh-outline-inline { display: block; }
+}
+/* Comments sit beside the article where the room beside the tree is what a shared page has from
+   1200px (256 + 1200 = 1456px, 91rem); below it they open in the drawer, as a narrower shared page's do. */
+@media (min-width: 1200px) and (max-width: 90.99rem) {
+  .kh-share-folder .kh-review-document { --review-rail: drawer; }
+}
+/* With them open the outline keeps its rail only where tree, outline, column and comments all fit
+   (256 + 224 + 860 + 320 = 1660px, 103.75rem); below that it folds into the disclosure. */
+@media (max-width: 103.74rem) {
+  .kh-share-folder:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-outline-rail { display: none; }
+  .kh-share-folder:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-outline > .kh-outline-inline { display: block; }
 }
 /* A heading jumped to lands below the pinned bar (57px), with 15px above it, not under the bar.
    72px is also inside the outline's 96px reading line, so the entry clicked is the one highlighted (spec §3). */
@@ -813,6 +852,13 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-share-page { --kh-outline-room: calc((100vw - theme("maxWidth.reading")) / 2); --kh-outline-slot: theme("spacing.52"); }
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) {
   --kh-outline-room: min(calc((100vw - theme("maxWidth.reading")) / 2), calc(100vw - theme("maxWidth.reading") - 320px));
+}
+/* A folder page's room is beside the tree, with the comments rail open as without it. One class more
+   than the rule above, which would otherwise win and measure the room from the window's edge. */
+@media (min-width: 640px) {
+  .kh-share-page.kh-share-folder:has(.kh-review-document[data-review-inline][data-review-open]) {
+    --kh-outline-room: min(calc((100vw - var(--kh-tree-rail) - theme("maxWidth.reading")) / 2), calc(100vw - var(--kh-tree-rail) - theme("maxWidth.reading") - 320px));
+  }
 }
 @container kh-document (min-width: 88rem) {
   .kh-document-pane .kh-outline-rail-left { display: block; }

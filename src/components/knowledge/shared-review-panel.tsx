@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ReviewAnchor, ReviewThreadView } from "@/modules/knowledge/domain/document-review";
 import { useReviewHighlights } from "./review-highlights";
 import { LogIn, RefreshCw, MessageSquare, MessageSquarePlus, X } from "lucide-react";
@@ -16,8 +16,16 @@ import { awaitingReader, newComments, parseDismissed, sharedDismissedKey } from 
 import { readStored, removeStored, writeStored } from "@/components/shell/use-persisted-state";
 
 type DiscussionResult = { threads: ReviewThreadView[]; revisionId: string; writesEnabled: boolean; callerUserId: string | null };
-/** `brand` and `actions` (the page's own: Save, Open) share the one pinned bar with Comments, so nothing stands between it and the title. */
-export function SharedReviewPanel({ token, revisionId, markdown, signInHref, brand, actions, children }: { token: string; revisionId: string; markdown: string; signInHref: string; brand?: ReactNode; actions?: ReactNode; children: ReactNode }) {
+/**
+ * `brand` and `actions` (the page's own: Save, Open) share the one pinned bar with Comments, so nothing stands between it and the title.
+ * On a folder link's page `documentId` names the document being read: every request carries it, and what this
+ * reader keeps on the device (dismissals, an unsent comment) is kept per document. The bar is `wide` there, spanning
+ * the window over the tree as the folder page's own bar does, with `brand` holding the tree, brand and breadcrumb.
+ */
+export function SharedReviewPanel({ token, documentId, revisionId, markdown, signInHref, brand, actions, wide = false, children }: { token: string; documentId?: string; revisionId: string; markdown: string; signInHref: string; brand?: ReactNode; actions?: ReactNode; wide?: boolean; children: ReactNode }) {
+  // A document link's page keeps the keys it always had, so a reader's stored drafts and dismissals still match.
+  const kept = documentId ? `${token}:${documentId}` : token;
+  const scope = useMemo(() => (documentId ? { token, documentId } : { token }), [token, documentId]);
   const [result, setResult] = useState<DiscussionResult>();
   const [error, setError] = useState<string>();
   const [activeThreadId, setActiveThreadId] = useState<string>();
@@ -33,13 +41,13 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, bra
   // so the rail stays shut on those and opens again for one that arrives later (as the owner's does).
   const changeOpen = useCallback((next: boolean) => {
     setOpen(next);
-    if (next) removeStored("local", sharedDismissedKey(token));
-    else writeStored("local", sharedDismissedKey(token), JSON.stringify(awaitingReader(shown.current?.threads ?? [])));
+    if (next) removeStored("local", sharedDismissedKey(kept));
+    else writeStored("local", sharedDismissedKey(kept), JSON.stringify(awaitingReader(shown.current?.threads ?? [])));
     if (!next) {
       setActiveThreadId(undefined);
       if (reviewRailInline()) entryRef.current?.focus({ preventScroll: true });
     }
-  }, [token]);
+  }, [kept]);
   const toggle = useCallback(() => changeOpen(!open), [changeOpen, open]);
   const revisionChanged = !!result && result.revisionId !== revisionId;
   const canComment = !!result?.writesEnabled && !revisionChanged;
@@ -50,28 +58,31 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, bra
   useEffect(() => {
     if (autoOpened.current || !result || !inline) return;
     autoOpened.current = true;
-    const dismissed = parseDismissed(readStored("local", sharedDismissedKey(token)));
+    const dismissed = parseDismissed(readStored("local", sharedDismissedKey(kept)));
     if (awaitingReader(result.threads).some(id => !dismissed.includes(id))) setOpen(true);
-  }, [result, inline, token]);
+  }, [result, inline, kept]);
   // `?thread=` (an Inbox entry) opens the discussions on that one, once, where it is listed; an unknown id does nothing.
   const deepLinked = useRef(false);
+  const [arrivedThreadId, setArrivedThreadId] = useState<string>();
   useEffect(() => {
     if (deepLinked.current || !result) return;
     deepLinked.current = true;
     const thread = result.threads.find(candidate => candidate.id === new URLSearchParams(window.location.search).get("thread"));
     if (!thread) return;
-    setFilter("ALL"); setActiveThreadId(thread.id); setOpen(true);
+    setFilter("ALL"); setActiveThreadId(thread.id); setArrivedThreadId(thread.id); setOpen(true);
     const anchor = revisionChanged ? undefined : thread.currentAnchor.anchor;
     const root = document.querySelector<HTMLElement>("[data-review-document]");
     if (anchor && root) requestAnimationFrame(() => requestAnimationFrame(() => focusReviewAnchor(root, markdown, anchor)));
   }, [result, revisionChanged, markdown]);
-  // Looking at a discussion one follows marks its replies seen. A failure retries once, then waits for the next look.
+  // Looking at a discussion one follows, or one the Inbox brought the reader to (a mention need not be
+  // followed), marks it seen. A failure retries once, then waits for the next look.
   const following = result?.threads.find(thread => thread.id === activeThreadId)?.following;
+  const seeing = following || (!!activeThreadId && activeThreadId === arrivedThreadId);
   useEffect(() => {
-    if (!activeThreadId || !following) return;
-    const send = () => reviewRequest(`/api/share-review/threads/${activeThreadId}/seen`, { token });
+    if (!activeThreadId || !seeing) return;
+    const send = () => reviewRequest(`/api/share-review/threads/${activeThreadId}/seen`, scope);
     void send().catch(() => send()).then(() => window.dispatchEvent(new Event("kh:notification-changed")), () => undefined);
-  }, [activeThreadId, following, token]);
+  }, [activeThreadId, seeing, scope]);
   useReviewHighlights(markdown, revisionChanged ? undefined : result?.threads, activeThreadId);
   const selection = useReviewSelection(readingRef, markdown, `${token}:${revisionId}`);
   // A newer reading, held back while it would move the cards: the reader chooses when to see it.
@@ -81,8 +92,8 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, bra
   const load = useCallback(async () => {
     setError(undefined);
     if (shown.current) setRefreshing(true);
-    try { setResult(await reviewRequest<DiscussionResult>("/api/share-review/threads/query", { token })); setArrived(undefined); } catch (failure) { if (!shown.current) setResult(undefined); setError(failure instanceof Error ? failure.message : "Discussions are unavailable."); } finally { setRefreshing(false); }
-  }, [token]);
+    try { setResult(await reviewRequest<DiscussionResult>("/api/share-review/threads/query", scope)); setArrived(undefined); } catch (failure) { if (!shown.current) setResult(undefined); setError(failure instanceof Error ? failure.message : "Discussions are unavailable."); } finally { setRefreshing(false); }
+  }, [scope]);
   const allResolved = !!result && result.threads.length > 0 && result.threads.every(thread => thread.status === "RESOLVED");
   useEffect(() => { void load(); }, [load]);
   // Coming back to the tab reads the discussions again. Nothing new is taken in quietly; new
@@ -91,23 +102,23 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, bra
     const back = async () => {
       if (document.visibilityState !== "visible" || !shown.current) return;
       try {
-        const next = await reviewRequest<DiscussionResult>("/api/share-review/threads/query", { token });
+        const next = await reviewRequest<DiscussionResult>("/api/share-review/threads/query", scope);
         const count = shown.current ? newComments(shown.current.threads, next.threads) : 0;
         if (count === 0) setResult(next); else setArrived({ result: next, count });
       } catch { /* What is shown stays; Refresh still reads again. */ }
     };
     document.addEventListener("visibilitychange", back);
     return () => document.removeEventListener("visibilitychange", back);
-  }, [token]);
+  }, [scope]);
   const showArrived = () => { if (!arrived) return; setResult(arrived.result); setArrived(undefined); changeOpen(true); };
-  useEffect(() => { setActiveThreadId(undefined); }, [token, revisionId, markdown]);
+  useEffect(() => { setActiveThreadId(undefined); }, [kept, revisionId, markdown]);
   useEffect(() => {
     const activate = (event: Event) => setActiveThreadId((event as CustomEvent<string>).detail);
     document.addEventListener("review-focus-thread", activate);
     return () => document.removeEventListener("review-focus-thread", activate);
   }, []);
   // An unsent new comment is kept with its passage, so a reload brings both back (spec amendment 2026-10-21).
-  const draftKey = reviewDraftKey("new", token);
+  const draftKey = reviewDraftKey("new", kept);
   const anchorKey = `${draftKey}:anchor`;
   const [restored, setRestored] = useState(false);
   const discardDraft = useCallback(() => { removeStored("session", draftKey); removeStored("session", anchorKey); setRestored(false); }, [draftKey, anchorKey]);
@@ -120,18 +131,20 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, bra
     if (anchor && readStored("session", draftKey)?.trim()) { selection.choose(anchor); setRestored(true); setOpen(true); }
     else discardDraft();
   }, [result, canComment, anchorKey, draftKey, selection, discardDraft]);
-  const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} draftKey={draftKey} restored={restored} onCancel={() => { discardDraft(); selection.clear(); }} onSubmit={async (body, idempotencyKey) => {
-    const created = await reviewRequest<{ id: string }>("/api/share-review/threads", { token, expectedRevisionId: revisionId, anchor: selection.chosen, body, idempotencyKey });
+  // Only a signed-in reader who may write is offered `@`: the candidate route refuses anyone else.
+  const mentionScope = result?.writesEnabled && !anonymous ? scope : undefined;
+  const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} draftKey={draftKey} restored={restored} mentionScope={mentionScope} onCancel={() => { discardDraft(); selection.clear(); }} onSubmit={async (body, idempotencyKey, mentions) => {
+    const created = await reviewRequest<{ id: string }>("/api/share-review/threads", { ...scope, expectedRevisionId: revisionId, anchor: selection.chosen, body, idempotencyKey, ...(mentions.length ? { mentions } : {}) });
     discardDraft(); selection.clear(); setFilter(current => current === "RESOLVED" ? "OPEN" : current); setActiveThreadId(created.id); await load();
   }} />;
   // Beside its passage where the discussions are a rail; at the top of the drawer, which covers the passage, where they are not.
   const draft = composer && inline && !revisionChanged ? { anchor: selection.chosen!, composer } : undefined;
   return <>
-    <div className="sticky top-0 z-20 border-b border-kh-border bg-kh-bg">
-      <div className="kh-review-entry kh-reading-column relative flex min-h-14 items-center justify-between gap-3 py-2">
+    <div className={`sticky top-0 z-20 border-b border-kh-border bg-kh-bg ${wide ? "kh-share-folder-bar" : ""}`}>
+      <div className={wide ? "flex h-14 items-center gap-2 px-4" : "kh-review-entry kh-reading-column relative flex min-h-14 items-center justify-between gap-3 py-2"}>
         {brand}
         {/* -me-3 takes back the last button's padding, so its label ends on the column's edge as the brand starts on it. */}
-        <div className="-me-3 flex min-w-0 items-center justify-end gap-1">
+        <div className={wide ? "-me-3 ml-auto flex shrink-0 items-center gap-1" : "-me-3 flex min-w-0 items-center justify-end gap-1"}>
           <span aria-live="polite">{arrived && <Button type="button" variant="soft" onClick={showArrived} className="max-sm:px-2"><span className="max-sm:hidden">{arrived.count === 1 ? "1 new comment" : `${arrived.count} new comments`}</span><span className="sm:hidden">{arrived.count} new</span></Button>}</span>
           <Button ref={entryRef} type="button" variant="ghost" aria-label={`${open ? "Hide discussions" : "Open discussions"}${result ? `, ${result.threads.length} comments` : ""}${allResolved ? ", all resolved" : ""}`} aria-expanded={open} aria-controls="shared-document-discussions" onPointerDown={event => event.preventDefault()} onClick={toggle} className="max-sm:gap-1 max-sm:px-2">
             <MessageSquare className="size-4" aria-hidden="true" />
@@ -178,10 +191,10 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, bra
       </div>
       {!draft && composer}
       {result && <ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId} focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }} threads={result.threads} writesEnabled={result.writesEnabled} signInHref={anonymous ? signInHref : undefined}
-        follow={anonymous ? undefined : async (threadId, next) => { await reviewRequest(`/api/share-review/threads/${threadId}/follow`, { token, following: next }); await load(); }} reply={async (threadId, body, idempotencyKey) => { await reviewRequest(`/api/share-review/threads/${threadId}/replies`, { token, body, idempotencyKey }); await load(); }}
+        follow={anonymous ? undefined : async (threadId, next) => { await reviewRequest(`/api/share-review/threads/${threadId}/follow`, { ...scope, following: next }); await load(); }} mentionScope={mentionScope} reply={async (threadId, body, idempotencyKey, mentions) => { await reviewRequest(`/api/share-review/threads/${threadId}/replies`, { ...scope, body, idempotencyKey, ...(mentions.length ? { mentions } : {}) }); await load(); }}
         author={result.callerUserId === null ? undefined : {
-          edit: async (threadId, commentId, body) => { await reviewRequest(`/api/share-review/threads/${threadId}/comments/${commentId}/body`, { token, body }); await load(); },
-          remove: async (threadId, commentId) => { await reviewRequest(`/api/share-review/threads/${threadId}/comments/${commentId}/deletion`, { token }); await load(); },
+          edit: async (threadId, commentId, body) => { await reviewRequest(`/api/share-review/threads/${threadId}/comments/${commentId}/body`, { ...scope, body }); await load(); },
+          remove: async (threadId, commentId) => { await reviewRequest(`/api/share-review/threads/${threadId}/comments/${commentId}/deletion`, scope); await load(); },
         }} />}
     </div></ReviewPanelShell>
       </aside>

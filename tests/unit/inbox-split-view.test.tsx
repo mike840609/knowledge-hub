@@ -50,6 +50,7 @@ beforeEach(() => {
     }
     if (url.startsWith("/api/review-notifications/activity")) return json(init.method === "POST" ? { ok: true } : { notifications, nextCursor: null });
     if (url === "/api/share-review/threads/query") return json({ threads: threads[`token:${body.token}`] ?? [], writesEnabled: true, callerUserId: "me", revisionId: "r" });
+    if (url.startsWith("/api/review-mentions/candidates")) return json({ candidates: [] });
     const peek = url.match(/^\/api\/documents\/([^/]+)\/peek\?brief$/);
     if (peek) return json({ title: `Doc ${peek[1]}`, markdown: `Passage of ${peek[1]}.`, revisionId: "r", status: "ACTIVE", sourceStatus: "ACTIVE", linkView: null });
     const owner = url.match(/^\/api\/documents\/([^/]+)\/review-threads$/);
@@ -116,12 +117,25 @@ it("a read entry is not marked again", async () => {
 });
 
 it("a followed discussion is read through its link's token, never the owner's document", async () => {
-  notifications = [entry("f", { kind: "FOLLOW", token: "tok", linkAvailable: true })];
+  // A document link's follow carries no ids but its token (the service leaves the rest empty).
+  notifications = [entry("f", { kind: "FOLLOW", token: "tok", linkAvailable: true, workspaceId: "", documentId: "", sourceId: "" })];
   threads["token:tok"] = [thread("thread-f")];
   await mount();
   await click(row("f"));
   expect(pane()?.textContent).toContain("body of thread-f");
   expect(calls.filter(call => call.url === "/api/share-review/threads/query").map(call => call.body)).toEqual([{ token: "tok" }]);
+  expect(calls.some(call => call.url.startsWith("/api/documents/"))).toBe(false);
+});
+
+it("a discussion followed through a folder link is read, and opened, at its document in that folder", async () => {
+  const documentId = "0192f3a4-0000-7000-8000-000000000002";
+  notifications = [entry("g", { kind: "FOLLOW", token: "tok", linkAvailable: true, workspaceId: "", documentId, sourceId: "" })];
+  threads["token:tok"] = [thread("thread-g")];
+  await mount();
+  await click(row("g"));
+  expect(pane()?.textContent).toContain("body of thread-g");
+  expect(calls.filter(call => call.url === "/api/share-review/threads/query").map(call => call.body)).toEqual([{ token: "tok", documentId }]);
+  expect(pane()?.querySelector("a")?.getAttribute("href")).toBe(`/s/tok?d=${documentId}&thread=thread-g`);
   expect(calls.some(call => call.url.startsWith("/api/documents/"))).toBe(false);
 });
 
@@ -278,4 +292,60 @@ it("a mark that failed is asked again by choosing the entry again", async () => 
   expect(marks()).toEqual(["thread:thread-a", "thread:thread-a"]);
   expect(row("a").textContent).toContain("Read");
   expect(host.querySelector('[role="alert"]')).toBeNull();
+});
+
+const mention = (id: string, over: Partial<ShareCommentNotificationView> = {}) =>
+  entry(`mention:${id}`, { kind: "MENTION", workspaceId: "", documentId: "", sourceId: "", token: "tok", linkAvailable: true, ...over });
+
+it("a mention is labelled, links through its token without prefetch, and shows no reply count", async () => {
+  notifications = [mention("c1", { threadId: "thread-m", authorName: "Ann", excerpt: "see this" })];
+  await mount();
+  const link = row("mention:c1");
+  expect(link.getAttribute("href")).toBe("/s/tok?thread=thread-m");
+  expect(link.textContent).toContain("Mentioned you");
+  expect(link.textContent).toContain("Ann: see this");
+  expect(link.textContent).not.toContain("new replies");
+});
+
+it("a mention opens through the link's token and settles by its own id", async () => {
+  notifications = [mention("c1", { threadId: "thread-m" }), entry("o", { threadId: "thread-m" })];
+  threads["token:tok"] = [thread("thread-m")];
+  await mount();
+  await click(row("mention:c1"));
+  expect(pane()?.textContent).toContain("body of thread-m");
+  expect(calls.filter(call => call.url === "/api/share-review/threads/query").map(call => call.body)).toEqual([{ token: "tok" }]);
+  expect(calls.some(call => call.url.startsWith("/api/documents/"))).toBe(false);
+  expect(marks()).toEqual(["mention:c1"]);
+});
+
+it("a dead mention shows the dead-entry copy and no link", async () => {
+  notifications = [mention("c2", { linkAvailable: false, token: undefined, documentTitle: "", authorName: undefined, excerpt: "", threadId: "" })];
+  await mount();
+  await click(row("mention:c2"));
+  expect(pane()?.textContent).toContain("This link is no longer available.");
+  expect(pane()?.textContent).toContain("A shared discussion");
+  expect(pane()?.querySelector("a")).toBeNull();
+});
+
+it("the owner panel's unread hook ignores mentions", async () => {
+  const { useShareCommentUnread } = await import("@/components/knowledge/share-comment-notifications");
+  unreadNotices = [{ kind: "MENTION", documentId: "doc-x", threadId: "t1" }, { kind: "OWNER", documentId: "doc-x", threadId: "t2" }];
+  let seen: string[] = [];
+  const Probe = () => { seen = [...useShareCommentUnread("doc-x").unreadThreadIds]; return null; };
+  await act(async () => root.render(<Probe />));
+  await act(async () => {});
+  expect(seen).toEqual(["t2"]);
+});
+
+it("a followed discussion's reply offers @ through its link's token", async () => {
+  notifications = [entry("f", { kind: "FOLLOW", token: "tok", linkAvailable: true, workspaceId: "", documentId: "", sourceId: "" })];
+  threads["token:tok"] = [thread("thread-f")];
+  await mount();
+  await click(row("f"));
+  await click([...pane()!.querySelectorAll("button")].find(button => button.textContent === "Reply")!);
+  const textarea = pane()!.querySelector("textarea")!;
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+  await act(async () => { setter.call(textarea, "@an"); textarea.setSelectionRange(3, 3); textarea.dispatchEvent(new Event("input", { bubbles: true })); });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 250)); });
+  expect(calls.some(call => call.url === "/api/review-mentions/candidates?query=an&token=tok")).toBe(true);
 });

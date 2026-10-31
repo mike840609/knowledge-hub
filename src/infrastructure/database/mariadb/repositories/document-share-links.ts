@@ -1,16 +1,23 @@
-import type { ManagedShareLink, ShareManagementQuery } from "@/modules/knowledge/domain/share-management";
+import type { ManagedShareLink, ShareManagementQuery, ShareManagementStatus } from "@/modules/knowledge/domain/share-management";
 import { toLikePattern } from "@/modules/knowledge/domain/search-query";
 import { shareLinkPath } from "@/modules/knowledge/domain/document-share-link";
 import { IntegrityViolationError } from "@/modules/knowledge/domain/errors";
-import type { DocumentShareLink } from "@/modules/knowledge/domain/document-share-link";
-import type { DocumentShareLinkRepository, ShareLinkViewTotals } from "@/modules/knowledge/ports/document-share-link-repository";
+import type { DocumentShareLink, ShareLinkTarget } from "@/modules/knowledge/domain/document-share-link";
+import type { DocumentShareLinkRepository, OpenFolderLink, ShareLinkViewTotals } from "@/modules/knowledge/ports/document-share-link-repository";
 import type { DbRow, QueryConnection } from "./shared";
 import { affectedRows, asDate, asNullableDate, asNumber } from "./shared";
+
+const ID_CHUNK = 500;
+
+function mapTarget(row: DbRow): ShareLinkTarget {
+  if (row.folder_node_id !== null && row.folder_node_id !== undefined) return { kind: "FOLDER", folderNodeId: String(row.folder_node_id) };
+  return { kind: "DOCUMENT", documentId: String(row.document_id) };
+}
 
 function mapLink(row: DbRow): DocumentShareLink {
   return {
     id: String(row.id),
-    documentId: String(row.document_id),
+    target: mapTarget(row),
     token: String(row.token),
     label: row.label === null ? null : String(row.label),
     createdBy: String(row.created_by),
@@ -29,44 +36,84 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
     // predicates remain inside the query so pagination never mixes scopes.
     const state = `CASE WHEN l.revoked_at IS NOT NULL THEN 'revoked'
       WHEN l.expires_at <= ? THEN 'expired'
-      WHEN d.status <> 'ACTIVE' OR s.status <> 'ACTIVE' OR w.lifecycle_state <> 'ACTIVE' OR m.user_id IS NULL THEN 'unavailable'
+      WHEN COALESCE(d.status, f.status) <> 'ACTIVE' OR s.status <> 'ACTIVE' OR w.lifecycle_state <> 'ACTIVE' OR m.user_id IS NULL THEN 'unavailable'
       ELSE 'active' END`;
     const rows = await this.connection.query<DbRow[]>(
       `SET STATEMENT max_statement_time=5 FOR SELECT scoped.*
        FROM (
-         SELECT l.*, d.source_id, r.title, s.name AS source_name, ${state} AS link_status
+         SELECT l.*, s.id AS source_id, COALESCE(r.title, f.name) AS title, s.name AS source_name, ${state} AS link_status
          FROM document_share_links l
-         JOIN knowledge_documents d ON d.id = l.document_id
-         JOIN knowledge_revisions r ON r.id = d.current_revision_id
-         JOIN knowledge_sources s ON s.id = d.source_id
+         LEFT JOIN knowledge_documents d ON d.id = l.document_id
+         LEFT JOIN knowledge_tree_nodes f ON f.id = l.folder_node_id AND f.node_type = 'FOLDER'
+         LEFT JOIN knowledge_revisions r ON r.id = d.current_revision_id
+         JOIN knowledge_sources s ON s.id = COALESCE(d.source_id, f.source_id)
          JOIN workspaces w ON w.id = s.workspace_id
          LEFT JOIN workspace_memberships m ON m.workspace_id = w.id AND m.user_id = l.created_by
          WHERE s.workspace_id = ? AND l.created_by = ? AND w.workspace_type = 'PERSONAL' AND w.personal_owner_user_id = ?
-           AND (? = '' OR r.title COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '!' OR l.label COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '!')
+           AND (r.id IS NOT NULL OR f.id IS NOT NULL)
+           AND (? = '' OR COALESCE(r.title, f.name) COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '!' OR l.label COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '!')
        ) scoped
        WHERE (? = 'all' OR scoped.link_status = ?)
        ORDER BY scoped.created_at DESC, scoped.id DESC LIMIT ? OFFSET ?`,
       [now, workspaceId, callerId, callerId, query.q, toLikePattern(query.q), toLikePattern(query.q), query.status, query.status, limit, offset],
     );
     const totals = await this.viewTotals(rows.map(row => String(row.id)));
-    return rows.map(row => ({
-      id: String(row.id), documentId: String(row.document_id), sourceId: String(row.source_id), title: String(row.title), sourceName: String(row.source_name),
-      label: row.label === null ? null : String(row.label), path: shareLinkPath(String(row.token)), status: String(row.link_status) as ManagedShareLink["status"],
-      createdAt: asDate(row.created_at), expiresAt: asDate(row.expires_at), revokedAt: asNullableDate(row.revoked_at), totalViews: totals.get(String(row.id))?.totalViews ?? 0, lastViewedAt: totals.get(String(row.id))?.lastViewedAt ?? null,
-    }));
+    return rows.map((row): ManagedShareLink => {
+      const base = {
+        id: String(row.id), sourceId: String(row.source_id), title: String(row.title), sourceName: String(row.source_name),
+        label: row.label === null ? null : String(row.label), path: shareLinkPath(String(row.token)), status: String(row.link_status) as ShareManagementStatus,
+        createdAt: asDate(row.created_at), expiresAt: asDate(row.expires_at), revokedAt: asNullableDate(row.revoked_at), totalViews: totals.get(String(row.id))?.totalViews ?? 0, lastViewedAt: totals.get(String(row.id))?.lastViewedAt ?? null,
+      };
+      return row.folder_node_id === null
+        ? { ...base, kind: "DOCUMENT", documentId: String(row.document_id), folderNodeId: null }
+        : { ...base, kind: "FOLDER", documentId: null, folderNodeId: String(row.folder_node_id) };
+    });
+  }
+
+  async listOpenFolderLinks(workspaceId: string, ownerId: string, now: Date): Promise<OpenFolderLink[]> {
+    // The bearer reader's validity, as one query: a folder is listed only while some link to it would open.
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT DISTINCT f.id, f.name
+       FROM document_share_links l
+       JOIN knowledge_tree_nodes f ON f.id = l.folder_node_id AND f.node_type = 'FOLDER' AND f.status = 'ACTIVE'
+       JOIN knowledge_sources s ON s.id = f.source_id AND s.status = 'ACTIVE'
+       JOIN workspaces w ON w.id = s.workspace_id AND w.workspace_type = 'PERSONAL' AND w.lifecycle_state = 'ACTIVE'
+       JOIN workspace_memberships m ON m.workspace_id = w.id AND m.user_id = l.created_by
+       WHERE w.id = ? AND w.personal_owner_user_id = ? AND l.created_by = ?
+         AND l.revoked_at IS NULL AND l.expires_at > ?
+       ORDER BY f.name, f.id`,
+      [workspaceId, ownerId, ownerId, now],
+    );
+    return rows.map(row => ({ folderNodeId: String(row.id), name: String(row.name ?? "") }));
   }
 
   async insert(link: DocumentShareLink): Promise<void> {
     await this.connection.query(
-      `INSERT INTO document_share_links (id, document_id, token, label, created_by, created_at, expires_at, revoked_by, revoked_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [link.id, link.documentId, link.token, link.label, link.createdBy, link.createdAt, link.expiresAt, link.revokedBy, link.revokedAt],
+      `INSERT INTO document_share_links (id, document_id, folder_node_id, token, label, created_by, created_at, expires_at, revoked_by, revoked_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [link.id, link.target.kind === "DOCUMENT" ? link.target.documentId : null, link.target.kind === "FOLDER" ? link.target.folderNodeId : null, link.token, link.label, link.createdBy, link.createdAt, link.expiresAt, link.revokedBy, link.revokedAt],
     );
   }
 
   async findByToken(token: string): Promise<DocumentShareLink | null> {
     const rows = await this.connection.query<DbRow[]>("SELECT * FROM document_share_links WHERE token = ?", [token]);
     return rows[0] ? mapLink(rows[0]) : null;
+  }
+
+  async findById(id: string): Promise<DocumentShareLink | null> {
+    const rows = await this.connection.query<DbRow[]>("SELECT * FROM document_share_links WHERE id = ?", [id]);
+    return rows[0] ? mapLink(rows[0]) : null;
+  }
+
+  async findByIds(ids: readonly string[]): Promise<DocumentShareLink[]> {
+    if (ids.length === 0) return [];
+    const found: DocumentShareLink[] = [];
+    for (let start = 0; start < ids.length; start += ID_CHUNK) {
+      const batch = ids.slice(start, start + ID_CHUNK);
+      const rows = await this.connection.query<DbRow[]>(`SELECT * FROM document_share_links WHERE id IN (${batch.map(() => "?").join(", ")})`, batch);
+      found.push(...rows.map(mapLink));
+    }
+    return found;
   }
 
   async lockById(id: string): Promise<DocumentShareLink | null> {
@@ -86,6 +133,22 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
     const rows = await this.connection.query<DbRow[]>(
       "SELECT COUNT(*) AS active FROM document_share_links WHERE document_id = ? AND revoked_at IS NULL AND expires_at > ?",
       [documentId, now],
+    );
+    return asNumber(rows[0]?.active ?? 0, "active share link count");
+  }
+
+  async listByFolder(folderNodeId: string): Promise<DocumentShareLink[]> {
+    const rows = await this.connection.query<DbRow[]>(
+      "SELECT * FROM document_share_links WHERE folder_node_id = ? ORDER BY created_at DESC, id DESC",
+      [folderNodeId],
+    );
+    return rows.map(mapLink);
+  }
+
+  async countActiveByFolder(folderNodeId: string, now: Date): Promise<number> {
+    const rows = await this.connection.query<DbRow[]>(
+      "SELECT COUNT(*) AS active FROM document_share_links WHERE folder_node_id = ? AND revoked_at IS NULL AND expires_at > ?",
+      [folderNodeId, now],
     );
     return asNumber(rows[0]?.active ?? 0, "active share link count");
   }

@@ -1,4 +1,5 @@
 import { ValidationError } from "./errors";
+import type { MentionedPerson } from "./review-mention";
 export const REVIEW_LIMITS = Object.freeze({ body:3000, quote:512, context:64, visibleThreads:200, visibleOpenPerCreator:20, replies:100, hourlyWrites:30 });
 export type ReviewStatus = "OPEN" | "RESOLVED";
 export type ReviewVisibility = "VISIBLE" | "HIDDEN";
@@ -13,14 +14,16 @@ export type ReviewComment = HiddenMetadata & { id:string; threadId:string; autho
  * ID: a link holder is outside the Workspace, and the public page adds no identifier that reaches
  * past its one document (share-link spec §6.1). The thread and comment IDs are the review's own.
  */
-export type ReviewCommentView = { id:string; threadId:string; authorName?:string; body:string; visibility:ReviewVisibility; createdAt:Date; editedAt:Date|null; deleted:boolean; /** The caller wrote it. Said as a fact about the caller, so no author ID is handed out. */ own:boolean };
+export type ReviewCommentView = { id:string; threadId:string; authorName?:string; body:string; visibility:ReviewVisibility; createdAt:Date; editedAt:Date|null; deleted:boolean; /** The caller wrote it. Said as a fact about the caller, so no author ID is handed out. */ own:boolean; /** Present only on a comment whose body is shown, and only for people its body names now; no user ID. */ mentions?:MentionedPerson[] };
 export type ReviewThreadView = { id:string; status:ReviewStatus; createdAt:Date; updatedAt:Date; currentAnchor:CurrentAnchorProjection; comments:ReviewCommentView[]; /** A signed-in reader, not the owner, follows it. Absent for anyone else. */ following?:boolean };
 /** What the document's owner reads in My Space: the same threads, with who and what moderation needs. */
 export type OwnerReviewThreadView = ReviewThreadView & { documentId:string; createdBy:string; visibility:ReviewVisibility; hiddenBy:string|null; hiddenAt:Date|null; hiddenReason:string|null; originalAnchor:ReviewAnchor; resolvedBy:string|null; resolvedAt:Date|null; comments:(ReviewCommentView & { authorUserId:string; hiddenBy:string|null; hiddenAt:Date|null; hiddenReason:string|null })[] };
-export type CreateReviewThreadInput = { token:string; expectedRevisionId:string; anchor:ReviewAnchor; body:string; idempotencyKey:string };
-/** The owner starts a discussion on their own document: no link stands between them and it. */
-export type CreateOwnerReviewThreadInput = Omit<CreateReviewThreadInput,"token"> & { documentId:string };
-export type ReplyReviewInput = { token:string; threadId:string; body:string; idempotencyKey:string };
+/** `documentId`: the document a folder link's page is reading; required there, refused on a document link (folder share spec §6). `mentions` is unvalidated client input (`normalizeMentions`); `undefined` means none. */
+export type CreateReviewThreadInput = { token:string; documentId?:string; expectedRevisionId:string; anchor:ReviewAnchor; body:string; idempotencyKey:string; mentions?:unknown };
+/** The owner starts a discussion on their own document: no link stands between them and it. A mention names the link it hands over (`mentionLinkId`). */
+export type CreateOwnerReviewThreadInput = Omit<CreateReviewThreadInput,"token"|"documentId"> & { documentId:string; mentionLinkId?:unknown };
+export type ReplyReviewInput = { token:string; documentId?:string; threadId:string; body:string; idempotencyKey:string; mentions?:unknown };
+export type ReplyOwnerReviewInput = Omit<ReplyReviewInput,"token"|"documentId"> & { documentId:string; mentionLinkId?:unknown };
 export function validateReviewBody(body:unknown):string {
   if(typeof body!=="string" || !body.trim() || [...body].length>REVIEW_LIMITS.body) throw new ValidationError("Comment body must contain 1–3,000 characters.");
   return body;

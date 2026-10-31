@@ -10,7 +10,7 @@ vi.mock("next/navigation",()=>({useRouter:()=>({refresh:vi.fn()})}));
 let host:HTMLDivElement,root:Root;
 beforeEach(()=>{host=document.createElement("div");document.body.append(host);root=createRoot(host);});
 afterEach(async()=>{await act(async()=>root.unmount());host.remove();vi.unstubAllGlobals();});
-const model:SavedShareList={query:{q:"",status:"all",page:1},hasNext:false,items:[{id:"saved",title:"A useful guide",sharedByName:"Someone",status:"available",savedAt:new Date(),expiresAt:new Date(Date.now()+86400000),updatedAt:new Date(),path:"/s/live-token"}]};
+const model:SavedShareList={query:{q:"",status:"all",page:1},hasNext:false,items:[{id:"saved",kind:"DOCUMENT",title:"A useful guide",sharedByName:"Someone",status:"available",savedAt:new Date(),expiresAt:new Date(Date.now()+86400000),updatedAt:new Date(),path:"/s/live-token"}]};
 const mount=async(value=model)=>{await act(async()=>root.render(<SavedSharesView workspaceId="reader" model={value}/>));};
 it("separates saved shares, preserves route filters and links only to the public reader",async()=>{
  await mount({...model,query:{q:"guide",status:"all",page:2},hasNext:true});
@@ -37,3 +37,9 @@ it("refresh can show a share re-saved on another device after local removal",asy
  vi.stubGlobal("fetch",async()=>new Response(null,{status:204}));await mount();await act(async()=>host.querySelector<HTMLButtonElement>('button[aria-label="Remove saved share: A useful guide"]')!.click());expect(host.textContent).not.toContain("A useful guide");
  await mount({...model,items:[]});await mount({...model,items:[{...model.items[0],savedAt:new Date(Date.now()+1000)}]});expect(host.textContent).toContain("A useful guide");
 });
+it("marks a folder row as a folder and opens it through its link",async()=>{
+ await mount({...model,items:[{...model.items[0],kind:"FOLDER",title:"Handbook",updatedAt:null}]});
+ const link=host.querySelector<HTMLAnchorElement>('a[href="/s/live-token"]')!;expect(link.textContent).toBe("Folder Handbook");expect(link.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+ expect(host.querySelector('button[aria-label="Remove saved share: Handbook"]')).not.toBeNull();
+});
+it("gives a document row no folder mark",async()=>{await mount();expect(host.textContent).not.toContain("Folder");expect(host.querySelector("a[href='/s/live-token'] svg")).toBeNull();});

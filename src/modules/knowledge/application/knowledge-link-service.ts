@@ -14,10 +14,11 @@ import {
   type LinkGraph,
   type WorkspaceGraph,
 } from "../domain/link-graph";
-import { buildLinkResolver, type CatalogDocument, type LinkOrigin } from "../domain/link-resolution";
+import { buildLinkResolver } from "../domain/link-resolution";
 import type { LinkIndexState } from "../ports/document-link-repository";
 import type { KnowledgeUnitOfWork } from "../ports/unit-of-work";
 import { requireVisibleDocument } from "./internal/require-visible-document";
+import { originOf } from "./internal/link-origin";
 
 /** A backlink list longer than this is cut; the total is still reported. */
 export const BACKLINK_LIMIT = 200;
@@ -119,11 +120,6 @@ export interface KnowledgeLinkService {
   listLinkTargets(caller: CallerContext, workspaceId: string): Promise<LinkTargetsView>;
   getWorkspaceGraph(caller: CallerContext, workspaceId: string, input?: GraphOptions): Promise<WorkspaceGraphView>;
   getLocalGraph(caller: CallerContext, documentId: string, input?: { depth?: 1 | 2 }): Promise<LocalGraphView>;
-}
-
-function originOf(catalog: readonly CatalogDocument[], document: { id: string; sourceId: string }): LinkOrigin {
-  const entry = catalog.find((candidate) => candidate.documentId === document.id);
-  return { documentId: document.id, sourceId: document.sourceId, sourcePath: entry?.sourcePath ?? null };
 }
 
 /**

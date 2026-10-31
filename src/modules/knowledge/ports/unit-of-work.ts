@@ -1,6 +1,7 @@
 import type { SavedShareRepository } from "./saved-share-repository";
 import type { ShareCommentEventRepository } from "./share-comment-event-repository";
 import type { ReviewFollowRepository } from "./review-follow-repository";
+import type { ReviewMentionRepository } from "./review-mention-repository";
 import type { DocumentReviewThreadRepository } from "./document-review-thread-repository";
 import type { DocumentReviewCommentRepository } from "./document-review-comment-repository";
 import type { DocumentReviewWriteLedger } from "./document-review-write-ledger";
@@ -25,6 +26,7 @@ export type KnowledgeRepositories = {
   reviewWriteLedger: DocumentReviewWriteLedger;
   shareCommentEvents: ShareCommentEventRepository;
   reviewFollows: ReviewFollowRepository;
+  reviewMentions: ReviewMentionRepository;
   users: UserRepository;
   documents: DocumentRepository;
   revisions: RevisionRepository;

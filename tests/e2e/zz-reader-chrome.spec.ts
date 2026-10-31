@@ -113,3 +113,33 @@ test("a code block in the editor is drawn as the reader draws it: one box, and t
   expect(editor).toEqual(await layout("article"));
   expect(editor.codePadding).toBe("0px");
 });
+
+test("scrolling back to the top leaves no toolbar overlay over document text", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  const workspaceId = await mySpace(page);
+  const created = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title: "Header spacing", markdown: "# Header spacing\n\n" + "A paragraph.\n\n".repeat(60) } });
+  expect(created.ok()).toBe(true);
+  const { sourceId, documentId } = await created.json();
+  await page.goto(`/w/${workspaceId}/knowledge/${sourceId}/${documentId}?revision=1`);
+  const pane = page.getByRole("region", { name: "Document content", exact: true });
+  const notice = pane.getByText("Read only · revision snapshot", { exact: true });
+  await expect(notice).toBeVisible();
+  const toolbar = pane.locator("header").locator("xpath=preceding-sibling::div[1]");
+  await pane.press("PageDown");
+  await expect(toolbar).toHaveAttribute("data-pinned", "true");
+  await page.screenshot({ path: testInfo.outputPath("header-scrolled.png") });
+  expect(await toolbar.evaluate(element => getComputedStyle(element, "::after").content)).toBe("none");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await pane.evaluate(element => { element.scrollTop = 900; });
+    await expect(toolbar).toHaveAttribute("data-pinned", "true");
+    await pane.evaluate(element => { element.scrollTop = 0; });
+    await expect(toolbar).not.toHaveAttribute("data-pinned", "true");
+    await expect(notice).toBeVisible();
+    const [bar, text] = await Promise.all([toolbar.boundingBox(), notice.boundingBox()]);
+    expect(text!.y).toBeGreaterThanOrEqual(bar!.y + bar!.height);
+    expect(await toolbar.evaluate(element => getComputedStyle(element, "::after").content)).toBe("none");
+  }
+  await page.screenshot({ path: testInfo.outputPath("header-top.png") });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(notice).toBeVisible();
+});

@@ -95,18 +95,42 @@ describe("the share link is the single caller-less content path", () => {
       .filter((file) => /link-graph-read|knowledge-link-service|rendered-links|applicationServices\(\)\.links|\.links\.(getDocumentLinks|getWorkspaceGraph|getLocalGraph)/.test(readFileSync(file, "utf8")))
       .map((file) => file);
     expect(offenders).toEqual([]);
+    // A document link's page draws its reading column with no resolutions at all.
     const page = readFileSync(path.join("src", "app", "s", "[token]", "page.tsx"), "utf8");
-    // `afterTitle` places the byline; it resolves nothing.
-    expect(page).toMatch(/<MarkdownRenderer\s+markdown=\{shared\.markdown\}(\s+afterTitle=\{[^}]*\})?\s*\/>/);
-    expect(page).not.toMatch(/<MarkdownRenderer[^>]*\blinks=/);
+    expect(page).toMatch(/<SharedReading\s+document=\{shared\}[^>]*\/>/);
+    expect(page).not.toMatch(/\blinks=/);
+    // The one exception (folder share spec §5): a folder page is given the links the caller-less
+    // read already kept — those whose target is reachable through the same link — and nothing else.
+    const passing = files.filter((file) => /\blinks=/.test(readFileSync(file, "utf8")));
+    expect(passing).toEqual([path.join("src", "app", "s", "[token]", "shared-folder-page.tsx")]);
+    const folderPage = readFileSync(passing[0], "utf8");
+    expect(folderPage.match(/\blinks=\{[^}]*\}/g)).toEqual(["links={sharedFolderLinks(token, document.links)}"]);
+    // And the reading column reads whatever it is not given as text, never as a link that is missing.
+    const reading = readFileSync(path.join("src", "components", "knowledge", "shared-reading.tsx"), "utf8");
+    expect(reading).toMatch(/<MarkdownRenderer\s+markdown=\{document\.markdown\}\s+links=\{links\}\s+unresolvedAsText\b/);
   });
 
   it("only the /s/:token projection reaches the caller-less entry", () => {
     const callers = ["src/server", "src/app", "src/components"]
       .flatMap(filesUnder)
       .filter((file) => !file.endsWith(path.join("server", "composition.ts")))
-      .filter((file) => /\breadShared\s*\(|\bshareReadService\s*\(/.test(readFileSync(file, "utf8")));
+      .filter((file) => /\breadShared(?:Target)?\s*\(|\bshareReadService\s*\(/.test(readFileSync(file, "utf8")));
     expect(callers).toEqual([path.join("src", "server", "share-read.ts")]);
+  });
+
+  it("the share service answers without a caller only through readShared and readSharedTarget, and the latter reads no content", () => {
+    // The content check above only sees methods whose bodies name Markdown or revisions. A new
+    // caller-less method that judged a link without reading content would slip past it, so the
+    // service's caller-less class methods are named outright (folder share spec, anti-goals; §3).
+    const file = "src/modules/knowledge/application/document-share-service.ts";
+    const source = readFileSync(file, "utf8");
+    const methods = new Set([...source.matchAll(/^ {2}async (\w+)\s*\(/gm)].map((match) => match[1]));
+    const callerless = callables(file)
+      .filter((callable) => methods.has(callable.name) && !requiresCaller(callable.parameters))
+      .map((callable) => callable.name);
+    expect(callerless).toEqual(["readShared", "readSharedTarget"]);
+    const target = callables(file).find((callable) => callable.name === "readSharedTarget");
+    expect(target?.body).not.toMatch(/\bmarkdown\b|\.revisions\.|\.users\.|loadCatalog|recordView|\.views\./);
   });
 
   it("review routes use services and never expose revision, tree or search repositories", () => {

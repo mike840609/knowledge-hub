@@ -14,7 +14,7 @@ export function useShareCommentUnread(documentId: string) {
   const refresh = useCallback(async () => {
     try {
       const result = await reviewRequest<{ notifications: ShareCommentNotificationView[] }>("/api/review-notifications/unread");
-      setUnread(result.notifications.filter(notice => notice.kind !== "FOLLOW" && notice.documentId === documentId));
+      setUnread(result.notifications.filter(notice => (notice.kind === "OWNER" || notice.kind === undefined) && notice.documentId === documentId));
     } catch {
       setUnread([]);
     }

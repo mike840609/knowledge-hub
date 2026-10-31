@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "./fixtures/test";
 import { openPalette } from "./fixtures/palette";
 import { personalWorkspaceId } from "./fixtures/my-space";
+import { readFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { parseGenericMarkdownText } from "../../src/modules/sources/adapters/generic-markdown-folder-adapter";
 
 async function note(page: Page) {
   const workspace = await personalWorkspaceId(page);
@@ -16,6 +19,180 @@ async function surface(page: Page, url: string) {
   return editor;
 }
 const saved = (page: Page) => expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", { timeout: 15000 });
+
+test("rename selects an opening heading and preserves the document body", async ({ page }) => {
+  const workspace = await personalWorkspaceId(page);
+  const response = await page.request.post(`/api/workspaces/${workspace}/documents`, { data: { title: "Old heading", markdown: "# Old heading\n\nKeep this paragraph." } });
+  const result = await response.json();
+  const url = `/w/${workspace}/knowledge/${result.sourceId}/${result.documentId}`;
+  const editor = await surface(page, url);
+  await page.getByRole("button", { name: "Rename document" }).click();
+  await expect(editor).toBeFocused();
+  await page.keyboard.insertText("New heading");
+  await saved(page);
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("New heading");
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Keep this paragraph.");
+});
+
+test("rename also selects the heading in Markdown mode", async ({ page }) => {
+  const workspace = await personalWorkspaceId(page);
+  const response = await page.request.post(`/api/workspaces/${workspace}/documents`, { data: { title: "Old heading", markdown: "# Old heading\n\nKeep this paragraph." } });
+  const result = await response.json();
+  const url = `/w/${workspace}/knowledge/${result.sourceId}/${result.documentId}`;
+  await surface(page, url);
+  await page.getByRole("button", { name: "Markdown" }).click();
+  await page.getByRole("button", { name: "Rename document" }).click();
+  await page.keyboard.insertText("New heading");
+  await saved(page);
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("New heading");
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Keep this paragraph.");
+});
+
+test("renaming a frontmatter title persists without changing other metadata or body", async ({ page }) => {
+  const workspace = await personalWorkspaceId(page);
+  const response = await page.request.post(`/api/workspaces/${workspace}/documents`, { data: { filename: "original.md", markdown: "---\ntitle: Original title\nowner: team\n---\n\nBody text." } });
+  expect(response.status()).toBe(201);
+  const result = await response.json();
+  const url = `/w/${workspace}/knowledge/${result.sourceId}/${result.documentId}`;
+  await surface(page, url);
+  await page.getByRole("button", { name: "Rename document" }).click();
+  const title = page.getByRole("textbox", { name: "Title", exact: true });
+  await expect(title).toBeFocused();
+  await title.fill("Updated title");
+  await saved(page);
+  const exported = await page.request.get(`/api/documents/${result.documentId}/export`);
+  const markdown = await exported.text();
+  expect(markdown).toContain("title: Updated title");
+  expect(markdown).toContain("owner: team");
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Updated title");
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Body text.");
+});
+
+test("a conflicting frontmatter rename downloads the new title and original metadata", async ({ page }) => {
+  const workspace = await personalWorkspaceId(page);
+  const response = await page.request.post(`/api/workspaces/${workspace}/documents`, { data: { filename: "original.md", markdown: "---\ntitle: Original title\nowner: team\n---\n\n# Body heading\n\nBody text." } });
+  expect(response.status()).toBe(201);
+  const result = await response.json();
+  await surface(page, `/w/${workspace}/knowledge/${result.sourceId}/${result.documentId}`);
+  await page.route(`**/api/documents/${result.documentId}`, route => route.request().method() === "PATCH" ? route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ error: { code: "REVISION_CONFLICT", message: "Another writer saved this document." } }) }) : route.continue());
+  await page.getByRole("textbox", { name: "Title", exact: true }).fill("Updated title");
+  await expect(page.getByRole("button", { name: "Download my changes" })).toBeVisible({ timeout: 15000 });
+  const pendingDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download my changes" }).click();
+  const download = await pendingDownload;
+  const downloaded = await readFile((await download.path())!, "utf8");
+  expect(downloaded).toContain("title: Updated title");
+  expect(downloaded).toContain("owner: team");
+  expect(downloaded).toContain("Body heading");
+  const parsed = parseGenericMarkdownText({ sourcePath: download.suggestedFilename(), text: downloaded, sourceFileHash: createHash("sha256").update(downloaded).digest("hex") });
+  expect(parsed.markdown).toBe("\n# Body heading\n\nBody text.");
+});
+
+test("conflict recovery keeps an H1 as the title source", async ({ page }) => {
+  const workspace = await personalWorkspaceId(page);
+  const response = await page.request.post(`/api/workspaces/${workspace}/documents`, { data: { title: "Original heading", markdown: "# Original heading\n\nBody text." } });
+  const result = await response.json();
+  const editor = await surface(page, `/w/${workspace}/knowledge/${result.sourceId}/${result.documentId}`);
+  await page.route(`**/api/documents/${result.documentId}`, route => route.request().method() === "PATCH" ? route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ error: { code: "REVISION_CONFLICT", message: "Another writer saved this document." } }) }) : route.continue());
+  await editor.fill("# Changed heading\n\nBody text.");
+  await expect(page.getByRole("button", { name: "Download my changes" })).toBeVisible({ timeout: 15000 });
+  const pendingDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download my changes" }).click();
+  const downloaded = await readFile((await (await pendingDownload).path())!, "utf8");
+  expect(downloaded.trimStart()).not.toMatch(/^---/);
+  const parsed = parseGenericMarkdownText({ sourcePath: (await pendingDownload).suggestedFilename(), text: downloaded, sourceFileHash: createHash("sha256").update(downloaded).digest("hex") });
+  expect(parsed.resolvedTitle).toBe("# Changed heading");
+  expect(parsed.titleSource).toBe("H1");
+  expect(downloaded).toContain("Changed heading");
+});
+
+test("conflict recovery preserves non-string metadata titles", async ({ page }) => {
+  const workspace = await personalWorkspaceId(page);
+  const response = await page.request.post(`/api/workspaces/${workspace}/documents`, { data: { filename: "heading.md", markdown: "---\ntitle: 42\nowner: team\n---\n\n# Original heading\n\nBody text." } });
+  expect(response.status()).toBe(201);
+  const result = await response.json();
+  const editor = await surface(page, `/w/${workspace}/knowledge/${result.sourceId}/${result.documentId}`);
+  await page.route(`**/api/documents/${result.documentId}`, route => route.request().method() === "PATCH" ? route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ error: { code: "REVISION_CONFLICT", message: "Another writer saved this document." } }) }) : route.continue());
+  await editor.fill("Changed content.");
+  await expect(page.getByRole("button", { name: "Download my changes" })).toBeVisible({ timeout: 15000 });
+  const pendingDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download my changes" }).click();
+  const downloaded = await readFile((await (await pendingDownload).path())!, "utf8");
+  expect(downloaded).toContain("title: 42");
+  expect(downloaded).toContain("owner: team");
+});
+
+test("a recovered independently titled document retains its exact title and metadata when uploaded", async ({ page }) => {
+  const workspace = await personalWorkspaceId(page);
+  const response = await page.request.post(`/api/workspaces/${workspace}/documents`, { data: { filename: "original.md", markdown: "---\ntitle: 42\nowner: team\n---\n\nBody without a heading." } });
+  expect(response.status()).toBe(201);
+  const original = await response.json();
+  const editor = await surface(page, `/w/${workspace}/knowledge/${original.sourceId}/${original.documentId}`);
+  await page.route(`**/api/documents/${original.documentId}`, route => route.request().method() === "PATCH" ? route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ error: { code: "REVISION_CONFLICT", message: "Another writer saved this document." } }) }) : route.continue());
+  const exactTitle = `Project / Notes : ? ${"長".repeat(130)}`;
+  await page.getByRole("textbox", { name: "Title", exact: true }).fill(exactTitle);
+  await expect(page.getByRole("button", { name: "Download my changes" })).toBeVisible({ timeout: 15000 });
+  const pendingDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download my changes" }).click();
+  const download = await pendingDownload;
+  const downloaded = await readFile((await download.path())!, "utf8");
+  expect(download.suggestedFilename()).toMatch(/\.kh-recovery\.md$/);
+  expect(downloaded.startsWith("---\n")).toBe(true);
+  const parsed = parseGenericMarkdownText({ sourcePath: download.suggestedFilename(), text: downloaded, sourceFileHash: createHash("sha256").update(downloaded).digest("hex") });
+  expect(parsed.resolvedTitle).toBe(exactTitle);
+  expect(parsed.metadata).toEqual({ title: 42, owner: "team" });
+  expect(parsed.markdown).toBe("\nBody without a heading.");
+  const restored = await page.request.post(`/api/workspaces/${workspace}/documents`, { data: { filename: download.suggestedFilename(), markdown: downloaded } });
+  expect(restored.status()).toBe(201);
+  const copy = await restored.json();
+  await page.unrouteAll();
+  await page.goto(`/w/${workspace}/knowledge/${copy.sourceId}/${copy.documentId}`);
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(exactTitle);
+  await expect(editor).toContainText("Body without a heading.");
+});
+
+test("a stale draft downloads metadata from its base revision", async ({ page }) => {
+  const workspace = await personalWorkspaceId(page);
+  const created = await page.request.post(`/api/workspaces/${workspace}/documents`, { data: { filename: "original.md", markdown: "---\ntitle: Original\nowner: current\n---\n\nBody." } });
+  expect(created.status()).toBe(201);
+  const document = await created.json();
+  const draft = await page.request.put(`/api/workspaces/${workspace}/personal`, { data: { key: `draft:${document.documentId}`, value: { title: "Draft title", markdown: "My draft body.", baseRevisionId: document.revisionId }, version: 0 } });
+  expect(draft.ok()).toBe(true);
+  const changed = await page.request.patch(`/api/documents/${document.documentId}`, { data: { title: "Newer title", markdown: "Newer body.", expectedCurrentRevisionId: document.revisionId, updateMetadataTitle: true } });
+  expect(changed.ok()).toBe(true);
+  await page.route(`**/api/documents/${document.documentId}/recovery-metadata?*`, route => route.fulfill({ status: 200, json: { revisionId: document.revisionId, metadata: { title: "Original", owner: "base" } } }));
+  await page.goto(`/w/${workspace}/knowledge/${document.sourceId}/${document.documentId}`);
+  await expect(page.getByText("This document changed while you were away.", { exact: false })).toBeVisible();
+  const pendingDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download my changes" }).click();
+  const download = await pendingDownload;
+  const text = await readFile((await download.path())!, "utf8");
+  const parsed = parseGenericMarkdownText({ sourcePath: download.suggestedFilename(), text, sourceFileHash: createHash("sha256").update(text).digest("hex") });
+  expect(parsed.resolvedTitle).toBe("Draft title");
+  expect(parsed.metadata).toEqual({ title: "Draft title", owner: "base" });
+  expect(parsed.markdown).toBe("My draft body.");
+  await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
+  const stored = await page.evaluate(id => {
+    const key = Object.keys(sessionStorage).find(item => item.startsWith("kh:draft:edit:") && item.endsWith(`:${id}`));
+    return key ? JSON.parse(sessionStorage.getItem(key)!) : null;
+  }, document.documentId);
+  expect(stored?.baseRevisionId).toBe(document.revisionId);
+  await page.reload();
+  await expect(page.getByText("This document changed while you were away.", { exact: false })).toBeVisible();
+});
+
+test("a stale draft warns when its original metadata is unavailable", async ({ page }) => {
+  const { url, id } = await note(page);
+  const workspace = await personalWorkspaceId(page);
+  const draft = await page.request.put(`/api/workspaces/${workspace}/personal`, { data: { key: `draft:${id}`, value: { title: "Draft title", markdown: "My draft body.", baseRevisionId: randomUUID() }, version: 0 } });
+  expect(draft.ok()).toBe(true);
+  await page.goto(url);
+  await expect(page.getByText("The draft's original metadata is unavailable", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download my changes" })).toBeEnabled();
+});
 
 test("inline: opening does not focus, write or require Edit; legacy URLs redirect", async ({ page }) => {
   const { url } = await note(page);
@@ -42,6 +219,8 @@ test("inline: content and title autosave without navigating or losing focus", as
   await saved(page);
   await expect(editor).toBeFocused();
   await expect(page).toHaveURL(new RegExp(`${url}$`));
+  await page.getByRole("button", { name: "Rename document" }).click();
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toBeFocused();
   await page.getByRole("textbox", { name: "Title", exact: true }).fill("Renamed inline");
   await saved(page);
   expect(traffic).toEqual([]);

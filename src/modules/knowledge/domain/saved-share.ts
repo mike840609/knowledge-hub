@@ -11,7 +11,7 @@ export type SavedShareSnapshot = {
   title: string | null; sharedByName: string | null;
 };
 export type SavedShareRecord = { id: string; userId: string; shareLinkId: string; savedTitle: string; savedSharedByName: string; savedExpiresAt: Date; savedAt: Date; updatedAt: Date; removedAt: Date | null };
-export type SavedShareView = { id: string; title: string; sharedByName: string; savedAt: Date; expiresAt: Date; updatedAt: Date | null; status: "available" | "expired" | "unavailable"; path: string | null };
+export type SavedShareView = { id: string; kind: "DOCUMENT" | "FOLDER"; title: string; sharedByName: string; savedAt: Date; expiresAt: Date; updatedAt: Date | null; status: "available" | "expired" | "unavailable"; path: string | null };
 export type SavedShareState = { saved: boolean; id: string | null; workspaceId: string };
 export type SavedShareList = { query: SavedShareQuery; items: SavedShareView[]; hasNext: boolean };
 export function parseSavedShareQuery(input: SavedShareInput): SavedShareQuery {

@@ -101,6 +101,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
       actionsFor("palette", {
         workspaceId,
         workspaceType: access.workspace.type,
+        isPersonalOwner: access.isPersonalOwner,
         can: access.actions,
         confirmed,
         target: reading
@@ -112,7 +113,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
             }
           : undefined,
       }),
-    [workspaceId, access.workspace.type, access.actions, confirmed, reading, shortcuts.favorites],
+    [workspaceId, access.workspace.type, access.isPersonalOwner, access.actions, confirmed, reading, shortcuts.favorites],
   );
 
   const matched = useMemo(() => prioritizePaletteActions(matchActions(actions, trimmed), pathname, trimmed), [actions, trimmed, pathname]);

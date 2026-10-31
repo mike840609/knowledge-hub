@@ -18,7 +18,7 @@ export default async function DraftRecoveryPage({
     const suffix = model.document.status === "ARCHIVED" || model.document.sourceStatus === "ARCHIVED" ? "?includeArchived=true" : "";
     return redirect(`/w/${workspaceId}/knowledge/${sourceId}/${documentId}${suffix}`);
   }
-  if (model.document.status === "ACTIVE" && model.document.sourceStatus === "ACTIVE") {
+  if (model.document.status === "ACTIVE" && model.document.sourceStatus === "ACTIVE" && model.canWrite && !model.workspaceArchived && !model.folderArchived && !model.treeNodeMissing && model.document.ownership === "HUB_MANAGED") {
     return redirect(`/w/${workspaceId}/knowledge/${sourceId}/${documentId}`);
   }
 
@@ -49,9 +49,11 @@ export default async function DraftRecoveryPage({
           documentId={documentId}
           title={draft.title || "Untitled draft"}
           markdown={draft.markdown}
+          metadata={draft.metadata}
           canRestore={model.canRestore}
         />}
       />
+      <p className="text-caption text-kh-text-muted">Keep the .kh-recovery.md filename ending when uploading a downloaded draft to restore it accurately.{draft.metadataMayDiffer ? " The original draft metadata is unavailable; the download uses metadata from the latest saved version." : ""}</p>
       {(model.sourceArchived || model.folderArchived || model.treeNodeMissing) && !model.workspaceArchived ? (
         <p className="text-body-sm text-kh-text-muted">
           <Link className="kh-focus-ring rounded-md text-kh-link" href={`/w/${workspaceId}/sources/${sourceId}`}>Open Sources</Link>

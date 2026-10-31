@@ -7,7 +7,7 @@ import { OwnerReviewPanel } from "./owner-review-panel";
 import { AutosaveIndicator } from "./autosave-indicator";
 import { ReadRevisionMarker } from "./read-revision-marker";
 import { Button } from "@/components/ui/button";
-import { FileCode2 } from "lucide-react";
+import { FileCode2, Pencil } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { governanceFailure, governanceRequest, GovernanceError } from "@/components/workspaces/governance-error";
@@ -17,6 +17,7 @@ import { PersistentDraft } from "@/lib/persistent-draft";
 import { carryTitle, resolveAuthoredTitle } from "@/lib/authored-title";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { downloadMarkdown } from "@/lib/download-markdown";
+import { buildRecoveryMarkdown } from "@/lib/recovery-markdown";
 import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
 import type { RenderedLinks } from "./rendered-links";
 import type { MarkdownEditor } from "./editor/editor-core";
@@ -26,10 +27,10 @@ import type { CaptureReviewAnchor, PreparedReviewComment } from "./inline-review
 type DetailProps = Omit<ComponentProps<typeof DocumentDetailClient>, "children" | "titleControl" | "editorActions">;
 
 /** The reader's frame stays mounted while its article edits and saves in place. */
-export function EditableDocument({ detail, markdown, metadataTitle, revisionId, userId, personal, standIn, backlinks, links }: {
+export function EditableDocument({ detail, markdown, metadata, revisionId, userId, personal, standIn, backlinks, links }: {
   detail: DetailProps;
   markdown: string;
-  metadataTitle: unknown;
+  metadata: Record<string, unknown>;
   revisionId: string;
   userId: string;
   personal: boolean;
@@ -39,7 +40,11 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
 }) {
   const router = useRouter();
   const { confirmed, access } = useWorkspaceAuthorization();
-  const [content, setContent] = useState<DocumentContent>({ title: detail.title, markdown });
+  const currentMetadata = useRef(metadata);
+  const metadataTitle = currentMetadata.current.title;
+  const hasMetadataTitle = () => typeof currentMetadata.current.title === "string" && !!currentMetadata.current.title.trim();
+  const initialTitle = typeof metadataTitle === "string" && metadataTitle.trim() ? metadataTitle.trim() : detail.title;
+  const [content, setContent] = useState<DocumentContent>({ title: initialTitle, markdown });
   const [savedRevision, setSavedRevision] = useState(revisionId);
   const [savedTitle, setSavedTitle] = useState(detail.title);
   const [savedAt, setSavedAt] = useState(detail.updatedAt);
@@ -71,8 +76,10 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
   const [CodePreview, setCodePreview] = useState<ComponentType<{ code: string; language: string }>>();
   const renderCode = useCallback((code: string, language: string) => CodePreview ? <CodePreview code={code} language={language} /> : <pre><code>{code}</code></pre>, [CodePreview]);
   const sourceTextarea = useRef<HTMLTextAreaElement>(null);
+  const titleInput = useRef<HTMLInputElement>(null);
   const [Editor, setEditor] = useState<ComponentType<RenderedEditorProps>>();
   const [recovery, setRecovery] = useState<"current" | "stale" | null>(null);
+  const [recoveryMetadata, setRecoveryMetadata] = useState<"ready" | "loading" | "unavailable">("ready");
   const [discarding, setDiscarding] = useState(false);
   const [, render] = useState(0);
   const editor = useRef<MarkdownEditor | null>(null);
@@ -80,6 +87,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
   const receivedRevision = useRef(revisionId);
   const acknowledgedRevisionNo = useRef(detail.inspectorData.selectedRevisionNo);
   const persistent = useRef<PersistentDraft | null>(null);
+  const staleDraftBase = useRef<{ revisionId: string | null } | null>(null);
   const pending = useRef(false);
   const composing = useRef(false);
   const alive = useRef(false);
@@ -89,13 +97,15 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
   authorization.current = confirmed && access.actions.canWrite && access.workspace.lifecycleState !== "ARCHIVED";
   const draftKey: DraftKey = { kind: "edit", userId, documentId: detail.inspectorData.documentId };
   const keyRef = useRef(draftKey);
-  const resolve = (value: DocumentContent) => resolveAuthoredTitle({ metadataTitle, markdown: value.markdown, typedTitle: value.title });
+  const resolve = (value: DocumentContent) => hasMetadataTitle()
+    ? { title: value.title.trim(), source: "METADATA" as const }
+    : resolveAuthoredTitle({ metadataTitle: currentMetadata.current.title, markdown: value.markdown, typedTitle: value.title });
   const resolved = resolve(content);
 
   function keepRecovery() {
     const writer = queue.current;
     if (!writer || discardingRef.current) return;
-    const draft = writer.dirty ? { ...writer.current, baseRevisionId: writer.revisionId } : null;
+    const draft = writer.dirty ? { ...writer.current, baseRevisionId: staleDraftBase.current ? staleDraftBase.current.revisionId : writer.revisionId } : null;
     // A tab-local copy also protects personal drafts while the account request is in flight.
     if (draft) syncDraft(browserDraftStorage(), keyRef.current, draft, { title: "\0", markdown: "\0" });
     else clearDraft(browserDraftStorage(), keyRef.current);
@@ -138,13 +148,14 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
     alive.current = true;
     let live = true;
     let previousStatus: string | undefined;
-    const writer = new DocumentAutosave({ title: detail.title, markdown }, revisionId, {
+    const writer = new DocumentAutosave({ title: initialTitle, markdown }, revisionId, {
       write: async (snapshot, expectedRevisionId) => {
         if (!authorization.current) throw new Error("Editing is unavailable.");
         const title = resolve(snapshot).title;
         if (!title) throw new Error("Add a title before saving.");
         return governanceRequest<SavedRevision>(`/api/documents/${detail.inspectorData.documentId}`, "PATCH", {
           title, markdown: snapshot.markdown, expectedCurrentRevisionId: expectedRevisionId, autosave: true,
+          ...(hasMetadataTitle() ? { updateMetadataTitle: true } : {}),
         }, { notifyMutation: false });
       },
       change: () => {
@@ -188,11 +199,29 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
       const account = await remote?.load();
       if (!live) return;
       const draft = local ?? account;
-      if (draft && (draft.title !== detail.title || draft.markdown !== markdown)) {
+      if (draft && (draft.title !== initialTitle || draft.markdown !== markdown)) {
         // Never publish a recovered draft merely because the user opened a page.
+        if (draft.baseRevisionId !== revisionId) staleDraftBase.current = { revisionId: draft.baseRevisionId };
         writer.change({ title: draft.title, markdown: draft.markdown });
         setContent(writer.current);
         setRecovery(draft.baseRevisionId === revisionId ? "current" : "stale");
+        if (draft.baseRevisionId !== revisionId) {
+          const { revisions } = detail.inspectorData;
+          const base = revisions.find(item => item.id === draft.baseRevisionId);
+          if (!base) setRecoveryMetadata("unavailable");
+          else {
+            setRecoveryMetadata("loading");
+            void governanceRequest<{ revisionId: string; metadata: Record<string, unknown> }>(`/api/documents/${detail.inspectorData.documentId}/recovery-metadata?revision=${base.revisionNo}`).then(result => {
+              if (!live || discardingRef.current) return;
+              if (result.revisionId !== draft.baseRevisionId || !result.metadata || typeof result.metadata !== "object" || Array.isArray(result.metadata)) {
+                setRecoveryMetadata("unavailable");
+                return;
+              }
+              currentMetadata.current = result.metadata;
+              setRecoveryMetadata("ready");
+            }).catch(() => { if (live && !discardingRef.current) setRecoveryMetadata("unavailable"); });
+          }
+        }
       } else writer.pause(!authorization.current);
       setLoaded(true);
     })();
@@ -267,6 +296,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
     if (!loaded || !writer || writer.revisionId === revisionId || pending.current || composing.current || recovery) return;
     const next = { title: detail.title, markdown };
     if (!writer.adopt(next, revisionId)) return;
+    currentMetadata.current = metadata;
     if (editor.current && editor.current.getMarkdown() !== markdown) {
       try { editor.current.replaceMarkdown(markdown); } catch { setFailed(true); }
     }
@@ -275,7 +305,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
     setSavedAt(detail.updatedAt);
     acknowledgedRevisionNo.current = detail.inspectorData.selectedRevisionNo;
     setSavedRevision(revisionId);
-  }, [loaded, revisionId, detail.title, detail.updatedAt, detail.inspectorData.selectedRevisionNo, markdown, recovery]);
+  }, [loaded, revisionId, detail.title, detail.updatedAt, detail.inspectorData.selectedRevisionNo, markdown, metadata, recovery]);
   useEffect(() => {
     if (!/```|~~~/u.test(content.markdown) || CodePreview) return;
     let live = true;
@@ -326,6 +356,21 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
     refreshMetadata();
   }
   const displayTitle = dirty || recovery ? resolved.title || "Untitled" : savedTitle;
+  function focusTitle() {
+    flushEditor();
+    if (resolve(queue.current!.current).source !== "H1") {
+      titleInput.current?.focus();
+      titleInput.current?.select();
+    } else if (source || failed) {
+      const textarea = sourceTextarea.current;
+      if (!textarea) return;
+      const match = /^﻿?(?:[ \t]*\r?\n)*#[ \t]+/.exec(textarea.value);
+      if (!match) return;
+      const end = textarea.value.indexOf("\n", match[0].length);
+      textarea.focus();
+      textarea.setSelectionRange(match[0].length, end < 0 ? textarea.value.length : end);
+    } else editor.current?.selectOpeningHeading();
+  }
   const Article = "article";
   // With the page's actions in the pinned line rather than on a row of its own above the title.
   const markdownToggle = <Button type="button" variant="ghost" aria-pressed={source || failed} data-pressed={source || failed} disabled={!loaded || failed} className="max-sm:px-2 data-[pressed=true]:bg-kh-bg-hover data-[pressed=true]:text-kh-text" onClick={() => {
@@ -342,16 +387,20 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
       {recovery === "current" && <Button variant="link" onClick={() => setRecovery(null)}>Resume saving</Button>}
       <Button variant="link" onClick={() => setDiscarding(true)}>Discard recovered changes</Button>
     </p>}
+    {recovery === "stale" && recoveryMetadata === "loading" ? <p role="status" className="mb-3 text-body-sm">Loading the draft's original metadata…</p> : null}
+    {recovery === "stale" && recoveryMetadata === "unavailable" ? <p role="status" className="mb-3 text-body-sm">The draft's original metadata is unavailable; the download uses metadata from the latest saved version.</p> : null}
     {error && <div className="mb-3"><GovernanceError error={error} />
       {conflict ? <p className="text-body-sm">Someone updated this document. Your text is still here. Download your changes before loading the latest version.</p> : null}
       {!conflict && <Button variant="link" disabled={!editable} onClick={() => void writer?.retry()}>Retry save</Button>}
       <Button variant="link" onClick={() => setDiscarding(true)}>Load latest version</Button>
     </div>}
-    {(error || recovery) && <Button variant="link" onClick={() => {
+    {(error || recovery) && <Button variant="link" disabled={recovery === "stale" && recoveryMetadata === "loading"} onClick={async () => {
       flushEditor();
       const value = queue.current!.current;
-      downloadMarkdown(resolve(value).title, value.markdown);
+      const output = await buildRecoveryMarkdown({ ...value, metadata: currentMetadata.current });
+      downloadMarkdown(output.title, output.markdown, { recovery: output.recovery });
     }}>Download my changes</Button>}
+    {(error || recovery) && resolved.title ? <p className="mb-3 text-caption text-kh-text-muted">Keep the .kh-recovery.md filename ending when uploading this draft to restore it accurately.</p> : null}
     {failed && <p role="status" className="mb-3 text-body-sm">Rendered editing is unavailable. You can continue in Markdown.</p>}
     <div ref={pressArea} onPointerDownCapture={() => { if (!ready) standInPressed.current = true; }} onCompositionStart={() => { composing.current = true; writer?.pause(true); }} onCompositionEnd={() => {
       composing.current = false;
@@ -395,8 +444,8 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
     inspectorData={{ ...detail.inspectorData, revisions, selectedRevisionNo: revisions.find(item => item.id === savedRevision)?.revisionNo ?? detail.inspectorData.selectedRevisionNo }}
     breadcrumb={[...detail.breadcrumb.slice(0, -1), { label: displayTitle }]} outline={outline}
     contentOwnsTitle={markdownOpensWithHeading(content.markdown)}
-    editorActions={<><AutosaveIndicator state={status} attention={attention} />{markdownToggle}</>}
-    titleControl={resolved.source === "TYPED" ? <input aria-label="Title" value={content.title} disabled={!editable} maxLength={512}
+    editorActions={<><AutosaveIndicator state={status} attention={attention} /><Button type="button" variant="ghost" aria-label="Rename document" title="Rename document" disabled={!editable || !!recovery || (!ready && !source && !failed)} onClick={focusTitle}><Pencil className="h-4 w-4" aria-hidden="true" /></Button>{markdownToggle}</>}
+    titleControl={resolved.source !== "H1" ? <input ref={titleInput} aria-label="Title" value={content.title} disabled={!editable} maxLength={512}
       onChange={event => change({ ...queue.current!.current, title: event.target.value })}
       className="mt-2 block w-full border-0 bg-transparent p-0 text-page-title font-semibold tracking-tight text-kh-text outline-none"
       onCompositionStart={() => { composing.current = true; writer?.pause(true); }}

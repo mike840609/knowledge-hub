@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notificationHref, notificationLine } from "./notification-href";
+import { isLinkEntry, notificationHref, notificationLine } from "./notification-href";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
 import type { FreshnessReminder } from "@/modules/personal/application/knowledge-freshness";
 import { Timestamp } from "@/components/ui/timestamp";
@@ -26,7 +26,7 @@ export function UnreadDiscussions({ notices }: { notices: readonly HomeNotice[] 
   if (!notices.length) return null;
   return <ul aria-label="Unread discussions" onKeyDown={navigateListRows} className="space-y-0.5">{notices.slice(0, 5).map(notice => (
     <li key={notice.id}>
-      <Link data-list-row className="kh-interactive-row kh-focus-ring flex min-h-10 items-center gap-3 rounded-md px-3 py-1" href={notificationHref(notice) ?? `/w/${notice.workspaceId}/home`} prefetch={notice.kind === "FOLLOW" ? false : undefined}>
+      <Link data-list-row className="kh-interactive-row kh-focus-ring flex min-h-10 items-center gap-3 rounded-md px-3 py-1" href={notificationHref(notice) ?? `/w/${notice.workspaceId}/home`} prefetch={isLinkEntry(notice.kind) ? false : undefined}>
         <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-kh-primary" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-body font-medium text-kh-text">{notice.documentTitle}</span>

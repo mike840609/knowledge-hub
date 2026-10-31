@@ -39,6 +39,18 @@ CI (`.github/workflows/phase2-dev-gate.yml`) runs four jobs on every PR to
 `main`: `unit` (which also runs typecheck and lint), `build`, `integration`
 and `e2e`. `make verify` covers everything except the two DB-backed jobs.
 
+### Package manager
+
+pnpm 12 is the default local package manager; `pnpm-workspace.yaml` and `pnpm-lock.yaml` are
+committed. Use `pnpm install` locally. npm is the fallback when pnpm is unavailable, and the
+package manager for CI, Vercel, and deployment (`npm ci`, `package-lock.json`); do not replace
+`package-lock.json` or switch those to pnpm.
+
+When dependencies change, refresh `package-lock.json` first (`npm install --package-lock-only`),
+then `pnpm import && pnpm install`, and commit both lockfiles. Setup, settings, layout
+switching, and caveats are in the README's [Local pnpm](README.md#local-pnpm). Keep the
+`patch-package` postinstall and never pass `--ignore-scripts` to `pnpm install`.
+
 ## Architecture
 
 A Next.js modular monolith over MariaDB, layered so that the web app is one
@@ -87,7 +99,12 @@ pass.
   re-verify policy regardless of what the UI allowed. A UI selector is not an
   access check.
   A **document share link** is an owner-issued random UUIDv4, expiring,
-  revocable grant with three narrow paths: anonymous current-document read via
+  revocable grant on a document **or a My Space folder**. A folder link grants
+  read of the documents currently under that folder, re-derived on every
+  request; the URL's document id (`?d=`) is navigation only, and an id not under
+  the folder answers as a dead link does
+  (`docs/superpowers/specs/2026-10-29-folder-share-link-design.md`). The grant
+  has three narrow paths: anonymous current-document read via
   `/s/:token` and `DocumentShareService.readShared`, and review-record access
   via `/api/share-review/*`: query reads require a live token only; writes additionally require a trusted caller;
   and recipient-owned saved-share access via `/api/saved-shares/*` and the
@@ -109,12 +126,29 @@ pass.
   without a live link (`POST /api/review-follows/:threadId/unfollow`): it reads
   nothing and answers alike for any id
   (`docs/superpowers/specs/2026-10-23-followed-discussions-tab-design.md`).
+  A **mention** hands a link's reference to one named, signed-in Hub user's Inbox:
+  the writer passes on the link they already hold or own, recorded instead of
+  pasted. It reads only through `/s/:token` like any holder, is judged per
+  request against the link's validity, never extends its lifetime, and grants no
+  Workspace membership, search, tree, history, MCP, Markdown edits or revision
+  writes. Its candidate search (`/api/review-mentions/candidates`) answers
+  signed-in callers only, never anonymously; it asks for a live token or
+  document ownership, but that is not a narrower gate on the directory, since
+  every signed-in user owns documents (accepted 2026-10-29). A mention through
+  a folder link hands over that link, which opens the whole folder; it is judged
+  per document, and an owner may name the links that open the document now (its own or a folder's above it)
+  (`docs/superpowers/specs/2026-10-29-review-mentions-design.md`, "Folder share links").
   Review access never grants Workspace membership, search, tree, history,
   MCP, Markdown edits or revision writes. Review responses include only
   validated current-revision selected-text fragments; hidden bodies and
-  outdated quotes are excluded. Exactly two entries answer without a caller:
+  outdated quotes are excluded. Exactly two entries serve content without a caller:
   `readShared`, which serves the document, and `DocumentReviewService.queryForLink`,
-  which serves the visible discussion and those fragments. Every other entry,
+  which serves the visible discussion and those fragments and, for each person a
+  visible comment mentions, that person's `name`, `name_en` and `emp_id`
+  (`docs/superpowers/specs/2026-10-30-review-mention-highlight-design.md`). A third,
+  `readSharedTarget`, answers without one but serves no content: it judges the
+  link for `/s/:token/open` and names only the document id to open, before
+  sign-in is asked for (so a dead link is a plain 404). Every other entry,
   and every write, requires one; `tests/unit/share-link-single-exception.test.ts`
   enforces it.
 - **`org_code` does not decide access.** It answers which company org a user
@@ -136,8 +170,9 @@ pass.
   Every code path that inserts a revision must replace the document's edges in
   the same transaction (`repositories.links.replaceForDocument`;
   `tests/unit/link-index-write-points.test.ts` fails if one does not). A link
-  never resolves across Workspaces, and a shared page (`/s/:token`) is given no
-  resolutions at all.
+  never resolves across Workspaces, and a shared document page (`/s/:token`) is
+  given no resolutions at all; a shared folder page is given only those whose
+  target is a document under that folder.
 - **The rendered editor must write a wikilink back as it read it.** It holds
   `[[x]]` as a `wiki_link` node; as text it would be written `\[\[x]]`, which is
   no link, and a document opened and saved there would lose its edges

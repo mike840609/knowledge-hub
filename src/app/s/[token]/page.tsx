@@ -1,86 +1,91 @@
 import { SaveShareButton } from "@/components/knowledge/save-share-button";
 import { SharedReviewPanel } from "@/components/knowledge/shared-review-panel";
+import { SharedFooter, SharedReading, SharedSkipLink, SHARED_CONTENT_ID } from "@/components/knowledge/shared-reading";
 import { buttonClasses } from "@/components/ui/button";
 import type { Metadata } from "next";
+import type { SharedView } from "@/modules/knowledge/application/document-share-service";
 import { notFound } from "next/navigation";
-import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
-import { SharedOutline } from "@/components/knowledge/shared-outline";
-import { extractOutline } from "@/shared/markdown/outline";
-import { markdownOpensWithHeading } from "@/lib/markdown-title";
-import { Timestamp } from "@/components/ui/timestamp";
-import { getSharedDocument } from "@/server/share-read";
+import { sharedDocumentParam } from "@/lib/share-paths";
+import { getShared } from "@/server/share-read";
 import { publicOrigin } from "@/server/config";
-import { expiresSoon } from "@/lib/share-expiry";
 import { ExternalLink } from "lucide-react";
+import { SharedFolderPage } from "./shared-folder-page";
 
 export const dynamic = "force-dynamic";
 
-type SharedPageProps = { params: Promise<{ token: string }> };
+type SharedPageProps = { params: Promise<{ token: string }>; searchParams?: Promise<{ d?: string | string[] }> };
 
 /**
- * A shared document, readable without signing in (share-link spec §6.5).
- * No app shell or tree. Platform entry is an explicit, non-prefetched link.
+ * The link and, on a folder page, the document `?d=` names. A malformed `?d=` reads nothing and is
+ * not available; a well-formed one is navigation the service judges (folder share spec §4).
+ */
+async function readPage({ params, searchParams }: SharedPageProps): Promise<{ token: string; shared: SharedView | null }> {
+  const { token } = await params;
+  const documentId = sharedDocumentParam((await searchParams)?.d);
+  return { token, shared: documentId === null ? null : await getShared(token, documentId) };
+}
+
+/**
+ * A shared document or folder, readable without signing in (share-link spec §6.5).
+ * No app shell. Platform entry is an explicit, non-prefetched link.
  * No Open Graph tags,
  * so a chat preview gets the title and nothing of the body (§14).
  */
-export async function generateMetadata({ params }: SharedPageProps): Promise<Metadata> {
-  const shared = await getSharedDocument((await params).token);
+export async function generateMetadata(props: SharedPageProps): Promise<Metadata> {
+  const { shared } = await readPage(props);
   return {
-    title: shared ? shared.title : "Link not available",
+    title: shared ? sharedTitle(shared) : "Link not available",
     description: null,
     robots: { index: false, follow: false },
   };
 }
 
-export default async function SharedDocumentPage({ params }: SharedPageProps) {
-  const { token } = await params;
-  const shared = await getSharedDocument(token);
+/** The document being read, else the folder's name (folder share spec §4). */
+function sharedTitle(shared: SharedView): string {
+  if (shared.kind === "DOCUMENT") return shared.title;
+  return shared.document ? shared.document.title : shared.folderName;
+}
+
+/** The query a Hub entry carries back to the page read. */
+const returnToQuery = (returnTo: string) => new URLSearchParams({ returnTo }).toString();
+
+/** The Hub entry for a full browser navigation, continuing to `returnTo` once signed in; null without a public origin. */
+function hubEntry(returnTo: string): string | null {
+  const origin = publicOrigin();
+  return origin ? `${origin}/?${returnToQuery(returnTo)}` : null;
+}
+
+/** Signing in to comment comes back to the page read, where the signed-in reader can then comment. */
+function signInHref(returnTo: string): string {
+  return hubEntry(returnTo) ?? `/?${returnToQuery(returnTo)}`;
+}
+
+/** The Hub's front door, by a full browser navigation, continuing to `returnTo` once signed in. */
+function platformEntry(returnTo: string): string {
+  return hubEntry(returnTo) ?? returnTo;
+}
+
+export default async function SharedPage(props: SharedPageProps) {
+  const { token, shared } = await readPage(props);
   if (!shared) notFound();
+  if (shared.kind === "FOLDER") {
+    const documentId = shared.document?.documentId;
+    const named = documentId ? `?d=${documentId}` : "";
+    return <SharedFolderPage token={token} folder={shared} platformEntry={platformEntry(`/s/${token}/open${named}`)} signInHref={signInHref(`/s/${token}${named}`)} />;
+  }
   // A full browser navigation to the protected origin lets the company Gateway initiate SSO.
   // The public /s/* routes are exempt from that login challenge.
-  const returnTo = `/s/${token}/open`;
-  const origin = publicOrigin();
-  const outline = extractOutline(shared.markdown);
-  const platformEntry = origin ? `${origin}/?${new URLSearchParams({ returnTo })}` : returnTo;
-  // Signing in to comment comes back to this page, where the signed-in reader can then comment.
-  const signInHref = `${origin ?? ""}/?${new URLSearchParams({ returnTo: `/s/${token}` })}`;
-  // Title, then who shared it, then the article — whether the title is this page's or the document's own `#` heading.
-  const contentOwnsTitle = markdownOpensWithHeading(shared.markdown);
-  const soon = expiresSoon(shared.expiresAt, new Date());
-  const pageIcon = shared.pageIcon ? <div data-shared-page-icon className="mb-2 select-none text-display leading-8" aria-hidden="true">{shared.pageIcon}</div> : null;
-  // The dots between these are the stylesheet's (`.kh-byline`), so a line never ends on one. A div: the prose spaces every `p`.
-  const byline = (
-    <div className="kh-byline mt-1.5 text-caption text-kh-text-muted">
-      <span>
-        <span>{`Shared by ${shared.sharedByName}`}</span>
-        <span>Updated <Timestamp value={shared.updatedAt} /></span>
-        {/* Quiet until it matters: close to the end it is said in the warning colour, with how soon. */}
-        <span className={soon ? "font-medium text-kh-warning" : undefined}>Link expires <Timestamp value={shared.expiresAt} variant="date" />{soon ? ` (${soon})` : ""}</span>
-      </span>
-    </div>
-  );
+  const entry = platformEntry(`/s/${token}/open`);
   return (
     <main className="kh-share-page min-h-screen bg-kh-bg">
+      <SharedSkipLink />
       {/* One pinned bar, then the title: the brand, Comments, Save and Open share a row. Save and Open show one word each (their full names stay for assistive technology), and on a phone only their icons. */}
-      <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={signInHref}
+      <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={signInHref(`/s/${token}`)}
         brand={<span className="shrink-0 text-body font-semibold text-kh-text">Knowledge Hub</span>}
-        actions={<><SaveShareButton token={token} /><span aria-hidden="true" className="mx-1 h-4 w-px bg-kh-border max-sm:hidden" /><a href={platformEntry} className={buttonClasses({ variant: "ghost" })}><ExternalLink className="size-4" aria-hidden="true" /><span className="max-sm:sr-only">Open<span className="sr-only"> in Knowledge Hub</span></span></a></>}>
-      {/* Outline: a rail off the column's left edge when there is room, else a disclosure above the title (share-page-outline spec §2). */}
-      <div className="kh-share-outline"><SharedOutline entries={outline} placement="disclosure" /></div>
-      {outline.length > 0 ? <div className="kh-share-outline-rail kh-reading-column sticky top-[4.5rem] z-10 h-0"><div className="kh-outline-hang absolute right-full top-0 w-52"><SharedOutline entries={outline} placement="rail" /></div></div> : null}
-      {contentOwnsTitle && pageIcon ? <div className="kh-reading-column pt-6">{pageIcon}</div> : null}
-      {contentOwnsTitle ? null : <header className="kh-reading-column pt-6">{pageIcon}<h1 className="text-page-title font-semibold tracking-tight text-kh-text">{shared.title}</h1>{byline}</header>}
-      <article data-review-document className={`kh-reading-column min-w-0 pb-6 ${contentOwnsTitle ? "pt-6" : "pt-3"} [&>div>:first-child]:mt-0`}>
-        <MarkdownRenderer markdown={shared.markdown} afterTitle={contentOwnsTitle ? byline : undefined} />
-      </article>
+        actions={<><SaveShareButton token={token} /><span aria-hidden="true" className="mx-1 h-4 w-px bg-kh-border max-sm:hidden" /><a href={entry} className={buttonClasses({ variant: "ghost" })}><ExternalLink className="size-4" aria-hidden="true" /><span className="max-sm:sr-only">Open<span className="sr-only"> in Knowledge Hub</span></span></a></>}>
+        <SharedReading document={shared} contentId={SHARED_CONTENT_ID} />
       </SharedReviewPanel>
-      <footer className="kh-reading-column pb-10 pt-4">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-kh-border pt-5">
-          <div><p className="text-body font-medium text-kh-text">Keep useful knowledge within reach.</p><p className="mt-1 text-body-sm text-kh-text-muted">Organize documents and search your workspace’s knowledge in Knowledge Hub.</p></div>
-          <a href={platformEntry} className={buttonClasses({ variant: "primary" })}>Get started</a>
-        </div>
-        <p className="mt-3 text-caption text-kh-text-muted">Continue with your company account. Workspace access is managed separately from this share link.</p>
-      </footer>
+      <SharedFooter platformEntry={entry} />
     </main>
   );
 }

@@ -158,7 +158,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
   function documentRow(doc: Doc, { timestamp, eventLabel, showSource, stackProvenance = false }: { timestamp?: string; eventLabel?: string; showSource: boolean; stackProvenance?: boolean }) {
     const key = keyOf(doc);
     const favorite = shortcuts.favorites.includes(key);
-    const actions = actionsFor("row", { workspaceId, workspaceType: "PERSONAL", can: access.actions, confirmed,
+    const actions = actionsFor("row", { workspaceId, workspaceType: "PERSONAL", isPersonalOwner: access.isPersonalOwner, can: access.actions, confirmed,
       target: { ...doc, label: doc.title, favorite, revision: "CURRENT" },
     }).filter(action => action.id !== "document.move");
     const label = `${favorite ? "Remove favorite" : "Favorite"}: ${doc.title}`;
@@ -194,7 +194,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
 
   function draftHref(item: DraftItem): string {
     if (!item.doc) return `/w/${workspaceId}/knowledge/new`;
-    if (item.doc.status === "ACTIVE" && item.doc.sourceStatus === "ACTIVE") {
+    if (item.doc.status === "ACTIVE" && item.doc.sourceStatus === "ACTIVE" && item.doc.ownership === "HUB_MANAGED" && confirmed && access.actions.canWrite && access.workspace.lifecycleState !== "ARCHIVED") {
       return `/w/${workspaceId}/knowledge/${item.doc.sourceId}/${item.doc.documentId}`;
     }
     return `/w/${workspaceId}/knowledge/drafts/${item.doc.sourceId}/${item.doc.documentId}`;

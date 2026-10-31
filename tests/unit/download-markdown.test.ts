@@ -26,3 +26,13 @@ it("downloads markdown with a safe filename and revokes the object URL", () => {
   vi.advanceTimersByTime(1000);
   expect(revokeObjectURL).toHaveBeenCalledWith("blob:draft");
 });
+
+it("gives a recovered independent title a recognizable suffix within filesystem limits", () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("URL", { createObjectURL: vi.fn(() => "blob:draft"), revokeObjectURL: vi.fn() });
+  let downloaded = "";
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { downloaded = this.download; });
+  downloadMarkdown("長".repeat(130), "body", { recovery: true });
+  expect(downloaded.endsWith(".kh-recovery.md")).toBe(true);
+  expect(new TextEncoder().encode(downloaded).length).toBeLessThan(255);
+});

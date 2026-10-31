@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { notificationHref, notificationLine } from "@/components/knowledge/notification-href";
+import { notificationHref, notificationLine, sharedDiscussionHref } from "@/components/knowledge/notification-href";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
 
 const view = (overrides: Partial<ShareCommentNotificationView> = {}): ShareCommentNotificationView => ({
@@ -17,6 +17,12 @@ describe("where an Inbox entry leads, and what it says", () => {
     const follow = view({ kind: "FOLLOW", token: "tok", linkAvailable: true, replyCount: 1, workspaceId: "", documentId: "", sourceId: "" });
     expect(notificationHref(follow)).toBe("/s/tok?thread=t");
     expect(notificationLine(follow)).toBe("Ann: Looks good");
+  });
+  it("a discussion followed through a folder link opens that link's page at its document", () => {
+    const follow = view({ kind: "FOLLOW", token: "tok", linkAvailable: true, replyCount: 1, workspaceId: "", documentId: "0192f3a4-0000-7000-8000-000000000002", sourceId: "" });
+    expect(notificationHref(follow)).toBe("/s/tok?d=0192f3a4-0000-7000-8000-000000000002&thread=t");
+    expect(sharedDiscussionHref("tok", "t")).toBe("/s/tok?thread=t");
+    expect(sharedDiscussionHref("tok", "t", "0192f3a4-0000-7000-8000-000000000002")).toBe("/s/tok?d=0192f3a4-0000-7000-8000-000000000002&thread=t");
   });
   it("several new replies say how many", () => {
     expect(notificationLine(view({ kind: "FOLLOW", token: "tok", linkAvailable: true, replyCount: 3 }))).toBe("3 new replies · Ann: Looks good");

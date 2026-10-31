@@ -30,18 +30,21 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
    * Counts visible, non-retracted link-origin comments without loading comment bodies or
    * truncating at the 100-entry unread Inbox preview limit.
    *
-   * Pick the newest unread thread per document so the Shares badge opens its discussion.
+   * One row per document, except that comments made through a folder link count under that link:
+   * a folder row has no document of its own. Either way the newest unread thread is picked, so the
+   * Shares badge opens its discussion.
    */
   async listUnreadCountsByRecipient(recipientUserId: string): Promise<ShareDocumentUnreadCount[]> {
     const rows = await this.connection.query<DbRow[]>(
-      `SELECT unread.document_id, unread.thread_id, unread.unread_count
+      `SELECT unread.document_id, unread.folder_link_id, unread.thread_id, unread.unread_count
        FROM (
-         SELECT e.document_id, e.thread_id,
-                COUNT(*) OVER (PARTITION BY e.document_id) AS unread_count,
-                ROW_NUMBER() OVER (PARTITION BY e.document_id
+         SELECT e.document_id, e.thread_id, l.id AS folder_link_id,
+                COUNT(*) OVER (PARTITION BY COALESCE(l.id, e.document_id)) AS unread_count,
+                ROW_NUMBER() OVER (PARTITION BY COALESCE(l.id, e.document_id)
                                    ORDER BY e.created_at DESC, e.id DESC) AS row_num
          FROM share_comment_events e
          JOIN workspaces w ON w.id = e.workspace_id
+         LEFT JOIN document_share_links l ON l.id = e.origin_share_link_id AND l.folder_node_id IS NOT NULL
          JOIN document_review_threads t ON t.id = e.thread_id
          JOIN document_review_comments c ON c.id = e.comment_id
          WHERE w.personal_owner_user_id = ? AND w.workspace_type = 'PERSONAL'
@@ -54,6 +57,7 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
     );
     return rows.map(row => ({
       documentId: String(row.document_id),
+      shareLinkId: row.folder_link_id === null ? null : String(row.folder_link_id),
       unreadCount: Number(row.unread_count),
       latestThreadId: String(row.thread_id),
     }));

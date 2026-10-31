@@ -76,7 +76,7 @@ describe("share-comment notify: link-origin comments notify the owner",()=>{
   const reply = await f.service.replyForLink(f.viewer, { token: f.token, threadId: first.id, body: "Second", idempotencyKey: randomUUID() });
   expect(reply.id).toBeTruthy();
   expect(await f.service.listUnreadShareCountsForOwner(f.caller)).toEqual([
-    { documentId: f.documentId, unreadCount: 2, latestThreadId: first.id },
+    { documentId: f.documentId, shareLinkId: null, unreadCount: 2, latestThreadId: first.id },
   ]);
   expect(await f.service.listUnreadShareCountsForOwner(f.viewer)).toEqual([]);
   await f.service.markDocumentRead(f.caller, f.documentId);

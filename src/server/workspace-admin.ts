@@ -37,9 +37,9 @@ export type TeamWorkspaceView = {
   caller: { directRole: WorkspaceRole | null; effectiveCapabilities: readonly WorkspaceCapability[] };
   actions: WorkspaceActions; grantOptions: WorkspaceGrantOptions;
 };
-export type WorkspaceAccessView = { workspace: WorkspaceNavigationItem; effectiveCapabilities: readonly WorkspaceCapability[]; actions: WorkspaceActions };
-export type HubUserLookup = { id: string; name: string; empId: string };
-export type MemberAdminView = { user: HubUserLookup; access: UserAccessInspection; assignableRoles: readonly WorkspaceRole[]; canRemoveDirectAccess: boolean };
+export type WorkspaceAccessView = { workspace: WorkspaceNavigationItem; /** True only for the owner of this My Space; Team workspaces are never one. */ isPersonalOwner: boolean; effectiveCapabilities: readonly WorkspaceCapability[]; actions: WorkspaceActions };
+export type HubUserLookup = { id: string; name: string; empId: string; nameEn: string | null };
+export type MemberAdminView = { user: { id: string; name: string; empId: string }; access: UserAccessInspection; assignableRoles: readonly WorkspaceRole[]; canRemoveDirectAccess: boolean };
 export type GroupAdminView = { externalGroupId: string; role: "ADMIN" | "EDITOR" | "VIEWER"; assignableRoles: readonly ("ADMIN" | "EDITOR" | "VIEWER")[]; canRemove: boolean };
 export type AuditItem = { id: string; actorName: string | null; eventType: string; targetType: string; targetId: string | null; summary: string; createdAt: string; before?: Readonly<Record<string, unknown>>; after?: Readonly<Record<string, unknown>> };
 export type AuditPage = { items: readonly AuditItem[]; nextCursor: string | null };
@@ -88,7 +88,7 @@ export class WorkspaceAdminService {
   async workspaceState(caller: CallerContext, workspaceId: string): Promise<WorkspaceAccessView> {
     return this.unitOfWork.run(async repositories => {
       const { workspace, capabilities, actions } = await readState(repositories, caller, workspaceId);
-      return { workspace: navigationItem(workspace), effectiveCapabilities: [...capabilities], actions };
+      return { workspace: navigationItem(workspace), isPersonalOwner: workspace.workspaceType === "PERSONAL" && workspace.personalOwnerUserId === caller.identity.id, effectiveCapabilities: [...capabilities], actions };
     });
   }
   async teamView(caller: CallerContext, workspaceId: string): Promise<TeamWorkspaceView> {
@@ -103,7 +103,7 @@ export class WorkspaceAdminService {
     if (!caller.identity.id || caller.personalWorkspaceOnly) throw new InsufficientWorkspaceCapabilityError();
     const normalized = query.trim();
     if (!normalized) return [];
-    return this.unitOfWork.run(async repositories => (await repositories.users.searchExisting(normalized.slice(0, 200), limit)).map(user => ({ id: user.id, name: user.name, empId: user.emp_id })));
+    return this.unitOfWork.run(async repositories => (await repositories.users.searchExisting(normalized.slice(0, 200), limit)).map(user => ({ id: user.id, name: user.name, empId: user.emp_id, nameEn: user.nameEn })));
   }
   async listMembers(caller: CallerContext, workspaceId: string): Promise<MemberAdminView[]> {
     return this.unitOfWork.run(async repositories => {

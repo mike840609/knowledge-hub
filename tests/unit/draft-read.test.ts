@@ -66,15 +66,19 @@ function fakeServices(overrides: {
   getDocument?: () => Promise<unknown>;
   getSource?: () => Promise<unknown>;
   listTree?: () => Promise<unknown>;
+  listRevisionSummaries?: () => Promise<unknown>;
+  getRevision?: () => Promise<unknown>;
 } = {}) {
   const personal = { get: vi.fn(overrides.get ?? (async () => DRAFT)) };
   const getDocument = vi.fn(overrides.getDocument ?? (async () => document()));
   const getSource = vi.fn(overrides.getSource ?? (async () => source()));
   const listTree = vi.fn(overrides.listTree ?? (async () => tree()));
+  const listRevisionSummaries = vi.fn(overrides.listRevisionSummaries ?? (async () => []));
+  const getRevision = vi.fn(overrides.getRevision ?? (async () => ({ metadata: {} })));
   const services = {
     establishTrustedCaller: vi.fn(async () => ({ caller })),
     personal,
-    queries: { getDocument, getSource, listTree },
+    queries: { getDocument, getSource, listTree, listRevisionSummaries, getRevision },
   } as unknown as Services;
   vi.mocked(applicationServices).mockReturnValue(services);
   return { personal, getDocument, getSource, listTree };
@@ -93,6 +97,25 @@ beforeEach(() => {
 });
 
 describe("draft recovery model", () => {
+  it("uses the draft's base revision metadata when a newer document version exists", async () => {
+    fakeServices({
+      get: async () => ({ ...DRAFT, value: { ...DRAFT.value, baseRevisionId: "old" } }),
+      getDocument: async () => document({ currentRevision: { id: "new", title: "Draft", metadata: { owner: "new" } } }),
+      listRevisionSummaries: async () => [{ id: "old", revisionNo: 1 }],
+      getRevision: async () => ({ metadata: { owner: "original" } }),
+    });
+    const model = await getDraftRecoveryModel(WORKSPACE_ID, SOURCE_ID, DOCUMENT_ID);
+    expect(model?.draft).toMatchObject({ metadata: { owner: "original" }, metadataMayDiffer: false });
+  });
+
+  it("indicates when the draft's base metadata is no longer available", async () => {
+    fakeServices({
+      get: async () => ({ ...DRAFT, value: { ...DRAFT.value, baseRevisionId: "missing" } }),
+      getDocument: async () => document({ currentRevision: { id: "new", title: "Draft", metadata: { owner: "latest" } } }),
+    });
+    const model = await getDraftRecoveryModel(WORKSPACE_ID, SOURCE_ID, DOCUMENT_ID);
+    expect(model?.draft).toMatchObject({ metadata: { owner: "latest" }, metadataMayDiffer: true });
+  });
   it("returns the draft and a restoreable archived document", async () => {
     fakeServices();
     const model = await getDraftRecoveryModel(WORKSPACE_ID, SOURCE_ID, DOCUMENT_ID);

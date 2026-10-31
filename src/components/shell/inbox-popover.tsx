@@ -8,7 +8,7 @@ import { buttonClasses, Button } from "@/components/ui/button";
 import { Timestamp } from "@/components/ui/timestamp";
 import { reviewRequest } from "@/components/knowledge/review-thread-list";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
-import { notificationHref, notificationLine, notificationTitle } from "@/components/knowledge/notification-href";
+import { isLinkEntry, notificationHref, notificationLabel, notificationLine, notificationTitle } from "@/components/knowledge/notification-href";
 import { NotificationListSkeleton } from "@/components/knowledge/knowledge-skeletons";
 import { useInboxUnread } from "./use-inbox-unread";
 
@@ -126,14 +126,14 @@ export function InboxPopover({ workspaceId, placement = "header" }: { workspaceI
                             <span data-inbox-notification-title className="block truncate text-body-sm font-medium text-kh-text">{notificationTitle(item)}</span>
                             <span className="mt-0.5 block line-clamp-2 break-words text-body-sm text-kh-text-muted lg:mt-1">{notificationLine(item)}</span>
                             <span className="mt-1.5 flex min-w-0 items-center justify-between gap-2 text-caption text-kh-text-muted">
-                              <span className="min-w-0 truncate">{item.kind === "FOLLOW" ? "Discussion you follow" : item.threadStatus === "OPEN" ? "Open discussion" : "Resolved"}</span>
+                              <span className="min-w-0 truncate">{notificationLabel(item)}</span>
                               <Timestamp value={String(item.createdAt)} variant="relative" className="shrink-0 whitespace-nowrap tabular-nums text-kh-text-faint" />
                             </span>
                           </span>
                         </span>
                     </>;
                     return <li key={item.id}>{href
-                      ? <Link className="kh-focus-ring block px-4 py-2.5 hover:bg-kh-bg-hover lg:py-3" href={href} prefetch={item.kind === "FOLLOW" ? false : undefined} onClick={() => setOpen(false)}>{content}</Link>
+                      ? <Link className="kh-focus-ring block px-4 py-2.5 hover:bg-kh-bg-hover lg:py-3" href={href} prefetch={isLinkEntry(item.kind) ? false : undefined} onClick={() => setOpen(false)}>{content}</Link>
                       : <div className="block px-4 py-2.5 lg:py-3">{content}</div>}</li>; })}
                   </ul>}
             </div>
