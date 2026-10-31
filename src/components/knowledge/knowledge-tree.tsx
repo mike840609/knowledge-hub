@@ -17,6 +17,7 @@ import type { Action } from "@/components/actions/action-registry";
 import { isSingleKeyShortcut } from "@/lib/shortcut-keys";
 import { REVEAL_FOLDER_EVENT } from "./move-request";
 import { CLEAR_FILTER_TO_REORDER, alreadyAtEdge, reorderedNode } from "./organize-messages";
+import { useTreeDrag } from "./use-tree-drag";
 import type { MoveNodeInput } from "./use-tree-mutations";
 import { Status } from "@/components/ui/status";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -81,7 +82,9 @@ function TreeNodeRow({
   documentActions,
   folderActions,
   onRunAction,
+  drag,
 }: {
+  drag: ReturnType<typeof useTreeDrag>;
   node: KnowledgeTreeNode;
   depth: number;
   scope: { workspaceId: string; sourceId: string };
@@ -109,6 +112,7 @@ function TreeNodeRow({
     const actions = documentActions(item);
     return (
       <RowContextMenu
+        {...drag.rowProps(item.id)}
         actions={actions}
         onRun={onRunAction}
         role="treeitem"
@@ -120,9 +124,10 @@ function TreeNodeRow({
         data-status={item.status}
         tabIndex={tabIndex}
         onFocus={() => onFocusNode(item.id)}
-        className={`kh-interactive-row group relative flex kh-rail-row items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}
+        className={`kh-interactive-row group relative flex kh-rail-row items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""} ${drag.draggingId === item.id ? "kh-tree-drag-source" : ""}`}
       >
         <Link
+          draggable={false}
           href={documentHref(item, scope, includeArchived)}
           // Never prefetch the page being read: prefetched from itself, the
           // server sends the whole page, and the router applies that copy on
@@ -168,9 +173,10 @@ function TreeNodeRow({
     >
       <RowContextMenu
         as="div"
+        {...drag.rowProps(item.id)}
         actions={actions}
         onRun={onRunAction}
-        className="kh-interactive-row group relative flex kh-rail-row items-center"
+        className={`kh-interactive-row group relative flex kh-rail-row items-center ${drag.draggingId === item.id ? "kh-tree-drag-source" : ""} ${drag.indicator?.kind === "into" && drag.indicator.nodeId === item.id ? "kh-tree-drop-into" : ""}`}
       >
         <button
           type="button"
@@ -198,6 +204,7 @@ function TreeNodeRow({
           {node.children.map((child) => (
             <TreeNodeRow
               key={child.item.id}
+              drag={drag}
               node={child}
               depth={depth + 1}
               scope={scope}
@@ -242,6 +249,7 @@ export function KnowledgeTree({
   folderActions,
   onRunAction,
   onReorder,
+  onMove,
 }: KnowledgeTreeProps) {
   const router = useRouter();
   const treeRef = useRef<HTMLUListElement>(null);
@@ -350,19 +358,37 @@ export function KnowledgeTree({
   const focusAfterReorder = useRef<string | null>(null);
   const [announcement, setAnnouncement] = useState({ text: "", sequence: 0 });
   const announce = (text: string) => setAnnouncement((previous) => ({ text, sequence: previous.sequence + 1 }));
+  const drag = useTreeDrag({
+    items, filtering,
+    canMove: (id) => { const item = itemById.get(id); if (!item || item.status === "ARCHIVED") return false; return (item.type === "document" ? documentActions(item) : folderActions(item)).some((action) => action.id === "document.move" || action.id === "folder.move"); },
+    isCollapsed: (id) => effectiveCollapsed.has(id), onReorder, onMove,
+    onPlaced: (id, parentId, refreshed) => {
+      focusAfterReorder.current = id;
+      if (parentId) expandFrom(parentId);
+      if (refreshed) {
+        const row = Array.from(treeRef.current?.querySelectorAll<HTMLElement>("[data-node-id]") ?? []).find((element) => element.dataset.nodeId === id);
+        if (row) { row.focus(); focusAfterReorder.current = null; }
+      }
+    },
+    announce, expandFolder: expandFrom, treeRef,
+  });
   useEffect(() => () => window.clearTimeout(reorderGiveUp.current), []);
   useEffect(() => {
     reordering.current = false;
     window.clearTimeout(reorderGiveUp.current);
-    const id = focusAfterReorder.current;
-    focusAfterReorder.current = null;
-    if (id) Array.from(treeRef.current?.querySelectorAll<HTMLElement>("[data-node-id]") ?? []).find((element) => element.dataset.nodeId === id)?.focus();
     const queued = queuedReorder.current;
     queuedReorder.current = null;
     const item = queued ? itemById.get(queued.id) : undefined;
     if (queued && item) void reorder(item, queued.direction);
     // The dependency is "the tree arrived"; `reorder` reads the render this effect is in, which is that one.
   }, [items]);
+
+  useEffect(() => {
+    const id = focusAfterReorder.current;
+    if (!id) return;
+    const row = Array.from(treeRef.current?.querySelectorAll<HTMLElement>("[data-node-id]") ?? []).find((element) => element.dataset.nodeId === id);
+    if (row) { row.focus(); focusAfterReorder.current = null; }
+  }, [items, effectiveCollapsed]);
 
   async function reorder(item: KnowledgeTreeItem, direction: -1 | 1) {
     // A filtered tree shows some of the siblings, and the ones next to this row in it are not its neighbours.
@@ -503,6 +529,7 @@ export function KnowledgeTree({
     <div aria-live="polite" aria-atomic="true" className="sr-only">
       <p key={announcement.sequence}>{announcement.text}</p>
     </div>
+    {drag.indicator?.kind === "line" ? <div className="kh-tree-drop-line" aria-hidden="true" style={{ top: drag.indicator.top, left: drag.indicator.left, width: drag.indicator.width }} /> : null}
     <ul
       ref={treeRef}
       role="tree"
@@ -515,6 +542,7 @@ export function KnowledgeTree({
       {roots.map((node) => (
         <TreeNodeRow
           key={node.item.id}
+          drag={drag}
           node={node}
           depth={1}
           scope={{ workspaceId, sourceId }}

@@ -187,14 +187,15 @@ export function dropPlacement(
   draggedId: string,
   targetId: string,
   zone: DropZone,
+  destinations?: ReadonlySet<string>,
 ): DropPlacement | null {
   const dragged = items.find((item) => item.id === draggedId);
   const target = items.find((item) => item.id === targetId);
   if (!dragged || !target || target.id === dragged.id) return null;
 
-  const destinations = moveDestinations(items, draggedId).map((destination) => destination.id);
+  const allowed = destinations ?? new Set(moveDestinations(items, draggedId).map((destination) => destination.id));
   const destinationParent = zone === "into" ? target.id : target.parentId;
-  if (destinationParent !== null && !destinations.includes(destinationParent)) return null;
+  if (destinationParent !== null && !allowed.has(destinationParent)) return null;
   if (zone === "into" && target.type !== "folder") return null;
 
   const siblings = items

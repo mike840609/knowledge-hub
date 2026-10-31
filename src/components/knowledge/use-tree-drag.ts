@@ -1,0 +1,128 @@
+"use client";
+
+import { useEffect, useRef, useState, type DragEvent, type RefObject } from "react";
+import { dropPlacement, moveDestinations, type DropZone } from "@/lib/knowledge-navigation";
+import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledge-query-service";
+import { CLEAR_FILTER_TO_REORDER, placedNode } from "./organize-messages";
+import type { MoveNodeInput } from "./use-tree-mutations";
+
+export type TreeDragIndicator = { kind: "line"; top: number; left: number; width: number } | { kind: "into"; nodeId: string } | null;
+
+type Input = {
+  items: KnowledgeTreeItem[]; filtering: boolean; canMove: (id: string) => boolean;
+  isCollapsed: (id: string) => boolean; onReorder: (input: { nodeId: string; position: number }) => Promise<boolean>;
+  onMove: (input: MoveNodeInput) => Promise<boolean>; onPlaced: (id: string, parentId: string | null, refreshed: boolean) => void;
+  announce: (text: string) => void; expandFolder: (id: string) => void; treeRef: RefObject<HTMLUListElement | null>;
+};
+
+export function useTreeDrag(input: Input) {
+  const [enabled, setEnabled] = useState(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [indicator, setIndicator] = useState<TreeDragIndicator>(null);
+  const dragging = useRef<string | null>(null);
+  const destinations = useRef<ReadonlySet<string>>(new Set());
+  const busy = useRef(false);
+  const awaitingResponse = useRef(false);
+  const refreshed = useRef(false);
+  const pointerY = useRef<number | null>(null);
+  const frame = useRef<number | undefined>(undefined);
+  const expandTimer = useRef<number | undefined>(undefined);
+  const expandFor = useRef<string | null>(null);
+  const giveUp = useRef<number | undefined>(undefined);
+  const clearExpand = () => { window.clearTimeout(expandTimer.current); expandFor.current = null; };
+  const cleanup = () => {
+    dragging.current = null; pointerY.current = null; setDraggingId(null); setIndicator(null);
+    window.cancelAnimationFrame(frame.current ?? 0); clearExpand();
+  };
+  useEffect(() => {
+    setEnabled(typeof window.matchMedia === "function" && window.matchMedia("(hover: hover) and (pointer: fine)").matches);
+    return () => { window.cancelAnimationFrame(frame.current ?? 0); window.clearTimeout(expandTimer.current); window.clearTimeout(giveUp.current); };
+  }, []);
+  useEffect(() => {
+    if (busy.current) {
+      if (awaitingResponse.current) refreshed.current = true;
+      else { busy.current = false; window.clearTimeout(giveUp.current); }
+    }
+  }, [input.items]);
+  const zoneFor = (event: DragEvent<HTMLElement>, item: KnowledgeTreeItem): DropZone => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const ratio = (event.clientY - rect.top) / rect.height;
+    if (item.type === "folder" && item.status !== "ARCHIVED") return ratio < 0.25 ? "before" : ratio > 0.75 ? "after" : "into";
+    return ratio < 0.5 ? "before" : "after";
+  };
+  const scroll = () => {
+    if (!dragging.current) return;
+    const nav = input.treeRef.current?.closest("nav");
+    if (nav && pointerY.current !== null) {
+      const rect = nav.getBoundingClientRect();
+      if (pointerY.current >= rect.top && pointerY.current < rect.top + 24) nav.scrollTop -= 12;
+      else if (pointerY.current <= rect.bottom && pointerY.current > rect.bottom - 24) nav.scrollTop += 12;
+    }
+    frame.current = window.requestAnimationFrame(scroll);
+  };
+  const rowProps = (nodeId: string) => ({
+    draggable: enabled && input.canMove(nodeId),
+    "data-row-node-id": nodeId,
+    onDragStart: (event: DragEvent<HTMLElement>) => {
+      if (!enabled || busy.current || !input.canMove(nodeId) || input.filtering) {
+        event.preventDefault(); if (input.filtering) input.announce(CLEAR_FILTER_TO_REORDER); return;
+      }
+      event.stopPropagation(); event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("application/x-kh-tree-node", nodeId);
+      destinations.current = new Set(moveDestinations(input.items, nodeId).map((destination) => destination.id));
+      dragging.current = nodeId; setDraggingId(nodeId); frame.current = window.requestAnimationFrame(scroll);
+    },
+    onDragOver: (event: DragEvent<HTMLElement>) => {
+      if (!dragging.current || busy.current) return;
+      event.stopPropagation(); event.preventDefault(); event.dataTransfer.dropEffect = "move";
+      pointerY.current = event.clientY;
+      const item = input.items.find((entry) => entry.id === nodeId);
+      if (!item) return;
+      const zone = zoneFor(event, item);
+      if (!dropPlacement(input.items, dragging.current, nodeId, zone, destinations.current)) { setIndicator(null); clearExpand(); return; }
+      const rect = event.currentTarget.getBoundingClientRect();
+      if (zone === "into") {
+        setIndicator({ kind: "into", nodeId });
+        if (input.isCollapsed(nodeId) && expandFor.current !== nodeId) {
+          clearExpand(); expandFor.current = nodeId;
+          expandTimer.current = window.setTimeout(() => { input.expandFolder(nodeId); expandFor.current = null; }, 500);
+        }
+      } else {
+        clearExpand();
+        const bottom = item.type === "folder" ? event.currentTarget.closest("[data-node-id]")?.getBoundingClientRect().bottom ?? rect.bottom : rect.bottom;
+        setIndicator({ kind: "line", top: zone === "before" ? rect.top : bottom, left: rect.left, width: rect.width });
+      }
+    },
+    onDragLeave: (event: DragEvent<HTMLElement>) => {
+      if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+      setIndicator(null); clearExpand(); pointerY.current = null;
+    },
+    onDrop: async (event: DragEvent<HTMLElement>) => {
+      if (!dragging.current || busy.current) return;
+      event.stopPropagation(); event.preventDefault();
+      const source = input.items.find((entry) => entry.id === dragging.current);
+      const target = input.items.find((entry) => entry.id === nodeId);
+      if (!source || !target) { cleanup(); return; }
+      const zone = zoneFor(event, target);
+      const placement = dropPlacement(input.items, source.id, target.id, zone, destinations.current);
+      if (!placement) { cleanup(); return; }
+      busy.current = true; awaitingResponse.current = true; refreshed.current = false;
+      giveUp.current = window.setTimeout(() => { busy.current = false; }, 3000);
+      let succeeded = false;
+      try {
+        const parentId = placement.kind === "move" ? placement.parentId : source.parentId;
+        const ok = placement.kind === "reorder"
+          ? await input.onReorder({ nodeId: source.id, position: placement.position })
+          : await input.onMove({ nodeId: source.id, label: source.label, from: { parentId: source.parentId, position: source.position }, to: { parentId, label: input.items.find((entry) => entry.id === parentId)?.label ?? null, position: placement.position } });
+        succeeded = ok;
+        if (ok) { if (placement.kind === "reorder") input.announce(placedNode(source.label, placement.index, placement.count)); input.onPlaced(source.id, parentId, refreshed.current); }
+      } finally {
+        awaitingResponse.current = false;
+        if (!succeeded || refreshed.current) { window.clearTimeout(giveUp.current); busy.current = false; }
+        cleanup();
+      }
+    },
+    onDragEnd: () => cleanup(),
+  });
+  return { rowProps, indicator, draggingId };
+}

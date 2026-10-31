@@ -257,6 +257,7 @@ type RowProps = {
   "data-row-node-id"?: string;
   onDragStart?: React.DragEventHandler;
   onDragOver?: React.DragEventHandler;
+  onDragLeave?: React.DragEventHandler;
   onDrop?: React.DragEventHandler;
   onDragEnd?: React.DragEventHandler;
 };

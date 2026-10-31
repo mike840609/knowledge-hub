@@ -38,6 +38,12 @@ describe("dropPlacement", () => {
     expect(dropPlacement([folder("H", 0, null, "ARCHIVED"), doc("D", 0, "n:H"), doc("A", 1)], "n:A", "n:D", "before")).toBeNull();
   });
 
+  it("uses the destinations captured when the drag began", () => {
+    const items = [doc("A", 0), folder("F", 1)];
+    expect(dropPlacement(items, "n:A", "n:F", "into", new Set<string>())).toBeNull();
+    expect(dropPlacement(items, "n:A", "n:F", "into", new Set(["n:F"]))?.kind).toBe("move");
+  });
+
   it("refuses itself and a document as a container", () => {
     expect(dropPlacement(siblings, "n:A", "n:A", "after")).toBeNull();
     expect(dropPlacement(siblings, "n:A", "n:B", "into")).toBeNull();
