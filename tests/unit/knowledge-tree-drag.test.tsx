@@ -255,24 +255,24 @@ describe("tree dragging", () => {
     act(() => { rowFor("A").dispatchEvent(event); });
     expect(event.defaultPrevented).toBe(true);
   });
-  it("ignores an old keyboard refusal after a queued newer request starts", async () => {
+  it("discards a queued keyboard reorder if the first request was refused", async () => {
     let finishFirst: (value: boolean) => void = () => {};
     const onReorder = vi.fn()
       .mockImplementationOnce(() => new Promise<boolean>((resolve) => { finishFirst = resolve; }))
-      .mockImplementation(() => new Promise<boolean>(() => {}));
+      .mockImplementation(async () => true);
     const { rerender } = render({ onReorder });
     const press = (label: string, key: string) => rowFor(label).dispatchEvent(new KeyboardEvent("keydown", { key, altKey: true, bubbles: true, cancelable: true }));
     act(() => { press("B", "ArrowDown"); press("C", "ArrowUp"); });
-    // The second key is queued behind the unresolved request, not sent on top of it.
     expect(onReorder).toHaveBeenCalledTimes(1);
     rerender({ items: [doc("A", 0), doc("C", 1), doc("B", 2)] });
-    expect(onReorder).toHaveBeenCalledTimes(2);
-    expect(onReorder).toHaveBeenLastCalledWith({ nodeId: "n:C", position: 0 });
+    // Even a matching tree cannot dispatch a second PATCH while the first is pending.
+    expect(onReorder).toHaveBeenCalledTimes(1);
     await act(async () => { finishFirst(false); });
+    expect(onReorder).toHaveBeenCalledTimes(1);
     const event = new Event("dragstart", { bubbles: true, cancelable: true });
     Object.defineProperty(event, "dataTransfer", { value: { effectAllowed: "", setData: vi.fn() } });
     act(() => { rowFor("A").dispatchEvent(event); });
-    expect(event.defaultPrevented).toBe(true);
+    expect(event.defaultPrevented).toBe(false);
   });
   it("blocks keyboard sorting during an active drag", async () => {
     const onReorder = vi.fn(async () => true);
@@ -332,7 +332,7 @@ describe("tree dragging", () => {
     rerender({ items: [folder, doc("A", 0, "n:F")] });
     expect(document.activeElement).toBe(rowFor("A"));
   });
-  it("ignores a late keyboard reply after a refresh starts the queued step", async () => {
+  it("keeps drag locked while the queued second keyboard request is pending", async () => {
     let finishFirst: (value: boolean) => void = () => {};
     const onReorder = vi.fn()
       .mockImplementationOnce(() => new Promise<boolean>((resolve) => { finishFirst = resolve; }))
@@ -341,8 +341,9 @@ describe("tree dragging", () => {
     const press = (key: string) => rowFor("B").dispatchEvent(new KeyboardEvent("keydown", { key, altKey: true, bubbles: true, cancelable: true }));
     act(() => { press("ArrowDown"); press("ArrowUp"); });
     rerender({ items: [doc("A", 0), doc("C", 1), doc("B", 2)] });
+    expect(onReorder).toHaveBeenCalledTimes(1);
+    await act(async () => { finishFirst(true); });
     expect(onReorder).toHaveBeenCalledTimes(2);
-    await act(async () => { finishFirst(false); });
     const event = new Event("dragstart", { bubbles: true, cancelable: true });
     Object.defineProperty(event, "dataTransfer", { value: { effectAllowed: "", setData: vi.fn() } });
     act(() => { rowFor("A").dispatchEvent(event); });
