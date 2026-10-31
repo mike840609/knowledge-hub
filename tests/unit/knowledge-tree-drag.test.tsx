@@ -164,4 +164,79 @@ describe("tree dragging", () => {
     await act(async () => { finish(true); });
     expect(document.activeElement).toBe(rowFor("A"));
   });
+  it("does not cancel a newer drag when a timed-out request finishes", async () => {
+    vi.useFakeTimers();
+    try {
+      let finish: (value: boolean) => void = () => {};
+      const onReorder = vi.fn(() => new Promise<boolean>((resolve) => { finish = resolve; }));
+      render({ onReorder });
+      const target = rowFor("B");
+      target.getBoundingClientRect = () => ({ top: 0, bottom: 20, height: 20, left: 0, right: 100, width: 100, x: 0, y: 0, toJSON: () => ({}) });
+      const transfer = { effectAllowed: "", dropEffect: "", setData: vi.fn() };
+      const fire = (row: HTMLElement, type: string) => {
+        const event = new Event(type, { bubbles: true, cancelable: true });
+        Object.defineProperties(event, { dataTransfer: { value: transfer }, clientY: { value: 1 } });
+        row.dispatchEvent(event);
+      };
+      act(() => { fire(rowFor("A"), "dragstart"); fire(target, "drop"); });
+      act(() => { vi.advanceTimersByTime(3000); fire(rowFor("C"), "dragstart"); });
+      expect(rowFor("C").className).toContain("kh-tree-drag-source");
+      await act(async () => { finish(true); });
+      expect(rowFor("C").className).toContain("kh-tree-drag-source");
+      act(() => { fire(target, "drop"); });
+      expect(onReorder).toHaveBeenCalledTimes(2);
+    } finally { vi.useRealTimers(); }
+  });
+  it("does not mistake another row changing for the drop refresh", async () => {
+    let finish: (value: boolean) => void = () => {};
+    const onReorder = vi.fn(() => new Promise<boolean>((resolve) => { finish = resolve; }));
+    const { rerender } = render({ onReorder });
+    const target = rowFor("B");
+    target.getBoundingClientRect = () => ({ top: 0, bottom: 20, height: 20, left: 0, right: 100, width: 100, x: 0, y: 0, toJSON: () => ({}) });
+    const fire = (row: HTMLElement, type: string) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperties(event, { dataTransfer: { value: { effectAllowed: "", setData: vi.fn() } }, clientY: { value: 19 } });
+      row.dispatchEvent(event);
+    };
+    act(() => { fire(rowFor("A"), "dragstart"); fire(target, "drop"); });
+    rerender({ items: items.map(item => ({ ...item })) });
+    rerender({ items: [doc("A", 0), doc("B", 1), doc("C", 3)] });
+    await act(async () => { finish(true); });
+    act(() => { fire(rowFor("C"), "dragstart"); fire(target, "drop"); });
+    expect(onReorder).toHaveBeenCalledTimes(1);
+  });
+  it("does not allow keyboard reorder while a drag request is pending", () => {
+    const onReorder = vi.fn(() => new Promise<boolean>(() => {}));
+    render({ onReorder });
+    const target = rowFor("B");
+    target.getBoundingClientRect = () => ({ top: 0, bottom: 20, height: 20, left: 0, right: 100, width: 100, x: 0, y: 0, toJSON: () => ({}) });
+    const fire = (row: HTMLElement, type: string) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperties(event, { dataTransfer: { value: { effectAllowed: "", setData: vi.fn() } }, clientY: { value: 19 } });
+      row.dispatchEvent(event);
+    };
+    act(() => { fire(rowFor("A"), "dragstart"); fire(target, "drop"); });
+    act(() => { target.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true, cancelable: true })); });
+    expect(onReorder).toHaveBeenCalledTimes(1);
+  });
+  it("does not start a drag while a keyboard reorder is pending", () => {
+    const onReorder = vi.fn(() => new Promise<boolean>(() => {}));
+    render({ onReorder });
+    const target = rowFor("B");
+    act(() => { target.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true, cancelable: true })); });
+    const event = new Event("dragstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: { effectAllowed: "", setData: vi.fn() } });
+    act(() => { rowFor("A").dispatchEvent(event); });
+    expect(event.defaultPrevented).toBe(true);
+  });
+  it("keeps a keyboard reorder locked when the tree rerenders unchanged", () => {
+    const onReorder = vi.fn(() => new Promise<boolean>(() => {}));
+    const { rerender } = render({ onReorder });
+    act(() => { rowFor("B").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true, cancelable: true })); });
+    rerender({ items: items.map(item => ({ ...item })) });
+    const event = new Event("dragstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: { effectAllowed: "", setData: vi.fn() } });
+    act(() => { rowFor("A").dispatchEvent(event); });
+    expect(event.defaultPrevented).toBe(true);
+  });
 });

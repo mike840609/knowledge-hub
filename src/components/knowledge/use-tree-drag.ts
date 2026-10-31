@@ -9,7 +9,7 @@ import type { MoveNodeInput } from "./use-tree-mutations";
 export type TreeDragIndicator = { kind: "line"; top: number; left: number; width: number } | { kind: "into"; nodeId: string } | null;
 
 type Input = {
-  items: KnowledgeTreeItem[]; filtering: boolean; canMove: (id: string) => boolean;
+  items: KnowledgeTreeItem[]; filtering: boolean; canMove: (id: string) => boolean; isKeyboardBusy: () => boolean;
   isCollapsed: (id: string) => boolean; onReorder: (input: { nodeId: string; position: number }) => Promise<boolean>;
   onMove: (input: MoveNodeInput) => Promise<boolean>; onPlaced: (id: string, parentId: string | null, refreshed: boolean) => void;
   announce: (text: string) => void; expandFolder: (id: string) => void; treeRef: RefObject<HTMLUListElement | null>;
@@ -22,6 +22,8 @@ export function useTreeDrag(input: Input) {
   const dragging = useRef<string | null>(null);
   const destinations = useRef<ReadonlySet<string>>(new Set());
   const busy = useRef(false);
+  const operation = useRef(0);
+  const expected = useRef<{ id: string; parentId: string | null; position: number | undefined; oldParent: string | null; oldPosition: number } | null>(null);
   const awaitingResponse = useRef(false);
   const refreshed = useRef(false);
   const pointerY = useRef<number | null>(null);
@@ -39,7 +41,14 @@ export function useTreeDrag(input: Input) {
     return () => { window.cancelAnimationFrame(frame.current ?? 0); window.clearTimeout(expandTimer.current); window.clearTimeout(giveUp.current); };
   }, []);
   useEffect(() => {
-    if (busy.current) {
+    const wanted = expected.current;
+    const row = wanted && input.items.find((item) => item.id === wanted.id);
+    const changed = row && wanted && (row.parentId !== wanted.oldParent || row.position !== wanted.oldPosition);
+    const appended = wanted?.position === undefined || wanted.position === Number.MAX_SAFE_INTEGER;
+    const atDestination = row && wanted && row.parentId === wanted.parentId && (appended
+      ? input.items.every((item) => item.parentId !== wanted.parentId || item.id === row.id || item.position < row.position)
+      : row.position === wanted.position);
+    if (busy.current && changed && atDestination) {
       if (awaitingResponse.current) refreshed.current = true;
       else { busy.current = false; window.clearTimeout(giveUp.current); }
     }
@@ -64,7 +73,7 @@ export function useTreeDrag(input: Input) {
     draggable: enabled && input.canMove(nodeId),
     "data-row-node-id": nodeId,
     onDragStart: (event: DragEvent<HTMLElement>) => {
-      if (!enabled || busy.current || !input.canMove(nodeId) || input.filtering) {
+      if (!enabled || busy.current || input.isKeyboardBusy() || !input.canMove(nodeId) || input.filtering) {
         event.preventDefault(); if (input.filtering) input.announce(CLEAR_FILTER_TO_REORDER); return;
       }
       event.stopPropagation(); event.dataTransfer.effectAllowed = "move";
@@ -107,22 +116,30 @@ export function useTreeDrag(input: Input) {
       const placement = dropPlacement(input.items, source.id, target.id, zone, destinations.current);
       if (!placement) { cleanup(); return; }
       busy.current = true; awaitingResponse.current = true; refreshed.current = false;
-      giveUp.current = window.setTimeout(() => { busy.current = false; }, 3000);
+      expected.current = { id: source.id, parentId: placement.kind === "move" ? placement.parentId : source.parentId,
+        position: placement.position, oldParent: source.parentId, oldPosition: source.position };
+      const currentOperation = ++operation.current;
+      giveUp.current = window.setTimeout(() => {
+        if (operation.current === currentOperation) { operation.current++; busy.current = false; awaitingResponse.current = false; }
+      }, 3000);
       let succeeded = false;
       try {
         const parentId = placement.kind === "move" ? placement.parentId : source.parentId;
         const ok = placement.kind === "reorder"
           ? await input.onReorder({ nodeId: source.id, position: placement.position })
           : await input.onMove({ nodeId: source.id, label: source.label, from: { parentId: source.parentId, position: source.position }, to: { parentId, label: input.items.find((entry) => entry.id === parentId)?.label ?? null, position: placement.position } });
+        if (operation.current !== currentOperation) return;
         succeeded = ok;
         if (ok) { if (placement.kind === "reorder") input.announce(placedNode(source.label, placement.index, placement.count)); input.onPlaced(source.id, parentId, refreshed.current); }
       } finally {
-        awaitingResponse.current = false;
-        if (!succeeded || refreshed.current) { window.clearTimeout(giveUp.current); busy.current = false; }
-        cleanup();
+        if (operation.current === currentOperation) {
+          awaitingResponse.current = false;
+          if (!succeeded || refreshed.current) { window.clearTimeout(giveUp.current); busy.current = false; }
+          cleanup();
+        }
       }
     },
     onDragEnd: () => cleanup(),
   });
-  return { rowProps, indicator, draggingId };
+  return { rowProps, indicator, draggingId, isBusy: () => busy.current };
 }

@@ -353,13 +353,14 @@ export function KnowledgeTree({
   // put back on the row then too, since a row that has changed its place in the list may have been
   // taken out of the page and put back, which drops focus.
   const reordering = useRef(false);
+  const expectedReorder = useRef<{ id: string; parentId: string | null; position: number } | null>(null);
   const reorderGiveUp = useRef<number | undefined>(undefined);
   const queuedReorder = useRef<{ id: string; direction: -1 | 1 } | null>(null);
   const focusAfterReorder = useRef<string | null>(null);
   const [announcement, setAnnouncement] = useState({ text: "", sequence: 0 });
   const announce = (text: string) => setAnnouncement((previous) => ({ text, sequence: previous.sequence + 1 }));
   const drag = useTreeDrag({
-    items, filtering,
+    items, filtering, isKeyboardBusy: () => reordering.current,
     canMove: (id) => { const item = itemById.get(id); if (!item || item.status === "ARCHIVED") return false; return (item.type === "document" ? documentActions(item) : folderActions(item)).some((action) => action.id === "document.move" || action.id === "folder.move"); },
     isCollapsed: (id) => effectiveCollapsed.has(id), onReorder, onMove,
     onPlaced: (id, parentId, refreshed) => {
@@ -374,7 +375,13 @@ export function KnowledgeTree({
   });
   useEffect(() => () => window.clearTimeout(reorderGiveUp.current), []);
   useEffect(() => {
+    const expected = expectedReorder.current;
+    if (reordering.current && expected) {
+      const row = itemById.get(expected.id);
+      if (!row || row.parentId !== expected.parentId || row.position !== expected.position) return;
+    }
     reordering.current = false;
+    expectedReorder.current = null;
     window.clearTimeout(reorderGiveUp.current);
     const queued = queuedReorder.current;
     queuedReorder.current = null;
@@ -396,6 +403,7 @@ export function KnowledgeTree({
       announce(CLEAR_FILTER_TO_REORDER);
       return;
     }
+    if (drag.isBusy()) return;
     if (reordering.current) {
       queuedReorder.current = { id: item.id, direction };
       return;
@@ -407,10 +415,12 @@ export function KnowledgeTree({
       return;
     }
     reordering.current = true;
+    expectedReorder.current = { id: item.id, parentId: item.parentId, position: step.position };
     // If the tree never arrives, the next key press is not lost for good.
     window.clearTimeout(reorderGiveUp.current);
     reorderGiveUp.current = window.setTimeout(() => {
       reordering.current = false;
+      expectedReorder.current = null;
       queuedReorder.current = null;
     }, 3000);
     if (await onReorder({ nodeId: item.id, position: step.position })) {
@@ -418,6 +428,7 @@ export function KnowledgeTree({
       announce(reorderedNode(item.label, direction < 0 ? "up" : "down", step.index, step.count));
     } else {
       reordering.current = false;
+      expectedReorder.current = null;
       queuedReorder.current = null;
       window.clearTimeout(reorderGiveUp.current);
     }
