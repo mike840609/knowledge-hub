@@ -464,17 +464,20 @@ export async function forgetRememberedFolder(sourceId: string): Promise<void> {
  * webkitRelativePath `${handle.name}/${relPath}` defined on it so the
  * existing selectFolder() derives rootName === handle.name unchanged.
  */
-export async function collectHandleFiles(handle: FileSystemDirectoryHandle): Promise<File[]> {
+export async function collectHandleFiles(handle: FileSystemDirectoryHandle, signal?: AbortSignal): Promise<File[]> {
+  const check = () => { if (signal?.aborted) throw Object.assign(new Error("Import was cancelled."), { code: "IMPORT_CANCELLED" }); };
   const out: File[] = [];
   const walk = async (dir: FileSystemDirectoryHandle, prefix: string): Promise<void> => {
     const entries = dir.values();
     for await (const entry of entries) {
+      check();
       // Never open an ignored file or descend into an ignored folder (`.git`,
       // `node_modules`): the import discards them, and walking them is the slow part.
       if (isIgnoredImportPath(prefix ? `${prefix}/${entry.name}` : entry.name)) continue;
       if (entry.kind === "file") {
         const fileHandle = entry as FileSystemFileHandle;
         const file = await fileHandle.getFile();
+        check();
         const relPath = prefix ? `${prefix}/${entry.name}` : entry.name;
         Object.defineProperty(file, "webkitRelativePath", {
           value: `${handle.name}/${relPath}`,
@@ -487,6 +490,8 @@ export async function collectHandleFiles(handle: FileSystemDirectoryHandle): Pro
       }
     }
   };
+  check();
   await walk(handle, "");
+  check();
   return out;
 }

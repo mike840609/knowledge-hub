@@ -115,7 +115,7 @@ describe("folder import directory picker", () => {
     await clickChooseFolder();
 
     expect(showDirectoryPicker).toHaveBeenCalledWith({ mode: "read" });
-    expect(collectHandleFiles).toHaveBeenCalledWith(handle);
+    expect(collectHandleFiles).toHaveBeenCalledWith(handle, expect.any(AbortSignal));
     expect(rememberFolderHandle).toHaveBeenCalledWith("s1", handle, "Notes");
     expect(push).toHaveBeenCalledWith("/w/w1/sources/imports/snap-1");
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
@@ -171,7 +171,7 @@ describe("folder import directory picker", () => {
     await clickChooseFolder();
 
     expect(showDirectoryPicker).toHaveBeenCalledWith({ mode: "read" });
-    expect(collectHandleFiles).toHaveBeenCalledWith(handle);
+    expect(collectHandleFiles).toHaveBeenCalledWith(handle, expect.any(AbortSignal));
     expect(stashPendingHandle).toHaveBeenCalledWith("snap-new", handle, "Notes");
     expect(rememberFolderHandle).not.toHaveBeenCalled();
     expect(push).toHaveBeenCalledWith("/w/w1/sources/imports/snap-new");

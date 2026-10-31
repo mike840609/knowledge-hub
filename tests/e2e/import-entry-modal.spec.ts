@@ -107,3 +107,52 @@ test("the dialog fits a phone viewport", async ({ page }) => {
   expect(box!.width).toBeLessThanOrEqual(390);
   await expect(dialog.getByRole("button", { name: "Choose folder", exact: true })).toBeInViewport();
 });
+
+test("refreshing an applied preview opens the full import page", async ({ page }) => {
+  const ws = await personalWorkspaceId(page);
+  await page.goto(`/w/${ws}/sources`);
+  await openImport(page);
+  await page.getByRole("dialog", { name: "Import folder" }).getByRole("button", { name: "English", exact: true }).click();
+  await expect(page).toHaveURL(/\/sources\/imports\//);
+  const preview = page.url();
+  await page.getByRole("button", { name: "Apply changes" }).click();
+  await expect(page).toHaveURL(/\/runs\//);
+  await page.goto(preview);
+  await page.getByRole("link", { name: "Refresh preview" }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${ws}/sources/import$`));
+  await expect(page.getByRole("dialog", { name: "Import folder" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 1, name: "Import folder" })).toBeVisible();
+});
+
+for (const stage of ["entries", "finalize"] as const) {
+  test(`locks dismissal and abandons the session when ${stage} is cancelled`, async ({ page }) => {
+    const ws = await personalWorkspaceId(page);
+    let unblock!: () => void;
+    const gate = new Promise<void>((resolve) => { unblock = resolve; });
+    let arrived!: () => void;
+    const reached = new Promise<void>((resolve) => { arrived = resolve; });
+    await page.route(`**/api/source-imports/*/${stage}`, async (route) => {
+      arrived();
+      await gate;
+      await route.abort().catch(() => {});
+    });
+    await page.goto(`/w/${ws}/sources`);
+    await openImport(page);
+    const dialog = page.getByRole("dialog", { name: "Import folder" });
+    await dialog.getByRole("button", { name: "English", exact: true }).click();
+    await reached;
+    const close = dialog.getByRole("button", { name: "Close dialog" });
+    await expect(close).toBeDisabled();
+    await page.keyboard.press("Escape");
+    await page.mouse.click(5, 5);
+    await expect(dialog).toBeVisible();
+    const deleted = page.waitForResponse((response) => response.request().method() === "DELETE" && /\/api\/source-imports\/[^/]+$/.test(new URL(response.url()).pathname));
+    await dialog.getByRole("button", { name: "Cancel import" }).click();
+    unblock();
+    const response = await deleted;
+    expect(await response.json()).toEqual({ abandoned: true });
+    await expect(close).toBeEnabled();
+    await close.click();
+    await expect(dialog).toBeHidden();
+  });
+}

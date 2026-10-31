@@ -12,12 +12,14 @@ export function SampleWikiImport({
   disabled,
   onLoaded,
   onLoadingChange,
+  onCancelReady,
 }: {
   disabled: boolean;
   /** Hands the files to the import flow; resolves when that import has settled. */
   onLoaded: (sample: SampleWiki) => Promise<void>;
   /** True from the click until the import has settled, so siblings can lock too. */
   onLoadingChange?: (loading: boolean) => void;
+  onCancelReady?: (cancel: (() => void) | null) => void;
 }): React.JSX.Element {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,14 +35,18 @@ export function SampleWikiImport({
   async function choose(locale: SampleLocale): Promise<void> {
     if (running.current) return;
     running.current = true;
+    const controller = new AbortController();
+    onCancelReady?.(() => controller.abort());
     setError(null);
     setLoading(true);
     onLoadingChange?.(true);
     try {
-      await onLoaded(await loadSampleWiki(locale));
+      const sample = await loadSampleWiki(locale, fetch, controller.signal);
+      if (!controller.signal.aborted) await onLoaded(sample);
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Could not load the sample wiki.");
+      if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : "Could not load the sample wiki.");
     } finally {
+      onCancelReady?.(null);
       settle();
     }
   }

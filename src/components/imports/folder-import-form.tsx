@@ -453,12 +453,13 @@ export function FolderImportForm({
   allowedRef.current = allowed;
   const mountedRef = useRef(false);
   const activeImportRef = useRef<AbortController | null>(null);
+  const cancelSampleRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     // React Strict Mode intentionally runs setup → cleanup → setup once in
     // development. Resetting this flag in setup makes that probe harmless;
     // permission state stays exclusively in allowedRef.
     mountedRef.current = true;
-    const cancel = () => activeImportRef.current?.abort();
+    const cancel = () => { activeImportRef.current?.abort(); cancelSampleRef.current?.(); };
     window.addEventListener("pagehide", cancel);
     return () => {
       mountedRef.current = false;
@@ -502,7 +503,7 @@ export function FolderImportForm({
     }
   }, [rememberedSourceId]);
   const [sampleLoading, setSampleLoading] = useState(false);
-  const busy = state.kind === "PREPARING" || state.kind === "UPLOADING" || state.kind === "FINALIZING";
+  const busy = sampleLoading || state.kind === "PREPARING" || state.kind === "UPLOADING" || state.kind === "FINALIZING";
   // Ticks once a second while finalizing so the elapsed time moves; idle otherwise.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -587,7 +588,11 @@ export function FolderImportForm({
     try {
       checkActive();
       setState({ kind: "PREPARING" });
-      const files = await collectHandleFiles(handle);
+      const files = await new Promise<File[]>((resolve, reject) => {
+        const cancelled = () => reject(Object.assign(new Error("Import was cancelled."), { code: "IMPORT_CANCELLED" }));
+        controller.signal.addEventListener("abort", cancelled, { once: true });
+        collectHandleFiles(handle, controller.signal).then(resolve, reject).finally(() => controller.signal.removeEventListener("abort", cancelled));
+      });
       checkActive();
       if (files.length === 0) { setState({ kind: "IDLE" }); return; }
       setSelection({ name: handle.name || "Selected folder", count: files.length });
@@ -680,10 +685,10 @@ export function FolderImportForm({
         }}
       />
       {target.kind === "new" ? (
-        <SampleWikiImport disabled={busy} onLoadingChange={setSampleLoading} onLoaded={(sample) => handleFiles(sample.files, sample.sourceName)} />
+        <SampleWikiImport disabled={busy} onLoadingChange={setSampleLoading} onCancelReady={(cancel) => { cancelSampleRef.current = cancel; }} onLoaded={(sample) => handleFiles(sample.files, sample.sourceName)} />
       ) : null}
       {status ? <p role="status" className="mt-3 text-body text-kh-text-muted">{status}</p> : null}
-      {busy ? <Button variant="secondary" className="mt-3" onClick={() => activeImportRef.current?.abort()}>Cancel import</Button> : null}
+      {busy ? <Button variant="secondary" className="mt-3" onClick={() => { cancelSampleRef.current?.(); activeImportRef.current?.abort(); }}>Cancel import</Button> : null}
       {state.kind === "ERROR" ? <p className="mt-2 text-body"><Link href="/help#troubleshooting" className="kh-focus-ring rounded-md text-kh-link hover:underline">Sync troubleshooting</Link></p> : null}
       {state.kind === "ERROR" ? <details className="mt-2 text-caption text-kh-text-muted"><summary className="cursor-pointer rounded-md kh-focus-ring">Technical details</summary><code>{state.code}</code></details> : null}
     </div>

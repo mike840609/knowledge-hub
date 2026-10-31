@@ -83,3 +83,28 @@ it("locks dismissal from the real form while the folder scan is running", async 
   act(() => closeButton().click());
   expect(state.back).toHaveBeenCalledOnce();
 });
+
+it("unlocks immediately when a slow folder scan is cancelled", async () => {
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  act(() => root.render(<ImportFolderDialog workspaceId="w1" canImport limits={limits} />));
+  await act(async () => { chooseFolderButton().click(); });
+  const cancel = [...document.querySelectorAll("button")].find((button) => button.textContent === "Cancel import")!;
+  await act(async () => { cancel.click(); });
+  expect(closeButton().disabled).toBe(false);
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("locks and permits cancellation while the sample wiki is loading", async () => {
+  vi.stubGlobal("fetch", vi.fn((_url, options?: RequestInit) => new Promise((_resolve, reject) => {
+    options?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+  })));
+  act(() => root.render(<ImportFolderDialog workspaceId="w1" canImport limits={limits} />));
+  const sample = [...document.querySelectorAll("button")].find((button) => button.textContent === "English")!;
+  await act(async () => { sample.click(); });
+  expect(closeButton().disabled).toBe(true);
+  const cancel = [...document.querySelectorAll("button")].find((button) => button.textContent === "Cancel import")!;
+  await act(async () => { cancel.click(); });
+  expect(closeButton().disabled).toBe(false);
+  expect(document.querySelector('[role="alert"]')).toBeNull();
+});
