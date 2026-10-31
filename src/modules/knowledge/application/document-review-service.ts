@@ -117,13 +117,33 @@ export class DocumentReviewService {
     }
     return views;
   }
+  /**
+   * The unread SQL window may be full of Team events whose access was revoked.
+   * Keep those unread for a future re-grant, but page past them so they cannot
+   * hide older personal or accessible Team notifications.
+   */
+  private async readableUnreadEvents(r: KnowledgeRepositories, caller: CallerContext, access: RequestAccess): Promise<ShareCommentNotificationView[]> {
+    const visible: ShareCommentNotificationView[] = [];
+    let before: { createdAt: Date; id: string } | undefined;
+    while (visible.length < FOLLOW_LIMIT) {
+      const rows = await r.shareCommentEvents.listUnreadByRecipient(caller.identity.id, before, FOLLOW_LIMIT);
+      if (rows.length === 0) break;
+      const views = await this.notificationViews(r, rows, caller, access, false);
+      visible.push(...views.slice(0, FOLLOW_LIMIT - visible.length));
+      if (rows.length < FOLLOW_LIMIT) break;
+      const last = rows[rows.length - 1];
+      before = { createdAt: last.createdAt, id: last.id };
+    }
+    return visible;
+  }
+
   /** The caller's unread: comments on their documents or team documents, replies in discussions they follow, and comments naming them. */
   async listUnreadForOwner(caller: CallerContext) {
     return this.uow.run(async r => {
       const access = this.requestAccess(r, caller);
       return {
         notifications: newestFirst([
-          ...await this.notificationViews(r, await r.shareCommentEvents.listUnreadByRecipient(caller.identity.id), caller, access, false),
+          ...await this.readableUnreadEvents(r, caller, access),
           ...(await this.followViews(r, caller.identity.id)).filter(view => view.readAt === null),
           ...(await this.mentionViews(r, await this.unreadMentions(r, caller, access), caller, access))
             .filter(view => view.readAt === null && (view.access?.kind !== "TEAM" || view.access.available)),
@@ -471,6 +491,7 @@ export class DocumentReviewService {
    */
   private requestAccess(r: KnowledgeRepositories, caller: CallerContext): RequestAccess {
     const capabilities = new Map<string, ReturnType<CapabilityOf>>();
+    const readableDocuments = new Map<string, Promise<ReviewScope | null>>();
     const capabilityOf: CapabilityOf = (workspaceId) => {
       const found = capabilities.get(workspaceId);
       if (found) return found;
@@ -480,14 +501,20 @@ export class DocumentReviewService {
     };
     return {
       capabilityOf,
-      readable: async (documentId) => {
-        try {
-          const s = await this.documentScope(r, caller, documentId, false, capabilityOf);
-          return s.team ? s : null;
-        } catch (error) {
-          if (error instanceof ShareLinkNotFoundError) return null;
-          throw error;
-        }
+      readable: (documentId) => {
+        const cached = readableDocuments.get(documentId);
+        if (cached) return cached;
+        const judged = (async () => {
+          try {
+            const s = await this.documentScope(r, caller, documentId, false, capabilityOf);
+            return s.team ? s : null;
+          } catch (error) {
+            if (error instanceof ShareLinkNotFoundError) return null;
+            throw error;
+          }
+        })();
+        readableDocuments.set(documentId, judged);
+        return judged;
       },
     };
   }
@@ -498,15 +525,26 @@ export class DocumentReviewService {
    * and back, loses its unread mark.
    */
   private async unreadMentions(r: KnowledgeRepositories, caller: CallerContext, access?: RequestAccess) {
-    for (;;) {
-      const unread = await r.reviewMentions.listUnreadByRecipient(caller.identity.id, FOLLOW_LIMIT);
-      // A team mention whose access was lost keeps its row and read state, so it reads normally if
-      // access returns; only a dead personal link mention is marked read here.
-      const dead = (await this.judgedMentions(r, unread, caller, access)).filter(judged => !("comment" in judged) && judged.mention.shareLinkId !== null);
-      if (dead.length === 0) return unread;
-      for (const { mention } of dead) await r.reviewMentions.markRead(caller.identity.id, mention.commentId, this.clock());
-      if (unread.length < FOLLOW_LIMIT) return unread.filter(mention => !dead.some(gone => gone.mention.commentId === mention.commentId));
+    const visible: ReviewMention[] = [];
+    let before: { createdAt: Date; commentId: string } | undefined;
+    while (visible.length < FOLLOW_LIMIT) {
+      const unread = await r.reviewMentions.listUnreadByRecipient(caller.identity.id, FOLLOW_LIMIT, before);
+      if (unread.length === 0) break;
+      // A revoked Team mention must remain unread for re-grant, but must not
+      // occupy the whole window and hide older, accessible personal mentions.
+      // Dead personal link mentions retain the existing auto-read cleanup.
+      for (const judged of await this.judgedMentions(r, unread, caller, access)) {
+        if ("comment" in judged) visible.push(judged.mention);
+        else if (judged.mention.shareLinkId !== null) {
+          await r.reviewMentions.markRead(caller.identity.id, judged.mention.commentId, this.clock());
+        }
+        if (visible.length === FOLLOW_LIMIT) break;
+      }
+      if (unread.length < FOLLOW_LIMIT) break;
+      const last = unread[unread.length - 1];
+      before = { createdAt: last.createdAt, commentId: last.commentId };
     }
+    return visible;
   }
   /** Mentions as Inbox entries, one per comment. A dead personal one names nothing and is never unread; a team one keeps its read state. */
   private async mentionViews(r: KnowledgeRepositories, mentions: readonly ReviewMention[], caller: CallerContext, access: RequestAccess): Promise<ShareCommentNotificationView[]> {
