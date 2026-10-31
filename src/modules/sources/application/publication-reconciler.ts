@@ -369,6 +369,7 @@ async function applyReconciliation(
       pushClaimNotice(original.documentId, claim);
       return false;
     }
+    const checkpoint = projection.checkpointTreeView();
     const attempt = await repositories.publications.runClaimAttempt(async () => {
       if (current && current.teamDocumentId !== holder.teamDocumentId) {
         if (current.status === "ACTIVE") {
@@ -382,6 +383,9 @@ async function applyReconciliation(
       }
     });
     if (!attempt.ok) {
+      // The savepoint rolled the database back; drop the statuses this attempt
+      // changed in the tx-local view too.
+      projection.restoreTreeView(checkpoint);
       const winner = await findClaimName(original.documentId);
       if (winner !== null) {
         pushClaimNotice(original.documentId, winner);
@@ -579,6 +583,7 @@ async function applyReconciliation(
       continue;
     }
     const parentId = await ensureFolders(placementNames(original, original.teamPath));
+    const checkpoint = projection.checkpointTreeView();
     const attempt = await repositories.publications.runClaimAttempt(() => projection.copy({
       originalDocumentId: original.documentId,
       parentId,
@@ -586,6 +591,9 @@ async function applyReconciliation(
       sourcePath: original.teamPath,
     }));
     if (!attempt.ok) {
+      // The savepoint dropped the document and tree node rows; remove the same
+      // node from the tx-local view before a later copy or prune reads it.
+      projection.restoreTreeView(checkpoint);
       const winner = await findClaimName(original.documentId);
       if (winner !== null) {
         pushClaimNotice(original.documentId, winner);

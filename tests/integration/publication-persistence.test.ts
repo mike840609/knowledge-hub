@@ -496,6 +496,65 @@ describe("publication event progress", () => {
     expect(done.consumed_at).not.toBeNull();
   });
 
+  it("consumes the root event exactly when the last concurrent delivery finishes", async () => {
+    const original = await fixture.createHubOriginal(fixture.mike, "Concurrent delivery source", "concurrent");
+    const first = await fixture.createPublication({
+      name: "Concurrent Delivery One",
+      kind: "DOCUMENT",
+      creator: fixture.mike,
+      origin: { kind: "DOCUMENT", documentId: original.documentId },
+    });
+    const second = await fixture.createPublication({
+      name: "Concurrent Delivery Two",
+      kind: "DOCUMENT",
+      creator: fixture.mike,
+      origin: { kind: "DOCUMENT", documentId: original.documentId },
+    });
+
+    for (let round = 0; round < 5; round += 1) {
+      await fixture.uow.run(async (repositories) => {
+        await repositories.publicationEvents.record({
+          documentId: original.documentId,
+          treeNodeId: null,
+          kind: "REVISION",
+          revisionId: original.revisionId,
+          at: new Date(Date.now() + round),
+        });
+        await repositories.publications.prepareDeliveries(100);
+      });
+      const rows = await fixture.pool.query<{ id: string }[]>(
+        "SELECT id FROM publication_events WHERE document_id = ? ORDER BY created_at DESC, id DESC LIMIT 1",
+        [original.documentId],
+      );
+      const eventId = String(rows[0]?.id);
+      const pending = (await fixture.uow.run((repositories) =>
+        repositories.publications.listPendingEvents(undefined, 100)))
+        .filter((row) => row.eventId === eventId);
+      expect(pending).toHaveLength(2);
+
+      // Two real transactions on separate pool connections. The event-row lock
+      // makes them finish one after the other; whichever finishes last must
+      // consume the event, so no interleaving can leave it pending.
+      await Promise.all([
+        fixture.uow.run((repositories) =>
+          repositories.publications.completeDelivery(eventId, first.contributionId, "APPLIED")),
+        fixture.uow.run((repositories) =>
+          repositories.publications.completeDelivery(eventId, second.contributionId, "SKIPPED")),
+      ]);
+
+      const [event] = await fixture.pool.query<{ consumed_at: Date | null }[]>(
+        "SELECT consumed_at FROM publication_events WHERE id = ?",
+        [eventId],
+      );
+      expect(event.consumed_at).not.toBeNull();
+      const processed = await fixture.pool.query<{ n: unknown }[]>(
+        "SELECT COUNT(*) AS n FROM publication_event_deliveries WHERE event_id = ? AND processed_at IS NOT NULL",
+        [eventId],
+      );
+      expect(Number(processed[0]?.n)).toBe(2);
+    }
+  });
+
   it("advances past events that already have deliveries when the window is full", async () => {
     const original = await fixture.createHubOriginal(fixture.mike, "Window source", "window");
     const publication = await fixture.createPublication({

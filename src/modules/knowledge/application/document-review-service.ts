@@ -175,7 +175,26 @@ export class DocumentReviewService {
     if (eventId.startsWith(MENTION_PREFIX)) {
       const commentId = eventId.slice(MENTION_PREFIX.length);
       // comment_id is a MariaDB UUID column: a malformed id would fail the query rather than match nothing.
-      if (isUuid(commentId)) await this.uow.run(r => r.reviewMentions.markRead(caller.identity.id, commentId, this.clock()));
+      if (!isUuid(commentId)) return;
+      await this.uow.run(async r => {
+        // Resolve comment → thread → document before touching read state. A
+        // link-less team mention is meaningful only while the caller still
+        // holds document.read; clearing it after access was removed would defeat
+        // the retained-row rule (the row must come back unread on re-grant).
+        const located = await r.reviewComments.listThreadIdsByCommentIds([commentId]);
+        const threadId = located[0]?.threadId;
+        if (threadId === undefined) return;
+        const mention = (await r.reviewMentions.findByThreads(caller.identity.id, [threadId]))
+          .find(candidate => candidate.commentId === commentId);
+        if (!mention) return;
+        if (mention.shareLinkId === null) {
+          const thread = await r.reviewThreads.findById(threadId);
+          if (!thread || !await this.requestAccess(r, caller).readable(thread.documentId)) {
+            throw new ShareLinkNotFoundError();
+          }
+        }
+        await r.reviewMentions.markRead(caller.identity.id, commentId, this.clock());
+      });
       return;
     }
     await this.uow.run(async r => {

@@ -118,16 +118,22 @@ export class PublicationService {
         }
       }
 
+      // Only a folder origin can join an existing publication. A single
+      // document is never joinable, so it neither suggests a join nor warns
+      // that its (always zero) overlap is low.
+      const joinableOrigin = input.origin.kind === "FOLDER";
       const originPaths = originals.flatMap((original) => (original.path === null ? [] : [original.path]));
-      // An origin with no synced paths still has overlap 0 against every folder
-      // candidate, which is exactly what join enforces, so preview must report
-      // the same warning instead of hiding the candidate.
       let best: PublishPreview["joinSuggestion"] = null;
-      for (const publication of publications) {
-        if (publication.kind !== "FOLDER") continue;
-        const overlap = publicationOverlap(originPaths, await activeSyncedPaths(repositories, publication.id));
-        if (best === null || overlap > best.overlap) {
-          best = { publicationId: publication.id, name: publication.name, overlap };
+      if (joinableOrigin) {
+        // An origin with no synced paths still has overlap 0 against every
+        // folder candidate, which is exactly what join enforces, so preview
+        // must report the same warning instead of hiding the candidate.
+        for (const publication of publications) {
+          if (publication.kind !== "FOLDER") continue;
+          const overlap = publicationOverlap(originPaths, await activeSyncedPaths(repositories, publication.id));
+          if (best === null || overlap > best.overlap) {
+            best = { publicationId: publication.id, name: publication.name, overlap };
+          }
         }
       }
 
@@ -154,7 +160,13 @@ export class PublicationService {
   ): Promise<PublicationListItem[]> {
     return this.uow.run(async (repositories) => {
       const workspace = await repositories.workspaces.findById(teamId);
-      if (!workspace || workspace.workspaceType !== "TEAM") throw new WorkspaceNotFoundError();
+      if (
+        !workspace
+        || workspace.workspaceType !== "TEAM"
+        || workspace.lifecycleState !== "ACTIVE"
+      ) {
+        throw new WorkspaceNotFoundError();
+      }
       const capabilities = await evaluateWorkspaceCapabilities(repositories, caller, teamId);
       if (!capabilities.has("document.read")) throw new WorkspaceNotFoundError();
 
@@ -272,7 +284,11 @@ export class PublicationService {
       const publication = await repositories.publications.findById(publicationId);
       if (!publication) throw new NotFoundError("Publication was not found.");
       const workspace = await repositories.workspaces.findById(publication.teamWorkspaceId);
-      if (!workspace || workspace.workspaceType !== "TEAM") {
+      if (
+        !workspace
+        || workspace.workspaceType !== "TEAM"
+        || workspace.lifecycleState !== "ACTIVE"
+      ) {
         throw new NotFoundError("Publication was not found.");
       }
       const capabilities = await evaluateWorkspaceCapabilities(
@@ -430,8 +446,17 @@ export class PublicationService {
             throw new ValidationError(
               "You already joined this publication from another folder; leave it before joining from a different one.");
           }
-          // Re-joining the same origin reuses the contribution and never rebinds
-          // it to a different folder.
+          // A join is an explicit action by that contributor, so it resumes a
+          // voluntary leave from the same origin. Re-joining never rebinds the
+          // contribution to a different folder.
+          if (existing.leftAt !== null) {
+            await repositories.publications.setContributionState(existing.id, {
+              leftAt: null,
+              rightsFrozenAt: existing.rightsFrozenAt,
+              pendingCatchUp: existing.pendingCatchUp,
+            });
+            existing.leftAt = null;
+          }
           const reconciled = await reconcileContribution(repositories, {
             publicationId: publication.id,
             contributionId: existing.id,
@@ -745,6 +770,16 @@ async function reuseRacedJoin(
       throw new ValidationError(
         "You already joined this publication from another folder; leave it before joining from a different one.");
     }
+    // A raced duplicate join of the same origin resumes the same way the
+    // ordinary path does; it is still an explicit join by that contributor.
+    if (existing.leftAt !== null) {
+      await repositories.publications.setContributionState(existing.id, {
+        leftAt: null,
+        rightsFrozenAt: existing.rightsFrozenAt,
+        pendingCatchUp: existing.pendingCatchUp,
+      });
+      existing.leftAt = null;
+    }
 
     const reconciled = await reconcileContribution(repositories, {
       publicationId: publication.id,
@@ -839,6 +874,9 @@ async function requirePublicationLifecycleRights(
   if (!workspace || workspace.workspaceType !== "TEAM") throw new WorkspaceNotFoundError();
   const capabilities = await evaluateWorkspaceCapabilities(
     repositories, caller, publication.teamWorkspaceId);
+  // A non-member is not told a publication exists, exactly as list/status and
+  // publish hide the team. Membership is re-judged on every lifecycle command.
+  if (!capabilities.has("document.read")) throw new WorkspaceNotFoundError();
   // Admin rights are effective rights: OWNER/ADMIN directly or through a
   // validated group. They survive the creator leaving.
   if (capabilities.has("membership.manage_basic")) return;

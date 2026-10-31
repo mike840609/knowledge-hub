@@ -43,13 +43,14 @@ make db-catch-up-publications
 Every personal revision, move and lifecycle write records a `publication_events` row, including while `KM_TEAM_WORKSPACES_ENABLED` is off. Those rows are consumed asynchronously, so the event and delivery tables grow unless an operator trims them.
 
 ```bash
-make db-purge-publication-events
-# or: npm run db:purge-publication-events
+make db-purge-publication-events PURGE_MODE=flag-on
+# or: npm run db:purge-publication-events -- --mode=flag-on
 # window: --days N, or KM_PUBLICATION_RETENTION_DAYS (default 30)
 ```
 
-- **While the flag is off**, nothing consumes events and the job removes every event older than the window, including unconsumed ones, after deleting its deliveries. This is safe because catch-up reconciles each contribution from current state rather than from the event log. `--include-unconsumed` selects this rule explicitly (and is refused while the flag is on).
-- **While the flag is on**, the job removes only events older than the window that are consumed. An unconsumed event is kept while any of its pending deliveries belongs to an active contributor, or while it has no delivery yet. It is removed only when every pending delivery belongs to a contributor who left or is rights-frozen — those contributors never reconcile on their own, and their copy is already labelled 「不再更新」.
+- **A mode is required.** The job never infers the destructive rule from its shell: a cron entry without the deployment's `KM_TEAM_WORKSPACES_ENABLED` used to look like flag-off and could delete pending deliveries. Pass `--mode=flag-on` (or `PURGE_MODE=flag-on`) for a running deployment and `--mode=flag-off` only when the flag is genuinely off. `--include-unconsumed` remains as the explicit legacy spelling of the flag-off rule and is refused while the deployment flag is on.
+- **While the flag is off** (`--mode=flag-off`), nothing consumes events and the job removes every event older than the window, including unconsumed ones, after deleting its deliveries. This is safe because catch-up reconciles each contribution from current state rather than from the event log.
+- **While the flag is on** (`--mode=flag-on`), the job removes only events older than the window that are consumed. An unconsumed event is kept while any of its pending deliveries belongs to an active contributor, or while it has no delivery yet. It is removed only when every pending delivery belongs to a contributor who left or is rights-frozen — those contributors never reconcile on their own, and their copy is already labelled 「不再更新」.
 - Deliveries are deleted before their events (`FK … ON DELETE RESTRICT`). Batched and idempotent, so it is safe to rerun and suitable for a weekly schedule.
 - The output names the mode: `Publication retention: deleted events=<n> deliveries=<n> cutoff=<iso> mode=flag-off|flag-on`.
 

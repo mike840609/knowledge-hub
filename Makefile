@@ -45,8 +45,8 @@ db-catch-up-publications: db-up ## Reconcile Team publications after reopening T
 	npm run db:catch-up-publications
 
 .PHONY: db-purge-publication-events
-db-purge-publication-events: db-up ## Delete consumed publication events and deliveries older than the retention window.
-	npm run db:purge-publication-events
+db-purge-publication-events: db-up ## Delete publication events older than the retention window. Requires PURGE_MODE=flag-on|flag-off.
+	npm run db:purge-publication-events -- $(if $(PURGE_MODE),--mode=$(PURGE_MODE),)
 
 .PHONY: db-report-escaped-wikilinks
 db-report-escaped-wikilinks: db-up ## List documents that may have lost wikilinks to the old editor (read-only; changes nothing).

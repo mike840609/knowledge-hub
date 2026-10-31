@@ -45,13 +45,14 @@ make db-catch-up-publications
 每一次個人 revision、移動與 lifecycle 寫入都會記錄一筆 `publication_events`，即使 `KM_TEAM_WORKSPACES_ENABLED` 關閉也一樣。這些事件是非同步消費的，因此若維運不清除，event 與 delivery 兩張表會持續成長。
 
 ```bash
-make db-purge-publication-events
-# 或：npm run db:purge-publication-events
+make db-purge-publication-events PURGE_MODE=flag-on
+# 或：npm run db:purge-publication-events -- --mode=flag-on
 # 保留窗：--days N，或 KM_PUBLICATION_RETENTION_DAYS（預設 30）
 ```
 
-- **旗標關閉時**沒有任何東西消費事件，因此工作會刪除早於保留窗的所有事件（包含未消費事件），並先刪除其 delivery。這是安全的：catch-up 會從當下狀態重新 reconcile 每個 contribution，不依賴事件記錄。`--include-unconsumed` 可明確選用此規則（旗標開啟時會被拒絕）。
-- **旗標開啟時**只刪除早於保留窗且已消費的事件。未消費事件只要仍有屬於 active contributor 的 pending delivery，或尚未建立任何 delivery，就會保留；唯有全部 pending delivery 都屬於已離開或 rights-frozen 的 contributor 時才移除——這些人不會自行 reconcile，其副本已標示「不再更新」。
+- **必須明確指定模式。** 工作不會從 shell 推斷破壞性規則：以前 cron 沒帶部署的 `KM_TEAM_WORKSPACES_ENABLED` 會被當成旗標關閉，可能刪掉 pending delivery。正式環境請傳 `--mode=flag-on`（或 `PURGE_MODE=flag-on`）；只有旗標確實關閉時才用 `--mode=flag-off`。`--include-unconsumed` 仍是旗標關閉規則的明確舊寫法，部署旗標開啟時會被拒絕。
+- **旗標關閉時**（`--mode=flag-off`）沒有任何東西消費事件，因此工作會刪除早於保留窗的所有事件（包含未消費事件），並先刪除其 delivery。這是安全的：catch-up 會從當下狀態重新 reconcile 每個 contribution，不依賴事件記錄。
+- **旗標開啟時**（`--mode=flag-on`）只刪除早於保留窗且已消費的事件。未消費事件只要仍有屬於 active contributor 的 pending delivery，或尚未建立任何 delivery，就會保留；唯有全部 pending delivery 都屬於已離開或 rights-frozen 的 contributor 時才移除——這些人不會自行 reconcile，其副本已標示「不再更新」。
 - delivery 會先於 event 刪除（`FK … ON DELETE RESTRICT`）。工作分批且可重複執行，適合排成每週工作。
 - 輸出會標明模式：`Publication retention: deleted events=<n> deliveries=<n> cutoff=<iso> mode=flag-off|flag-on`。
 

@@ -60,7 +60,7 @@ function withoutArchivedSubtrees(items: KnowledgeTreeItem[]): KnowledgeTreeItem[
   return items.filter((item) => !hidden(item));
 }
 
-export function SourceSidebar({ workspaceId, source, collections, sources, treeStates, ensureTree, retryTree, selectedDocumentId, includeArchived, publications = [], onCollapse }: SourceSidebarProps) {
+export function SourceSidebar({ workspaceId, source, collections, sources, treeStates, ensureTree, retryTree, selectedDocumentId, includeArchived, publications: seededPublications = [], onCollapse }: SourceSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -217,6 +217,18 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   const matches = visibleCollections.filter(({ source: candidate, tree }) => !needle || (ensureTree && treeStates?.[candidate.id]?.status !== "loaded") || candidate.name.toLowerCase().includes(needle) || tree.some((item) => item.label.toLowerCase().includes(needle)));
   const hasNotes = visibleCollections.some(({ source: candidate }) => candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE");
   const canCreate = access.actions.canWrite && confirmed && access.workspace.type === "PERSONAL";
+  // A collapsed publication shows no documents until its lazy tree arrives. The
+  // tree response carries its document views, so merge those over the seed:
+  // opening the section fills in per-document maintainers without a page load.
+  const publications = useMemo(() => {
+    const bySource = new Map(seededPublications.map((item) => [item.publication.sourceId, item]));
+    for (const state of Object.values(treeStates ?? {})) {
+      if (state.status === "loaded" && state.publication) {
+        bySource.set(state.publication.publication.sourceId, state.publication);
+      }
+    }
+    return [...bySource.values()];
+  }, [seededPublications, treeStates]);
   const publicationBySource = useMemo(
     () => new Map(publications.map((item) => [item.publication.sourceId, item])),
     [publications],

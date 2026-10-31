@@ -4,7 +4,9 @@ import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/
 import { bindSourceProjection } from "@/modules/sources/application/source-knowledge-projection-service";
 import { updateSourceLocator } from "@/modules/sources/application/source-entry-mapping-service";
 import { reconcileContribution } from "@/modules/sources/application/publication-reconciler";
-import type { RightsJudge } from "@/modules/sources/domain/publication";
+import type { DocumentBinding, RightsJudge } from "@/modules/sources/domain/publication";
+import { publicationError } from "@/modules/sources/domain/publication-errors";
+import type { SourceRepositories, SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
 import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
 import { createPublicationFixture, type PublicationFixture } from "../fixtures/publications";
 
@@ -890,6 +892,120 @@ describe("cross-publication claims", () => {
     expect(await bindingsOf(challenger.contributionId)).toEqual([]);
     expect(await fixture.uow.run((repositories) =>
       repositories.publications.findReport(challenger.contributionId))).not.toBeNull();
+  });
+
+  it("rolls the in-memory tree view back when a claim attempt loses", async () => {
+    const root = await fixture.createFolder(fixture.mike, "claim/phantom", "phantom");
+    const shared = await projectFolder(
+      "mike", fixture.mikeFolderSourceId, fixture.mikePersonalWorkspaceId,
+      root.treeNodeId, "claim/phantom/shared", "shared",
+    );
+    const lonely = await projectFolder(
+      "mike", fixture.mikeFolderSourceId, fixture.mikePersonalWorkspaceId,
+      root.treeNodeId, "claim/phantom/lonely", "lonely",
+    );
+    const sharedDocuments = [
+      await fixture.createSyncedOriginal(fixture.mike, {
+        parentId: shared.treeNodeId,
+        sourcePath: "claim/phantom/shared/a.md",
+        title: "Shared A",
+        markdown: "a",
+      }),
+      await fixture.createSyncedOriginal(fixture.mike, {
+        parentId: shared.treeNodeId,
+        sourcePath: "claim/phantom/shared/b.md",
+        title: "Shared B",
+        markdown: "b",
+      }),
+    ];
+    // The failing copy must sort before the surviving one so a phantom node
+    // would push the survivor's position to 1.
+    const [failingShared, survivingShared] = sharedDocuments
+      .sort((left, right) => left.documentId.localeCompare(right.documentId));
+    const failingLonely = await fixture.createSyncedOriginal(fixture.mike, {
+      parentId: lonely.treeNodeId,
+      sourcePath: "claim/phantom/lonely/only.md",
+      title: "Lonely",
+      markdown: "only",
+    });
+    const publication = await fixture.createPublication({
+      name: "Phantom Claim Publication", kind: "FOLDER", creator: fixture.mike,
+      origin: { kind: "FOLDER", folderNodeId: root.treeNodeId },
+    });
+    const failing = new Set([failingShared.documentId, failingLonely.documentId]);
+    const findClaimCalls = new Map<string, number>();
+    const conflicted: SourceUnitOfWork = {
+      async run<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
+        return fixture.uow.run(async (repositories) => {
+          const publications = new Proxy(repositories.publications, {
+            get(target, property, receiver) {
+              if (property === "findClaim") {
+                return async (
+                  originalDocumentId: string,
+                  teamWorkspaceId: string,
+                  excludePublicationId: string,
+                ) => {
+                  if (!failing.has(originalDocumentId)) {
+                    return target.findClaim(originalDocumentId, teamWorkspaceId, excludePublicationId);
+                  }
+                  const calls = (findClaimCalls.get(originalDocumentId) ?? 0) + 1;
+                  findClaimCalls.set(originalDocumentId, calls);
+                  // Hide the claim from the pre-check, then name the winner
+                  // after the savepoint fails, like a real concurrent claim.
+                  return calls === 1
+                    ? null
+                    : { publicationId: "00000000-0000-7000-8000-000000000001", publicationName: "Winner" };
+                };
+              }
+              if (property === "bind") {
+                return async (binding: DocumentBinding) => {
+                  if (failing.has(binding.originalDocumentId)) {
+                    throw publicationError("PUBLICATION_ORIGINAL_TAKEN", "taken");
+                  }
+                  return target.bind(binding);
+                };
+              }
+              return Reflect.get(target, property, receiver);
+            },
+          });
+          const wrapped = new Proxy(repositories, {
+            get(target, property, receiver) {
+              return property === "publications"
+                ? publications
+                : Reflect.get(target, property, receiver);
+            },
+          });
+          return work(wrapped);
+        });
+      },
+      runWithCreatorQuotaLock: (creatorId, timeoutSeconds, work) =>
+        fixture.uow.runWithCreatorQuotaLock(creatorId, timeoutSeconds, work),
+    };
+
+    const result = await conflicted.run((repositories) => reconcileContribution(repositories, {
+      publicationId: publication.publication.id,
+      contributionId: publication.contributionId,
+      judge: mikeJudge(),
+      now: new Date(),
+    }));
+
+    expect(result.state).toBe("APPLIED");
+    expect(result.report.created).toBe(1);
+    expect(result.report.notices.filter((notice) => notice.code === "ORIGINAL_ALREADY_PUBLISHED"))
+      .toHaveLength(2);
+    // The failed copies left no active node or folder behind: prune sees the
+    // lonely folder as empty, and the survivor starts at position 0.
+    expect(await folderStatus(publication.sourceId, null, "lonely")).toBe("ARCHIVED");
+    const nodes = await fixture.uow.run((repositories) =>
+      repositories.tree.listBySource(publication.sourceId));
+    const sharedFolder = nodes.find((node) =>
+      node.nodeType === "FOLDER" && node.parentId === null && node.name === "shared");
+    expect(sharedFolder).toBeDefined();
+    const sharedChildren = nodes.filter((node) => node.parentId === sharedFolder?.id);
+    expect(sharedChildren).toHaveLength(1);
+    const [survivor] = await publicationDocuments(publication.publication.id);
+    expect(survivor.currentOriginalDocumentId).toBe(survivingShared.documentId);
+    expect(sharedChildren[0]).toMatchObject({ documentId: survivor.teamDocumentId, position: 0 });
   });
 
   it("lets one of two racing publications win the claim without aborting the other", async () => {

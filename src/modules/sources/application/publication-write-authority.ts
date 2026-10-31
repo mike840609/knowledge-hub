@@ -38,6 +38,14 @@ export interface PublicationProjection {
   setDocumentStatus(teamDocumentId: string, status: "ACTIVE" | "ARCHIVED"): Promise<void>;
   ensureFolder(parentId: string | null, name: string): Promise<string>;
   pruneEmptyFolders(): Promise<void>;
+  /**
+   * Captures the tx-local tree view so the caller can undo its in-memory
+   * mutations when a savepoint-wrapped claim loses. The database rolls back on
+   * its own; without this the next placement or prune in the same run would
+   * still see a copied node the transaction no longer contains.
+   */
+  checkpointTreeView(): TreeViewNode[];
+  restoreTreeView(checkpoint: readonly TreeViewNode[]): void;
 }
 
 const AUTHORITY = Symbol("publication-write-authority");
@@ -449,6 +457,14 @@ export async function bindPublicationProjection(
           folder.status = "ARCHIVED";
         }
       }
+    },
+
+    checkpointTreeView() {
+      return treeView.map((node) => ({ ...node }));
+    },
+
+    restoreTreeView(checkpoint) {
+      treeView.splice(0, treeView.length, ...checkpoint.map((node) => ({ ...node })));
     },
   };
 }

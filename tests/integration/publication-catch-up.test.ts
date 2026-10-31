@@ -7,6 +7,7 @@ import { PublicationService } from "@/modules/sources/application/publication-se
 import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
 import { bindSourceProjection } from "@/modules/sources/application/source-knowledge-projection-service";
 import { updateSourceLocator } from "@/modules/sources/application/source-entry-mapping-service";
+import { uuidv7 } from "@/shared/ids/uuidv7";
 import { catchUpExitCode, catchUpPublications } from "../../scripts/db/catch-up-publications";
 import { createPublicationFixture, type PublicationFixture } from "../fixtures/publications";
 
@@ -505,6 +506,96 @@ describe("publication catch-up: flag on", () => {
       /^Publication catch-up: applied=\d+ pending=\d+ skipped=\d+ failed=\d+$/,
     );
     expect(summaryLineOf(output)).toContain(`failed=${result.failed}`);
+  });
+
+  it("keeps draining when a window contains only skipped deliveries", async () => {
+    await fixture.pool.query("DELETE FROM publication_event_deliveries");
+    await fixture.pool.query("DELETE FROM publication_events");
+
+    const leftOriginal = await fixture.createHubOriginal(fixture.mike, unique("Skipped Only A"), "a");
+    const leftPublication = await fixture.createPublication({
+      name: unique("Skipped Only Left Publication"),
+      kind: "DOCUMENT",
+      creator: fixture.mike,
+      origin: { kind: "DOCUMENT", documentId: leftOriginal.documentId },
+    });
+    const leftContributionId = await fixture.addContribution({
+      publicationId: leftPublication.publication.id,
+      user: fixture.ann,
+      origin: { kind: "DOCUMENT", documentId: leftOriginal.documentId },
+    });
+    await fixture.uow.run((repositories) => repositories.publications.setContributionState(
+      leftContributionId,
+      { leftAt: new Date(), rightsFrozenAt: null, pendingCatchUp: false },
+    ));
+
+    const applicableOriginal = await fixture.createHubOriginal(fixture.mike, unique("Skipped Only B"), "b");
+    const applicable = await fixture.createPublication({
+      name: unique("Skipped Only Applicable Publication"),
+      kind: "DOCUMENT",
+      creator: fixture.mike,
+      origin: { kind: "DOCUMENT", documentId: applicableOriginal.documentId },
+    });
+
+    const now = Date.now();
+    // A full 500-delivery window of SKIPPED work has to precede the applicable
+    // event, because the production drain stops after one window.
+    const SKIPPED_WINDOW = 500;
+    for (let start = 0; start < SKIPPED_WINDOW; start += 100) {
+      const ids = Array.from({ length: 100 }, () => uuidv7());
+      await fixture.pool.query(
+        `INSERT INTO publication_events (id, document_id, kind, created_at, consumed_at)
+         VALUES ${ids.map(() => "(?, ?, 'REVISION', ?, NULL)").join(", ")}`,
+        ids.flatMap((eventId, index) => [
+          eventId,
+          leftOriginal.documentId,
+          new Date(now - 10_000 + start + index),
+        ]),
+      );
+      await fixture.pool.query(
+        `INSERT INTO publication_event_deliveries (event_id, contribution_id, processed_at, outcome)
+         VALUES ${ids.map(() => "(?, ?, NULL, NULL)").join(", ")}`,
+        ids.flatMap((eventId) => [eventId, leftContributionId]),
+      );
+    }
+    const applicableEventId = uuidv7();
+    await fixture.pool.query(
+      `INSERT INTO publication_events (id, document_id, kind, created_at, consumed_at)
+       VALUES (?, ?, 'REVISION', ?, NULL)`,
+      [applicableEventId, applicableOriginal.documentId, new Date(now)],
+    );
+    await fixture.pool.query(
+      `INSERT INTO publication_event_deliveries (event_id, contribution_id, processed_at, outcome)
+       VALUES (?, ?, NULL, NULL)`,
+      [applicableEventId, applicable.contributionId],
+    );
+
+    setFlag(true);
+    const lines: string[] = [];
+    // The first window is exactly the skipped deliveries. The old stop
+    // condition saw zero applied/pending/frozen/failed and left the applicable
+    // event unconsumed forever.
+    const result = await catchUpPublications(fixture.pool, {
+      log: (line) => lines.push(line),
+      reconcile: async () => ({
+        state: "SKIPPED",
+        report: { created: 0, updated: 0, moved: 0, archived: 0, restored: 0, notices: [] },
+      }),
+    });
+    expect(result.status).toBe("RAN");
+
+    const [counts] = await fixture.pool.query<{ total: unknown; remaining: unknown }[]>(
+      `SELECT COUNT(*) AS total,
+              SUM(consumed_at IS NULL) AS remaining
+       FROM publication_events`,
+    );
+    expect(Number(counts.total)).toBeGreaterThanOrEqual(SKIPPED_WINDOW + 1);
+    expect(Number(counts.remaining)).toBe(0);
+    const [applicableRow] = await fixture.pool.query<{ consumed_at: Date | null }[]>(
+      "SELECT consumed_at FROM publication_events WHERE id = ?",
+      [applicableEventId],
+    );
+    expect(applicableRow.consumed_at).not.toBeNull();
   });
 
   it("exits 1 when a contribution fails and prints the summary line exactly", async () => {

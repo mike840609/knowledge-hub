@@ -265,6 +265,29 @@ describe("publication service: preview", () => {
     });
     expect(preview.lowOverlapWarning).toBe(false);
   });
+
+  it("does not warn about low overlap for a single-document origin", async () => {
+    const tree = await createFolderTree(fixture.mike, unique("doc-preview-folder"), [
+      { relative: "a.md", title: "Doc Preview A", markdown: "a" },
+    ]);
+    await service.publish(fixture.mike, {
+      teamWorkspaceId: fixture.teamWorkspaceId,
+      name: unique("Doc Preview Publication"),
+      origin: { kind: "FOLDER", folderNodeId: tree.folderNodeId },
+    });
+    const original = await fixture.createHubOriginal(fixture.mike, unique("Doc Preview Single"), "body");
+
+    const preview = await service.preview(fixture.mike, {
+      teamWorkspaceId: fixture.teamWorkspaceId,
+      name: unique("Doc Preview Single Publication"),
+      origin: { kind: "DOCUMENT", documentId: original.documentId },
+    });
+
+    // A document origin is never joinable: no suggestion and no low-overlap
+    // warning that would ask for an acknowledgement join cannot accept.
+    expect(preview.joinSuggestion).toBeNull();
+    expect(preview.lowOverlapWarning).toBe(false);
+  });
 });
 
 describe("publication service: claims", () => {
@@ -627,6 +650,71 @@ describe("publication service: leave and resume", () => {
     const newPath = documentsAfterResume.find((document) => document.sourcePath === "new.md");
     expect(newPath?.creatorContributionId).toBe(joined.contributionId);
     expect(await titleOf(newPath?.teamDocumentId ?? "")).toBe("Ann New");
+  });
+
+  it("resumes a left contribution when the same person joins from the same origin", async () => {
+    const mikeTree = await createFolderTree(fixture.mike, unique("join-resume-mike"), [
+      { relative: "a.md", title: "Join Resume Mike A", markdown: "mike" },
+    ]);
+    const published = await service.publish(fixture.mike, {
+      teamWorkspaceId: fixture.teamWorkspaceId,
+      name: unique("Join Resume Publication"),
+      origin: { kind: "FOLDER", folderNodeId: mikeTree.folderNodeId },
+    });
+    const annTree = await createFolderTree(fixture.ann, unique("join-resume-ann"), [
+      { relative: "ann.md", title: "Join Resume Ann", markdown: "v1" },
+    ]);
+    const joined = await service.join(fixture.ann, {
+      publicationId: published.publicationId,
+      folderNodeId: annTree.folderNodeId,
+      acknowledgeLowOverlap: true,
+    });
+    await service.leave(fixture.ann, published.publicationId);
+
+    // A new revision appears while she is away; an explicit join resumes and
+    // reconciles the contribution rather than silently reusing a LEFT row.
+    const annRevisionId = await fixture.revisionIdOf(annTree.documents[0].documentId);
+    await fixture.uow.run(async (repositories) => {
+      const { bindSourceProjection } = await import(
+        "@/modules/sources/application/source-knowledge-projection-service"
+      );
+      await bindSourceProjection(repositories, {
+        id: fixture.annFolderSourceId,
+        workspaceId: fixture.annPersonalWorkspaceId,
+      }).projectRevision(fixture.ann, {
+        documentId: annTree.documents[0].documentId,
+        expectedCurrentRevisionId: annRevisionId,
+        title: "Join Resume Ann v2",
+        markdown: "v2",
+        metadata: {},
+      });
+    });
+
+    const rejoined = await service.join(fixture.ann, {
+      publicationId: published.publicationId,
+      folderNodeId: annTree.folderNodeId,
+    });
+    expect(rejoined.contributionId).toBe(joined.contributionId);
+    expect(rejoined.report.updated).toBe(1);
+
+    const contributions = await fixture.uow.run((repositories) =>
+      repositories.publications.listContributions(published.publicationId));
+    expect(contributions.find((contribution) => contribution.id === joined.contributionId)?.leftAt)
+      .toBeNull();
+    const documents = await fixture.uow.run((repositories) =>
+      repositories.publications.listDocuments(published.publicationId));
+    const annDocument = documents.find((document) => document.creatorContributionId === joined.contributionId);
+    expect(await titleOf(annDocument?.teamDocumentId ?? "")).toBe("Join Resume Ann v2");
+
+    // A different origin is still refused: resuming never rebinds the original.
+    const otherAnnTree = await createFolderTree(fixture.ann, unique("join-resume-other"), [
+      { relative: "other.md", title: "Other", markdown: "other" },
+    ]);
+    await expect(service.join(fixture.ann, {
+      publicationId: published.publicationId,
+      folderNodeId: otherAnnTree.folderNodeId,
+      acknowledgeLowOverlap: true,
+    })).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });
 });
 

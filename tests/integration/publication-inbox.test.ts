@@ -228,6 +228,81 @@ describe("team discussion in the Inbox", () => {
     expect(entryFrom(await service.listUnreadForOwner(creator.caller), eventId)).toBeDefined();
   });
 
+  it("marks a readable team event read by its single id", async () => {
+    const creator = await addMember(fixture.teamWorkspaceId, "SingleReadCreator", "EDITOR");
+    const commenter = await addMember(fixture.teamWorkspaceId, "SingleReadCommenter", "EDITOR");
+    const doc = await publishedDocument({ creator: creator.caller });
+    await service.createForOwner(commenter.caller, {
+      documentId: doc.documentId, expectedRevisionId: doc.revisionId, anchor: doc.anchor,
+      body: "Read this one", idempotencyKey: randomUUID(),
+    });
+    const eventId = (await eventsOf(doc.documentId))[0].id;
+    expect((await eventsOf(doc.documentId))[0].read_at).toBeNull();
+
+    await service.markEventRead(creator.caller, eventId);
+
+    expect((await eventsOf(doc.documentId))[0].read_at).not.toBeNull();
+    expect(await service.countUnreadForOwner(creator.caller)).toEqual({ count: 0 });
+  });
+
+  it("judges access before marking a team mention read, and keeps it on re-grant", async () => {
+    const mentioned = await addMember(fixture.teamWorkspaceId, "MentionMarkMember", "EDITOR");
+    const writer = await addMember(fixture.teamWorkspaceId, "MentionMarkWriter", "EDITOR");
+    const doc = await publishedDocument({ creator: writer.caller });
+    const thread = await service.createForOwner(writer.caller, {
+      documentId: doc.documentId, expectedRevisionId: doc.revisionId, anchor: doc.anchor,
+      body: "@MentionMarkMember please look", idempotencyKey: randomUUID(),
+      mentions: [mentioned.identity.id],
+    });
+    const commentId = await commentIdOf(thread.id);
+    const eventId = `mention:${commentId}`;
+
+    await removeMember(fixture.teamWorkspaceId, mentioned.identity.id);
+    await expect(service.markEventRead(mentioned.caller, eventId))
+      .rejects.toMatchObject({ code: "SHARE_LINK_NOT_FOUND" });
+    expect((await mentionRowsOf(commentId))[0].read_at).toBeNull();
+
+    await fixture.uow.run((repositories) => repositories.workspaceMemberships.insert(
+      createDirectMembership({ workspaceId: fixture.teamWorkspaceId, userId: mentioned.identity.id, role: "EDITOR", now: new Date() }),
+    ));
+    await service.markEventRead(mentioned.caller, eventId);
+    expect((await mentionRowsOf(commentId))[0].read_at).not.toBeNull();
+    expect(await service.countUnreadForOwner(mentioned.caller)).toEqual({ count: 0 });
+  });
+
+  it("rejects a group-revoked team mention mark-read and allows it after the group returns", async () => {
+    const mentioned = await groupMember("GroupMentionMark");
+    // Mention creation accepts direct members only, so start with a direct row
+    // the group team also maps; remove it so only the group carries access.
+    await fixture.uow.run((repositories) => repositories.workspaceMemberships.insert(
+      createDirectMembership({ workspaceId: fixture.groupTeamWorkspaceId, userId: mentioned.identity.id, role: "EDITOR", now: new Date() }),
+    ));
+    // A different creator keeps the mentioned member out of the owner-deduped
+    // mention list; the writer is the team owner.
+    const doc = await publishedDocument({ teamId: fixture.groupTeamWorkspaceId, creator: fixture.mike });
+    const thread = await service.createForOwner(fixture.mike, {
+      documentId: doc.documentId, expectedRevisionId: doc.revisionId, anchor: doc.anchor,
+      body: "@GroupMentionMark group only", idempotencyKey: randomUUID(),
+      mentions: [mentioned.identity.id],
+    });
+    const commentId = await commentIdOf(thread.id);
+    expect((await mentionRowsOf(commentId))[0]?.share_link_id).toBeNull();
+    await removeMember(fixture.groupTeamWorkspaceId, mentioned.identity.id);
+    const memberships = await fixture.pool.query<{ n: unknown }[]>(
+      "SELECT COUNT(*) AS n FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
+      [fixture.groupTeamWorkspaceId, mentioned.identity.id],
+    );
+    expect(Number(memberships[0]?.n)).toBe(0);
+    const withoutGroup = { ...mentioned.caller, validatedExternalGroupIds: [] };
+
+    await expect(service.markEventRead(withoutGroup, `mention:${commentId}`))
+      .rejects.toMatchObject({ code: "SHARE_LINK_NOT_FOUND" });
+    expect((await mentionRowsOf(commentId))[0].read_at).toBeNull();
+
+    await service.markEventRead(mentioned.caller, `mention:${commentId}`);
+    expect((await mentionRowsOf(commentId))[0].read_at).not.toBeNull();
+  });
+
   it("marks all read only for rows the caller can still read, skipping inaccessible team rows", async () => {
     const creator = await addMember(fixture.teamWorkspaceId, "BulkCreator", "EDITOR");
     const mixed: CallerContext = { ...creator.caller, validatedExternalGroupIds: [fixture.annExternalGroupId] };
@@ -256,6 +331,39 @@ describe("team discussion in the Inbox", () => {
     expect(directAfter.read_at).not.toBeNull();
     expect(groupAfter.read_at).toBeNull();
     expect(await service.countUnreadForOwner(withoutGroup)).toEqual({ count: 0 });
+  });
+
+  it("marks readable team mentions read and skips inaccessible ones in a bulk mark", async () => {
+    const mentioned = await addMember(fixture.teamWorkspaceId, "BulkMentionMember", "EDITOR");
+    const writer = await addMember(fixture.teamWorkspaceId, "BulkMentionWriter", "EDITOR");
+    const directDoc = await publishedDocument({ creator: writer.caller });
+    const directThread = await service.createForOwner(writer.caller, {
+      documentId: directDoc.documentId, expectedRevisionId: directDoc.revisionId, anchor: directDoc.anchor,
+      body: "@BulkMentionMember direct", idempotencyKey: randomUUID(),
+      mentions: [mentioned.identity.id],
+    });
+
+    // A mention in a team the caller can reach only through a group, while the
+    // caller marks with its groups stripped.
+    await fixture.uow.run((repositories) => repositories.workspaceMemberships.insert(
+      createDirectMembership({ workspaceId: fixture.groupTeamWorkspaceId, userId: mentioned.identity.id, role: "EDITOR", now: new Date() }),
+    ));
+    const groupDoc = await publishedDocument({
+      teamId: fixture.groupTeamWorkspaceId,
+      creator: fixture.mike,
+    });
+    const groupThread = await service.createForOwner(fixture.mike, {
+      documentId: groupDoc.documentId, expectedRevisionId: groupDoc.revisionId, anchor: groupDoc.anchor,
+      body: "@BulkMentionMember group", idempotencyKey: randomUUID(),
+      mentions: [mentioned.identity.id],
+    });
+    await removeMember(fixture.groupTeamWorkspaceId, mentioned.identity.id);
+
+    const withoutGroup = { ...mentioned.caller, validatedExternalGroupIds: [] };
+    await service.markAllActivityRead(withoutGroup);
+
+    expect((await mentionRowsOf(await commentIdOf(directThread.id)))[0].read_at).not.toBeNull();
+    expect((await mentionRowsOf(await commentIdOf(groupThread.id)))[0].read_at).toBeNull();
   });
 
   it("does not auto-read a team mention whose access was lost, so it returns with access", async () => {

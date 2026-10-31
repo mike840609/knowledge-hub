@@ -69,8 +69,26 @@ export function documentPublicationState(
   return contributionState(document);
 }
 
+/**
+ * The header state belongs to the publication, not to whoever is looking at it.
+ * A joiner who left must not label the whole publication 「不再更新」 while its
+ * creator and other contributors still update it. The creator's own view keeps
+ * their own pending/left/frozen state; everyone else reads the copies' states.
+ */
+function publicationHeaderState(item: PublicationListItem): PublicationContributionState {
+  const own = item.ownContribution;
+  if (own !== null && own.userId === item.publication.creatorUserId) {
+    return contributionState(own);
+  }
+  const states = item.documents.map(documentPublicationState);
+  if (states.length === 0) return "ACTIVE";
+  if (states.some((state) => state === "ACTIVE")) return "ACTIVE";
+  if (states.some((state) => state === "PENDING")) return "PENDING";
+  return states.some((state) => state === "FROZEN") ? "FROZEN" : "LEFT";
+}
+
 export function publicationTreeMeta(item: PublicationListItem): PublicationTreeMeta {
-  const state = contributionState(item.ownContribution);
+  const state = publicationHeaderState(item);
   return {
     publicationId: item.publication.id,
     sourceId: item.publication.sourceId,

@@ -56,7 +56,10 @@ export async function catchUpPublications(
       judge: { kind: "NO_CALLER" },
       limit: 500,
     });
-    if (drained.applied + drained.pending + drained.frozen + drained.failed === 0) break;
+    // SKIPPED deliveries are work too: a window made only of left/archived
+    // contributors must not look like an empty run and stop before a later
+    // applicable event is reached.
+    if (drained.processed === 0) break;
     if (drained.failed > 0) {
       log(`Publication catch-up: ${drained.failed} event delivery/deliveries failed; they stay retryable.`);
     }

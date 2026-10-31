@@ -4,9 +4,13 @@ import { reconcileContribution, type ReconcileState } from "./publication-reconc
 
 export type PublicationDrainSummary = {
   applied: number;
+  /** Deliveries that completed as SKIPPED (left contributor or archived publication). */
+  skipped: number;
   pending: number;
   frozen: number;
   failed: number;
+  /** Every delivery this run worked on, including SKIPPED: the loop's stop signal. */
+  processed: number;
 };
 
 const DEFAULT_BATCH = 100;
@@ -157,7 +161,9 @@ export async function drainPublicationEvents(
     retryDelayMs?: number;
   },
 ): Promise<PublicationDrainSummary> {
-  const summary: PublicationDrainSummary = { applied: 0, pending: 0, frozen: 0, failed: 0 };
+  const summary: PublicationDrainSummary = {
+    applied: 0, skipped: 0, pending: 0, frozen: 0, failed: 0, processed: 0,
+  };
   const batchSize = Math.max(1, Math.trunc(input.limit ?? DEFAULT_BATCH));
   const userId = input.judge.kind === "CALLER" ? input.judge.caller.identity.id : undefined;
   const clock = input.now ?? (() => new Date());
@@ -187,11 +193,10 @@ export async function drainPublicationEvents(
       const state = await deliverContribution(uow, batch, input.judge, now, retryDelayMs);
       const count = batch.rows.length;
       if (state === "APPLIED") summary.applied += count;
+      else if (state === "SKIPPED") summary.skipped += count;
       else if (state === "PENDING") summary.pending += count;
       else if (state === "FROZEN") summary.frozen += count;
       else if (state === "FAILED") summary.failed += count;
-      // SKIPPED (left, archived publication) completes the delivery but has no
-      // counter in the result contract.
     }
   }
 
@@ -209,10 +214,15 @@ export async function drainPublicationEvents(
         rows: [],
       }, input.judge, now, retryDelayMs);
       if (state === "APPLIED") summary.applied += 1;
+      else if (state === "SKIPPED") summary.skipped += 1;
       else if (state === "PENDING") summary.pending += 1;
       else if (state === "FROZEN") summary.frozen += 1;
       else if (state === "FAILED") summary.failed += 1;
     }
   }
+  // SKIPPED is real work: a caller that loops until "no work" must not stop on
+  // a batch made only of left/archived deliveries and leave later rows behind.
+  summary.processed = summary.applied + summary.skipped
+    + summary.pending + summary.frozen + summary.failed;
   return summary;
 }

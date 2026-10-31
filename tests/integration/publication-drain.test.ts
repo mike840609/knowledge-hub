@@ -350,6 +350,41 @@ async function readyResync(
 }
 
 describe("publication drain", () => {
+  it("reports skipped deliveries as processed work", async () => {
+    const path = `skipped-${uuidv7()}`;
+    const { folderNodeId, documents } = await folderWithDocuments(fixture.mike, path, [
+      { name: "a.md", text: "# Skipped\n\nskipped\n" },
+    ]);
+    const publication = await publishFolder(
+      fixture.mike, fixture.teamWorkspaceId, `Skipped ${path}`, folderNodeId);
+    const leftContributionId = await fixture.addContribution({
+      publicationId: publication.publication.id,
+      user: fixture.ann,
+      origin: { kind: "FOLDER", folderNodeId },
+    });
+    await fixture.uow.run((repositories) => repositories.publications.setContributionState(
+      leftContributionId,
+      { leftAt: new Date(), rightsFrozenAt: null, pendingCatchUp: false },
+    ));
+    await fixture.uow.run(async (repositories) => {
+      await repositories.publicationEvents.record({
+        documentId: documents["a.md"].documentId,
+        treeNodeId: null,
+        kind: "REVISION",
+        revisionId: documents["a.md"].revisionId,
+        at: new Date(),
+      });
+      await repositories.publications.prepareDeliveries(100);
+    });
+
+    const result = await drainPublicationEvents(fixture.uow, {
+      judge: { kind: "CALLER", caller: fixture.ann },
+      limit: 1,
+    });
+
+    expect(result).toMatchObject({ applied: 0, skipped: 1, processed: 1 });
+  });
+
   it("keeps the root event unconsumed when one team fails and catches up on retry", async () => {
     const path = `fanout-${uuidv7()}`;
     const { folderNodeId, documents } = await folderWithDocuments(fixture.mike, path, [

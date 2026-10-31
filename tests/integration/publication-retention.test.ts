@@ -132,13 +132,15 @@ describe("publication event retention", () => {
     await insertDelivery({ eventId: stale.id, contributionId: publication.contributionId, processedAt: null });
     const freshEvent = await insertEvent({ documentId: original.documentId, createdAt: fresh, consumedAt: null });
 
-    // No explicit mode: the feature flag selects it. Nothing consumes events
-    // while the flag is off, and catch-up later reconciles from current state.
+    // The destructive rule needs an explicit mode even when the environment
+    // says the flag is off; a cron shell without the variable must never decide
+    // it by accident.
     const previous = process.env.KM_TEAM_WORKSPACES_ENABLED;
     process.env.KM_TEAM_WORKSPACES_ENABLED = "false";
     try {
-      const result = await purgePublicationEvents(fixture.pool, { now: () => now });
+      const result = await purgePublicationEvents(fixture.pool, { now: () => now, mode: "flag-off" });
       expect(result.includeUnconsumed).toBe(true);
+      expect(result.mode).toBe("flag-off");
       expect(result.deliveries).toBeGreaterThanOrEqual(1);
     } finally {
       if (previous === undefined) delete process.env.KM_TEAM_WORKSPACES_ENABLED;
@@ -151,6 +153,33 @@ describe("publication event retention", () => {
       [stale.id],
     );
     expect(Number(staleDeliveries[0]?.n ?? 0)).toBe(0);
+  });
+
+  it("refuses to infer a mode from a shell that lacks the deployment flag", async () => {
+    const original = await fixture.createHubOriginal(fixture.mike, "No mode source", "no mode");
+    const publication = await fixture.createPublication({
+      name: `No Mode ${uuidv7()}`,
+      kind: "DOCUMENT",
+      creator: fixture.mike,
+      origin: { kind: "DOCUMENT", documentId: original.documentId },
+    });
+    const now = new Date("2026-10-31T12:00:00Z");
+    const cutoff = new Date(now.getTime() - purgeRetentionDays() * 86_400_000);
+    const old = new Date(cutoff.getTime() - 60_000);
+    const pending = await insertEvent({ documentId: original.documentId, createdAt: old, consumedAt: null });
+    await insertDelivery({ eventId: pending.id, contributionId: publication.contributionId, processedAt: null });
+
+    const previous = process.env.KM_TEAM_WORKSPACES_ENABLED;
+    delete process.env.KM_TEAM_WORKSPACES_ENABLED;
+    try {
+      await expect(purgePublicationEvents(fixture.pool, { now: () => now }))
+        .rejects.toThrow(/mode=flag-on or --mode=flag-off/);
+    } finally {
+      if (previous === undefined) delete process.env.KM_TEAM_WORKSPACES_ENABLED;
+      else process.env.KM_TEAM_WORKSPACES_ENABLED = previous;
+    }
+    // Nothing was deleted without a chosen mode.
+    expect(await remainingEventIds([pending.id])).toEqual([pending.id]);
   });
 
   it("keeps an active pending delivery and ages out a frozen contributor's delivery when the flag is on", async () => {

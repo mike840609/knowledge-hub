@@ -5,7 +5,25 @@ type Services = ReturnType<typeof applicationServices>;
 export async function readSourceTree(services: Services, caller: CallerContext, workspaceId: string, sourceId: string) {
   const source = await services.queries.getSource(caller, sourceId, { includeArchived: true });
   if (source.workspaceId !== workspaceId) throw new SourceNotFoundError();
-  return { source, tree: await services.queries.listTree(caller, sourceId, { includeArchived: true }) };
+  // The lazy tree request is also the first time a collapsed publication is
+  // opened. Return its document views so per-document maintainers ("由 Mike 維護")
+  // are available immediately instead of only after the document is read. A
+  // caption lookup must never fail the tree itself.
+  const publications = (services as { publications?: Services["publications"] }).publications;
+  const publication = publications === undefined
+    ? null
+    : await publications.list(caller, workspaceId, true, {
+      includeDocuments: true,
+      documentsSourceId: sourceId,
+    }).then(
+      (items) => items.find((item) => item.publication.sourceId === sourceId) ?? null,
+      () => null,
+    );
+  return {
+    source,
+    tree: await services.queries.listTree(caller, sourceId, { includeArchived: true }),
+    publication,
+  };
 }
 export async function readSidebarShortcuts(services: Services, caller: CallerContext, workspaceId: string, ids: string[], includeArchived: boolean) {
   const sources = await services.queries.listSources(caller, workspaceId, { includeArchived });

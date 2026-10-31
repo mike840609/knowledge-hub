@@ -293,14 +293,30 @@ describe("team tree metadata", () => {
     });
     expect(pendingState.documents.td1.state).toBe("PENDING");
 
-    // The viewer's own pending contribution never labels Mike's copy.
+    // The viewer's own pending contribution never labels Mike's copy nor the
+    // whole publication header; only the creator's own state may do that.
     const ownPending = publicationTreeMeta({
       ...viewer,
       ownContribution: { id: "c3", userId: "u3", leftAt: null, rightsFrozenAt: null, pendingCatchUp: true },
       documents: [document],
     });
-    expect(ownPending.state).toBe("PENDING");
+    expect(ownPending.state).toBe("ACTIVE");
     expect(ownPending.documents.td1.state).toBe("ACTIVE");
+  });
+
+  it("does not label the publication stopped when only a joiner left", async () => {
+    const joinerLeft: PublicationListItem = {
+      ...item,
+      canJoin: false,
+      // Ann (u3) is not the creator; Mike (u2) still updates the copy.
+      ownContribution: { id: "c3", userId: "u3", leftAt: new Date(), rightsFrozenAt: null, pendingCatchUp: false },
+      documents: [document],
+    };
+    const meta = publicationTreeMeta(joinerLeft);
+    expect(meta.state).toBe("ACTIVE");
+    expect(meta.documents.td1.state).toBe("ACTIVE");
+    await act(async () => root.render(<PublicationEntryMeta meta={meta} />));
+    expect(container.textContent).not.toContain("不再更新");
   });
 
   it("labels a left contribution as no longer updated and a pending one as waiting", async () => {

@@ -545,20 +545,34 @@ export class MariaDbPublicationRepository implements PublicationRepository {
     contributionId: string,
     outcome: "APPLIED" | "SKIPPED",
   ): Promise<void> {
+    // Two drains must not each mark their own delivery and then both see the
+    // other still pending. Locking the root event serializes their completion,
+    // so the last one to finish is the one that sets consumed_at.
+    await this.connection.query(
+      "SELECT id FROM publication_events WHERE id = ? FOR UPDATE",
+      [eventId],
+    );
     await this.connection.query(
       `UPDATE publication_event_deliveries
        SET processed_at = CURRENT_TIMESTAMP(6), outcome = ?, next_attempt_at = NULL
        WHERE event_id = ? AND contribution_id = ? AND processed_at IS NULL`,
       [outcome, eventId, contributionId],
     );
-    await this.connection.query(
-      `UPDATE publication_events e SET consumed_at = CURRENT_TIMESTAMP(6)
-       WHERE e.id = ? AND e.consumed_at IS NULL
-         AND NOT EXISTS (
-           SELECT 1 FROM publication_event_deliveries d WHERE d.event_id = e.id AND d.processed_at IS NULL
-         )`,
+    // A locking read sees the other transaction's committed delivery once the
+    // event lock above is released; an UPDATE's subquery could still read from
+    // an older snapshot and leave the event unconsumed forever.
+    const pending = await this.connection.query<DbRow[]>(
+      `SELECT 1 FROM publication_event_deliveries
+       WHERE event_id = ? AND processed_at IS NULL
+       LIMIT 1 FOR UPDATE`,
       [eventId],
     );
+    if (pending.length === 0) {
+      await this.connection.query(
+        "UPDATE publication_events SET consumed_at = CURRENT_TIMESTAMP(6) WHERE id = ? AND consumed_at IS NULL",
+        [eventId],
+      );
+    }
   }
 
   async saveReport(contributionId: string, report: ReconcileReport): Promise<void> {

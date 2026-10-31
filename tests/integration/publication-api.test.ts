@@ -447,6 +447,29 @@ describe("publication API: access is re-judged before publication shape", () => 
     );
   });
 
+  it("answers 404 to a non-member for unpublish, restore and rename without writing", async () => {
+    const teamId = await teamWithRoles("Lifecycle Outsider Team", [
+      { user: fixture.mike, role: "OWNER" },
+    ]);
+    const tree = await createFolderTree(fixture.mike, unique("lifecycle-outsider"), [
+      { relative: "a.md", title: "Lifecycle Outsider A", markdown: "a" },
+    ]);
+    const name = unique("Lifecycle Outsider Publication");
+    const published = await publishTree(fixture.mike, teamId, tree, name);
+    const sourceId = await publicationSourceId(published.publicationId);
+
+    as(outsiderCaller("Lifecycle Outsider"));
+    await expectError(
+      await unpublish(request(), ofPublication(published.publicationId)), 404, "NOT_FOUND");
+    await expectError(
+      await restore(request(), ofPublication(published.publicationId)), 404, "NOT_FOUND");
+    await expectError(
+      await rename(request({ name: "Hijacked" }), ofPublication(published.publicationId)),
+      404, "NOT_FOUND");
+
+    expect(await sourceRow(sourceId)).toEqual({ status: "ACTIVE", name });
+  });
+
   it("re-judges team read before leave and before resume writes state", async () => {
     const teamId = await teamWithRoles("Rejudge Command Team", [
       { user: fixture.mike, role: "OWNER" },
@@ -570,6 +593,30 @@ describe("publication API: safe read models", () => {
 
     as(outsiderCaller("No Member"));
     await expectError(await list(new Request("http://hub.test/api"), ofWorkspace(teamId)), 404, "NOT_FOUND");
+  });
+
+  it("hides list and status once the team itself is archived", async () => {
+    const teamId = await teamWithRoles("Archived Read Team", [
+      { user: fixture.mike, role: "OWNER" },
+    ]);
+    const tree = await createFolderTree(fixture.mike, unique("archived-read"), [
+      { relative: "a.md", title: "Archived Read A", markdown: "a" },
+    ]);
+    const published = await publishTree(
+      fixture.mike, teamId, tree, unique("Archived Read Publication"));
+
+    as(fixture.mike);
+    expect((await list(new Request("http://hub.test/api"), ofWorkspace(teamId))).status).toBe(200);
+    expect((await status(request(undefined, "GET"), ofPublication(published.publicationId))).status)
+      .toBe(200);
+
+    await fixture.uow.run((repositories) => repositories.workspaces.setWorkspaceLifecycle(
+      teamId, "ARCHIVED", fixture.mike.identity.id, new Date(), new Date()));
+
+    as(fixture.mike);
+    await expectError(await list(new Request("http://hub.test/api"), ofWorkspace(teamId)), 404, "NOT_FOUND");
+    await expectError(
+      await status(request(undefined, "GET"), ofPublication(published.publicationId)), 404, "NOT_FOUND");
   });
 
   it("returns only the caller's own report and pending state", async () => {
