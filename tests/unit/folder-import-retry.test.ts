@@ -34,12 +34,17 @@ describe("folder import retries and cancellation", () => {
   });
 
   it("obtains and abandons the created snapshot when cancellation occurs during create", async () => {
+    // Abandonment is deliberately fire-and-forget so the UI can cancel at once;
+    // wait for the late create response to reach the DELETE instead of assuming
+    // it has already run when the import promise rejects.
+    vi.useRealTimers();
     const controller = new AbortController();
     const fetchMock = vi.fn<typeof fetch>()
       .mockImplementationOnce(async () => { controller.abort(); return response({ snapshotId: "snapshot" }, 201); })
       .mockResolvedValue(response({ abandoned: true }));
     vi.stubGlobal("fetch", fetchMock);
     await expect(runFolderImport({ ...input, signal: controller.signal })).rejects.toMatchObject({ code: "IMPORT_CANCELLED" });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(fetchMock.mock.calls.map(([url, init]) => [url, init?.method])).toEqual([
       ["/api/workspaces/workspace/source-imports", "POST"],
       ["/api/source-imports/snapshot", "DELETE"],
