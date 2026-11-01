@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { refreshOnArrival, refreshOnArrivalElsewhere } from "@/components/shell/refresh-on-arrival";
 import { useToast } from "@/components/ui/toast";
@@ -20,6 +20,7 @@ import {
 export type OrganizeResult = { ok: true } | { ok: false; message: string };
 
 export type MoveNodeInput = {
+  sourceId?: string;
   nodeId: string;
   label: string;
   from: { parentId: string | null; position: number };
@@ -48,7 +49,9 @@ export type TreeMutations = {
    * beside, so it is said as a toast here, and there is no Undo toast either: a step is undone by the
    * step back, and a toast for every key press would bury the tree.
    */
-  reorderNode(input: { nodeId: string; position: number }): Promise<OrganizeResult>;
+  reorderNode(input: { nodeId: string; position: number; sourceId?: string }): Promise<OrganizeResult>;
+  /** Survives the KnowledgeTree being filtered out and remounted. */
+  isSourceArrangementPending(sourceId: string): boolean;
 };
 
 /**
@@ -67,6 +70,7 @@ export function useTreeMutations(): TreeMutations {
   const pathname = usePathname();
   const params = useParams<{ workspaceId?: string }>();
   const workspaceId = params?.workspaceId ?? "";
+  const sourceArrangements = useRef(new Set<string>());
 
   const refresh = useCallback(() => router.refresh(), [router]);
 
@@ -132,8 +136,21 @@ export function useTreeMutations(): TreeMutations {
       }
     }
 
+    // The sidebar owns this hook, whereas filtering may unmount and remount a
+    // KnowledgeTree while its earlier PATCH is still pending. Keep the write
+    // lease here, shared by pointer moves and keyboard reorders of one source.
+    async function serializeArrangement(sourceId: string | undefined, write: () => Promise<OrganizeResult>): Promise<OrganizeResult> {
+      const key = sourceId ? `${workspaceId}:${sourceId}` : null;
+      if (key && sourceArrangements.current.has(key)) return { ok: false, message: "A tree change is still in progress." };
+      if (key) sourceArrangements.current.add(key);
+      try { return await write(); }
+      finally { if (key) sourceArrangements.current.delete(key); }
+    }
+
     return {
-      async moveNode({ nodeId, label, from, to }, report = "dialog") {
+      isSourceArrangementPending: (sourceId) => sourceArrangements.current.has(`${workspaceId}:${sourceId}`),
+      async moveNode({ sourceId, nodeId, label, from, to }, report = "dialog") {
+        return serializeArrangement(sourceId, async () => {
         try {
           await governanceRequest(`/api/tree-nodes/${nodeId}`, "PATCH", {
             parentId: to.parentId,
@@ -157,8 +174,10 @@ export function useTreeMutations(): TreeMutations {
           if (report === "toast") toast({ message, tone: "danger" });
           return { ok: false, message };
         }
+        });
       },
-      async reorderNode({ nodeId, position }) {
+      async reorderNode({ sourceId, nodeId, position }) {
+        return serializeArrangement(sourceId, async () => {
         try {
           await governanceRequest(`/api/tree-nodes/${nodeId}`, "PATCH", { position });
           refresh();
@@ -168,6 +187,7 @@ export function useTreeMutations(): TreeMutations {
           toast({ message, tone: "danger" });
           return { ok: false, message };
         }
+        });
       },
       archiveDocument: (input) => setDocument("archive", input),
       restoreDocument: (input) => setDocument("restore", input),
