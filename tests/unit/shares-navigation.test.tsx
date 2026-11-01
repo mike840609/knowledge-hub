@@ -5,26 +5,27 @@ import type { AnchorHTMLAttributes, MouseEvent, ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useSearchParams } from "next/navigation";
 import { SharesNavigation, parseSharesTab } from "@/components/knowledge/shares-navigation";
+import { LiveSearch } from "@/components/search/live-search-submit";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const state = vi.hoisted(() => ({ pending: false, pendingByHref: {} as Record<string, boolean>, refresh: vi.fn() }));
+const state = vi.hoisted(() => ({ pending: false, pendingByHref: {} as Record<string, boolean>, refresh: vi.fn(), replace: vi.fn() }));
 
-vi.mock("next/navigation", () => ({ useSearchParams: vi.fn(), useRouter: () => ({ refresh: state.refresh }) }));
+vi.mock("next/navigation", () => ({ useSearchParams: vi.fn(), useRouter: () => ({ refresh: state.refresh, replace: state.replace }) }));
 vi.mock("next/link", async () => {
   const React = await import("react");
   const Href = React.createContext("");
   const Provider = Href.Provider;
   return {
     default: ({ href, children, prefetch, onClick, ...rest }: { href: string; children: ReactNode; prefetch?: boolean; onClick?: (event: MouseEvent<HTMLAnchorElement>) => void } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href">) =>
-      <Provider value={href}><a href={href} data-prefetch={prefetch ? "true" : undefined} onClick={event => { event.preventDefault(); onClick?.(event); }} {...rest}>{children}</a></Provider>,
+      <Provider value={href}><a href={href} data-prefetch={prefetch ? "true" : undefined} onClick={event => { onClick?.(event); event.preventDefault(); }} {...rest}>{children}</a></Provider>,
     useLinkStatus: () => ({ pending: state.pending || !!state.pendingByHref[React.useContext(Href)] }),
   };
 });
 
 let host: HTMLDivElement, root: Root;
 beforeEach(() => { host = document.createElement("div"); document.body.append(host); root = createRoot(host); });
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.clearAllMocks(); state.pending = false; state.pendingByHref = {}; });
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers(); vi.clearAllMocks(); state.pending = false; state.pendingByHref = {}; });
 
 async function mount(tab: string | null, unread = 0) {
   vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams(tab ? `tab=${tab}` : "") as unknown as ReturnType<typeof useSearchParams>);
@@ -110,6 +111,52 @@ it("keeps the newest tab selected when an older route commits first", async () =
   state.pendingByHref[discussionsHref] = false;
   await mount("discussions");
   expect(tabs.saved.getAttribute("aria-current")).toBeNull();
+});
+
+it.each(["saved", "discussions"] as const)("cancels a queued search before switching to %s", async tab => {
+  vi.useFakeTimers();
+  vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams() as unknown as ReturnType<typeof useSearchParams>);
+  await act(async () => root.render(
+    <div className="kh-page-wide">
+      <SharesNavigation workspaceId="ws" />
+      <form action="/w/ws/shares">
+        <input name="q" defaultValue="" />
+        <LiveSearch />
+      </form>
+    </div>,
+  ));
+  const field = host.querySelector<HTMLInputElement>('input[name="q"]')!;
+  field.value = "pending search";
+  await act(async () => field.dispatchEvent(new Event("input", { bubbles: true })));
+  const destination = host.querySelector<HTMLAnchorElement>(`a[href="/w/ws/shares?tab=${tab}"]`)!;
+  await act(async () => destination.click());
+  expect(destination.getAttribute("aria-current")).toBe("page");
+
+  await act(async () => vi.advanceTimersByTime(300));
+  expect(state.replace).not.toHaveBeenCalled();
+});
+
+it("does not cancel the current search on a modified tab click", async () => {
+  vi.useFakeTimers();
+  vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams() as unknown as ReturnType<typeof useSearchParams>);
+  await act(async () => root.render(
+    <div className="kh-page-wide">
+      <SharesNavigation workspaceId="ws" />
+      <form action="/w/ws/shares">
+        <input name="q" defaultValue="" />
+        <LiveSearch />
+      </form>
+    </div>,
+  ));
+  const field = host.querySelector<HTMLInputElement>('input[name="q"]')!;
+  field.value = "keep searching";
+  await act(async () => field.dispatchEvent(new Event("input", { bubbles: true })));
+  const saved = host.querySelector<HTMLAnchorElement>('a[href="/w/ws/shares?tab=saved"]')!;
+  await act(async () => saved.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, metaKey: true, button: 0 })));
+
+  await act(async () => vi.advanceTimersByTime(300));
+  expect(state.replace).toHaveBeenCalledOnce();
+  expect(state.replace).toHaveBeenCalledWith("/w/ws/shares?q=keep+searching", { scroll: false });
 });
 
 it("refreshes the server badge after Inbox notification changes", async () => {

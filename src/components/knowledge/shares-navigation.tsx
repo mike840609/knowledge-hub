@@ -4,6 +4,7 @@ import Link, { useLinkStatus } from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { tabClasses, tabListClasses } from "@/components/ui/tab";
+import { cancelPendingLiveSearch } from "@/components/search/live-search-submit";
 
 export type SharesTab = "mine" | "saved" | "discussions";
 
@@ -50,7 +51,12 @@ export function SharesNavigation({ workspaceId, discussionsBadge }: { workspaceI
           aria-current={active === section.id ? "page" : undefined}
           className={tabClasses(active === section.id)}
           onClick={event => {
-            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+            if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+            // The tab bar is outside the active filter form. Cancel a queued
+            // search before it can router.replace() the destination tab away.
+            const activeForm = event.currentTarget.closest(".kh-page-wide")
+              ?.querySelector<HTMLFormElement>('form[data-live-search-ready="true"]') ?? null;
+            cancelPendingLiveSearch(activeForm);
             setOptimistic({ from: derived, to: section.id });
           }}
         >
