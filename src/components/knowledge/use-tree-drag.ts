@@ -10,7 +10,7 @@ import { matchesCommittedTreeView } from "./source-tree-cache";
 export type TreeDragIndicator = { kind: "line"; top: number; left: number; width: number } | { kind: "into"; nodeId: string } | null;
 
 type Input = {
-  items: KnowledgeTreeItem[]; filtering: boolean; canMove: (id: string) => boolean; isKeyboardBusy: () => boolean; onDragStarted: () => void;
+  items: KnowledgeTreeItem[]; includeArchived: boolean; filtering: boolean; canMove: (id: string) => boolean; isKeyboardBusy: () => boolean; onDragStarted: () => void;
   isCollapsed: (id: string) => boolean; onReorder: (input: { nodeId: string; position: number }, onRefreshRequested?: (tree?: KnowledgeTreeItem[]) => void) => Promise<boolean>;
   onMove: (input: Omit<MoveNodeInput, "sourceId">, onRefreshRequested?: (tree?: KnowledgeTreeItem[]) => void) => Promise<boolean>; onPlaced: (id: string, parentId: string | null, refreshed: boolean) => void;
   onRefreshed: (id: string) => void;
@@ -83,7 +83,7 @@ export function useTreeDrag(input: Input) {
     // Never settle a drop from a snapshot that preceded the write's own
     // refresh; an unrelated router refresh may otherwise falsely unlock it.
     const confirmed = authoritativeTree.current
-      ? matchesCommittedTreeView(input.items, authoritativeTree.current)
+      ? matchesCommittedTreeView(input.items, authoritativeTree.current, input.includeArchived)
       : input.items !== (mutationSnapshot ? itemsAtRefreshRequest.current : itemsAtDrop.current);
     if (!confirmed) return;
     const row = itemById.get(wanted.id);
