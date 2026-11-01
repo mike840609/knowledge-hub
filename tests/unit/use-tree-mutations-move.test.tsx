@@ -45,6 +45,7 @@ beforeEach(async () => {
   request.mockReset().mockResolvedValue(undefined);
   toast.mockReset();
   mocks.refresh.mockReset();
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ tree: [] })));
   container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   await act(async () => root.render(<Harness />));
@@ -54,6 +55,7 @@ afterEach(async () => {
   container.remove();
   harness.moveNode = null;
   harness.reorderNode = null;
+  vi.unstubAllGlobals();
 });
 
 function move(input: MoveNodeInput, report?: "dialog" | "toast") {
@@ -75,6 +77,31 @@ function reorder(nodeId = "n2") {
 }
 
 describe("source-scoped arrangement writes", () => {
+  it("keeps the source locked after PATCH until the authoritative tree is retrieved", async () => {
+    let finishRead!: (response: Response) => void;
+    const fetchTree = vi.fn(() => new Promise<Response>((resolve) => { finishRead = resolve; }));
+    vi.stubGlobal("fetch", fetchTree);
+    const first = move(input);
+    // Wait for the successful PATCH to begin a source-specific post-write GET.
+    await act(async () => { await Promise.resolve(); });
+    expect(fetchTree).toHaveBeenCalledWith("/api/workspaces/w1/sources/s1/tree", expect.objectContaining({ cache: "no-store" }));
+    expect(await move({ ...input, nodeId: "n2" })).toEqual({ ok: false, message: "A tree change is still in progress." });
+    await act(async () => { finishRead(Response.json({ tree: [] })); await first; });
+    expect((await move({ ...input, nodeId: "n3" })).ok).toBe(true);
+  });
+
+  it("does not release the source lease while its owning component is unmounted after PATCH", async () => {
+    let finishRead!: (response: Response) => void;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((resolve) => { finishRead = resolve; })));
+    const first = move(input);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await act(async () => root.render(<Harness />));
+    expect((await move({ ...input, nodeId: "n2" })).ok).toBe(false);
+    await act(async () => { finishRead(Response.json({ tree: [] })); await first; });
+  });
+
   it("blocks a dialog move while the tree has a pending keyboard reorder", async () => {
     let finish!: () => void;
     request.mockImplementationOnce(() => new Promise<undefined>((resolve) => { finish = () => resolve(undefined); }));
