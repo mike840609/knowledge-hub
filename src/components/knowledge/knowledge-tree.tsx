@@ -17,6 +17,9 @@ import type { Action } from "@/components/actions/action-registry";
 import { isSingleKeyShortcut } from "@/lib/shortcut-keys";
 import { REVEAL_FOLDER_EVENT } from "./move-request";
 import { CLEAR_FILTER_TO_REORDER, alreadyAtEdge, reorderedNode } from "./organize-messages";
+import { useTreeDrag } from "./use-tree-drag";
+import type { MoveNodeInput } from "./use-tree-mutations";
+import { matchesCommittedTreeView } from "./source-tree-cache";
 import { Status } from "@/components/ui/status";
 import { Tooltip } from "@/components/ui/tooltip";
 
@@ -47,7 +50,13 @@ export type KnowledgeTreeProps = {
    * Puts a node at a place among its siblings (Alt+↑/↓), and says whether that happened. The tree
    * decides which place from what it shows; whether it may is the actions' say, and the server's.
    */
-  onReorder: (input: { nodeId: string; position: number }) => Promise<boolean>;
+  onReorder: (input: { nodeId: string; position: number }, onRefreshRequested?: (tree?: KnowledgeTreeItem[]) => void) => Promise<boolean>;
+  /**
+   * Puts a node into another folder, or at a place among that folder's siblings, from a drop. The
+   * tree decides where from what it shows; whether it may is the actions' say, and the server's.
+   */
+  onMove: (input: Omit<MoveNodeInput, "sourceId">, onRefreshRequested?: (tree?: KnowledgeTreeItem[]) => void) => Promise<boolean>;
+  isSourceArrangementPending?: () => boolean;
 };
 
 function documentHref(
@@ -75,7 +84,9 @@ function TreeNodeRow({
   documentActions,
   folderActions,
   onRunAction,
+  drag,
 }: {
+  drag: ReturnType<typeof useTreeDrag>;
   node: KnowledgeTreeNode;
   depth: number;
   scope: { workspaceId: string; sourceId: string };
@@ -103,6 +114,7 @@ function TreeNodeRow({
     const actions = documentActions(item);
     return (
       <RowContextMenu
+        {...drag.rowProps(item.id)}
         actions={actions}
         onRun={onRunAction}
         role="treeitem"
@@ -114,9 +126,10 @@ function TreeNodeRow({
         data-status={item.status}
         tabIndex={tabIndex}
         onFocus={() => onFocusNode(item.id)}
-        className={`kh-interactive-row group relative flex kh-rail-row items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}
+        className={`kh-interactive-row group relative flex kh-rail-row items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""} ${drag.draggingId === item.id ? "kh-tree-drag-source" : ""}`}
       >
         <Link
+          draggable={false}
           href={documentHref(item, scope, includeArchived)}
           // Never prefetch the page being read: prefetched from itself, the
           // server sends the whole page, and the router applies that copy on
@@ -162,9 +175,10 @@ function TreeNodeRow({
     >
       <RowContextMenu
         as="div"
+        {...drag.rowProps(item.id)}
         actions={actions}
         onRun={onRunAction}
-        className="kh-interactive-row group relative flex kh-rail-row items-center"
+        className={`kh-interactive-row group relative flex kh-rail-row items-center ${drag.draggingId === item.id ? "kh-tree-drag-source" : ""} ${drag.indicator?.kind === "into" && drag.indicator.nodeId === item.id ? "kh-tree-drop-into" : ""}`}
       >
         <button
           type="button"
@@ -192,6 +206,7 @@ function TreeNodeRow({
           {node.children.map((child) => (
             <TreeNodeRow
               key={child.item.id}
+              drag={drag}
               node={child}
               depth={depth + 1}
               scope={scope}
@@ -236,6 +251,8 @@ export function KnowledgeTree({
   folderActions,
   onRunAction,
   onReorder,
+  onMove,
+  isSourceArrangementPending = () => false,
 }: KnowledgeTreeProps) {
   const router = useRouter();
   const treeRef = useRef<HTMLUListElement>(null);
@@ -339,24 +356,74 @@ export function KnowledgeTree({
   // put back on the row then too, since a row that has changed its place in the list may have been
   // taken out of the page and put back, which drops focus.
   const reordering = useRef(false);
-  const reorderGiveUp = useRef<number | undefined>(undefined);
+  const reorderOperation = useRef(0);
+  const expectedReorder = useRef<{ id: string; parentId: string | null; position: number } | null>(null);
   const queuedReorder = useRef<{ id: string; direction: -1 | 1 } | null>(null);
+  const itemsAtReorderStart = useRef(items);
+  const latestItems = useRef(items);
+  latestItems.current = items;
+  const refreshRequested = useRef(false);
+  const authoritativeTree = useRef<KnowledgeTreeItem[] | null>(null);
+  const itemsAtRefreshRequest = useRef(items);
+  const reorderReplySeen = useRef(false);
+  const [reorderReplyVersion, markReorderReply] = useState(0);
   const focusAfterReorder = useRef<string | null>(null);
   const [announcement, setAnnouncement] = useState({ text: "", sequence: 0 });
   const announce = (text: string) => setAnnouncement((previous) => ({ text, sequence: previous.sequence + 1 }));
-  useEffect(() => () => window.clearTimeout(reorderGiveUp.current), []);
+  const drag = useTreeDrag({
+    items, includeArchived, filtering, isKeyboardBusy: () => reordering.current, onDragStarted: () => { reorderOperation.current++; },
+    canMove: (id) => { const item = itemById.get(id); if (isSourceArrangementPending() || !item || item.status === "ARCHIVED") return false; return (item.type === "document" ? documentActions(item) : folderActions(item)).some((action) => action.id === "document.move" || action.id === "folder.move"); },
+    isCollapsed: (id) => effectiveCollapsed.has(id), onReorder, onMove,
+    onPlaced: (id, parentId, refreshed) => {
+      if (parentId) expandFrom(parentId);
+      if (refreshed) {
+        focusAfterReorder.current = id;
+        const row = Array.from(treeRef.current?.querySelectorAll<HTMLElement>("[data-node-id]") ?? []).find((element) => element.dataset.nodeId === id);
+        if (row) { row.focus(); focusAfterReorder.current = null; }
+      }
+    },
+    onRefreshed: (id) => { focusAfterReorder.current = id; },
+    announce, expandFolder: expandFrom, treeRef,
+  });
   useEffect(() => {
+    const expected = expectedReorder.current;
+    // A matching tree may arrive before the PATCH response. Never start a queued
+    // write until both the server reply and the refreshed position are confirmed.
+    if (!reordering.current || !expected || !reorderReplySeen.current) return;
+    const row = itemById.get(expected.id);
+    const matched = row?.parentId === expected.parentId && row.position === expected.position;
+    // An unrelated refresh can render before PATCH commits. Only a tree
+    // snapshot arriving after this mutation requested its own refresh may
+    // confirm a clamped position or flush a queued keyboard step.
+    const confirmedSnapshot = authoritativeTree.current
+      ? matchesCommittedTreeView(items, authoritativeTree.current, includeArchived)
+      : refreshRequested.current
+        ? items !== itemsAtRefreshRequest.current
+        : items !== itemsAtReorderStart.current; // legacy callback-free callers
+    if (!confirmedSnapshot) return;
     reordering.current = false;
-    window.clearTimeout(reorderGiveUp.current);
-    const id = focusAfterReorder.current;
-    focusAfterReorder.current = null;
-    if (id) Array.from(treeRef.current?.querySelectorAll<HTMLElement>("[data-node-id]") ?? []).find((element) => element.dataset.nodeId === id)?.focus();
+    reorderReplySeen.current = false;
+    refreshRequested.current = false;
+    authoritativeTree.current = null;
+    expectedReorder.current = null;
     const queued = queuedReorder.current;
     queuedReorder.current = null;
+    if (!matched) {
+      focusAfterReorder.current = null;
+      announce("The tree changed while sorting. Review the current order and try again.");
+      return;
+    }
     const item = queued ? itemById.get(queued.id) : undefined;
     if (queued && item) void reorder(item, queued.direction);
-    // The dependency is "the tree arrived"; `reorder` reads the render this effect is in, which is that one.
-  }, [items]);
+    // Recheck on either event: the refreshed tree or the response settling.
+  }, [items, reorderReplyVersion]);
+
+  useEffect(() => {
+    const id = focusAfterReorder.current;
+    if (!id) return;
+    const row = Array.from(treeRef.current?.querySelectorAll<HTMLElement>("[data-node-id]") ?? []).find((element) => element.dataset.nodeId === id);
+    if (row) { row.focus(); focusAfterReorder.current = null; }
+  }, [items, effectiveCollapsed]);
 
   async function reorder(item: KnowledgeTreeItem, direction: -1 | 1) {
     // A filtered tree shows some of the siblings, and the ones next to this row in it are not its neighbours.
@@ -364,10 +431,12 @@ export function KnowledgeTree({
       announce(CLEAR_FILTER_TO_REORDER);
       return;
     }
+    if (drag.isBusy()) return;
     if (reordering.current) {
       queuedReorder.current = { id: item.id, direction };
       return;
     }
+    if (isSourceArrangementPending()) return;
     const step = reorderStep(roots, item.id, direction);
     if (!step) return;
     if (step.kind === "edge") {
@@ -375,19 +444,34 @@ export function KnowledgeTree({
       return;
     }
     reordering.current = true;
-    // If the tree never arrives, the next key press is not lost for good.
-    window.clearTimeout(reorderGiveUp.current);
-    reorderGiveUp.current = window.setTimeout(() => {
-      reordering.current = false;
-      queuedReorder.current = null;
-    }, 3000);
-    if (await onReorder({ nodeId: item.id, position: step.position })) {
-      focusAfterReorder.current = item.id;
+    reorderReplySeen.current = false;
+    refreshRequested.current = false;
+    authoritativeTree.current = null;
+    itemsAtReorderStart.current = items;
+    drag.invalidatePending();
+    const operation = ++reorderOperation.current;
+    expectedReorder.current = { id: item.id, parentId: item.parentId, position: step.position };
+    // The refreshed tree may arrive before the request resolves. The row that will move is known
+    // now, so the focus effect can put focus back on it as soon as that tree lands; waiting for the
+    // promise would leave a tree that already arrived with nothing to focus.
+    focusAfterReorder.current = item.id;
+    const ok = await onReorder({ nodeId: item.id, position: step.position }, (tree) => {
+      authoritativeTree.current = tree ?? null;
+      refreshRequested.current = true;
+      itemsAtRefreshRequest.current = latestItems.current;
+    });
+    if (reorderOperation.current !== operation) return;
+    if (ok) {
+      reorderReplySeen.current = true;
+      markReorderReply((version) => version + 1);
       announce(reorderedNode(item.label, direction < 0 ? "up" : "down", step.index, step.count));
     } else {
+      focusAfterReorder.current = null;
       reordering.current = false;
+      reorderReplySeen.current = false;
+      refreshRequested.current = false;
+      expectedReorder.current = null;
       queuedReorder.current = null;
-      window.clearTimeout(reorderGiveUp.current);
     }
   }
 
@@ -497,6 +581,7 @@ export function KnowledgeTree({
     <div aria-live="polite" aria-atomic="true" className="sr-only">
       <p key={announcement.sequence}>{announcement.text}</p>
     </div>
+    {drag.indicator?.kind === "line" ? <div className="kh-tree-drop-line" aria-hidden="true" style={{ top: drag.indicator.top, left: drag.indicator.left, width: drag.indicator.width }} /> : null}
     <ul
       ref={treeRef}
       role="tree"
@@ -509,6 +594,7 @@ export function KnowledgeTree({
       {roots.map((node) => (
         <TreeNodeRow
           key={node.item.id}
+          drag={drag}
           node={node}
           depth={1}
           scope={{ workspaceId, sourceId }}

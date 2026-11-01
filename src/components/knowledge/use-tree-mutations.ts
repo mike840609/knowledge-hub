@@ -3,7 +3,9 @@
 import { useCallback, useMemo } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { refreshOnArrival, refreshOnArrivalElsewhere } from "@/components/shell/refresh-on-arrival";
-import { useToast } from "@/components/ui/toast";
+import { RetryableUndoError, useToast } from "@/components/ui/toast";
+import { commitSourceTree } from "./source-tree-cache";
+import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledge-query-service";
 import { governanceFailure, governanceRequest } from "@/components/workspaces/governance-error";
 import {
   UNDO_LABEL,
@@ -17,7 +19,24 @@ import {
   restoredFolder,
 } from "./organize-messages";
 
+// A source's PATCH must outlive the Sidebar/Tree that started it: filtering,
+ // route navigation or a responsive drawer may unmount either client component.
+ // The lease is per browser module instance and is released by the pending
+ // request's finally block even when its initiating component is gone.
+const sourceArrangements = new Set<string>();
+// If a committed PATCH cannot be re-read, do not accept a second write based
+// on stale tree positions. A full page reload clears this browser-local guard.
+const staleArrangements = new Set<string>();
+
 export type OrganizeResult = { ok: true } | { ok: false; message: string };
+
+export type MoveNodeInput = {
+  sourceId: string;
+  nodeId: string;
+  label: string;
+  from: { parentId: string | null; position: number };
+  to: { parentId: string | null; label: string | null; position?: number };
+};
 
 export type TreeMutations = {
   archiveDocument(input: { documentId: string; sourceId: string; title: string }): Promise<void>;
@@ -30,21 +49,20 @@ export type TreeMutations = {
   createFolder(input: { name: string; parentId: string | null; sourceId: string | null }): Promise<OrganizeResult>;
   renameFolder(input: { nodeId: string; from: string; to: string }): Promise<OrganizeResult>;
   /**
-   * Into a folder, or to the top level with a null parent, last. `from` is where it was, for the Undo;
-   * `to.label` is the folder's name, or null for the top level. For a dialog, like the two above.
+   * Into a folder, or to the top level with a null parent, last — or at `to.position` among that
+   * parent's siblings. `from` is where it was, for the Undo; `to.label` is the folder's name, or null
+   * for the top level. For a dialog, like the two above, a refusal comes back as words to put beside
+   * the field; `report: "toast"` is for the drag surface, which has no field to put them beside.
    */
-  moveNode(input: {
-    nodeId: string;
-    label: string;
-    from: { parentId: string | null; position: number };
-    to: { parentId: string | null; label: string | null };
-  }): Promise<OrganizeResult>;
+  moveNode(input: MoveNodeInput, report?: "dialog" | "toast", onRefreshRequested?: (authoritativeTree?: KnowledgeTreeItem[]) => void): Promise<OrganizeResult>;
   /**
    * To another place among its own siblings, from the keyboard. There is no dialog to put a refusal
    * beside, so it is said as a toast here, and there is no Undo toast either: a step is undone by the
    * step back, and a toast for every key press would bury the tree.
    */
-  reorderNode(input: { nodeId: string; position: number }): Promise<OrganizeResult>;
+  reorderNode(input: { nodeId: string; position: number; sourceId: string }, onRefreshRequested?: (authoritativeTree?: KnowledgeTreeItem[]) => void): Promise<OrganizeResult>;
+  /** Survives the KnowledgeTree being filtered out and remounted. */
+  isSourceArrangementPending(sourceId: string): boolean;
 };
 
 /**
@@ -128,36 +146,86 @@ export function useTreeMutations(): TreeMutations {
       }
     }
 
+    async function syncCommittedSource(sourceId: string, onRefreshRequested?: (tree?: KnowledgeTreeItem[]) => void): Promise<void> {
+      try {
+        // This response is about *this source*, after the PATCH committed. A
+        // router refresh or another source's lazy load is not an acknowledgement.
+        const response = await fetch(`/api/workspaces/${workspaceId}/sources/${sourceId}/tree`, { cache: "no-store" });
+        if (!response.ok) throw new Error("The changed tree could not be loaded.");
+        const body: unknown = await response.json();
+        if (!body || typeof body !== "object" || !("tree" in body) || !Array.isArray(body.tree)) {
+          throw new Error("Invalid source tree response.");
+        }
+        const tree = body.tree as KnowledgeTreeItem[];
+        onRefreshRequested?.(tree);
+        // Publish before releasing the source-scoped PATCH lease. Every mounted
+        // explorer receives the new tree; a remounted explorer also starts with it.
+        commitSourceTree(workspaceId, sourceId, tree);
+      } catch {
+        staleArrangements.add(`${workspaceId}:${sourceId}`);
+        toast({ message: "The change was saved, but its tree could not be refreshed. Reload the page before sorting again.", tone: "danger" });
+      }
+      refresh();
+    }
+
+    // The sidebar owns this hook, whereas filtering may unmount and remount a
+    // KnowledgeTree while its earlier PATCH is still pending. Keep the write
+    // lease here, shared by pointer moves and keyboard reorders of one source.
+    async function serializeArrangement(sourceId: string, write: () => Promise<OrganizeResult>): Promise<OrganizeResult> {
+      const key = `${workspaceId}:${sourceId}`;
+      if (sourceArrangements.has(key) || staleArrangements.has(key)) return { ok: false, message: "A tree change is still in progress." };
+      sourceArrangements.add(key);
+      try { return await write(); }
+      finally { sourceArrangements.delete(key); }
+    }
+
     return {
-      async moveNode({ nodeId, label, from, to }) {
+      isSourceArrangementPending: (sourceId) => sourceArrangements.has(`${workspaceId}:${sourceId}`) || staleArrangements.has(`${workspaceId}:${sourceId}`),
+      async moveNode({ sourceId, nodeId, label, from, to }, report = "dialog", onRefreshRequested) {
+        return serializeArrangement(sourceId, async () => {
         try {
-          await governanceRequest(`/api/tree-nodes/${nodeId}`, "PATCH", { parentId: to.parentId });
+          await governanceRequest(`/api/tree-nodes/${nodeId}`, "PATCH", {
+            parentId: to.parentId,
+            ...(to.position !== undefined ? { position: to.position } : {}),
+          });
           toast({
             message: movedNode(label, to.label),
             undo: {
               label: UNDO_LABEL,
               run: async () => {
-                await governanceRequest(`/api/tree-nodes/${nodeId}`, "PATCH", { parentId: from.parentId, position: from.position });
-                refresh();
+                // Undo must obey the same source-level lease as a drag, keyboard
+                // reorder or dialog move. Never issue a competing raw PATCH.
+                const result = await serializeArrangement(sourceId, async () => {
+                  await governanceRequest(`/api/tree-nodes/${nodeId}`, "PATCH", { parentId: from.parentId, position: from.position });
+                  await syncCommittedSource(sourceId);
+                  return { ok: true };
+                });
+                if (!result.ok) throw new RetryableUndoError(result.message);
               },
             },
           });
-          refresh();
+          await syncCommittedSource(sourceId, onRefreshRequested);
           return { ok: true };
         } catch (failure) {
-          return { ok: false, message: organizeFailure(governanceFailure(failure)) };
+          const message = organizeFailure(governanceFailure(failure));
+          // The dialog shows the words beside its field; a drag has no field, so it is never silent.
+          if (report === "toast") toast({ message, tone: "danger" });
+          return { ok: false, message };
         }
+        });
       },
-      async reorderNode({ nodeId, position }) {
+      async reorderNode({ sourceId, nodeId, position }, onRefreshRequested) {
+        return serializeArrangement(sourceId, async () => {
         try {
           await governanceRequest(`/api/tree-nodes/${nodeId}`, "PATCH", { position });
-          refresh();
+          await syncCommittedSource(sourceId, onRefreshRequested);
           return { ok: true };
         } catch (failure) {
           const message = organizeFailure(governanceFailure(failure));
           toast({ message, tone: "danger" });
           return { ok: false, message };
         }
+        });
       },
       archiveDocument: (input) => setDocument("archive", input),
       restoreDocument: (input) => setDocument("restore", input),

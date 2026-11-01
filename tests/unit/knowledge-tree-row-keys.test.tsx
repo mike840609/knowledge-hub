@@ -65,6 +65,7 @@ function render(props: Props = {}) {
         folderActions: () => [newHereAction],
         onRunAction,
         onReorder: async () => true,
+        onMove: async () => true,
         ...props,
       }),
     ),

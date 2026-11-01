@@ -961,9 +961,9 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-slash-menu { width: 18rem; max-width: calc(100vw - 1rem); max-height: min(24rem, 60vh); overflow-y: auto; }
 .kh-slash-option { @apply flex cursor-pointer flex-col rounded-md px-3 py-1.5 text-body-sm text-kh-text hover:bg-kh-bg-hover; }
 .kh-slash-option[aria-selected="true"] { @apply bg-kh-bg-selected text-kh-selected-text; }
-.kh-block-drop-line { position: fixed; z-index: 50; height: 2px; background: var(--kh-primary); pointer-events: none; }
+.kh-tree-drop-line, .kh-block-drop-line { position: fixed; z-index: 50; height: 2px; background: var(--kh-primary); pointer-events: none; }
 .kh-block-is-dragging { cursor: grabbing; }
-@media print { .kh-block-gutter, .kh-block-move-menu, .kh-slash-menu, .kh-block-drop-line, .kh-table-actions { display: none; } }
+@media print { .kh-block-gutter, .kh-block-move-menu, .kh-slash-menu, .kh-block-drop-line, .kh-tree-drop-line, .kh-table-actions { display: none; } }
 
 /* The whole block stays marked while it moves, nested content included. */
 .kh-editor .kh-block-drag-source {
@@ -974,3 +974,5 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-editor .kh-block-drag-source :is(th, td, pre, code) {
   background-color: transparent;
 }
+
+.kh-tree-drag-source, .kh-tree-drop-into { background-color: var(--kh-bg-selected); }

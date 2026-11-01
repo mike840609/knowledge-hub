@@ -28,6 +28,9 @@ import { buttonClasses } from "@/components/ui/button";
  * as its content is not reliably announced.
  */
 
+/** A transient conflict: the Undo did not run, so keep its action retryable. */
+export class RetryableUndoError extends Error {}
+
 export type ToastUndo = {
   /** Run the reverse operation. Rejecting is reported rather than swallowed. */
   run: () => Promise<void>;
@@ -111,13 +114,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     try {
       await undo.run();
       setToast({ message: "Undone.", id: (nextId.current += 1), state: "idle" });
-    } catch {
-      setToast({
-        message: "Could not undo that. Nothing else changed.",
-        tone: "danger",
-        id: (nextId.current += 1),
-        state: "idle",
-      });
+    } catch (error) {
+      if (error instanceof RetryableUndoError) {
+        setToast((current) => current?.id === toast.id
+          ? { ...current, message: "Another tree change is in progress. Try Undo again.", tone: "danger", state: "idle" }
+          : current);
+      } else {
+        setToast({
+          message: "Could not undo that. Nothing else changed.",
+          tone: "danger",
+          id: (nextId.current += 1),
+          state: "idle",
+        });
+      }
     }
   };
 

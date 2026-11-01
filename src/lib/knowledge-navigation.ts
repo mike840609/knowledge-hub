@@ -19,11 +19,11 @@ export function sortSourcesByName(sources: SourceView[]): SourceView[] {
 }
 
 const byPosition = (
-  left: KnowledgeTreeNode,
-  right: KnowledgeTreeNode,
+  left: KnowledgeTreeItem,
+  right: KnowledgeTreeItem,
 ): number =>
-  left.item.position - right.item.position ||
-  (left.item.id < right.item.id ? -1 : left.item.id > right.item.id ? 1 : 0);
+  left.position - right.position ||
+  (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
 
 export function buildKnowledgeTree(
   items: KnowledgeTreeItem[],
@@ -43,7 +43,7 @@ export function buildKnowledgeTree(
     }
   }
   const sortRecursively = (list: KnowledgeTreeNode[]): void => {
-    list.sort(byPosition);
+    list.sort((left, right) => byPosition(left.item, right.item));
     for (const node of list) {
       if (node.children.length > 0) sortRecursively(node.children);
     }
@@ -161,4 +161,64 @@ export function reorderStep(roots: KnowledgeTreeNode[], nodeId: string, directio
   const neighbour = siblings[index + direction];
   if (!neighbour) return { kind: "edge", index, count: siblings.length };
   return { kind: "move", position: neighbour.item.position, index: index + direction, count: siblings.length };
+}
+
+export type DropZone = "before" | "after" | "into";
+
+export type DropPlacement =
+  /** Same parent: ask the server to reorder the node to `position` among all its siblings. */
+  | { kind: "reorder"; position: number; index: number; count: number }
+  /** Another parent: ask the server to move the node there, at `position` when there is one. */
+  | { kind: "move"; parentId: string | null; position?: number; index: number; count: number };
+
+/**
+ * Where a drop asks the server to put the dragged node, or `null` when the target is not a place it
+ * may go. `index` and `count` are the node's place among the *visible* siblings after the drop, for
+ * the live region; `position` is the server's index among all of them, archived ones included.
+ *
+ * The destination is gated by `moveDestinations`, the same rule the Move dialog offers, so an
+ * archived folder, an anchor under one, and the dragged folder's own subtree are all refused here
+ * rather than promised and then rejected by the server. Dropping into the folder the node already
+ * lives in appends it there as a same-parent reorder; into another folder the position is omitted
+ * and the server appends.
+ */
+export function dropPlacement(
+  items: KnowledgeTreeItem[],
+  draggedId: string,
+  targetId: string,
+  zone: DropZone,
+  destinations?: ReadonlySet<string>,
+): DropPlacement | null {
+  const dragged = items.find((item) => item.id === draggedId);
+  const target = items.find((item) => item.id === targetId);
+  if (!dragged || !target || target.id === dragged.id) return null;
+
+  const allowed = destinations ?? new Set(moveDestinations(items, draggedId).map((destination) => destination.id));
+  const destinationParent = zone === "into" ? target.id : target.parentId;
+  if (destinationParent !== null && !allowed.has(destinationParent)) return null;
+  if (zone === "into" && target.type !== "folder") return null;
+
+  const siblings = items
+    .filter((item) => item.parentId === destinationParent && item.id !== draggedId)
+    .sort(byPosition);
+  const count = siblings.length + 1;
+
+  if (zone === "into") {
+    const index = siblings.length;
+    return destinationParent === dragged.parentId
+      ? { kind: "reorder", position: Number.MAX_SAFE_INTEGER, index, count }
+      : { kind: "move", parentId: destinationParent, index, count };
+  }
+
+  const at = siblings.findIndex((item) => item.id === target.id);
+  if (at < 0) return null;
+  const index = zone === "before" ? at : at + 1;
+  const draggedBefore = dragged.parentId === destinationParent && dragged.position < target.position;
+  const position =
+    zone === "before"
+      ? target.position - (draggedBefore ? 1 : 0)
+      : target.position + 1 - (draggedBefore ? 1 : 0);
+  return destinationParent === dragged.parentId
+    ? { kind: "reorder", position, index, count }
+    : { kind: "move", parentId: destinationParent, position, index, count };
 }

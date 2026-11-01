@@ -40,7 +40,7 @@ function renderTree(sharedFolderIds?: ReadonlySet<string>) {
   act(() => root.render(createElement(KnowledgeTree, {
     items: [folder("n:shared", "Handbook"), folder("n:private", "Drafts")],
     workspaceId: "w1", sourceId: "s1", favoriteDocumentIds: new Set<string>(), sharedFolderIds,
-    onToggleFavorite: () => {}, documentActions: () => [], folderActions: () => [], onRunAction: () => {}, onReorder: async () => true,
+    onToggleFavorite: () => {}, documentActions: () => [], folderActions: () => [], onRunAction: () => {}, onReorder: async () => true, onMove: async () => true,
   })));
 }
 const rowFor = (label: string) => container.querySelector<HTMLElement>(`[role=treeitem][aria-label="${label}"]`)!;

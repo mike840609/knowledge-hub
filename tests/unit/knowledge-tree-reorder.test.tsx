@@ -64,6 +64,7 @@ function render(props: Props = {}) {
       folderActions: () => [],
       onRunAction: () => {},
       onReorder,
+      onMove: async () => true,
       ...props,
       ...extra,
     });
@@ -84,14 +85,14 @@ describe("Alt+arrow on a row the reader may move", () => {
   it("asks for the neighbour's place, and takes the key so nothing else answers it", () => {
     const { onReorder } = render();
     const event = press(rowFor("B"), "ArrowDown");
-    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:B", position: 2 });
+    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:B", position: 2 }, expect.any(Function));
     expect(event.defaultPrevented).toBe(true);
   });
 
   it("asks for the place above it when the key is up", () => {
     const { onReorder } = render();
     press(rowFor("B"), "ArrowUp");
-    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:B", position: 0 });
+    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:B", position: 0 }, expect.any(Function));
   });
 
   it("says where the row is now, counting from one, once the server has said yes", async () => {
@@ -137,7 +138,7 @@ describe("Alt+arrow on a row the reader may not move", () => {
     const folder: KnowledgeTreeItem = { type: "folder", id: "n:F", parentId: null, label: "F", position: 3, status: "ACTIVE" };
     const { onReorder } = render({ items: [...items, folder], folderActions: () => [moveAction("folder.move")] });
     press(rowFor("F"), "ArrowUp");
-    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:F", position: 2 });
+    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:F", position: 2 }, expect.any(Function));
   });
 });
 
@@ -170,7 +171,7 @@ describe("Alt+arrow while a request is in flight", () => {
     onReorder.mockImplementation(async () => true);
     rerender({ items: [doc("A", 0), doc("C", 1), doc("B", 2)] });
     expect(onReorder).toHaveBeenCalledTimes(2);
-    expect(onReorder).toHaveBeenLastCalledWith({ nodeId: "n:B", position: 1 });
+    expect(onReorder).toHaveBeenLastCalledWith({ nodeId: "n:B", position: 1 }, expect.any(Function));
   });
 
   it("does not keep a key past a step the server refused", async () => {

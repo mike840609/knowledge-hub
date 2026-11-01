@@ -254,6 +254,15 @@ type RowProps = {
   "aria-current"?: "page";
   "aria-selected"?: boolean;
   "data-node-id"?: string;
+  /** The row header a drag starts from, and the id hit-testing finds it by (tree drag spec). */
+  draggable?: boolean;
+  /** The row's own node id for drag hit-testing, distinct from `data-node-id`, which focus restore uses. */
+  "data-row-node-id"?: string;
+  onDragStart?: React.DragEventHandler;
+  onDragOver?: React.DragEventHandler;
+  onDragLeave?: React.DragEventHandler;
+  onDrop?: React.DragEventHandler;
+  onDragEnd?: React.DragEventHandler;
 };
 
 export function RowContextMenu({

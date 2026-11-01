@@ -961,6 +961,8 @@ image policy doing its job, not something to loosen for a glyph.
 
 ### A source heading's slot
 
+A writable Knowledge tree row is dragged whole. The dragged row and a receiving folder use `kh-bg-selected`; a 2px `--kh-primary` line marks a position at the target's indent, below the visible subtree when placing after a folder. A collapsed folder opens after 500 ms over its middle. Sources the Hub cannot write to offer no drag. This uses existing tokens.
+
 A Knowledge explorer source heading has one 14px slot before its name: the
 source's mark at rest, its chevron on hover or on keyboard focus. The hover
 swap applies only under `(hover: hover) and (pointer: fine)`, the same
