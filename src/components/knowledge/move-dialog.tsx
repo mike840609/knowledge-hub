@@ -110,6 +110,7 @@ function MoveDialog({ request, collections, onClose, loading, failed, onRetry }:
     setBusy(true);
     setProblem(null);
     const result = await mutations.moveNode({
+      sourceId: request.sourceId,
       nodeId: found.item.id,
       label,
       from: { parentId: found.item.parentId, position: found.item.position },
