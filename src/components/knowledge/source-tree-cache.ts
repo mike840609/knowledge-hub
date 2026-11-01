@@ -4,8 +4,17 @@ export type TreeLoadState = { status: 'loading' | 'error' } | { status: 'loaded'
 
 // A PATCH must publish the authoritative source, rather than waiting for an arbitrary
 // array change from the router: loading another source also recreates the sidebar's arrays.
-// Keep the committed tree across cache replacement until an RSC seed has caught up.
-const committed = new Map<string, KnowledgeTreeItem[]>();
+// Bridge a short-lived stale RSC seed after PATCH without masking later
+// authoritative server updates indefinitely.
+const COMMITTED_BRIDGE_MS = 60_000;
+const committed = new Map<string, { tree: KnowledgeTreeItem[]; expiresAt: number }>();
+
+function committedTree(key: string): KnowledgeTreeItem[] | undefined {
+  const snapshot = committed.get(key);
+  if (!snapshot) return undefined;
+  if (Date.now() >= snapshot.expiresAt) { committed.delete(key); return undefined; }
+  return snapshot.tree;
+}
 type CommitListener = (workspaceId: string, sourceId: string, tree: KnowledgeTreeItem[]) => void;
 const listeners = new Set<CommitListener>();
 const keyFor = (workspaceId: string, sourceId: string) => `${workspaceId}:${sourceId}`;
@@ -24,9 +33,8 @@ function equalTree(left: KnowledgeTreeItem[], right: KnowledgeTreeItem[]): boole
  * allocated array caused by a different source's lazy load. Normal explorer
  * mode hides archived nodes and their descendants.
  */
-export function matchesCommittedTreeView(displayed: KnowledgeTreeItem[], authoritative: KnowledgeTreeItem[]): boolean {
-  const showArchived = displayed.some(node => node.status === 'ARCHIVED');
-  if (showArchived) return equalTree(displayed, authoritative);
+export function matchesCommittedTreeView(displayed: KnowledgeTreeItem[], authoritative: KnowledgeTreeItem[], includeArchived = false): boolean {
+  if (includeArchived) return equalTree(displayed, authoritative);
   const byId = new Map(authoritative.map(node => [node.id, node]));
   const visible = authoritative.filter(node => {
     const visited = new Set<string>();
@@ -41,7 +49,7 @@ export function matchesCommittedTreeView(displayed: KnowledgeTreeItem[], authori
 }
 
 export function commitSourceTree(workspaceId: string, sourceId: string, tree: KnowledgeTreeItem[]): void {
-  committed.set(keyFor(workspaceId, sourceId), tree);
+  committed.set(keyFor(workspaceId, sourceId), { tree, expiresAt: Date.now() + COMMITTED_BRIDGE_MS });
   for (const listener of listeners) listener(workspaceId, sourceId, tree);
 }
 
@@ -56,8 +64,13 @@ export class SourceTreeCache {
   constructor(private workspaceId: string, seed: SourceCollection[], private fetcher: typeof fetch = (...args) => fetch(...args)) {
     this.states = Object.fromEntries(seed.map(c => {
       const key = keyFor(workspaceId, c.source.id);
-      const latest = committed.get(key);
-      if (latest && equalTree(latest, c.tree)) committed.delete(key);
+      const latest = committedTree(key);
+      if (latest && equalTree(latest, c.tree)) {
+        // This fresh RSC seed acknowledges the committed placement; use its
+        // current labels/revisions/metadata, not the old committed copy.
+        committed.delete(key);
+        return [c.source.id, { status: 'loaded', tree: c.tree }];
+      }
       return [c.source.id, { status: 'loaded', tree: latest ?? c.tree }];
     }));
   }
@@ -78,7 +91,7 @@ export class SourceTreeCache {
   };
   private put(id: string, state: TreeLoadState) {
     if (this.disposed) return;
-    const latest = committed.get(keyFor(this.workspaceId, id));
+    const latest = committedTree(keyFor(this.workspaceId, id));
     if (latest && state.status === 'loaded' && !equalTree(latest, state.tree)) {
       state = { status: 'loaded', tree: latest };
     }
@@ -88,7 +101,7 @@ export class SourceTreeCache {
     if (this.disposed) return Promise.resolve();
     const pending = this.pending.get(id); if (pending) return pending;
     if (this.states[id]) return Promise.resolve();
-    const latest = committed.get(keyFor(this.workspaceId, id));
+    const latest = committedTree(keyFor(this.workspaceId, id));
     if (latest) { this.put(id, { status: 'loaded', tree: latest }); return Promise.resolve(); }
     const controller = new AbortController(); this.controllers.add(controller);
     this.put(id, { status: 'loading' });
