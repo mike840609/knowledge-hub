@@ -1,9 +1,13 @@
 import type { SourcePolicy, SourceType, SourceOwnership } from "@/modules/knowledge/domain/source-policy";
 import type { SourcePolicyPort } from "@/modules/knowledge/ports/source-policy";
 import type { SourceRepository } from "@/modules/sources/ports/source-repository";
+import type { PublicationRepository } from "@/modules/sources/ports/publication-repository";
 
 export class MariaDbSourcePolicyRepository implements SourcePolicyPort {
-  constructor(private readonly sources: SourceRepository) {}
+  constructor(
+    private readonly sources: SourceRepository,
+    private readonly publications: PublicationRepository,
+  ) {}
 
   private map(source: Awaited<ReturnType<SourceRepository["findById"]>>): SourcePolicy | null {
     if (!source) return null;
@@ -24,5 +28,11 @@ export class MariaDbSourcePolicyRepository implements SourcePolicyPort {
   async lockById(sourceId: string): Promise<SourcePolicy | null> { return this.map(await this.sources.lockById(sourceId)); }
   async listByWorkspaceId(workspaceId: string, options: { includeArchived?: boolean } = {}): Promise<SourcePolicy[]> {
     return this.mapAll(await this.sources.findByWorkspaceId(workspaceId, options));
+  }
+  async findPublicationDocument(
+    documentId: string,
+    sourceId: string,
+  ): Promise<{ creatorUserId: string; publicationId: string; sourcePath: string | null } | null> {
+    return this.publications.findDocument(documentId, sourceId);
   }
 }

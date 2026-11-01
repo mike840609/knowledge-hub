@@ -120,7 +120,8 @@ test("the palette offers actions as well as documents, and keeps the keyboard ov
   await expect(field).toBeFocused();
   const list = page.getByRole("listbox", { name: "Actions and documents" });
   await expect(list.getByRole("option", { name: "Go to Sources" })).toBeVisible();
-  await expect(list.getByRole("option", { name: "Create document" })).toBeVisible();
+  // Team authoring is hidden: publishing is the only UI way content enters a team.
+  await expect(list.getByRole("option", { name: "Create document" })).toHaveCount(0);
 
   // The active row is the first one, and arrow keys move over the merged list.
   await expect(list.getByRole("option").first()).toHaveAttribute("aria-selected", "true");

@@ -14,6 +14,7 @@ import {
   type GovernanceFailure,
 } from "./governance-error";
 import { GrantRowActions } from "./grant-row-actions";
+import { assignableTeamRoles, teamRoleLabel } from "./team-role";
 export function MembersSettings({
   team,
   members,
@@ -34,7 +35,7 @@ export function MembersSettings({
   const [matchedUserCount, setMatchedUserCount] = useState(0);
   const searchGeneration = useRef(0);
   const [error, setError] = useState<GovernanceFailure | null>(null);
-  const roles = team.grantOptions.newMemberAssignableRoles;
+  const roles = assignableTeamRoles(team.grantOptions.newMemberAssignableRoles);
   const chosenRole = roles.find((value) => value === role) ?? roles[0] ?? "";
   const canAdd =
     access.actions.canManageBasicMembers &&
@@ -155,7 +156,7 @@ export function MembersSettings({
                 value={chosenRole}
                 disabled={busy || !confirmed}
                 onValueChange={setRole}
-                options={roles.map((value) => ({ value, label: value }))}
+                options={roles.map((value) => ({ value, label: teamRoleLabel(value) }))}
               />
               <Button type="submit" disabled={busy || !confirmed || !selected}>
                 Add member
@@ -184,7 +185,7 @@ export function MembersSettings({
                   {member.user.name}
                   <span className="block text-caption text-kh-text-muted">{member.user.empId}</span>
                 </td>
-                <td className="block px-3 py-2 align-top sm:table-cell"><span className="block text-caption text-kh-text-muted sm:hidden">Direct role</span>{member.access.directRole ?? "No direct role"}</td>
+                <td className="block px-3 py-2 align-top sm:table-cell"><span className="block text-caption text-kh-text-muted sm:hidden">Direct role</span>{member.access.directRole ? teamRoleLabel(member.access.directRole) : "No direct role"}</td>
                 <td className="col-span-2 block px-3 py-2 align-top sm:table-cell"><span className="block text-caption text-kh-text-muted sm:hidden">Group access</span>
                   {member.access.groupAccess === "UNKNOWN_NOT_EVALUATED"
                     ? "Group access not evaluated"

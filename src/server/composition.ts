@@ -5,11 +5,14 @@ import { cache } from "react";
 import { DocumentReviewService } from "@/modules/knowledge/application/document-review-service";
 import { AuthUnavailableError } from "@/modules/identity/domain/identity-session-errors";
 import { DomainError } from "@/shared/domain/errors";
-import { reviewWritesEnabled } from "./config";
+import { reviewWritesEnabled, teamWorkspacesEnabled } from "./config";
 import { PersonalPreferencesService } from "@/modules/personal/application/personal-preferences-service";
 import { PersonalProfileService } from "@/modules/personal/application/personal-profile-service";
 import { AgentContextService } from "@/modules/knowledge/application/agent-context-service";
+import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { GetImportScopeService } from "@/modules/sources/application/get-import-scope";
+import { drainPublicationEvents } from "@/modules/sources/application/publication-drain";
+import { PublicationService } from "@/modules/sources/application/publication-service";
 import {GetSourceHealthService} from "@/modules/sources/application/get-source-health";
 import { ListFolderUpdatesService } from "@/modules/personal/application/list-folder-updates";
 import { GetSyncRunDetailService } from "@/modules/sources/application/get-sync-run-detail";
@@ -49,6 +52,12 @@ import { HubIdentityResolver } from "@/modules/identity/application/hub-identity
 import { establishTrustedCaller as establishTrustedCallerWith } from "@/server/trusted-caller";
 import { importRuntimeConfig } from "@/server/import-config";
 import { createIdentityProvider } from "@/server/identity-provider-factory";
+import {
+  HUB_PERSONAL_WRITE_METHODS,
+  SOURCE_PERSONAL_WRITE_METHODS,
+  schedulePublicationDrain,
+  withPostCommitDrain,
+} from "./publication-post-commit";
 import { closeDatabasePool, getDatabasePool } from "./database-pool";
 
 let services: ReturnType<typeof buildApplicationServices> | undefined;
@@ -76,21 +85,40 @@ export function buildApplicationServices(databasePool: Pool, options: {
   const providerKind = identityProviderKind();
   const providerName = companySsoProviderName();
   const sessionReaderConfigured = options.companySessionReader !== undefined;
-  const hub = new HubKnowledgeCommandServiceImpl(unitOfWork);
+  // Only the caller's own events are consumed in their request, so group-derived
+  // rights are judged as them. Each mutator schedules after its transaction has
+  // committed and released its locks.
+  const scheduleAfterPersonalWrite = (caller: CallerContext): void => {
+    schedulePublicationDrain(caller, {
+      drain: (captured) => drainPublicationEvents(unitOfWork, {
+        judge: { kind: "CALLER", caller: captured },
+      }),
+    });
+  };
+  const hub = withPostCommitDrain(
+    new HubKnowledgeCommandServiceImpl(unitOfWork),
+    HUB_PERSONAL_WRITE_METHODS,
+    scheduleAfterPersonalWrite,
+  );
   const queries = new KnowledgeQueryServiceImpl(unitOfWork);
   const links = new KnowledgeLinkServiceImpl(unitOfWork);
   const documentReadProgress = new DocumentReadProgressService(unitOfWork, queries);
   const personalPreferences = new PersonalPreferencesService(new MariaDbPersonalStore(databasePool), unitOfWork);
   const personal = new PersonalService(new MariaDbPersonalStore(databasePool), queries, unitOfWork);
-  const reviews = new DocumentReviewService(unitOfWork, undefined, reviewWritesEnabled);
+  const reviews = new DocumentReviewService(unitOfWork, undefined, reviewWritesEnabled, teamWorkspacesEnabled);
   const savedShares = new SavedShareService(unitOfWork);
   const feedbackReports = new FeedbackReportService(new MariaDbFeedbackReportStore(databasePool));
   const shares = new DocumentShareService(unitOfWork, new RandomShareTokenIssuer());
-  const sources = new SourceApplicationService(unitOfWork);
+  const sources = withPostCommitDrain(
+    new SourceApplicationService(unitOfWork),
+    SOURCE_PERSONAL_WRITE_METHODS,
+    scheduleAfterPersonalWrite,
+  );
   const workspaceAdmin = new WorkspaceAdminService(unitOfWork);
   const teams = new TeamWorkspaceService(unitOfWork);
   const governance = new TeamGovernanceService(unitOfWork);
   const workspaces = new WorkspaceQueryService(unitOfWork);
+  const publications = new PublicationService(unitOfWork);
   const search = new KnowledgeSearchService(unitOfWork, workspaces);
   const resolver = new HubIdentityResolver(unitOfWork);
   const personalWorkspaces = new PersonalWorkspaceService(unitOfWork);
@@ -141,13 +169,17 @@ export function buildApplicationServices(databasePool: Pool, options: {
     finalize: new FinalizeFolderImportService(unitOfWork, { limits: importConfig.limits, readyTtlMs: importConfig.readyTtlMs, memoryBudget }),
     preview: new GetFolderImportPreviewService(unitOfWork),
     diff: new GetFolderImportDiffService(unitOfWork),
-    apply: new ApplyFolderImportService(unitOfWork, { memoryBudget }),
+    apply: withPostCommitDrain(
+      new ApplyFolderImportService(unitOfWork, { memoryBudget }),
+      ["apply"],
+      scheduleAfterPersonalWrite,
+    ),
     cleanup: new CleanupFolderImportsService(unitOfWork),
   };
   return {
     personalProfile: new PersonalProfileService(unitOfWork),
     agentContext: new AgentContextService(unitOfWork),
-    importScope: new GetImportScopeService(unitOfWork), sourceHealth:new GetSourceHealthService(unitOfWork), folderUpdates:new ListFolderUpdatesService(unitOfWork), syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, personal, personalPreferences, feedbackReports, workspaceAdmin, teams, governance, reviewReadAvailable: true, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, savedShares, reviews, sources, workspaces, search, imports };
+    importScope: new GetImportScopeService(unitOfWork), sourceHealth:new GetSourceHealthService(unitOfWork), folderUpdates:new ListFolderUpdatesService(unitOfWork), syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, personal, personalPreferences, feedbackReports, workspaceAdmin, teams, governance, reviewReadAvailable: true, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, savedShares, reviews, sources, workspaces, publications, search, imports };
 }
 
 export function applicationServices() {

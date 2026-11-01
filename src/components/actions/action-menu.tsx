@@ -20,6 +20,7 @@ import { requestFolderName } from "@/components/knowledge/folder-name-request";
 import { requestMove } from "@/components/knowledge/move-request";
 import { requestPeek } from "@/components/knowledge/peek-request";
 import { requestNavToggle } from "@/components/shell/nav-toggle";
+import { requestPublish } from "@/components/publications/publish-request";
 import { useTreeMutations } from "@/components/knowledge/use-tree-mutations";
 import { shortcutLabel } from "@/lib/shortcut-keys";
 import { ActionIcon } from "./action-icon";
@@ -134,6 +135,9 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
           return;
         case "move":
           requestMove({ sourceId: effect.sourceId, label: effect.label, node: effect.node });
+          return;
+        case "publish":
+          requestPublish(effect.origin);
           return;
         case "folder-command":
           switch (effect.command) {

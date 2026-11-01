@@ -4,6 +4,8 @@ export interface DocumentReviewCommentRepository {
  findById(id:string):Promise<ReviewComment|null>;
  findByIdempotencyKey(threadId:string,authorId:string,key:string):Promise<ReviewComment|null>;
  findByIds(ids:readonly string[]):Promise<ReviewComment[]>;
+ /** Comment id to its thread, without reading any body: enough to judge access before loading words. */
+ listThreadIdsByCommentIds(ids:readonly string[]):Promise<{commentId:string;threadId:string}[]>;
  listByThread(threadId:string):Promise<ReviewComment[]>;
  listByThreads(threadIds:string[]):Promise<ReviewComment[]>;
  countByThread(threadId:string):Promise<number>;

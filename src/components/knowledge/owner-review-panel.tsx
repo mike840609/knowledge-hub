@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CheckCheck, MessageSquarePlus, RefreshCw, X } from "lucide-react";
-import type { OwnerReviewThreadView } from "@/modules/knowledge/domain/document-review";
+import type { OwnerReviewThreadView, ReviewThreadView } from "@/modules/knowledge/domain/document-review";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { readStored, removeStored, writeStored } from "@/components/shell/use-persisted-state";
@@ -30,7 +30,11 @@ import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewRequest, t
  * selecting a passage (docs/superpowers/specs/2026-10-13-review-anchors-and-owner-threads-design.md).
  */
 export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = false, contentPending = false, prepareComment, commentAvailable = false, thread, children }: { /** A discussion to open on arrival in place of `?thread=`, with its passage scrolled into view. The Inbox passes it, and marks the entry read itself. */ thread?: string; prepareComment?: (capture: CaptureReviewAnchor) => PreparedReviewComment; commentAvailable?: boolean; documentId: string; revisionId: string; markdown: string; readOnly?: boolean; contentPending?: boolean; children: ReactNode }) {
-  const [result, setResult] = useState<{ threads: OwnerReviewThreadView[]; writesEnabled: boolean; revisionId: string; callerUserId: string }>();
+  const [result, setResult] = useState<{ threads: Array<OwnerReviewThreadView | ReviewThreadView>; writesEnabled: boolean; revisionId: string; callerUserId: string; ownerUserId?: string; canModerate?: boolean }>();
+  // A team member reads the same panel; the server's `canModerate` decides whether they get
+  // moderation, and `ownerUserId` is the document's creator — who an arriving discussion
+  // awaits — never the caller.
+  const canModerate = result?.canModerate !== false;
   const [error, setError] = useState<string>();
   const [activeThreadId, setActiveThreadId] = useState<string>();
   const [filter, setFilter] = useState<ReviewFilter>("ALL");
@@ -93,13 +97,13 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   // Open on arrival, once, where a discussion awaits the owner that they have not closed the rail
   // on (`review-auto-open.ts`) — and only as a rail: a drawer would cover what they came to read.
   // It sets the state and nothing else, so it takes neither the focus nor the scroll position.
-  const threads = useRef<OwnerReviewThreadView[]>([]);
+  const threads = useRef<Array<OwnerReviewThreadView | ReviewThreadView>>([]);
   const arrived = useRef(false);
   const owner = useRef<string | null>(null);
   useEffect(() => {
     if (!result) return;
     threads.current = result.threads;
-    owner.current = result.callerUserId;
+    owner.current = result.ownerUserId ?? result.callerUserId;
     if (arrived.current) return;
     arrived.current = true;
     // The list starts on what is still open, where something is: settled discussions would
@@ -121,7 +125,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
       const root = readingRef.current?.querySelector<HTMLElement>("[data-review-document]");
       if (root) revealReviewAnchor(root, markdown, anchor, "auto");
     }));
-    if (reviewRailInline() && opensOnArrival(result.threads, parseDismissed(readStored("local", dismissedKey(documentId))), result.callerUserId)) setOpen(true);
+    if (reviewRailInline() && canModerate && opensOnArrival(threads.current as OwnerReviewThreadView[], parseDismissed(readStored("local", dismissedKey(documentId))), result.ownerUserId ?? result.callerUserId)) setOpen(true);
   }, [result, documentId, thread, markdown, revisionId]);
   useEffect(() => {
     const activate = (event: Event) => setActiveThreadId((event as CustomEvent<string>).detail);
@@ -133,7 +137,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const changeOpen = useCallback((next: boolean) => {
     setOpen(next);
     if (next) removeStored("local", dismissedKey(documentId));
-    else writeStored("local", dismissedKey(documentId), JSON.stringify(awaitingOwner(threads.current, owner.current)));
+    else if (canModerate) writeStored("local", dismissedKey(documentId), JSON.stringify(awaitingOwner(threads.current as OwnerReviewThreadView[], owner.current)));
     if (!next) {
       requestVersion.current++;
       selection.clear(); setPrepared(undefined); setCommentRevision(undefined); setSaveError(undefined); setSavingDocument(false);
@@ -247,13 +251,13 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
           {composer && !draft && <div className="mt-3">{composer}</div>}
           {result && <div className="mt-3"><ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={prepared?.markdown ?? (revisionChanged || contentPending ? undefined : markdown)} activeThreadId={activeThreadId} onActivate={setActiveThreadId} unreadThreadIds={unreadThreadIds}
             focusAnchor={revisionChanged || contentPending ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }}
-            threads={result.threads} writesEnabled={result.writesEnabled && !readOnly} canResolve={!readOnly}
+            threads={result.threads} writesEnabled={result.writesEnabled && !readOnly} canResolve={canModerate && !readOnly}
             mentionScope={mentionScope} reply={async (threadId, body, idempotencyKey, mentions, mentionLinkId) => { await reviewRequest(`${base}/${threadId}/replies`, { body, idempotencyKey, ...(mentions.length ? { mentions, mentionLinkId } : {}) }); if (unreadThreadIds.has(threadId)) void markRead(threadId); await load(); }}
             author={{
               edit: async (threadId, commentId, body) => { await reviewRequest(`${base}/${threadId}/comments/${commentId}/body`, { body }); await load(); },
               remove: async (threadId, commentId) => { await reviewRequest(`${base}/${threadId}/comments/${commentId}/deletion`, {}); await load(); },
             }}
-            moderate={async (threadId, action, value, commentId) => { const path = commentId ? `${base}/${threadId}/comments/${commentId}/visibility` : `${base}/${threadId}/${action}`; await reviewRequest(path, action === "resolution" ? { status: value } : { visibility: value }); await load(); }} /></div>}
+            moderate={canModerate ? async (threadId, action, value, commentId) => { const path = commentId ? `${base}/${threadId}/comments/${commentId}/visibility` : `${base}/${threadId}/${action}`; await reviewRequest(path, action === "resolution" ? { status: value } : { visibility: value }); await load(); } : undefined} /></div>}
         </div></ReviewPanelShell>
       </aside>
     </div>

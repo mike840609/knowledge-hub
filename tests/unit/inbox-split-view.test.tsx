@@ -349,3 +349,45 @@ it("a followed discussion's reply offers @ through its link's token", async () =
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 250)); });
   expect(calls.some(call => call.url === "/api/review-mentions/candidates?query=an&token=tok")).toBe(true);
 });
+
+const lostTeam = (id: string) => entry(id, {
+  workspaceId: "", documentId: "", sourceId: "", documentTitle: "",
+  authorName: undefined, excerpt: "", access: { kind: "TEAM", available: false },
+});
+
+it("an unavailable team row has no mark affordance and selecting it never asks to mark it read", async () => {
+  notifications = [lostTeam("team-lost")];
+  window.history.replaceState(null, "", "/w/ws/inbox?item=team-lost");
+  await mount();
+  await settle();
+  expect(pane()?.textContent).toContain("This discussion is no longer available.");
+  expect(row("team-lost").textContent).not.toContain("Mark read");
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  await click(row("team-lost"));
+  expect(marks()).toEqual([]);
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+});
+
+it("a readable team row opens its team document and marks the discussion read", async () => {
+  notifications = [entry("team-live", { threadId: "thread-live", access: { kind: "TEAM", available: true } })];
+  threads["doc-team-live"] = [thread("thread-live")];
+  await mount();
+  await click(row("team-live"));
+  expect(marks()).toEqual(["thread:thread-live"]);
+  expect(calls.filter(call => call.url === "/api/review-notifications/mark-read").map(call => call.body))
+    .toEqual([{ documentId: "doc-team-live", threadId: "thread-live" }]);
+  expect(pane()?.textContent).toContain("body of thread-live");
+});
+
+it("mark all read settles readable rows only, leaving an unavailable team row unread", async () => {
+  notifications = [entry("a"), lostTeam("team-lost")];
+  threads["doc-a"] = [thread("thread-a")];
+  window.history.replaceState(null, "", "/w/ws/inbox?item=team-lost");
+  await mount();
+  await settle();
+  const markAll = [...host.querySelectorAll("button")].find(button => button.textContent?.includes("Mark all read"))!;
+  await click(markAll);
+  expect(marks()).toEqual([]);
+  expect(row("team-lost").textContent).toContain("Unread");
+  expect(row("a").textContent).toContain("Read");
+});

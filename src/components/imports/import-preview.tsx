@@ -10,6 +10,7 @@ import { ImportSummary } from "@/components/imports/import-summary";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { ImportWarningSummary } from "@/components/imports/import-warning-summary";
 import { Label } from "@/components/ui/label";
+import { PublicationSyncNotices } from "@/components/publications/maintained-by-notice";
 
 type ChangeGroupKey = "added" | "updated" | "moved" | "archived" | "unchanged";
 
@@ -107,6 +108,7 @@ export function ImportPreview({
         </> : null}
       </section> : null}
       {preview.safety ? <ImportSafetyWarning safety={preview.safety} /> : null}
+      <PublicationSyncNotices notices={preview.publicationNotices} names={{}} />
       <ImportWarningSummary preview={preview} />
       <div className="flex items-center gap-2 text-body">
         <Label inline htmlFor="import-change-filter">

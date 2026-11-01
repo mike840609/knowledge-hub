@@ -3,7 +3,8 @@ import { DocumentNotFoundError, TreeNodeNotFoundError } from "../../domain/error
 import type { KnowledgeTreeNode } from "../../domain/tree-node";
 import type { KnowledgeRepositories } from "../../ports/unit-of-work";
 import { assertActiveDocumentPlacement } from "../tree-validation";
-import { requireHubManagedSource } from "./tree-transaction";
+import { recordPersonalPublicationEvent } from "./publication-event-recording";
+import { requireHubManagedSourceContext } from "./tree-transaction";
 
 /**
  * Hub-managed document lifecycle bound to an already-open canonical
@@ -40,7 +41,7 @@ export async function archiveDocumentInTransaction(
 ): Promise<void> {
   const existing = await repositories.documents.findById(documentId);
   if (!existing) throw new DocumentNotFoundError();
-  const source = await requireHubManagedSource(repositories, caller, existing.sourceId);
+  const { source, workspace } = await requireHubManagedSourceContext(repositories, caller, existing.sourceId);
   const document = await repositories.documents.lockById(documentId);
   if (!document || document.sourceId !== source.id) throw new DocumentNotFoundError();
   if (document.status === "ARCHIVED") return;
@@ -59,6 +60,9 @@ export async function archiveDocumentInTransaction(
       lastSeenAt: now,
     });
   }
+  await recordPersonalPublicationEvent(repositories, workspace, {
+    documentId: document.id, treeNodeId: null, sourceId: null, kind: "LIFECYCLE", at: now,
+  });
 }
 
 export async function restoreDocumentInTransaction(
@@ -68,7 +72,7 @@ export async function restoreDocumentInTransaction(
 ): Promise<void> {
   const existing = await repositories.documents.findById(documentId);
   if (!existing) throw new DocumentNotFoundError();
-  const source = await requireHubManagedSource(repositories, caller, existing.sourceId);
+  const { source, workspace } = await requireHubManagedSourceContext(repositories, caller, existing.sourceId);
   const document = await repositories.documents.lockById(documentId);
   if (!document || document.sourceId !== source.id) throw new DocumentNotFoundError();
   if (document.status === "ACTIVE") return;
@@ -87,4 +91,7 @@ export async function restoreDocumentInTransaction(
       lastSeenAt: linked.lastSeenAt,
     });
   }
+  await recordPersonalPublicationEvent(repositories, workspace, {
+    documentId: document.id, treeNodeId: null, sourceId: null, kind: "LIFECYCLE", at: new Date(),
+  });
 }

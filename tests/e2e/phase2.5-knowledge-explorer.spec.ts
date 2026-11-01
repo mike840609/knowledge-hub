@@ -79,11 +79,9 @@ test("reading navigation separates collections from authoring and source managem
   await expect(page).toHaveURL(/\/knowledge\/0199f100-0000-7000-8000-000000000105\//);
   await expect(page.getByRole("heading", { name: "Compliance Policy", exact: true })).toBeVisible();
 
-  await page.getByRole("link", { name: "Create document", exact: true }).click();
-  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("New document");
-  await expect(page.locator("main").getByRole("textbox", { name: "Content" })).toBeVisible();
-  await expect(page.locator('input[type="file"]')).toBeAttached();
-  await expect(page.getByText("Upload .md")).toBeVisible();
+  // Team authoring is hidden: publishing is the only UI way content enters a team.
+  await expect(page.getByRole("link", { name: "Create document", exact: true })).toHaveCount(0);
+  await expect(page.locator('input[type="file"]')).toHaveCount(0);
 });
 
 test("filters documents across collections without switching sources", async ({ page }) => {

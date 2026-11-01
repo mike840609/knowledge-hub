@@ -23,6 +23,12 @@ it('late responses cannot update a disposed scope', async () => {
  const pending=cache.ensure('s'); cache.dispose(); resolve(Response.json({tree:[]})); await pending;
  expect(cache.snapshot().s.status).not.toBe('loaded');
 });
+it('stores the publication document views returned with a lazy tree', async () => {
+ const publication={publication:{id:'p1',sourceId:'s'},documents:[{teamDocumentId:'d1',creatorName:'Mike'}]};
+ const cache=new SourceTreeCache('w',[],vi.fn().mockResolvedValue(Response.json({tree:[],publication})));
+ await cache.ensure('s');
+ expect(cache.snapshot().s).toEqual({status:'loaded',tree:[],publication});
+});
 it('a fresh snapshot drops extra cached trees but seeds the updated current tree', async () => {
  const source={id:'s',name:'Source'} as never;
  const old=new SourceTreeCache('w',[],vi.fn().mockResolvedValue(Response.json({tree:[]})));

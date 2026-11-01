@@ -1,4 +1,5 @@
 import type { SavedShareRepository } from "./saved-share-repository";
+import type { PublicationEventRepository } from "./publication-event-repository";
 import type { ShareCommentEventRepository } from "./share-comment-event-repository";
 import type { ReviewFollowRepository } from "./review-follow-repository";
 import type { ReviewMentionRepository } from "./review-mention-repository";
@@ -56,6 +57,11 @@ export type KnowledgeRepositories = {
   links: DocumentLinkRepository;
   /** Share-link create/revoke append governance events in the same transaction (share-link spec §7.3). */
   auditEvents: WorkspaceAuditEventRepository;
+  /**
+   * Changes to personal originals, written in the caller's transaction so an
+   * event and its revision/move/lifecycle commit or roll back together.
+   */
+  publicationEvents: PublicationEventRepository;
 };
 
 export interface KnowledgeUnitOfWork {

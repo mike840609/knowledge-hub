@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 export function SourceList({ workspaceId, items, limits }: { workspaceId: string; items: SourceListItemModel[]; limits?: FolderImportClientLimits }) {
   const { access, confirmed } = useWorkspaceAuthorization();
   const accessConfirmed = confirmed && access.workspace.id === workspaceId;
-  const canImport = accessConfirmed && access.actions.canImport;
+  const canImport = accessConfirmed && access.actions.canImport && access.workspace.type === "PERSONAL";
   const [showArchived, setShowArchived] = useState(false);
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [sort, setSort] = useState("attention");

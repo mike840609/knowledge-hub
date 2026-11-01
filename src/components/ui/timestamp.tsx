@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SSR_TIME_ZONE, formatDate, formatDateTime, formatRelativeTime, formatShortTime } from "@/lib/format-date";
+import { SSR_TIME_ZONE, formatDate, formatDateTime, formatRelativeTime, formatShortTime, formatShortTimeZhTw } from "@/lib/format-date";
 
 /**
  * A moment in time, shown in the reader's own zone.
@@ -37,8 +37,8 @@ export function Timestamp({
   className,
 }: {
   value: Date | string;
-  /** `date` drops the time and moves it to the tooltip, for narrow columns; `short` is `5m`, `23h`, `Oct 12`. */
-  variant?: "datetime" | "date" | "relative" | "short";
+  /** `date` drops the time and moves it to the tooltip, for narrow columns; `short` is `5m`, `23h`, `Oct 12`; `zh-relative` is the Chinese team publication line. */
+  variant?: "datetime" | "date" | "relative" | "short" | "zh-relative";
   /** Names the event in the tooltip ("Edited"), for a column too narrow to say it. */
   label?: string;
   className?: string;
@@ -47,7 +47,7 @@ export function Timestamp({
   const date = value instanceof Date ? value : new Date(value);
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
-    if (variant !== "relative" && variant !== "short") return;
+    if (variant !== "relative" && variant !== "short" && variant !== "zh-relative") return;
     setNow(Date.now());
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
@@ -59,6 +59,7 @@ export function Timestamp({
       className={className}
     >
       {now !== null && variant === "relative" ? formatRelativeTime(Math.max(0, now - date.getTime()))
+        : now !== null && variant === "zh-relative" ? formatShortTimeZhTw(date, now, zone)
         : now !== null && variant === "short" ? formatShortTime(date, now, zone)
         : variant === "date" || variant === "short" ? formatDate(date, zone) : formatDateTime(date, zone)}
     </time>

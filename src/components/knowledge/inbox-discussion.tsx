@@ -11,7 +11,7 @@ import { governanceRequest } from "@/components/workspaces/governance-error";
 import { MARKDOWN_ARTICLE } from "./markdown-article";
 import { MarkdownRenderer } from "./markdown-renderer";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
-import { isLinkEntry, notificationHref, notificationTitle } from "./notification-href";
+import { isLinkEntry, isTeamEntry, notificationHref, notificationTitle } from "./notification-href";
 import { OwnerReviewPanel } from "./owner-review-panel";
 import { renderedLinksFrom } from "./rendered-links";
 import { ReviewThreadList, reviewRequest } from "./review-thread-list";
@@ -26,14 +26,17 @@ type Entry = ShareCommentNotificationView;
  */
 export function InboxDiscussion({ entry }: { entry: Entry }) {
   const href = notificationHref(entry);
-  const follow = isLinkEntry(entry.kind);
+  const team = isTeamEntry(entry);
+  const follow = isLinkEntry(entry.kind) && !team;
   // The reader's 48px path line: what this is on the left, the way to the full page on the right.
   return <section aria-label="Selected discussion" className="flex h-full min-h-0 min-w-0 flex-col">
     <header className="flex h-12 shrink-0 items-center justify-between gap-3 px-6">
       <h2 className="min-w-0 truncate text-body text-kh-text-muted">{notificationTitle(entry)}</h2>
       {href && <Link className={buttonClasses({ variant: "secondary", size: "sm" })} href={href} prefetch={follow ? false : undefined}>Open document</Link>}
     </header>
-    {follow ? <FollowedDiscussion entry={entry} /> : <OwnerDocument entry={entry} />}
+    {team && entry.access?.kind === "TEAM" && !entry.access.available
+      ? <p className="px-6 text-body-sm text-kh-text-muted">This discussion is no longer available.</p>
+      : follow ? <FollowedDiscussion entry={entry} /> : <OwnerDocument entry={entry} />}
   </section>;
 }
 

@@ -25,9 +25,10 @@ describe("contextual empty-state recovery", () => {
     expect(html).not.toMatch(/<p[\s>]/);
     expect(html).not.toMatch(/Read-only here|edit it any time/);
   });
-  it("keeps the registry's order in a Team workspace", () => {
+  it("offers no authoring actions in a Team workspace", () => {
     auth.type = "TEAM";
-    expect(links(renderToStaticMarkup(<WorkspaceContentActions workspaceId="ws" />)).map(({ label, primary }) => [label, primary])).toEqual([["Create document", true], ["Import knowledge", false]]);
+    // Publishing from My Space is the one way content enters a team.
+    expect(renderToStaticMarkup(<WorkspaceContentActions workspaceId="ws" />)).toBe("");
   });
   it("offers only what the confirmed capabilities of this workspace allow", () => {
     auth.canImport = false;

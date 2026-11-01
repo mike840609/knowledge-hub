@@ -15,6 +15,7 @@ import {
 } from "./governance-error";
 import { GrantRowActions } from "./grant-row-actions";
 import { Label } from "@/components/ui/label";
+import { assignableTeamRoles, teamRoleLabel } from "./team-role";
 export function GroupsSettings({
   team,
   groups,
@@ -29,7 +30,7 @@ export function GroupsSettings({
   const [role, setRole] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<GovernanceFailure | null>(null);
-  const roles = team.grantOptions.newGroupAssignableRoles;
+  const roles = assignableTeamRoles(team.grantOptions.newGroupAssignableRoles);
   const chosenRole = roles.find((value) => value === role) ?? roles[0] ?? "";
   const canAdd =
     access.actions.canManageBasicGroups &&
@@ -98,7 +99,7 @@ export function GroupsSettings({
               value={chosenRole}
               disabled={busy || !confirmed}
               onValueChange={setRole}
-              options={roles.map((value) => ({ value, label: value }))}
+              options={roles.map((value) => ({ value, label: teamRoleLabel(value) }))}
             />
           </Label>
           <Button type="submit" disabled={busy || !confirmed || !externalGroupId.trim()}>
@@ -126,7 +127,7 @@ export function GroupsSettings({
               {groups.map((group) => (
                 <tr className="grid grid-cols-2 gap-x-3 border-b border-kh-border py-2 sm:table-row sm:py-0" key={group.externalGroupId}>
                   <td className="block px-3 py-2 align-top break-all sm:table-cell">{group.externalGroupId}</td>
-                  <td className="block px-3 py-2 align-top sm:table-cell"><span className="block text-caption text-kh-text-muted sm:hidden">Role</span>{group.role}</td>
+                  <td className="block px-3 py-2 align-top sm:table-cell"><span className="block text-caption text-kh-text-muted sm:hidden">Role</span>{teamRoleLabel(group.role)}</td>
                   <td className="col-span-2 block px-3 py-2 align-top sm:table-cell">
                     <GrantRowActions
                       role={group.role}

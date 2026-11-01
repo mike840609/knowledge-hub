@@ -2,7 +2,13 @@ import { stripLegacyMarkdownSourceIdentity } from "@/modules/sources/domain/mark
 import type { KnowledgeMetadata } from "@/modules/knowledge/domain/content";
 import { fingerprintReconciliationContent } from "@/modules/sources/domain/reconciliation-fingerprint";
 import { importError } from "@/modules/sources/domain/import-errors";
-import type { CanonicalAssetState, CanonicalDocumentState, CanonicalFolderState, CanonicalImportState } from "@/modules/sources/domain/import-plan";
+import type {
+  CanonicalAssetState,
+  CanonicalDocumentLocation,
+  CanonicalDocumentState,
+  CanonicalFolderState,
+  CanonicalImportState,
+} from "@/modules/sources/domain/import-plan";
 import type { ImportCanonicalStateRepository } from "@/modules/sources/ports/import-canonical-state-repository";
 import { asNumber, type DbRow, type QueryConnection } from "./shared";
 
@@ -91,5 +97,22 @@ export class MariaDbImportCanonicalStateRepository implements ImportCanonicalSta
       metadata: jsonObject(row.metadata),
     }));
     return { documents, folders, assets };
+  }
+
+  async listDocumentLocations(sourceId: string): Promise<CanonicalDocumentLocation[]> {
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT e.id AS entry_id, e.source_path, e.status AS entry_status, e.document_id
+       FROM source_entries e
+       JOIN knowledge_documents d ON d.id = e.document_id AND d.source_id = e.source_id
+       WHERE e.source_id = ? AND e.entry_type = 'DOCUMENT'
+       ORDER BY e.source_path, e.id`,
+      [sourceId],
+    );
+    return rows.map((row) => ({
+      entryId: String(row.entry_id),
+      documentId: String(row.document_id),
+      sourcePath: String(row.source_path),
+      status: String(row.entry_status) as "ACTIVE" | "ARCHIVED",
+    }));
   }
 }

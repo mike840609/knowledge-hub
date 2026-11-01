@@ -163,7 +163,7 @@ test.describe("who is offered it", () => {
     return { context, page: await context.newPage() };
   }
 
-  test("an editor is; a viewer sees the broken link as it always was, and cannot reach the form", async ({ browser }) => {
+  test("a team editor and viewer see the broken link as plain text; neither is offered the create form", async ({ browser }) => {
     test.setTimeout(90_000);
     const owner = await session(browser, "owner");
     const editor = await session(browser, "editor");
@@ -182,7 +182,9 @@ test.describe("who is offered it", () => {
       const url = `/w/${workspaceId}/knowledge/${sourceId}/${documentId}`;
 
       await editor.page.goto(url);
-      await expect(editor.page.locator("article").first().locator("a[data-create-link]")).toHaveCount(1, ROUND_TRIP);
+      // Team authoring is hidden: an unresolved wikilink is plain text even for an editor.
+      await expect(editor.page.locator("article").first().locator("[data-unresolved-link]")).toHaveCount(1, ROUND_TRIP);
+      await expect(editor.page.locator("article").first().locator("a[data-create-link]")).toHaveCount(0);
 
       await viewer.page.setViewportSize({ width: 1500, height: 900 });
       await viewer.page.goto(url);

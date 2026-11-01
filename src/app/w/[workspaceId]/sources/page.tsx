@@ -31,12 +31,12 @@ export default async function WorkspaceSourcesPage({
         locationHref={`/w/${workspaceId}/knowledge`}
         title="Sources"
         // The empty state carries the same action as its primary; two of them on one screen is one too many.
-        actions={<>{model.workspace.type === "PERSONAL" ? <Link className={buttonClasses({variant:"ghost"})} href={`/w/${workspaceId}/sources/health`}>Check source health</Link> : null}{model.items.length === 0 ? null : <WorkspaceImportLink
+        actions={<>{model.workspace.type === "PERSONAL" ? <Link className={buttonClasses({variant:"ghost"})} href={`/w/${workspaceId}/sources/health`}>Check source health</Link> : null}{model.workspace.type === "PERSONAL" && model.items.length > 0 ? <WorkspaceImportLink
           className={buttonClasses({ variant: "secondary" })}
           href={`/w/${workspaceId}/sources/import`}
         >
           Import folder
-        </WorkspaceImportLink>}</>}
+        </WorkspaceImportLink> : null}</>}
       />
       <div className="mt-6">
         <SourceList workspaceId={workspaceId} items={model.items} limits={{ maxMarkdownFileBytes: limits.maxMarkdownFileBytes, maxAssetFileBytes: limits.maxAssetFileBytes, maxAssetTotalBytes: limits.maxAssetTotalBytes }} />

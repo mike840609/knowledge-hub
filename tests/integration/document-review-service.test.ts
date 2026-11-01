@@ -98,7 +98,8 @@ describe("document review security, idempotency and moderation",()=>{
   await f.service.setVisibility(f.caller,{documentId:f.documentId,threadId:first.id,visibility:"HIDDEN"});
   await f.service.createForLink(f.viewer,{...f.input,idempotencyKey:randomUUID()});
   await expect(f.service.setVisibility(f.caller,{documentId:f.documentId,threadId:first.id,visibility:"VISIBLE"})).rejects.toMatchObject({code:"CAPACITY_EXCEEDED"});
-  expect((await f.service.queryForOwner(f.caller,f.documentId)).threads.find(t=>t.id===first.id)?.visibility).toBe("HIDDEN");
+  const hidden=(await f.service.queryForOwner(f.caller,f.documentId)).threads.find(t=>t.id===first.id);
+  expect(hidden&&"visibility" in hidden?hidden.visibility:undefined).toBe("HIDDEN");
  });
 
  it("counts resolved visible threads toward document capacity and preserves failed unhide",async()=>{

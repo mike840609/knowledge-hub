@@ -69,8 +69,15 @@ export class MariaDbKnowledgeSearchRepository implements KnowledgeSearchReposito
     const filterClauses: string[] = [];
     if (criteria.filters?.path) {
       const literal = toLikePattern(criteria.filters.path).slice(1, -1);
-      filterClauses.push("EXISTS (SELECT 1 FROM source_entries e WHERE e.document_id = d.id AND e.source_id = d.source_id AND (e.source_path = ? OR e.source_path LIKE ? ESCAPE '!'))");
-      parameters.push(criteria.filters.path, `${literal}/%`);
+      // A publication copy's path is in `publication_documents`, not `source_entries`.
+      // The source type chooses the table; neither branch fabricates a path.
+      filterClauses.push(`(
+        (s.source_type = 'PUBLICATION'
+          AND EXISTS (SELECT 1 FROM publication_documents pd WHERE pd.team_document_id = d.id AND (pd.source_path = ? OR pd.source_path LIKE ? ESCAPE '!')))
+        OR (s.source_type <> 'PUBLICATION'
+          AND EXISTS (SELECT 1 FROM source_entries e WHERE e.document_id = d.id AND e.source_id = d.source_id AND (e.source_path = ? OR e.source_path LIKE ? ESCAPE '!')))
+      )`);
+      parameters.push(criteria.filters.path, `${literal}/%`, criteria.filters.path, `${literal}/%`);
     }
     if (criteria.filters?.updatedFrom) { filterClauses.push("r.created_at >= ?"); parameters.push(criteria.filters.updatedFrom); }
     if (criteria.filters?.updatedBefore) { filterClauses.push("r.created_at < ?"); parameters.push(criteria.filters.updatedBefore); }

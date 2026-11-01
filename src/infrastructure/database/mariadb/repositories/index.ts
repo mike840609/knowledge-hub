@@ -1,4 +1,6 @@
 import { MariaDbSavedShareRepository } from "./saved-shares";
+import { MariaDbPublicationRepository } from "./publications";
+import { MariaDbPublicationEventRepository } from "./publication-events";
 import { MariaDbShareCommentEventsRepository } from "./share-comment-events";
 import { MariaDbReviewFollowsRepository } from "./review-follows";
 import { MariaDbReviewMentionsRepository } from "./review-mentions";
@@ -43,6 +45,7 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
   const workspaceMemberships = new MariaDbWorkspaceMembershipRepository(connection);
   const groupMappings = new MariaDbWorkspaceGroupMappingRepository(connection);
   const workspaceAccess = new WorkspaceMembershipPolicy(workspaceMemberships, groupMappings);
+  const publications = new MariaDbPublicationRepository(connection);
   return {
     reviewThreads: new MariaDbDocumentReviewThreadsRepository(connection),
     reviewComments: new MariaDbDocumentReviewCommentsRepository(connection),
@@ -65,7 +68,7 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
     revisions,
     tree,
     linkedEntries: new MariaDbLinkedEntryRepository(connection),
-    sourcePolicy: new MariaDbSourcePolicyRepository(sources),
+    sourcePolicy: new MariaDbSourcePolicyRepository(sources, publications),
     search: new MariaDbKnowledgeSearchRepository(connection),
     workspaces,
     workspaceMemberships,
@@ -76,5 +79,7 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
     savedShares: new MariaDbSavedShareRepository(connection),
     links: new MariaDbDocumentLinkRepository(connection),
     identityLinks: new MariaDbExternalIdentityLinkRepository(connection),
+    publications,
+    publicationEvents: new MariaDbPublicationEventRepository(connection),
   };
 }

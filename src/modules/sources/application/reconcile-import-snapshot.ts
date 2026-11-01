@@ -3,6 +3,7 @@ import { importError } from "@/modules/sources/domain/import-errors";
 import { compareImportText } from "@/modules/sources/domain/import-path";
 import type { ImportSnapshot } from "@/modules/sources/domain/import-snapshot";
 import { reconcileFolderImport } from "@/modules/sources/domain/import-reconciler";
+import type { PublicationNotice } from "@/modules/sources/domain/publication";
 import type {
   CanonicalImportState,
   FolderImportPlan,
@@ -30,6 +31,11 @@ export type ImportPreview = {
   hasBlockers: boolean;
   summary: ImportDiffSummary;
   changes: ImportPreviewChange[];
+  /**
+   * Optional, display-only: how this sync's proposed originals relate to the
+   * caller's publications. Never part of the persisted plan hash.
+   */
+  publicationNotices?: PublicationNotice[];
 };
 
 function emptySummary(): ImportDiffSummary {

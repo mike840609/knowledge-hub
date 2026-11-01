@@ -158,6 +158,31 @@ pass.
   (folder sync) is read-only in the Hub and updated by re-syncing the source;
   `HUB_MANAGED` content (upload, web create) is editable. Workspace access and
   source ownership are separate questions and must not be conflated.
+- **Publication sources are written only by the publication mechanism.** A
+  Team document is a copy in a `PUBLICATION` source, never a reference to a
+  personal document. Every source, document and tree mutation on one is refused
+  except the publication mechanism acting for the document's creator, an
+  admin's archive or restore of the whole publication, and its publication
+  creator's unpublish, restore or rename while they still hold `source.manage`
+  and have not left
+  (`src/modules/sources/application/publication-write-authority.ts`,
+  `publication-service.ts`, `publication-reconciler.ts`). `document.write` alone
+  never overrides this. Only that document's creator's originals update it;
+  another contributor's version of the same path is reported, never applied.
+  The revision, move and lifecycle writers record a publication event in their
+  own transaction, and `tests/unit/publication-event-write-points.test.ts`
+  fails if one does not, beside `tests/unit/link-index-write-points.test.ts`
+  for link edges.
+- **Team discussion requires a caller and re-judges membership.** Any active
+  Team member may read and write discussions on a published team document;
+  "owner" means that document's creator. Every creator- or mention-based team
+  path (Inbox entries, unread counts, mark-read, hide, unpublish, rename)
+  re-checks `document.read` — or `source.manage` for the lifecycle commands —
+  as the caller, groups included. When that check fails the entry stays but
+  names nothing and opens nothing; being a creator, or once mentioned, grants
+  nothing on its own. The no-caller share-link exceptions
+  (`tests/unit/share-link-single-exception.test.ts`) are unchanged, and team
+  review never mints a share link.
 - **Identity vs position vs content.** The tree decides position, the document
   ID decides identity, and the revision stores title/Markdown/metadata. Moving
   or renaming a file creates no revision; editing the article title does.

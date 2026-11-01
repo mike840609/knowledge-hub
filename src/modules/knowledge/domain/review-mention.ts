@@ -2,7 +2,7 @@ import { DomainError } from "@/shared/domain/errors";
 import { isUuid } from "@/shared/ids/uuidv7";
 
 /** A comment that names a user with `@`. `readAt` is that user's own read state. */
-export type ReviewMention = { commentId: string; mentionedUserId: string; shareLinkId: string; createdAt: Date; readAt: Date | null };
+export type ReviewMention = { commentId: string; mentionedUserId: string; shareLinkId: string | null; createdAt: Date; readAt: Date | null };
 
 export const MENTION_LIMIT = 10;
 export const MENTION_PREFIX = "mention:";

@@ -13,6 +13,7 @@ import { assignContiguousPositions, orderSiblingsByPosition } from "../../domain
 import type { KnowledgeRepositories } from "../../ports/unit-of-work";
 import type { TreeViewNode } from "../../ports/tree-repository";
 import type { SourcePolicy } from "../../domain/source-policy";
+import type { Workspace } from "@/modules/workspaces/domain/workspace";
 
 /**
  * Shared Tree mutation preamble (plan §6): trusted CallerContext → resolve
@@ -28,6 +29,22 @@ export async function requireHubManagedSource(
   caller: CallerContext,
   sourceId: string,
 ): Promise<SourcePolicy> {
+  return (await requireOwnedSource(repositories, caller, sourceId, "HUB_MANAGED")).source;
+}
+
+/**
+ * The Hub preamble plus the Workspace row it locked on this connection.
+ *
+ * A writer that records a change to a personal original needs the workspace
+ * type, and it must be the row the preamble validated — not a second read that
+ * a concurrent lifecycle change could make disagree. Team-space publishing
+ * spec, "When the team updates".
+ */
+export async function requireHubManagedSourceContext(
+  repositories: KnowledgeRepositories,
+  caller: CallerContext,
+  sourceId: string,
+): Promise<{ source: SourcePolicy; workspace: Workspace }> {
   return requireOwnedSource(repositories, caller, sourceId, "HUB_MANAGED");
 }
 
@@ -44,7 +61,7 @@ export async function requireSourceManagedSource(
   caller: CallerContext,
   sourceId: string,
 ): Promise<SourcePolicy> {
-  return requireOwnedSource(repositories, caller, sourceId, "SOURCE_MANAGED");
+  return (await requireOwnedSource(repositories, caller, sourceId, "SOURCE_MANAGED")).source;
 }
 
 async function requireOwnedSource(
@@ -52,17 +69,24 @@ async function requireOwnedSource(
   caller: CallerContext,
   sourceId: string,
   ownership: "HUB_MANAGED" | "SOURCE_MANAGED",
-): Promise<SourcePolicy> {
+): Promise<{ source: SourcePolicy; workspace: Workspace }> {
   await syncCallerIdentity(repositories.users, caller);
   const source = await repositories.sourcePolicy.lockById(sourceId);
   if (!source) throw new SourceNotFoundError();
   if (source.status !== "ACTIVE") throw new SourceArchivedError();
+  // A publication source has no ordinary writer. Only the publication
+  // mechanism, which acts for one document's creator, writes it (spec
+  // "Publication sources are locked server-side"); `document.write` and
+  // `source.manage` never override this.
+  if (source.sourceType === "PUBLICATION") {
+    throw new SourceReadOnlyError("Publication content is written only by the publication mechanism.");
+  }
   if (source.ownership !== ownership) {
     if (ownership === "HUB_MANAGED") throw new SourceReadOnlyError();
     throw new HubManagedOperationRequiredError();
   }
-  await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "content-write");
-  return source;
+  const workspace = await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "content-write");
+  return { source, workspace };
 }
 
 /**

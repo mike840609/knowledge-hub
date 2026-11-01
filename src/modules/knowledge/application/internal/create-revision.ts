@@ -17,6 +17,7 @@ import {
   ValidationError,
 } from "../../domain/errors";
 import type { KnowledgeRepositories } from "../../ports/unit-of-work";
+import { recordPersonalPublicationEvent } from "./publication-event-recording";
 
 export type CreateRevisionInput = RevisionContentInput & {
   saveMode?: RevisionSaveMode;
@@ -50,7 +51,7 @@ export async function createRevisionInTransaction(
   if (!source) throw new SourceNotFoundError();
   if (source.status !== "ACTIVE") throw new SourceArchivedError();
   if (source.ownership !== "HUB_MANAGED") throw new SourceReadOnlyError();
-  await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "content-write");
+  const workspace = await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "content-write");
   const document = await repositories.documents.lockById(input.documentId);
   if (!document) throw new DocumentNotFoundError();
   if (document.status !== "ACTIVE") throw new DocumentArchivedError();
@@ -81,6 +82,9 @@ export async function createRevisionInTransaction(
   });
   await repositories.documents.setCurrentRevision(document.id, revisionId, caller.identity.id);
   await repositories.links.replaceForDocument({ documentId: document.id, revisionId, links: extractDocumentLinks(content.markdown) });
+  await recordPersonalPublicationEvent(repositories, workspace, {
+    documentId: document.id, treeNodeId: null, sourceId: null, kind: "REVISION", revisionId, at: now,
+  });
   if (input.saveMode || current.history?.state === "WORKING") await repositories.revisions.pruneWorking(document.id);
   await repositories.documents.assertComplete(document.id);
   return { revisionId, revisionNo, changed: true, ...(input.saveMode ? { history: policy.history } : {}), ...(preservedRevision ? { preservedRevision } : {}) };

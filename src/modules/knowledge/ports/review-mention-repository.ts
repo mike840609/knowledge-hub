@@ -8,8 +8,18 @@ export interface ReviewMentionRepository {
   insertMany(rows: ReviewMention[]): Promise<void>;
   /** Newest first. */
   listRecentByRecipient(userId: string, limit: number): Promise<ReviewMention[]>;
-  /** Unread rows only, newest first; whether each may still be shown is judged live by the service. */
-  listUnreadByRecipient(userId: string, limit: number): Promise<ReviewMention[]>;
+  /** Unread rows only, newest first. Optional Team Workspace ids filter inaccessible
+   * Team mentions in SQL before LIMIT, while retaining those rows unread for re-grant.
+   * Undefined preserves the existing unscoped/history behavior; [] selects only link mentions.
+   * Service still re-judges each returned Team document before exposing content. */
+  listUnreadByRecipient(
+    userId: string,
+    limit: number,
+    before?: { createdAt: Date; commentId: string },
+    allowedTeamWorkspaceIds?: readonly string[],
+  ): Promise<ReviewMention[]>;
+  /** Unread link-less (team) mentions, newest first; access is judged live by the service. */
+  listUnreadTeamByRecipient(userId: string): Promise<ReviewMention[]>;
   /** The user's mention rows (read or not) on comments of these threads. */
   findByThreads(userId: string, threadIds: readonly string[]): Promise<ReviewMention[]>;
   /** Who these comments mention. Empty input reads nothing. */

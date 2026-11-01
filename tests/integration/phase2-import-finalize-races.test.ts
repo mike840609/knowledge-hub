@@ -107,6 +107,7 @@ class CountingCanonicalLoad implements SourceUnitOfWork {
           this.loadCalls += 1;
           return canonical.load(sourceId);
         },
+        listDocumentLocations: (sourceId: string) => canonical.listDocumentLocations(sourceId),
       },
     };
   }

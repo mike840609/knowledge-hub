@@ -2,7 +2,8 @@ import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { FolderNotEmptyError, TreeNodeNotFoundError, ValidationError } from "../../domain/errors";
 import type { KnowledgeRepositories } from "../../ports/unit-of-work";
 import { assertActiveFolderAncestry } from "../tree-validation";
-import { requireHubManagedSource, requireLockedSourceNode } from "./tree-transaction";
+import { recordPersonalPublicationEvent } from "./publication-event-recording";
+import { requireHubManagedSourceContext, requireLockedSourceNode } from "./tree-transaction";
 
 /**
  * Hub-managed folder lifecycle bound to an already-open canonical
@@ -23,7 +24,7 @@ export async function archiveFolderInTransaction(
 ): Promise<void> {
   const routing = await repositories.tree.findById(nodeId);
   if (!routing) throw new TreeNodeNotFoundError();
-  const source = await requireHubManagedSource(repositories, caller, routing.sourceId);
+  const { source, workspace } = await requireHubManagedSourceContext(repositories, caller, routing.sourceId);
   const node = await requireLockedSourceNode(repositories, source.id, nodeId);
   if (node.nodeType !== "FOLDER") throw new ValidationError("Only folders can be archived.");
   if (node.status === "ARCHIVED") return;
@@ -45,6 +46,9 @@ export async function archiveFolderInTransaction(
       lastSeenAt: now,
     });
   }
+  await recordPersonalPublicationEvent(repositories, workspace, {
+    documentId: null, treeNodeId: node.id, sourceId: null, kind: "LIFECYCLE", at: now,
+  });
 }
 
 export async function restoreFolderInTransaction(
@@ -54,7 +58,7 @@ export async function restoreFolderInTransaction(
 ): Promise<void> {
   const routing = await repositories.tree.findById(nodeId);
   if (!routing) throw new TreeNodeNotFoundError();
-  const source = await requireHubManagedSource(repositories, caller, routing.sourceId);
+  const { source, workspace } = await requireHubManagedSourceContext(repositories, caller, routing.sourceId);
   const node = await requireLockedSourceNode(repositories, source.id, nodeId);
   if (node.nodeType !== "FOLDER") throw new ValidationError("Only folders can be restored.");
   if (node.status === "ACTIVE") return;
@@ -71,4 +75,7 @@ export async function restoreFolderInTransaction(
       lastSeenAt: linked.lastSeenAt,
     });
   }
+  await recordPersonalPublicationEvent(repositories, workspace, {
+    documentId: null, treeNodeId: node.id, sourceId: null, kind: "LIFECYCLE", at: new Date(),
+  });
 }

@@ -134,13 +134,19 @@ export class MariaDbDocumentLinkRepository implements DocumentLinkRepository {
 
   async loadCatalog(workspaceId: string): Promise<CatalogDocument[]> {
     // uq_entries_source_document keeps the left join row-preserving; uq_tree_one_document does the same for the tree.
+    // A team copy has no `source_entries` row: its publication-relative path lives in
+    // `publication_documents`. The CASE picks one table by source type; it never
+    // invents a path (`NULL` stays `NULL`, so a Hub-written copy resolves nothing).
     const rows = await this.connection.query<DbRow[]>(
-      `SELECT d.id AS document_id, d.source_id AS source_id, r.title AS title, e.source_path AS source_path, d.created_at AS created_at
+      `SELECT d.id AS document_id, d.source_id AS source_id, r.title AS title,
+              CASE WHEN s.source_type = 'PUBLICATION' THEN pd.source_path ELSE e.source_path END AS source_path,
+              d.created_at AS created_at
        FROM knowledge_documents d
        JOIN knowledge_sources s ON s.id = d.source_id
        JOIN knowledge_revisions r ON r.id = d.current_revision_id
        JOIN knowledge_tree_nodes n ON n.document_id = d.id
        LEFT JOIN source_entries e ON e.document_id = d.id AND e.entry_type = 'DOCUMENT'
+       LEFT JOIN publication_documents pd ON pd.team_document_id = d.id
        WHERE s.workspace_id = ? AND s.status = 'ACTIVE' AND d.status = 'ACTIVE' AND n.status = 'ACTIVE'`,
       [workspaceId],
     );

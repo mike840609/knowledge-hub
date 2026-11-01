@@ -8,7 +8,7 @@ import {
   TreeNodeNotFoundError,
 } from "../domain/errors";
 import type { KnowledgeRevision, KnowledgeRevisionSummary } from "../domain/revision";
-import type { SourcePolicy } from "../domain/source-policy";
+import type { SourcePolicy, SourceType } from "../domain/source-policy";
 import { collectAncestors } from "../domain/tree-rules";
 import { requireSourcePolicy, requireVisibleDocument } from "./internal/require-visible-document";
 import type { DocumentSummary, TreeViewNode } from "../ports/tree-repository";
@@ -18,7 +18,7 @@ export type SourceView = {
   id: string;
   workspaceId: string;
   name: string;
-  sourceType: "FOLDER_SYNC" | "FILE_UPLOAD" | "HUB";
+  sourceType: SourceType;
   status: "ACTIVE" | "ARCHIVED";
   ownership: "SOURCE_MANAGED" | "HUB_MANAGED";
   syncVersion: number;

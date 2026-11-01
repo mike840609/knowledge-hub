@@ -9,6 +9,7 @@ import type { SyncRunRepository } from "./sync-run-repository";
 import type { ImportSnapshotRepository } from "./import-snapshot-repository";
 import type { ImportSnapshotEntryRepository } from "./import-snapshot-entry-repository";
 import type { ImportCanonicalStateRepository } from "./import-canonical-state-repository";
+import type { PublicationRepository } from "./publication-repository";
 
 import type { WorkspaceRepository } from "@/modules/workspaces/ports/workspace-repository";
 import type { WorkspaceMembershipRepository } from "@/modules/workspaces/ports/workspace-membership-repository";
@@ -27,6 +28,7 @@ export type SourceRepositories = KnowledgeRepositories & {
   importSnapshots: ImportSnapshotRepository;
   importSnapshotEntries: ImportSnapshotEntryRepository;
   importCanonicalState: ImportCanonicalStateRepository;
+  publications: PublicationRepository;
   workspaces: WorkspaceRepository;
   workspaceMemberships: WorkspaceMembershipRepository;
   groupMappings: WorkspaceGroupMappingRepository;

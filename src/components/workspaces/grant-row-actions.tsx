@@ -9,6 +9,7 @@ import {
   governanceFailure,
   type GovernanceFailure,
 } from "./governance-error";
+import { assignableTeamRoles, teamRoleOptions } from "./team-role";
 
 /**
  * Both of these are reversible — a role can be set back, a grant can be
@@ -49,6 +50,8 @@ export function GrantRowActions({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<GovernanceFailure | null>(null);
   useEffect(() => setNextRole(role), [role]);
+  // Only 管理員 and 成員 are offered. An existing OWNER/VIEWER is shown as it is, disabled.
+  const selectableRoles = assignableTeamRoles(roles);
   const allowed =
     confirmed &&
     access.workspace.lifecycleState === "ACTIVE" &&
@@ -75,20 +78,17 @@ export function GrantRowActions({
     <div className="min-w-52 space-y-2">
       {allowed && (
         <div className="flex flex-wrap gap-2">
-          {roles.length > 0 && (
+          {selectableRoles.length > 0 && (
             <>
               <SelectMenu
                 aria-label={`Role for ${label}`}
                 value={nextRole}
                 disabled={busy}
                 onValueChange={setNextRole}
-                options={[
-                  ...(roles.includes(role) ? [] : [{ value: role, label: role, disabled: true }]),
-                  ...roles.map((value) => ({ value, label: value })),
-                ]}
+                options={teamRoleOptions(roles, role)}
               />
               <Button
-                disabled={busy || nextRole === role || !roles.includes(nextRole)}
+                disabled={busy || nextRole === role || !selectableRoles.includes(nextRole)}
                 onClick={() => {
                   const previous = role;
                   const assigned = nextRole;

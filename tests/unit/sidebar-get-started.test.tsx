@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ActionContext } from "@/components/actions/action-registry";
-import { SidebarGetStarted, hasNoDocuments, startActions } from "@/components/knowledge/sidebar-get-started";
+import { SidebarGetStarted, emptyWorkspaceActions, hasNoDocuments, startActions } from "@/components/knowledge/sidebar-get-started";
 import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledge-query-service";
 
 const can = { canWrite: true, canImport: true, canSearch: true, canInspectSources: true, canOpenSettings: true };
-const context = (overrides: Partial<Omit<ActionContext, "onboarding">> = {}) => ({ workspaceId: "w1", workspaceType: "TEAM" as const, isPersonalOwner: false, can, confirmed: true, ...overrides });
+const context = (overrides: Partial<Omit<ActionContext, "onboarding">> = {}) => ({ workspaceId: "w1", workspaceType: "PERSONAL" as const, isPersonalOwner: true, can, confirmed: true, ...overrides });
 const render = (overrides: Partial<Omit<ActionContext, "onboarding">> = {}) => renderToStaticMarkup(createElement(SidebarGetStarted, { actions: startActions(context(overrides)) }));
 const item = (type: "document" | "folder", status: "ACTIVE" | "ARCHIVED" = "ACTIVE") => ({ id: `${type}-1`, type, status, label: type, documentId: type === "document" ? "d1" : undefined }) as unknown as KnowledgeTreeItem;
 
@@ -17,13 +17,19 @@ describe("sidebar get started", () => {
     expect(html).toContain('href="/w/w1/knowledge/new"');
     expect(html).toContain('href="/w/w1/sources/import"');
     expect(html).toMatch(/Create document[\s\S]*You can edit it any time/);
-    expect(html).toMatch(/Import knowledge[\s\S]*Read-only here; import again to update them/);
+    expect(html).toMatch(/Import your first knowledge source[\s\S]*Read-only here; import again to update them/);
   });
 
-  it("leads with writing in a team workspace and with the import in a personal one", () => {
-    expect(startActions(context()).map((action) => action.id)).toEqual(["create.document", "create.import"]);
-    expect(startActions(context({ workspaceType: "PERSONAL" })).map((action) => action.id)).toEqual(["create.import", "create.document"]);
-    expect(render({ workspaceType: "PERSONAL" })).toContain("Import your first knowledge source");
+  it("leads with the import in My Space", () => {
+    expect(startActions(context()).map((action) => action.id)).toEqual(["create.import", "create.document"]);
+    expect(render()).toContain("Import your first knowledge source");
+  });
+
+  it("offers nothing to start in a team, and does not fall through to the edit-access line", () => {
+    expect(startActions(context({ workspaceType: "TEAM" }))).toEqual([]);
+    expect(emptyWorkspaceActions(context({ workspaceType: "TEAM" }))).toBeNull();
+    expect(emptyWorkspaceActions(context())?.map((action) => action.id))
+      .toEqual(["create.import", "create.document"]);
   });
 
   it("offers only what the reader may do", () => {

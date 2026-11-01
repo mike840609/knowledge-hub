@@ -19,6 +19,7 @@ import { REVEAL_FOLDER_EVENT } from "./move-request";
 import { CLEAR_FILTER_TO_REORDER, alreadyAtEdge, reorderedNode } from "./organize-messages";
 import { Status } from "@/components/ui/status";
 import { Tooltip } from "@/components/ui/tooltip";
+import { PublicationDocumentMetaLine, type PublicationDocumentMeta } from "@/components/publications/publication-entry-meta";
 
 export type KnowledgeTreeProps = {
   items: KnowledgeTreeItem[];
@@ -42,6 +43,8 @@ export type KnowledgeTreeProps = {
   documentActions: (item: Extract<KnowledgeTreeItem, { type: "document" }>) => readonly Action[];
   /** And to this folder: the same registry, the same rules, a folder's own target. */
   folderActions: (item: Extract<KnowledgeTreeItem, { type: "folder" }>) => readonly Action[];
+  /** Publication metadata per document, for a team's published copies only. */
+  documentPublicationMeta?: Record<string, PublicationDocumentMeta>;
   onRunAction: (action: Action) => void;
   /**
    * Puts a node at a place among its siblings (Alt+↑/↓), and says whether that happened. The tree
@@ -74,6 +77,7 @@ function TreeNodeRow({
   onToggleFavorite,
   documentActions,
   folderActions,
+  documentPublicationMeta,
   onRunAction,
 }: {
   node: KnowledgeTreeNode;
@@ -90,6 +94,7 @@ function TreeNodeRow({
   onToggleFavorite: (documentId: string) => void;
   documentActions: (item: Extract<KnowledgeTreeItem, { type: "document" }>) => readonly Action[];
   folderActions: (item: Extract<KnowledgeTreeItem, { type: "folder" }>) => readonly Action[];
+  documentPublicationMeta?: Record<string, PublicationDocumentMeta>;
   onRunAction: (action: Action) => void;
 }) {
   const { item } = node;
@@ -101,6 +106,7 @@ function TreeNodeRow({
     const selected = selectedDocumentId !== undefined && item.documentId === selectedDocumentId;
     const isFavorite = favoriteDocumentIds.has(item.documentId);
     const actions = documentActions(item);
+    const publicationMeta = documentPublicationMeta?.[item.documentId];
     return (
       <RowContextMenu
         actions={actions}
@@ -129,7 +135,10 @@ function TreeNodeRow({
           }`}
         >
           {item.pageIcon ? <span className="flex size-3.5 shrink-0 items-center justify-center text-body leading-none" aria-hidden="true">{item.pageIcon}</span> : <FileText size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
-          <span className="truncate">{item.label}</span>
+          <span className="min-w-0 flex flex-col">
+            <span className="truncate">{item.label}</span>
+            {publicationMeta ? <PublicationDocumentMetaLine meta={publicationMeta} /> : null}
+          </span>
           {archived ? <Status kind="archived" className="ml-auto shrink-0 text-caption font-normal text-kh-text-muted">Archived</Status> : null}
         </Link>
         <Tooltip label={isFavorite ? "Remove from favorites" : "Add to favorites"}><button type="button" onClick={() => onToggleFavorite(item.documentId)} aria-label={`${isFavorite ? "Remove from" : "Add to"} favorites: ${item.label}`} className={`mr-1 inline-flex kh-control kh-icon-control h-6 w-6 shrink-0 items-center justify-center rounded-md kh-focus-ring ${isFavorite ? "text-kh-selected-text" : "kh-row-action text-kh-text-muted hover:bg-kh-bg-hover"}`}>
@@ -206,6 +215,7 @@ function TreeNodeRow({
               onToggleFavorite={onToggleFavorite}
               documentActions={documentActions}
               folderActions={folderActions}
+              documentPublicationMeta={documentPublicationMeta}
               onRunAction={onRunAction}
             />
           ))}
@@ -234,6 +244,7 @@ export function KnowledgeTree({
   onToggleFavorite,
   documentActions,
   folderActions,
+  documentPublicationMeta,
   onRunAction,
   onReorder,
 }: KnowledgeTreeProps) {
@@ -523,6 +534,7 @@ export function KnowledgeTree({
           onToggleFavorite={onToggleFavorite}
           documentActions={documentActions}
           folderActions={folderActions}
+          documentPublicationMeta={documentPublicationMeta}
           onRunAction={onRunAction}
         />
       ))}

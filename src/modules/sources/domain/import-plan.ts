@@ -120,6 +120,17 @@ export type CanonicalFolderState = {
   status: "ACTIVE" | "ARCHIVED";
 };
 
+/**
+ * Display-only projection of a canonical document: identity, path and
+ * lifecycle only. Notice lookups must never read every revision body just to
+ * answer "who maintains this path", so they use this shape instead of the full
+ * `CanonicalImportState`.
+ */
+export type CanonicalDocumentLocation = Pick<
+  CanonicalDocumentState,
+  "entryId" | "documentId" | "sourcePath" | "status"
+>;
+
 export type CanonicalAssetState = {
   id: string;
   sourcePath: string;

@@ -3,6 +3,7 @@ import { chooseOption } from "./fixtures/select-menu";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type APIRequestContext } from "./fixtures/test";
+import { mySpace } from "./fixtures/organize";
 
 // Phase 2 folder import acceptance. Helpers use the same HTTP contracts as the
 // browser launcher (session create, multipart batch upload, finalize, apply)
@@ -260,14 +261,16 @@ test("enforces asset file and total byte limits at the HTTP boundary", async ({ 
 });
 
 test("imports basic-v1 through the directory input and applies the grouped preview", async ({ page }) => {
-  await page.goto(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources`);
+  // Folder import is a My Space authoring path; a Team workspace hides it.
+  const workspaceId = await mySpace(page);
+  await page.goto(`/w/${workspaceId}/sources`);
   await page.getByRole("link", { name: "Import folder", exact: true }).click();
-  await expect(page).toHaveURL(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/import`);
+  await expect(page).toHaveURL(`/w/${workspaceId}/sources/import`);
 
   await page.getByLabel("Source name").fill("E2E Folder Import");
   await page.locator('input[type="file"]').setInputFiles(path.join(FIXTURE_ROOT, "basic-v1"));
 
-  await expect(page).toHaveURL(new RegExp(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/imports/[0-9a-f-]+`), { timeout: 30_000 });
+  await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/sources/imports/[0-9a-f-]+`), { timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Import preview" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Added" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Updated" })).toBeVisible();
@@ -279,7 +282,7 @@ test("imports basic-v1 through the directory input and applies the grouped previ
   await expect(page.getByRole("button", { name: "Apply changes" })).toBeEnabled();
   await page.getByRole("button", { name: "Apply changes" }).click();
 
-  await expect(page).toHaveURL(new RegExp(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/[0-9a-f-]+/runs/[0-9a-f-]+`), { timeout: 30_000 });
+  await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/sources/[0-9a-f-]+/runs/[0-9a-f-]+`), { timeout: 30_000 });
   await expect(page.getByRole("heading",{name:"Folder synced"})).toBeVisible();
 });
 

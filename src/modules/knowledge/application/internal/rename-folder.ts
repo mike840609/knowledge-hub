@@ -3,7 +3,8 @@ import { TreeNodeNotFoundError, ValidationError } from "../../domain/errors";
 import { normalizeFolderName } from "../../domain/tree-rules";
 import type { KnowledgeRepositories } from "../../ports/unit-of-work";
 import { assertActiveFolderAncestry } from "../tree-validation";
-import { requireHubManagedSource, requireLockedSourceNode } from "./tree-transaction";
+import { recordPersonalPublicationEvent } from "./publication-event-recording";
+import { requireHubManagedSourceContext, requireLockedSourceNode } from "./tree-transaction";
 
 export type RenameFolderInput = {
   nodeId: string;
@@ -26,10 +27,14 @@ export async function renameFolderInTransaction(
   const name = normalizeFolderName(input.name);
   const routing = await repositories.tree.findById(input.nodeId);
   if (!routing) throw new TreeNodeNotFoundError();
-  const source = await requireHubManagedSource(repositories, caller, routing.sourceId);
+  const { source, workspace } = await requireHubManagedSourceContext(repositories, caller, routing.sourceId);
   const node = await requireLockedSourceNode(repositories, source.id, input.nodeId);
   if (node.nodeType !== "FOLDER") throw new ValidationError("Only folders can be renamed.");
   if (node.status !== "ACTIVE") throw new ValidationError("Archived folders cannot be renamed.");
   if (node.parentId) await assertActiveFolderAncestry(repositories, source.id, node.parentId);
   await repositories.tree.updateName(node.id, name, caller.identity.id);
+  // A rename writes no revision; without this the team would never see it.
+  await recordPersonalPublicationEvent(repositories, workspace, {
+    documentId: null, treeNodeId: node.id, sourceId: null, kind: "TREE", at: new Date(),
+  });
 }
