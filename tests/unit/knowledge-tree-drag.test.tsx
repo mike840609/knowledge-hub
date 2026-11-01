@@ -466,4 +466,43 @@ describe("tree dragging", () => {
     expect(onReorder).toHaveBeenLastCalledWith({ nodeId: "n:B", position: 1 });
   });
 
+  it("unlocks keyboard navigation when the refreshed server position was clamped", async () => {
+    let finish!: (ok: boolean) => void;
+    const onReorder = vi.fn(() => new Promise<boolean>((resolve) => { finish = resolve; }));
+    const { rerender } = render({ onReorder, items: [doc("A", 0), doc("B", 1)] });
+    act(() => {
+      rowFor("A").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true, cancelable: true }));
+    });
+    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:A", position: 1 });
+    // B was moved away concurrently, so the server clamps A to position zero.
+    rerender({ items: [doc("A", 0)] });
+    await act(async () => { finish(true); });
+    let next: Event | undefined;
+    act(() => {
+      next = new Event("dragstart", { bubbles: true, cancelable: true });
+      Object.defineProperty(next, "dataTransfer", { value: { effectAllowed: "", setData: vi.fn() } });
+      rowFor("A").dispatchEvent(next);
+    });
+    expect(next?.defaultPrevented).toBe(false);
+  });
+
+  it("does not recalculate placement for repeated dragovers in the same zone", () => {
+    let positionReads = 0;
+    const tracked = doc("B", 1);
+    Object.defineProperty(tracked, "position", { configurable: true, enumerable: true, get() { positionReads++; return 1; } });
+    render({ items: [doc("A", 0), tracked, doc("C", 2)] });
+    const target = rowFor("B");
+    target.getBoundingClientRect = () => ({ top: 0, bottom: 20, height: 20, left: 0, right: 100, width: 100, x: 0, y: 0, toJSON: () => ({}) });
+    const fire = (row: HTMLElement, type: string) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperties(event, { dataTransfer: { value: { effectAllowed: "", dropEffect: "", setData: vi.fn() } }, clientY: { value: 1 } });
+      row.dispatchEvent(event);
+    };
+    act(() => { fire(rowFor("A"), "dragstart"); fire(target, "dragover"); });
+    const reads = positionReads;
+    expect(reads).toBeGreaterThan(0);
+    act(() => { for (let i = 0; i < 12; i++) fire(target, "dragover"); });
+    expect(positionReads).toBe(reads);
+  });
+
 });
