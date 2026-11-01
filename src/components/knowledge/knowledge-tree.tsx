@@ -49,12 +49,12 @@ export type KnowledgeTreeProps = {
    * Puts a node at a place among its siblings (Alt+↑/↓), and says whether that happened. The tree
    * decides which place from what it shows; whether it may is the actions' say, and the server's.
    */
-  onReorder: (input: { nodeId: string; position: number }) => Promise<boolean>;
+  onReorder: (input: { nodeId: string; position: number }, onRefreshRequested?: () => void) => Promise<boolean>;
   /**
    * Puts a node into another folder, or at a place among that folder's siblings, from a drop. The
    * tree decides where from what it shows; whether it may is the actions' say, and the server's.
    */
-  onMove: (input: MoveNodeInput) => Promise<boolean>;
+  onMove: (input: Omit<MoveNodeInput, "sourceId">, onRefreshRequested?: () => void) => Promise<boolean>;
   isSourceArrangementPending?: () => boolean;
 };
 
@@ -359,6 +359,10 @@ export function KnowledgeTree({
   const expectedReorder = useRef<{ id: string; parentId: string | null; position: number } | null>(null);
   const queuedReorder = useRef<{ id: string; direction: -1 | 1 } | null>(null);
   const itemsAtReorderStart = useRef(items);
+  const latestItems = useRef(items);
+  latestItems.current = items;
+  const refreshRequested = useRef(false);
+  const itemsAtRefreshRequest = useRef(items);
   const reorderReplySeen = useRef(false);
   const [reorderReplyVersion, markReorderReply] = useState(0);
   const focusAfterReorder = useRef<string | null>(null);
@@ -386,11 +390,16 @@ export function KnowledgeTree({
     if (!reordering.current || !expected || !reorderReplySeen.current) return;
     const row = itemById.get(expected.id);
     const matched = row?.parentId === expected.parentId && row.position === expected.position;
-    // The server clamps indexes against its latest sibling group. A new tree
-    // snapshot is authoritative even when the requested position no longer exists.
-    if (!matched && items === itemsAtReorderStart.current) return;
+    // An unrelated refresh can render before PATCH commits. Only a tree
+    // snapshot arriving after this mutation requested its own refresh may
+    // confirm a clamped position or flush a queued keyboard step.
+    const confirmedSnapshot = refreshRequested.current
+      ? items !== itemsAtRefreshRequest.current
+      : items !== itemsAtReorderStart.current; // legacy callback-free callers
+    if (!confirmedSnapshot) return;
     reordering.current = false;
     reorderReplySeen.current = false;
+    refreshRequested.current = false;
     expectedReorder.current = null;
     const queued = queuedReorder.current;
     queuedReorder.current = null;
@@ -431,6 +440,7 @@ export function KnowledgeTree({
     }
     reordering.current = true;
     reorderReplySeen.current = false;
+    refreshRequested.current = false;
     itemsAtReorderStart.current = items;
     drag.invalidatePending();
     const operation = ++reorderOperation.current;
@@ -439,7 +449,10 @@ export function KnowledgeTree({
     // now, so the focus effect can put focus back on it as soon as that tree lands; waiting for the
     // promise would leave a tree that already arrived with nothing to focus.
     focusAfterReorder.current = item.id;
-    const ok = await onReorder({ nodeId: item.id, position: step.position });
+    const ok = await onReorder({ nodeId: item.id, position: step.position }, () => {
+      refreshRequested.current = true;
+      itemsAtRefreshRequest.current = latestItems.current;
+    });
     if (reorderOperation.current !== operation) return;
     if (ok) {
       reorderReplySeen.current = true;
@@ -449,6 +462,7 @@ export function KnowledgeTree({
       focusAfterReorder.current = null;
       reordering.current = false;
       reorderReplySeen.current = false;
+      refreshRequested.current = false;
       expectedReorder.current = null;
       queuedReorder.current = null;
     }
