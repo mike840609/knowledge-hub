@@ -51,6 +51,14 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
       : allowedTeamWorkspaceIds.length === 0
         ? "AND e.recipient_user_id IS NULL"
         : `AND (e.recipient_user_id IS NULL OR e.workspace_id IN (${allowedTeamWorkspaceIds.map(() => "?").join(",")}))`;
+    // The unscoped repository API is also used to inspect raw unread event
+    // history (including later deleted/retracted comments). Only the Inbox
+    // projection requests visibility filtering; it must not change that contract.
+    const visibleInboxFilter = allowedTeamWorkspaceIds === undefined ? "" : `
+         AND t.visibility='VISIBLE' AND c.visibility='VISIBLE' AND c.deleted_at IS NULL
+         AND (e.recipient_user_id IS NULL OR
+              (w.lifecycle_state='ACTIVE' AND s.status='ACTIVE'
+               AND d.status='ACTIVE' AND s.source_type='PUBLICATION'))`;
     const params: (string | Date | number)[] = [recipientUserId, recipientUserId];
     if (allowedTeamWorkspaceIds?.length) params.push(...allowedTeamWorkspaceIds);
     if (before) params.push(before.createdAt, before.createdAt, before.id);
@@ -63,11 +71,7 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
        JOIN document_review_threads t ON t.id=e.thread_id
        JOIN document_review_comments c ON c.id=e.comment_id
        WHERE ${OWNED} AND e.read_at IS NULL ${teamFilter}
-         AND t.visibility='VISIBLE' AND c.visibility='VISIBLE' AND c.deleted_at IS NULL
-         AND (e.recipient_user_id IS NULL OR
-              (w.lifecycle_state='ACTIVE' AND s.status='ACTIVE'
-               AND d.status='ACTIVE' AND s.source_type='PUBLICATION'))
-         ${cursor}
+         ${visibleInboxFilter} ${cursor}
        ORDER BY e.created_at DESC, e.id DESC LIMIT ?`,
       params,
     );
