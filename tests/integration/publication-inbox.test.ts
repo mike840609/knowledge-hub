@@ -446,7 +446,7 @@ describe("team discussion in the Inbox", () => {
     expect(await service.countUnreadForOwner(creator.caller)).toEqual({ count: 1 });
   });
 
-  it("does not let 101 revoked team mentions hide an older readable mention", async () => {
+  it("does not scan a large revoked Team mention backlog to reach an older readable mention", async () => {
     const mentioned = await addMember(fixture.teamWorkspaceId, "MentionPagingReader", "EDITOR");
     const writer = await addMember(fixture.teamWorkspaceId, "MentionPagingWriter", "EDITOR");
     const good = await publishedDocument({ creator: writer.caller });
@@ -473,7 +473,9 @@ describe("team discussion in the Inbox", () => {
         .find((row) => row.commentId === seedCommentId);
       if (!seed || !mention) throw new Error("Missing seeded team mention");
       const after = Date.now() + 60_000;
-      for (let i = 0; i < 101; i += 1) {
+      // A backlog large enough to require multiple raw query pages. Every
+      // synthetic mention has a real, distinct comment and stays unread.
+      for (let i = 0; i < 501; i += 1) {
         const id = uuidv7();
         const createdAt = new Date(after + i * 1000);
         await r.reviewComments.insert({ ...seed, id, createdAt, idempotencyKey: randomUUID() });
@@ -481,6 +483,14 @@ describe("team discussion in the Inbox", () => {
       }
     });
     await removeMember(fixture.groupTeamWorkspaceId, mentioned.identity.id);
+
+    // A scoped repository page must skip the whole inaccessible Team backlog
+    // *inside SQL, before LIMIT*, while the unscoped history remains unread.
+    const scoped = await fixture.uow.run((r) => r.reviewMentions.listUnreadByRecipient(
+      mentioned.identity.id, 100, undefined, [fixture.teamWorkspaceId],
+    ));
+    expect(scoped.map((mention) => mention.commentId)).toEqual([goodCommentId]);
+    expect((await mentionRowsOf(seedCommentId))[0].read_at).toBeNull();
 
     const unread = await service.listUnreadForOwner(mentioned.caller);
     expect(entryFrom(unread, `mention:${goodCommentId}`)?.excerpt).toContain("older and readable");
