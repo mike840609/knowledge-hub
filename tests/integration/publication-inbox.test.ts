@@ -433,6 +433,14 @@ describe("team discussion in the Inbox", () => {
     });
     await removeMember(fixture.groupTeamWorkspaceId, creator.identity.id);
 
+    // SQL excludes revoked Team workspaces *before* LIMIT, rather than asking the
+    // service to page through every inaccessible event one batch at a time.
+    const filtered = await fixture.uow.run((r) => r.shareCommentEvents.listUnreadByRecipient(
+      creator.identity.id, undefined, 100, [fixture.teamWorkspaceId],
+    ));
+    expect(filtered.map((event) => event.id)).toContain(goodId);
+    expect(filtered.every((event) => event.workspaceId === fixture.teamWorkspaceId)).toBe(true);
+
     const unread = await service.listUnreadForOwner(creator.caller);
     expect(entryFrom(unread, goodId)?.excerpt).toBe("Readable event beyond the page");
     expect(await service.countUnreadForOwner(creator.caller)).toEqual({ count: 1 });
