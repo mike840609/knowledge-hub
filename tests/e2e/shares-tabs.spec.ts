@@ -19,7 +19,10 @@ async function delaySavedShares(page: Page, workspaceId: string) {
   page.on("requestfinished", markSettled);
   page.on("requestfailed", markSettled);
 
-  await page.route("**/*", async route => {
+  // Intercept only the Shares RSC URL. A global route intercept would disable
+  // the browser cache for unrelated page assets and make the test less realistic.
+  const routePattern = `**/w/${workspaceId}/shares?*`;
+  await page.route(routePattern, async route => {
     const req = route.request();
     const url = new URL(req.url());
     const delayed = req.headers()["rsc"] === "1"
@@ -31,10 +34,12 @@ async function delaySavedShares(page: Page, workspaceId: string) {
     }
     try {
       await route.continue();
-    } catch {
-      // A newer navigation can abort an intercepted request before continue().
-      // That is a terminal cancellation, not a request still in flight.
-      if (delayed) settled.add(req);
+    } catch (error) {
+      if (!delayed) throw error;
+      // The browser may have aborted an obsolete navigation before continue().
+      // Do not manufacture a terminal event here: only requestfinished or
+      // requestfailed can prove that the request is no longer in flight.
+      // waitForSettled intentionally fails if neither event arrives.
     }
   });
 
@@ -51,7 +56,7 @@ async function delaySavedShares(page: Page, workspaceId: string) {
     },
     async dispose() {
       release();
-      await page.unroute("**/*");
+      await page.unroute(routePattern);
       page.off("requestfinished", markSettled);
       page.off("requestfailed", markSettled);
     },
@@ -165,8 +170,9 @@ test("late Saved shares RSC responses cannot override the newer Discussions tab"
     // leave our route handler, before we assert the newest navigation survived.
     delayed.release();
     await delayed.waitForSettled();
-    await expect(nav.getByRole("link", { name: /^Discussions/ })).toHaveAttribute("aria-current", "page");
     await expect(page).toHaveURL(/tab=discussions/);
+    await expect(nav.getByRole("link", { name: /^Discussions/ })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("list", { name: "Followed discussions" })).toBeVisible();
   } finally {
     await delayed.dispose();
   }
