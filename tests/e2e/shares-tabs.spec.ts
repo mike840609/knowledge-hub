@@ -180,17 +180,33 @@ test("late Saved shares RSC responses cannot override the newer Discussions tab"
 
 test("search then tab switch cancels debounce while the destination RSC is delayed", async ({ page, request }) => {
   const doc = await createReviewDocument(request);
+  // Install before page load: fastForward can then deterministically flush a
+  // 250ms debounce without relying on the CI worker's scheduling.
+  await page.clock.install();
   const delayed = await delaySavedShares(page, doc.workspaceId);
   try {
     await page.goto(phase3Origin("reviewOwner") + "/w/" + doc.workspaceId + "/shares");
     const nav = page.getByRole("navigation", { name: "Shares sections" });
-    await page.getByRole("textbox", { name: "Find shares" }).fill("should-not-replace-tabs");
-    await nav.getByRole("link", { name: "Saved shares", exact: true }).click({ noWaitAfter: true });
+    // Dispatch the edit and tab click in one browser task. Separate Playwright
+    // fill()/click() calls can take >250ms on slow CI before the user clicks,
+    // allowing the search to fire before navigation even begins.
+    await page.evaluate(() => {
+      const input = document.querySelector<HTMLInputElement>("#shares-query");
+      const savedTab = document.querySelector<HTMLAnchorElement>(
+        'nav[aria-label="Shares sections"] a[href*="tab=saved"]',
+      );
+      if (!input || !savedTab) throw new Error("Shares search or Saved shares tab missing");
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      if (!setValue) throw new Error("Native input value setter missing");
+      setValue.call(input, "should-not-replace-tabs");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      savedTab.click();
+    });
     await expect.poll(delayed.intercepted).toBeGreaterThan(0);
 
-    // The destination is blocked long enough for an uncancelled 250ms debounce
-    // to navigate back to My shares. That must never happen.
-    await page.waitForTimeout(350);
+    // Deterministically fire any accidentally surviving 250ms timer; the old
+    // search must not navigate back to My shares while Saved RSC is pending.
+    await page.clock.fastForward(350);
     expect(page.url()).not.toContain("q=should-not-replace-tabs");
     delayed.release();
     await delayed.waitForSettled();
