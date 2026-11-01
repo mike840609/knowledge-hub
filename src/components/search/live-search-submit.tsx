@@ -28,6 +28,7 @@ function useLiveSearch(ref: RefObject<HTMLElement | null>) {
       // Only the fields travel, so a new query starts again at page 1.
       router.replace(`${form.getAttribute("action")}${params.size ? `?${params}` : ""}`, { scroll: false });
     };
+    const cancelPending = () => window.clearTimeout(timer);
     const later = (event: Event) => {
       window.clearTimeout(timer);
       // A native choice is made in one act, so it applies at once; only typing waits for a pause.
@@ -42,16 +43,23 @@ function useLiveSearch(ref: RefObject<HTMLElement | null>) {
       event.preventDefault();
       search();
     };
+    form.addEventListener("kh:live-search-cancel", cancelPending);
     form.addEventListener("input", later);
     form.addEventListener("submit", now);
     form.dataset.liveSearchReady = "true";
     return () => {
       window.clearTimeout(timer);
+      form.removeEventListener("kh:live-search-cancel", cancelPending);
       form.removeEventListener("input", later);
       form.removeEventListener("submit", now);
       delete form.dataset.liveSearchReady;
     };
   }, [ref, router]);
+}
+
+/** Explicit link navigation supersedes any search waiting in the debounce queue. */
+export function cancelPendingLiveSearch(form: HTMLFormElement | null) {
+  form?.dispatchEvent(new Event("kh:live-search-cancel"));
 }
 
 /** GET fallback and debounced live search share the same form values.

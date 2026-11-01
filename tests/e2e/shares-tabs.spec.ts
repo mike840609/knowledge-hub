@@ -77,3 +77,14 @@ test("a phone keeps the search full width and the page inside the viewport", asy
   expect((await saved.boundingBox())!.width).toBeGreaterThan(320);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test("rapid tab switches eventually select the URL's current content", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  await page.goto(`${phase3Origin("reviewOwner")}/w/${doc.workspaceId}/shares`);
+  const nav = page.getByRole("navigation", { name: "Shares sections" });
+  await nav.getByRole("link", { name: "Saved shares", exact: true }).click({ noWaitAfter: true });
+  await nav.getByRole("link", { name: /^Discussions/ }).click({ noWaitAfter: true });
+  await expect(page).toHaveURL(/tab=discussions/);
+  await expect(nav.getByRole("link", { name: /^Discussions/ })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("list", { name: "Followed discussions" })).toBeVisible();
+});

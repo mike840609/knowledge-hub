@@ -81,3 +81,24 @@ it("preserves saved-search text when Clear filters is opened in a new tab", asyn
  await act(async()=>clear.dispatchEvent(new MouseEvent("click",{bubbles:true,cancelable:true,metaKey:true,button:0})));
  expect(input.value).toBe("guide");
 });
+
+it("keeps saved pagination synchronized with the committed query", async () => {
+ await mount({...model,query:{q:"guide",status:"all",page:2},hasNext:true});
+ const input=host.querySelector<HTMLInputElement>("#saved-shares-query")!;
+ await act(async()=>{
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")!.set!.call(input,"new draft");
+  input.dispatchEvent(new Event("input",{bubbles:true}));
+ });
+ expect(input.value).toBe("new draft");
+ const form=host.querySelector("form")!;
+ const cancelled=vi.fn();
+ form.addEventListener("kh:live-search-cancel",cancelled);
+ const next=[...host.querySelectorAll("a")].find(a=>a.textContent==="Next")!;
+ const prevent=(event:MouseEvent)=>event.preventDefault();
+ document.addEventListener("click",prevent,{once:true});
+ await act(async()=>next.click());
+ expect(input.value).toBe("guide");
+ expect(cancelled).toHaveBeenCalledTimes(1);
+ expect(next.getAttribute("href")).toContain("q=guide");
+ document.removeEventListener("click",prevent);
+});

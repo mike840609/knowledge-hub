@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
-import { applyAndSearch, LiveSearch } from "@/components/search/live-search-submit";
+import { applyAndSearch, cancelPendingLiveSearch, LiveSearch } from "@/components/search/live-search-submit";
 import { Timestamp } from "@/components/ui/timestamp";
 import { Status } from "@/components/ui/status";
 import { useToast } from "@/components/ui/toast";
@@ -44,17 +44,31 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
     intendedQuery.current = value.trim();
     setQuery(value);
   };
-  // Opening the reset link in another tab must not reset this tab's draft.
-  const clearOnNavigation = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+  // Next's client-side Link navigation does not raise popstate. Reconcile the
+  // field to the destination *before* navigating and cancel any queued replace().
+  const isPlainNavigation = (event: MouseEvent<HTMLAnchorElement>) =>
+    !event.defaultPrevented && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0;
+  const pageNavigation = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!isPlainNavigation(event)) return;
+    cancelPendingLiveSearch(filterForm.current);
+    changeQuery(model.query.q);
+    setStatus(model.query.status);
+  };
+  const clearOnNavigation = (event: MouseEvent<HTMLAnchorElement>, nextStatus: string = "active") => {
+    if (!isPlainNavigation(event)) return;
+    cancelPendingLiveSearch(filterForm.current);
     changeQuery("");
+    setStatus(nextStatus);
   };
   useEffect(() => {
     if (intendedQuery.current !== null && model.query.q !== intendedQuery.current) return;
     if (document.activeElement !== queryInput.current) setQuery(model.query.q);
   }, [model.query.q]);
   useEffect(() => {
-    const syncHistory = () => changeQuery(new URLSearchParams(window.location.search).get("q") ?? "");
+    const syncHistory = () => {
+      cancelPendingLiveSearch(filterForm.current);
+      changeQuery(new URLSearchParams(window.location.search).get("q") ?? "");
+    };
     window.addEventListener("popstate", syncHistory);
     return () => window.removeEventListener("popstate", syncHistory);
   }, []);
@@ -136,7 +150,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
     </div>
     {filterError ? <p role="alert" className="mt-3 text-body text-kh-danger">{filterError}</p> : null}
     <GovernanceError error={error} />
-    {!filterError && model.items.length === 0 ? <EmptyState icon={Share2} illustration={!model.query.q && model.query.page === 1 && (model.query.status === "all" || (model.query.status === "active" && !hasDocuments)) ? <Illustration kind="shares" /> : undefined} title={!model.query.q && model.query.page === 1 && model.query.status === "active" ? "No active share links." : filtered ? "No shares match these filters." : "No share links yet."} description={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? "Clear the filters to see links with other titles or statuses." : hasDocuments ? "Open a document and choose Share to create a link." : "Links you share to your documents appear here."} action={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/shares?status=all`} onClick={clearOnNavigation}>Show all shares</Link> : hasDocuments ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/knowledge`}>Browse documents</Link> : <WorkspaceContentActions workspaceId={workspaceId} />} /> : null}
+    {!filterError && model.items.length === 0 ? <EmptyState icon={Share2} illustration={!model.query.q && model.query.page === 1 && (model.query.status === "all" || (model.query.status === "active" && !hasDocuments)) ? <Illustration kind="shares" /> : undefined} title={!model.query.q && model.query.page === 1 && model.query.status === "active" ? "No active share links." : filtered ? "No shares match these filters." : "No share links yet."} description={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? "Clear the filters to see links with other titles or statuses." : hasDocuments ? "Open a document and choose Share to create a link." : "Links you share to your documents appear here."} action={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/shares?status=all`} onClick={event => clearOnNavigation(event, "all")}>Show all shares</Link> : hasDocuments ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/knowledge`}>Browse documents</Link> : <WorkspaceContentActions workspaceId={workspaceId} />} /> : null}
     {model.items.length > 0 ? <div aria-hidden="true" className="mt-4 hidden grid-cols-[minmax(0,1fr)_6rem_7rem_4rem_6rem] items-center gap-3 border-b border-kh-border px-3 py-2 text-caption text-kh-text-muted md:grid"><span>Document / link</span><span>Status</span><span>Expires</span><span className="text-right">Views</span><span /></div> : null}
     <ul aria-label="Share links" onKeyDown={navigateListRows} className="mt-4 space-y-2 md:mt-0 md:space-y-0">
       {model.items.map(item => {
@@ -182,6 +196,6 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
       })}
     </ul>
     <ConfirmDialog open={!!confirmedItem} onOpenChange={open => { if (!open) setConfirming(null); }} title="Revoke share link?" description={<>Revoke “{confirmedItem?.label ?? "Untitled link"}” for {confirmedItem?.title}? Anyone holding this link will lose access. This cannot be undone.</>} cancelLabel="Keep" confirmLabel="Confirm revoke" onConfirm={() => { if (confirming) void revoke(confirming); }} />
-    {model.query.page > 1 || model.hasNext ? <nav aria-label="Share pages" className="mt-4 flex items-center gap-4 text-body"><span className="text-kh-text-muted">Page {model.query.page}</span>{model.query.page > 1 ? <Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page - 1)}>Previous</Link> : null}{model.hasNext ? <Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page + 1)}>Next</Link> : null}</nav> : null}
+    {model.query.page > 1 || model.hasNext ? <nav aria-label="Share pages" className="mt-4 flex items-center gap-4 text-body"><span className="text-kh-text-muted">Page {model.query.page}</span>{model.query.page > 1 ? <Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page - 1)} onClick={pageNavigation}>Previous</Link> : null}{model.hasNext ? <Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page + 1)} onClick={pageNavigation}>Next</Link> : null}</nav> : null}
   </>;
 }

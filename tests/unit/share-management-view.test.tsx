@@ -147,3 +147,28 @@ it("does not clear the current search on a modified Clear filters click", async 
     expect(input.value).toBe("guide");
   } finally { await act(async () => root.unmount()); host.remove(); }
 });
+
+it("reconciles a pending draft when a pagination Link is chosen", async () => {
+  const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+  const model = { items: [], query: { q: "guide", status: "all" as const, page: 2 }, hasNext: true };
+  try {
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={model} />));
+    const input = host.querySelector<HTMLInputElement>("#shares-query")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "draft");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(input.value).toBe("draft");
+    const form = host.querySelector("form")!;
+    const cancelled = vi.fn();
+    form.addEventListener("kh:live-search-cancel", cancelled);
+    const next = [...host.querySelectorAll("a")].find(a => a.textContent === "Next")!;
+    const prevent = (event: MouseEvent) => event.preventDefault();
+    document.addEventListener("click", prevent, { once: true });
+    await act(async () => next.click());
+    expect(input.value).toBe("guide");
+    expect(cancelled).toHaveBeenCalledTimes(1);
+    expect(next.getAttribute("href")).toContain("q=guide");
+    document.removeEventListener("click", prevent);
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});

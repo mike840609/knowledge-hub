@@ -64,7 +64,7 @@ export class DocumentReviewService {
   async countUnreadForOwner(caller: CallerContext): Promise<{ count: number }> {
     return this.uow.run(async r => {
       const owner = (await r.shareCommentEvents.listUnreadCountsByRecipient(caller.identity.id)).reduce((sum, row) => sum + row.unreadCount, 0);
-      const follows = (await this.followedThreads(r, caller.identity.id)).filter(({ summary }) => !("unavailable" in summary) && !!summary.latestReply && summary.unread > 0).length;
+      const follows = await r.reviewFollows.countUnreadFollowing(caller.identity.id, this.clock(), FOLLOW_LIMIT);
       return { count: owner + follows };
     });
   }
@@ -124,12 +124,9 @@ export class DocumentReviewService {
       await r.reviewFollows.markSeen(input.threadId, caller.identity.id, this.clock());
     });
   }
-  /** A lightweight unread count: no revision titles, author names or Markdown. */
+  /** One aggregate query for the badge, with no comment bodies or other projections. */
   async countUnreadFollowedDiscussions(caller: CallerContext): Promise<number> {
-    return this.uow.run(async r => {
-      const followed = await this.followedThreads(r, caller.identity.id);
-      return followed.filter(({ summary }) => !("unavailable" in summary) && summary.unread > 0).length;
-    });
+    return this.uow.run(r => r.reviewFollows.countUnreadFollowing(caller.identity.id, this.clock(), FOLLOW_LIMIT));
   }
   /** Shares → Discussions: every discussion the caller follows, including ones no one has answered. */
   async listFollowedDiscussions(caller: CallerContext): Promise<{ items: FollowedDiscussionView[] }> {

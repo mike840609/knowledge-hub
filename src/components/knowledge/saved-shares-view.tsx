@@ -9,7 +9,7 @@ import { SelectMenu } from "@/components/ui/select-menu";
 import { Timestamp } from "@/components/ui/timestamp";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Illustration } from "@/components/knowledge/illustration";
-import { applyAndSearch, LiveSearch } from "@/components/search/live-search-submit";
+import { applyAndSearch, cancelPendingLiveSearch, LiveSearch } from "@/components/search/live-search-submit";
 import { navigateListRows } from "@/lib/list-row-navigation";
 import type { SavedShareList } from "@/modules/knowledge/domain/saved-share";
 export function SavedSharesView({ workspaceId,model,filterError }: { workspaceId:string;model:SavedShareList;filterError?:string }) {
@@ -27,17 +27,31 @@ export function SavedSharesView({ workspaceId,model,filterError }: { workspaceId
     intendedQuery.current = value.trim();
     setQuery(value);
   };
-  // Opening the reset link in another tab must not reset this tab's draft.
-  const clearOnNavigation = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+  // Next's client-side Link navigation does not raise popstate. Reconcile the
+  // field to the destination *before* navigating and cancel any queued replace().
+  const isPlainNavigation = (event: MouseEvent<HTMLAnchorElement>) =>
+    !event.defaultPrevented && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0;
+  const pageNavigation = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!isPlainNavigation(event)) return;
+    cancelPendingLiveSearch(filterForm.current);
+    changeQuery(model.query.q);
+    setStatus(model.query.status);
+  };
+  const clearOnNavigation = (event: MouseEvent<HTMLAnchorElement>, nextStatus: string = "all") => {
+    if (!isPlainNavigation(event)) return;
+    cancelPendingLiveSearch(filterForm.current);
     changeQuery("");
+    setStatus(nextStatus);
   };
   useEffect(() => {
     if (intendedQuery.current !== null && model.query.q !== intendedQuery.current) return;
     if (document.activeElement !== queryInput.current) setQuery(model.query.q);
   }, [model.query.q]);
   useEffect(() => {
-    const syncHistory = () => changeQuery(new URLSearchParams(window.location.search).get("q") ?? "");
+    const syncHistory = () => {
+      cancelPendingLiveSearch(filterForm.current);
+      changeQuery(new URLSearchParams(window.location.search).get("q") ?? "");
+    };
     window.addEventListener("popstate", syncHistory);
     return () => window.removeEventListener("popstate", syncHistory);
   }, []);
@@ -77,6 +91,6 @@ export function SavedSharesView({ workspaceId,model,filterError }: { workspaceId
         <Button variant="ghost" size="sm" className="col-start-2 row-start-1 justify-self-end md:col-auto md:row-auto" aria-label={`Remove saved share: ${item.title}`} disabled={busy!==null} onClick={()=>void remove(item.id)}>Remove</Button>
       </div>
     </li>)}</ul>
-    {(model.query.page>1||model.hasNext)&&<nav aria-label="Saved share pages" className="mt-4 flex gap-4 text-body-sm"><span className="text-kh-text-muted">Page {model.query.page}</span>{model.query.page>1&&<Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page-1)}>Previous</Link>}{model.hasNext&&<Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page+1)}>Next</Link>}</nav>}
+    {(model.query.page>1||model.hasNext)&&<nav aria-label="Saved share pages" className="mt-4 flex gap-4 text-body-sm"><span className="text-kh-text-muted">Page {model.query.page}</span>{model.query.page>1&&<Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page-1)} onClick={pageNavigation}>Previous</Link>}{model.hasNext&&<Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page+1)} onClick={pageNavigation}>Next</Link>}</nav>}
   </>;
 }

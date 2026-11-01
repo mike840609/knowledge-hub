@@ -252,6 +252,27 @@ describe("the Inbox badge counts a reader's followed discussions as the Inbox li
     await f.shares.revoke(f.owner, f.link.id);
     expect([await badge(), await listed(), await sharesBadge()]).toEqual([0, 0, 0]);
   });
+
+  it("does not count a thread hidden by its owner", async () => {
+    const f = await fixture();
+    const thread = await f.start();
+    await f.ownerReply(thread.id);
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(1);
+    await f.service.setVisibility(f.owner, { documentId: f.documentId, threadId: thread.id, visibility: "HIDDEN", reason: "moderated" });
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(0);
+    expect(await f.follows()).toEqual([]);
+  });
+
+  it("counts multiple unread replies in one thread as one discussion", async () => {
+    const f = await fixture();
+    const first = await f.start();
+    const second = await f.start();
+    await f.ownerReply(first.id);
+    await f.ownerReply(first.id, "Second reply");
+    await f.ownerReply(second.id);
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(2);
+    expect((await f.service.listFollowedDiscussions(f.reader)).items.filter(row => row.linkAvailable && row.unread > 0)).toHaveLength(2);
+  });
 });
 
 describe("batched review lookups", () => {

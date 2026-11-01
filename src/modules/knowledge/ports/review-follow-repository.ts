@@ -9,4 +9,6 @@ export interface ReviewFollowRepository {
   markAllSeen(userId: string, at: Date): Promise<void>;
   listFollowing(userId: string, limit: number): Promise<ReviewFollow[]>;
   followingThreadIds(userId: string, threadIds: readonly string[]): Promise<Set<string>>;
+  /** Count unread *visible* discussions reachable through a live share link, matching the bounded follows list. */
+  countUnreadFollowing(userId: string, now: Date, limit: number): Promise<number>;
 }
