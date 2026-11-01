@@ -26,7 +26,7 @@ const sourceArrangements = new Set<string>();
 export type OrganizeResult = { ok: true } | { ok: false; message: string };
 
 export type MoveNodeInput = {
-  sourceId?: string;
+  sourceId: string;
   nodeId: string;
   label: string;
   from: { parentId: string | null; position: number };
@@ -49,13 +49,13 @@ export type TreeMutations = {
    * for the top level. For a dialog, like the two above, a refusal comes back as words to put beside
    * the field; `report: "toast"` is for the drag surface, which has no field to put them beside.
    */
-  moveNode(input: MoveNodeInput, report?: "dialog" | "toast"): Promise<OrganizeResult>;
+  moveNode(input: MoveNodeInput, report?: "dialog" | "toast", onRefreshRequested?: () => void): Promise<OrganizeResult>;
   /**
    * To another place among its own siblings, from the keyboard. There is no dialog to put a refusal
    * beside, so it is said as a toast here, and there is no Undo toast either: a step is undone by the
    * step back, and a toast for every key press would bury the tree.
    */
-  reorderNode(input: { nodeId: string; position: number; sourceId?: string }): Promise<OrganizeResult>;
+  reorderNode(input: { nodeId: string; position: number; sourceId: string }, onRefreshRequested?: () => void): Promise<OrganizeResult>;
   /** Survives the KnowledgeTree being filtered out and remounted. */
   isSourceArrangementPending(sourceId: string): boolean;
 };
@@ -144,17 +144,17 @@ export function useTreeMutations(): TreeMutations {
     // The sidebar owns this hook, whereas filtering may unmount and remount a
     // KnowledgeTree while its earlier PATCH is still pending. Keep the write
     // lease here, shared by pointer moves and keyboard reorders of one source.
-    async function serializeArrangement(sourceId: string | undefined, write: () => Promise<OrganizeResult>): Promise<OrganizeResult> {
-      const key = sourceId ? `${workspaceId}:${sourceId}` : null;
-      if (key && sourceArrangements.has(key)) return { ok: false, message: "A tree change is still in progress." };
-      if (key) sourceArrangements.add(key);
+    async function serializeArrangement(sourceId: string, write: () => Promise<OrganizeResult>): Promise<OrganizeResult> {
+      const key = `${workspaceId}:${sourceId}`;
+      if (sourceArrangements.has(key)) return { ok: false, message: "A tree change is still in progress." };
+      sourceArrangements.add(key);
       try { return await write(); }
-      finally { if (key) sourceArrangements.delete(key); }
+      finally { sourceArrangements.delete(key); }
     }
 
     return {
       isSourceArrangementPending: (sourceId) => sourceArrangements.has(`${workspaceId}:${sourceId}`),
-      async moveNode({ sourceId, nodeId, label, from, to }, report = "dialog") {
+      async moveNode({ sourceId, nodeId, label, from, to }, report = "dialog", onRefreshRequested) {
         return serializeArrangement(sourceId, async () => {
         try {
           await governanceRequest(`/api/tree-nodes/${nodeId}`, "PATCH", {
@@ -166,11 +166,18 @@ export function useTreeMutations(): TreeMutations {
             undo: {
               label: UNDO_LABEL,
               run: async () => {
-                await governanceRequest(`/api/tree-nodes/${nodeId}`, "PATCH", { parentId: from.parentId, position: from.position });
-                refresh();
+                // Undo must obey the same source-level lease as a drag, keyboard
+                // reorder or dialog move. Never issue a competing raw PATCH.
+                const result = await serializeArrangement(sourceId, async () => {
+                  await governanceRequest(`/api/tree-nodes/${nodeId}`, "PATCH", { parentId: from.parentId, position: from.position });
+                  refresh();
+                  return { ok: true };
+                });
+                if (!result.ok) throw new Error(result.message);
               },
             },
           });
+          onRefreshRequested?.();
           refresh();
           return { ok: true };
         } catch (failure) {
@@ -181,10 +188,11 @@ export function useTreeMutations(): TreeMutations {
         }
         });
       },
-      async reorderNode({ sourceId, nodeId, position }) {
+      async reorderNode({ sourceId, nodeId, position }, onRefreshRequested) {
         return serializeArrangement(sourceId, async () => {
         try {
           await governanceRequest(`/api/tree-nodes/${nodeId}`, "PATCH", { position });
+          onRefreshRequested?.();
           refresh();
           return { ok: true };
         } catch (failure) {
