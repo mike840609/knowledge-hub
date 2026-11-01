@@ -55,6 +55,7 @@ export type KnowledgeTreeProps = {
    * tree decides where from what it shows; whether it may is the actions' say, and the server's.
    */
   onMove: (input: MoveNodeInput) => Promise<boolean>;
+  isSourceArrangementPending?: () => boolean;
 };
 
 function documentHref(
@@ -250,6 +251,7 @@ export function KnowledgeTree({
   onRunAction,
   onReorder,
   onMove,
+  isSourceArrangementPending = () => false,
 }: KnowledgeTreeProps) {
   const router = useRouter();
   const treeRef = useRef<HTMLUListElement>(null);
@@ -356,6 +358,7 @@ export function KnowledgeTree({
   const reorderOperation = useRef(0);
   const expectedReorder = useRef<{ id: string; parentId: string | null; position: number } | null>(null);
   const queuedReorder = useRef<{ id: string; direction: -1 | 1 } | null>(null);
+  const itemsAtReorderStart = useRef(items);
   const reorderReplySeen = useRef(false);
   const [reorderReplyVersion, markReorderReply] = useState(0);
   const focusAfterReorder = useRef<string | null>(null);
@@ -363,7 +366,7 @@ export function KnowledgeTree({
   const announce = (text: string) => setAnnouncement((previous) => ({ text, sequence: previous.sequence + 1 }));
   const drag = useTreeDrag({
     items, filtering, isKeyboardBusy: () => reordering.current, onDragStarted: () => { reorderOperation.current++; },
-    canMove: (id) => { const item = itemById.get(id); if (!item || item.status === "ARCHIVED") return false; return (item.type === "document" ? documentActions(item) : folderActions(item)).some((action) => action.id === "document.move" || action.id === "folder.move"); },
+    canMove: (id) => { const item = itemById.get(id); if (isSourceArrangementPending() || !item || item.status === "ARCHIVED") return false; return (item.type === "document" ? documentActions(item) : folderActions(item)).some((action) => action.id === "document.move" || action.id === "folder.move"); },
     isCollapsed: (id) => effectiveCollapsed.has(id), onReorder, onMove,
     onPlaced: (id, parentId, refreshed) => {
       if (parentId) expandFrom(parentId);
@@ -382,12 +385,20 @@ export function KnowledgeTree({
     // write until both the server reply and the refreshed position are confirmed.
     if (!reordering.current || !expected || !reorderReplySeen.current) return;
     const row = itemById.get(expected.id);
-    if (!row || row.parentId !== expected.parentId || row.position !== expected.position) return;
+    const matched = row?.parentId === expected.parentId && row.position === expected.position;
+    // The server clamps indexes against its latest sibling group. A new tree
+    // snapshot is authoritative even when the requested position no longer exists.
+    if (!matched && items === itemsAtReorderStart.current) return;
     reordering.current = false;
     reorderReplySeen.current = false;
     expectedReorder.current = null;
     const queued = queuedReorder.current;
     queuedReorder.current = null;
+    if (!matched) {
+      focusAfterReorder.current = null;
+      announce("The tree changed while sorting. Review the current order and try again.");
+      return;
+    }
     const item = queued ? itemById.get(queued.id) : undefined;
     if (queued && item) void reorder(item, queued.direction);
     // Recheck on either event: the refreshed tree or the response settling.
@@ -411,6 +422,7 @@ export function KnowledgeTree({
       queuedReorder.current = { id: item.id, direction };
       return;
     }
+    if (isSourceArrangementPending()) return;
     const step = reorderStep(roots, item.id, direction);
     if (!step) return;
     if (step.kind === "edge") {
@@ -419,6 +431,7 @@ export function KnowledgeTree({
     }
     reordering.current = true;
     reorderReplySeen.current = false;
+    itemsAtReorderStart.current = items;
     drag.invalidatePending();
     const operation = ++reorderOperation.current;
     expectedReorder.current = { id: item.id, parentId: item.parentId, position: step.position };
