@@ -36,12 +36,41 @@ export class MariaDbReviewMentionsRepository implements ReviewMentionRepository 
       "SELECT * FROM review_comment_mentions WHERE mentioned_user_id=? ORDER BY created_at DESC, comment_id DESC LIMIT ?", [userId, limit]);
     return rows.map(toMention);
   }
-  async listUnreadByRecipient(userId: string, limit: number, before?: { createdAt: Date; commentId: string }): Promise<ReviewMention[]> {
-    const cursor = before ? "AND (created_at < ? OR (created_at = ? AND comment_id < ?))" : "";
+  async listUnreadByRecipient(
+    userId: string,
+    limit: number,
+    before?: { createdAt: Date; commentId: string },
+    allowedTeamWorkspaceIds?: readonly string[],
+  ): Promise<ReviewMention[]> {
+    const cursor = before ? "AND (m.created_at < ? OR (m.created_at = ? AND m.comment_id < ?))" : "";
+    // Only the Inbox requests an access-scoped page. The unscoped query and
+    // historical access continue to return all unread mentions, including
+    // ones that were deleted, hidden or lost Team access after delivery.
+    const teamScope = allowedTeamWorkspaceIds === undefined
+      ? ""
+      : allowedTeamWorkspaceIds.length === 0
+        ? "AND m.share_link_id IS NOT NULL"
+        : `AND (m.share_link_id IS NOT NULL OR EXISTS (
+          SELECT 1 FROM document_review_comments c
+          JOIN document_review_threads t ON t.id = c.thread_id
+          JOIN knowledge_documents d ON d.id = t.document_id
+          JOIN knowledge_sources s ON s.id = d.source_id
+          JOIN workspaces w ON w.id = s.workspace_id
+          WHERE c.id = m.comment_id AND s.workspace_id IN (${allowedTeamWorkspaceIds.map(() => "?").join(",")})
+            AND s.source_type = 'PUBLICATION' AND s.status = 'ACTIVE'
+            AND w.workspace_type = 'TEAM' AND w.lifecycle_state = 'ACTIVE'
+            AND d.status = 'ACTIVE' AND t.visibility = 'VISIBLE'
+            AND c.visibility = 'VISIBLE' AND c.deleted_at IS NULL
+        ))`;
+    const params: (string | Date | number)[] = [userId];
+    if (allowedTeamWorkspaceIds?.length) params.push(...allowedTeamWorkspaceIds);
+    if (before) params.push(before.createdAt, before.createdAt, before.commentId);
+    params.push(limit);
     const rows = await this.connection.query<DbRow[]>(
-      `SELECT * FROM review_comment_mentions
-       WHERE mentioned_user_id=? AND read_at IS NULL ${cursor} ORDER BY created_at DESC, comment_id DESC LIMIT ?`,
-      before ? [userId, before.createdAt, before.createdAt, before.commentId, limit] : [userId, limit],
+      `SELECT m.* FROM review_comment_mentions m
+       WHERE m.mentioned_user_id=? AND m.read_at IS NULL ${teamScope} ${cursor}
+       ORDER BY m.created_at DESC, m.comment_id DESC LIMIT ?`,
+      params,
     );
     return rows.map(toMention);
   }
