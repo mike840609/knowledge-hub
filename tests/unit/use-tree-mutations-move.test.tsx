@@ -15,7 +15,7 @@ vi.mock("next/navigation", () => ({
   useParams: () => ({ workspaceId: "w1" }),
 }));
 // The real hook reads the provider; without one it throws, and the test only wants the request it makes.
-vi.mock("@/components/ui/toast", () => ({ useToast: () => mocks.toast }));
+vi.mock("@/components/ui/toast", () => ({ useToast: () => mocks.toast, RetryableUndoError: class RetryableUndoError extends Error {} }));
 vi.mock("@/components/workspaces/governance-error", () => ({
   governanceRequest: mocks.request,
   // A code organizeFailure has no sentence for, so the server's own words come through.
