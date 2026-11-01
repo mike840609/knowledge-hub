@@ -609,4 +609,30 @@ describe("tree dragging", () => {
     expect(onReorder).toHaveBeenLastCalledWith({nodeId:"n:B",position:1},expect.any(Function));
   });
 
+  it("waits for newly archived rows in an archived-inclusive pointer refresh", async () => {
+    const canonical = [doc("B", 0), doc("A", 1), doc("C", 2),
+      { ...doc("X", 3), status: "ARCHIVED" as const }];
+    const onReorder = vi.fn(async (_input: { nodeId: string; position: number }, ack?: (tree?: KnowledgeTreeItem[]) => void) => {
+      ack?.(canonical);
+      return true;
+    });
+    const { rerender } = render({ includeArchived: true, onReorder });
+    const target = rowFor("B");
+    target.getBoundingClientRect = () => ({ top: 0, bottom: 20, height: 20, left: 0, right: 100, width: 100, x: 0, y: 0, toJSON: () => ({}) });
+    const fire = (row: HTMLElement, name: string) => {
+      const event = new Event(name, { bubbles: true, cancelable: true });
+      Object.defineProperties(event, { dataTransfer: { value: { effectAllowed: "", setData: vi.fn() } }, clientY: { value: 19 } });
+      row.dispatchEvent(event);
+      return event;
+    };
+    await act(async () => { fire(rowFor("A"), "dragstart"); fire(target, "drop"); });
+    rerender({ items: canonical.slice(0, 3) });
+    let another: Event | undefined;
+    act(() => { another = fire(rowFor("C"), "dragstart"); });
+    expect(another?.defaultPrevented).toBe(true);
+    rerender({ items: canonical });
+    act(() => { another = fire(rowFor("C"), "dragstart"); });
+    expect(another?.defaultPrevented).toBe(false);
+  });
+
 });
