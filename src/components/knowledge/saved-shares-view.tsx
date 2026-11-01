@@ -37,6 +37,10 @@ export function SavedSharesView({ workspaceId,model,filterError }: { workspaceId
     changeQuery(model.query.q);
     setStatus(model.query.status);
   };
+  // A pending search must not replace navigation to the shared article.
+  const leaveShares = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (isPlainNavigation(event)) cancelPendingLiveSearch(filterForm.current);
+  };
   const clearOnNavigation = (event: MouseEvent<HTMLAnchorElement>, nextStatus: string = "all") => {
     if (!isPlainNavigation(event)) return;
     cancelPendingLiveSearch(filterForm.current);
@@ -82,7 +86,7 @@ export function SavedSharesView({ workspaceId,model,filterError }: { workspaceId
     {items.length>0&&<div aria-hidden="true" className="mt-4 hidden grid-cols-[minmax(0,1fr)_7rem_7rem_5rem] gap-3 border-b border-kh-border px-3 py-2 text-caption text-kh-text-muted md:grid"><span>Article / shared by</span><span>Saved</span><span>Expires</span><span/></div>}
     <ul aria-label="Saved shares" onKeyDown={navigateListRows} className="mt-4 space-y-2 md:mt-0 md:space-y-0">{items.map(item=><li key={item.id} className="group rounded-md border border-kh-border bg-kh-bg p-3 hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover md:rounded-none md:border-x-0 md:border-t-0 md:py-2">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 md:grid-cols-[minmax(0,1fr)_7rem_7rem_5rem]">
-        <div className="min-w-0">{item.path?<Link prefetch={false} data-list-row className="kh-focus-ring block truncate rounded-md text-body font-medium text-kh-text hover:text-kh-link" href={item.path}>{item.title}</Link>:<span className="block truncate text-body font-medium text-kh-text">{item.title}</span>}
+        <div className="min-w-0">{item.path?<Link prefetch={false} data-list-row className="kh-focus-ring block truncate rounded-md text-body font-medium text-kh-text hover:text-kh-link" href={item.path} onClick={leaveShares}>{item.title}</Link>:<span className="block truncate text-body font-medium text-kh-text">{item.title}</span>}
           <p className="truncate text-caption text-kh-text-muted">Shared by {item.sharedByName}</p>
           <p className="text-caption text-kh-text-muted">{item.status==="available"?<>Available{item.updatedAt&&<> · Updated <Timestamp value={item.updatedAt}/></>}</>:item.status==="expired"?"Expired":"Link unavailable"}</p>
         </div>

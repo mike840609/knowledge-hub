@@ -54,6 +54,11 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
     changeQuery(model.query.q);
     setStatus(model.query.status);
   };
+  // Opening a document leaves Shares, but the current form stays mounted until
+  // Next completes the transition. Cancel its debounce so it cannot navigate back.
+  const leaveShares = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (isPlainNavigation(event)) cancelPendingLiveSearch(filterForm.current);
+  };
   const clearOnNavigation = (event: MouseEvent<HTMLAnchorElement>, nextStatus: string = "active") => {
     if (!isPlainNavigation(event)) return;
     cancelPendingLiveSearch(filterForm.current);
@@ -150,7 +155,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
     </div>
     {filterError ? <p role="alert" className="mt-3 text-body text-kh-danger">{filterError}</p> : null}
     <GovernanceError error={error} />
-    {!filterError && model.items.length === 0 ? <EmptyState icon={Share2} illustration={!model.query.q && model.query.page === 1 && (model.query.status === "all" || (model.query.status === "active" && !hasDocuments)) ? <Illustration kind="shares" /> : undefined} title={!model.query.q && model.query.page === 1 && model.query.status === "active" ? "No active share links." : filtered ? "No shares match these filters." : "No share links yet."} description={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? "Clear the filters to see links with other titles or statuses." : hasDocuments ? "Open a document and choose Share to create a link." : "Links you share to your documents appear here."} action={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/shares?status=all`} onClick={event => clearOnNavigation(event, "all")}>Show all shares</Link> : hasDocuments ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/knowledge`}>Browse documents</Link> : <WorkspaceContentActions workspaceId={workspaceId} />} /> : null}
+    {!filterError && model.items.length === 0 ? <EmptyState icon={Share2} illustration={!model.query.q && model.query.page === 1 && (model.query.status === "all" || (model.query.status === "active" && !hasDocuments)) ? <Illustration kind="shares" /> : undefined} title={!model.query.q && model.query.page === 1 && model.query.status === "active" ? "No active share links." : filtered ? "No shares match these filters." : "No share links yet."} description={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? "Clear the filters to see links with other titles or statuses." : hasDocuments ? "Open a document and choose Share to create a link." : "Links you share to your documents appear here."} action={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/shares?status=all`} onClick={event => clearOnNavigation(event, "all")}>Show all shares</Link> : hasDocuments ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/knowledge`} onClick={leaveShares}>Browse documents</Link> : <WorkspaceContentActions workspaceId={workspaceId} />} /> : null}
     {model.items.length > 0 ? <div aria-hidden="true" className="mt-4 hidden grid-cols-[minmax(0,1fr)_6rem_7rem_4rem_6rem] items-center gap-3 border-b border-kh-border px-3 py-2 text-caption text-kh-text-muted md:grid"><span>Document / link</span><span>Status</span><span>Expires</span><span className="text-right">Views</span><span /></div> : null}
     <ul aria-label="Share links" onKeyDown={navigateListRows} className="mt-4 space-y-2 md:mt-0 md:space-y-0">
       {model.items.map(item => {
@@ -161,9 +166,10 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
           <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 md:grid-cols-[minmax(0,1fr)_6rem_7rem_4rem_6rem] md:gap-y-0">
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
-                <Link data-list-row className="kh-focus-ring min-w-0 flex-1 truncate rounded-md text-body font-medium text-kh-text hover:text-kh-link" href={`/w/${workspaceId}/knowledge/${item.sourceId}/${item.documentId}?includeArchived=true`}>{item.title}</Link>
+                <Link data-list-row className="kh-focus-ring min-w-0 flex-1 truncate rounded-md text-body font-medium text-kh-text hover:text-kh-link" href={`/w/${workspaceId}/knowledge/${item.sourceId}/${item.documentId}?includeArchived=true`} onClick={leaveShares}>{item.title}</Link>
                 {notice ? <Link
                   href={`/w/${workspaceId}/knowledge/${item.sourceId}/${item.documentId}?thread=${notice.latestThreadId}`}
+                  onClick={leaveShares}
                   aria-label={`Open ${notice.unreadCount} unread comments for ${item.title}`}
                   className="kh-focus-ring shrink-0 rounded-full bg-kh-bg-selected px-2 py-0.5 text-caption font-semibold text-kh-selected-text hover:bg-kh-highlight"
                 >{notice.unreadCount} new</Link> : null}

@@ -187,6 +187,9 @@ test("search then tab switch cancels debounce while the destination RSC is delay
   try {
     await page.goto(phase3Origin("reviewOwner") + "/w/" + doc.workspaceId + "/shares");
     const nav = page.getByRole("navigation", { name: "Shares sections" });
+    // Wait for hydration: unmounted listeners would make this look like a
+    // successful debounce cancellation without exercising LiveSearch at all.
+    await expect(page.locator('form[data-live-search-ready="true"]')).toHaveCount(1);
     // Dispatch the edit and tab click in one browser task. Separate Playwright
     // fill()/click() calls can take >250ms on slow CI before the user clicks,
     // allowing the search to fire before navigation even begins.

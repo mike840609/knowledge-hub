@@ -172,3 +172,61 @@ it("reconciles a pending draft when a pagination Link is chosen", async () => {
     document.removeEventListener("click", prevent);
   } finally { await act(async () => root.unmount()); host.remove(); }
 });
+
+
+it("cancels a queued search when opening the document, unread discussion, or browse action", async () => {
+  const item: ManagedShareLink = {
+    id: "link", documentId: "doc", sourceId: "source", title: "Guide",
+    sourceName: "Wiki", label: null, path: "/s/token", status: "active",
+    createdAt: new Date(), expiresAt: new Date(Date.now() + 86400000),
+    revokedAt: null, totalViews: 0, lastViewedAt: null,
+  };
+  vi.stubGlobal("fetch", async () => Response.json({
+    counts: [{ documentId: "doc", unreadCount: 2, latestThreadId: "thread" }],
+  }));
+  const host = document.createElement("div"); document.body.append(host);
+  const root = createRoot(host);
+  const prevent = (event: MouseEvent) => event.preventDefault();
+  document.addEventListener("click", prevent);
+  try {
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={{
+      items: [item], query: { q: "", status: "active", page: 1 }, hasNext: false,
+    }} />));
+    const cancelled = vi.fn();
+    host.querySelector("form")!.addEventListener("kh:live-search-cancel", cancelled);
+    const documentLink = host.querySelector<HTMLAnchorElement>('a[href*="includeArchived=true"]')!;
+    const unreadLink = host.querySelector<HTMLAnchorElement>('a[aria-label="Open 2 unread comments for Guide"]')!;
+    expect(documentLink).not.toBeNull();
+    expect(unreadLink).not.toBeNull();
+    await act(async () => {
+      documentLink.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+      unreadLink.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+    });
+    expect(cancelled).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      documentLink.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, metaKey: true, button: 0 }));
+    });
+    expect(cancelled).toHaveBeenCalledTimes(2);
+  } finally {
+    document.removeEventListener("click", prevent);
+    await act(async () => root.unmount());
+    host.remove();
+  }
+
+  // The empty-state Browse documents link also leaves this route.
+  const empty = document.createElement("div"); document.body.append(empty);
+  const emptyRoot = createRoot(empty);
+  try {
+    await act(async () => emptyRoot.render(<ShareManagementView workspaceId="ws" model={{
+      items: [], query: { q: "", status: "active", page: 1 }, hasNext: false,
+    }} />));
+    const cancelled = vi.fn();
+    empty.querySelector("form")!.addEventListener("kh:live-search-cancel", cancelled);
+    const browse = [...empty.querySelectorAll("a")].find(a => a.textContent === "Browse documents")!;
+    await act(async () => { browse.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 })); });
+    expect(cancelled).toHaveBeenCalledOnce();
+  } finally {
+    await act(async () => emptyRoot.unmount());
+    empty.remove();
+  }
+});

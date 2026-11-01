@@ -102,3 +102,22 @@ it("keeps saved pagination synchronized with the committed query", async () => {
  expect(next.getAttribute("href")).toContain("q=guide");
  document.removeEventListener("click",prevent);
 });
+
+
+it("cancels a queued search before opening a saved article, but not a modified click", async () => {
+  await mount();
+  const form = host.querySelector("form")!;
+  const cancelled = vi.fn();
+  form.addEventListener("kh:live-search-cancel", cancelled);
+  const link = host.querySelector<HTMLAnchorElement>('a[href="/s/live-token"]')!;
+  const prevent = (event: MouseEvent) => event.preventDefault();
+  document.addEventListener("click", prevent);
+  try {
+    await act(async () => { link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 })); });
+    expect(cancelled).toHaveBeenCalledOnce();
+    await act(async () => { link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, metaKey: true, button: 0 })); });
+    expect(cancelled).toHaveBeenCalledOnce();
+  } finally {
+    document.removeEventListener("click", prevent);
+  }
+});
