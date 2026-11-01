@@ -141,8 +141,7 @@ export class DocumentReviewService {
     return readable;
   }
 
-  private async readableUnreadEvents(r: KnowledgeRepositories, caller: CallerContext, access: RequestAccess): Promise<ShareCommentNotificationView[]> {
-    const allowedTeams = await this.readableTeamWorkspaceIds(r, caller, access);
+  private async readableUnreadEvents(r: KnowledgeRepositories, caller: CallerContext, access: RequestAccess, allowedTeams: readonly string[]): Promise<ShareCommentNotificationView[]> {
     const rows = await r.shareCommentEvents.listUnreadByRecipient(caller.identity.id, undefined, FOLLOW_LIMIT, allowedTeams);
     return this.notificationViews(r, rows, caller, access, false);
   }
@@ -151,11 +150,12 @@ export class DocumentReviewService {
   async listUnreadForOwner(caller: CallerContext) {
     return this.uow.run(async r => {
       const access = this.requestAccess(r, caller);
+      const allowedTeams = await this.readableTeamWorkspaceIds(r, caller, access);
       return {
         notifications: newestFirst([
-          ...await this.readableUnreadEvents(r, caller, access),
+          ...await this.readableUnreadEvents(r, caller, access, allowedTeams),
           ...(await this.followViews(r, caller.identity.id)).filter(view => view.readAt === null),
-          ...(await this.mentionViews(r, await this.unreadMentions(r, caller, access), caller, access))
+          ...(await this.mentionViews(r, await this.unreadMentions(r, caller, access, allowedTeams), caller, access))
             .filter(view => view.readAt === null && (view.access?.kind !== "TEAM" || view.access.available)),
         ]),
       };
@@ -165,6 +165,7 @@ export class DocumentReviewService {
   async countUnreadForOwner(caller: CallerContext): Promise<{ count: number }> {
     return this.uow.run(async r => {
       const access = this.requestAccess(r, caller);
+      const allowedTeams = await this.readableTeamWorkspaceIds(r, caller, access);
       const rows = await r.shareCommentEvents.listUnreadCountsByRecipient(caller.identity.id);
       // A team row counts only while the caller still holds document.read; personal rows always do.
       let owner = 0;
@@ -172,7 +173,7 @@ export class DocumentReviewService {
         if (row.recipientUserId === null || await access.readable(row.documentId)) owner += row.unreadCount;
       }
       const follows = (await this.followedThreads(r, caller.identity.id)).filter(({ summary }) => !("unavailable" in summary) && !!summary.latestReply && summary.unread > 0).length;
-      const mentions = (await this.judgedMentions(r, await this.unreadMentions(r, caller, access), caller, access)).filter(judged => "comment" in judged).length;
+      const mentions = (await this.judgedMentions(r, await this.unreadMentions(r, caller, access, allowedTeams), caller, access)).filter(judged => "comment" in judged).length;
       return { count: owner + follows + mentions };
     });
   }
@@ -534,11 +535,13 @@ export class DocumentReviewService {
    * hide an older live mention. ponytail: a thread the owner hides then restores, or a document moved out of a shared folder
    * and back, loses its unread mark.
    */
-  private async unreadMentions(r: KnowledgeRepositories, caller: CallerContext, access?: RequestAccess) {
+  private async unreadMentions(r: KnowledgeRepositories, caller: CallerContext, access: RequestAccess, allowedTeams: readonly string[]) {
     const visible: ReviewMention[] = [];
     let before: { createdAt: Date; commentId: string } | undefined;
     while (visible.length < FOLLOW_LIMIT) {
-      const unread = await r.reviewMentions.listUnreadByRecipient(caller.identity.id, FOLLOW_LIMIT, before);
+      // Remove revoked/inactive Team mentions in SQL before LIMIT. Their unread
+      // rows remain untouched for when the caller regains access.
+      const unread = await r.reviewMentions.listUnreadByRecipient(caller.identity.id, FOLLOW_LIMIT, before, allowedTeams);
       if (unread.length === 0) break;
       // A revoked Team mention must remain unread for re-grant, but must not
       // occupy the whole window and hide older, accessible personal mentions.
