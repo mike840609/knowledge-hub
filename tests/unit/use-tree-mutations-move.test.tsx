@@ -65,6 +65,32 @@ const input: MoveNodeInput = {
   to: { parentId: "f1", label: "F" },
 };
 
+describe("source-scoped arrangement writes", () => {
+  it("does not send another PATCH for one source while a prior move is unresolved", async () => {
+    let finishFirst!: () => void;
+    request.mockImplementationOnce(() => new Promise<void>((resolve) => { finishFirst = resolve; }));
+    const first = move({ ...input, sourceId: "s1" });
+    expect(request).toHaveBeenCalledTimes(1);
+    const second = await move({ ...input, sourceId: "s1", nodeId: "n2" });
+    expect(second.ok).toBe(false);
+    expect(request).toHaveBeenCalledTimes(1);
+    await act(async () => { finishFirst(); await first; });
+    const third = await move({ ...input, sourceId: "s1", nodeId: "n3" });
+    expect(third.ok).toBe(true);
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("allows independent source writes while another source has a pending PATCH", async () => {
+    let finishFirst!: () => void;
+    request.mockImplementationOnce(() => new Promise<void>((resolve) => { finishFirst = resolve; }));
+    const first = move({ ...input, sourceId: "s1" });
+    const second = await move({ ...input, sourceId: "s2", nodeId: "n2" });
+    expect(second.ok).toBe(true);
+    expect(request).toHaveBeenCalledTimes(2);
+    await act(async () => { finishFirst(); await first; });
+  });
+});
+
 describe("the move request", () => {
   it("sends the destination position when there is one, and omits it when there is not", async () => {
     await move({ ...input, to: { parentId: "f1", label: "F", position: 2 } });
