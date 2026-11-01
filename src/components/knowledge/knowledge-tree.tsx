@@ -371,7 +371,7 @@ export function KnowledgeTree({
   const [announcement, setAnnouncement] = useState({ text: "", sequence: 0 });
   const announce = (text: string) => setAnnouncement((previous) => ({ text, sequence: previous.sequence + 1 }));
   const drag = useTreeDrag({
-    items, filtering, isKeyboardBusy: () => reordering.current, onDragStarted: () => { reorderOperation.current++; },
+    items, includeArchived, filtering, isKeyboardBusy: () => reordering.current, onDragStarted: () => { reorderOperation.current++; },
     canMove: (id) => { const item = itemById.get(id); if (isSourceArrangementPending() || !item || item.status === "ARCHIVED") return false; return (item.type === "document" ? documentActions(item) : folderActions(item)).some((action) => action.id === "document.move" || action.id === "folder.move"); },
     isCollapsed: (id) => effectiveCollapsed.has(id), onReorder, onMove,
     onPlaced: (id, parentId, refreshed) => {
@@ -396,7 +396,7 @@ export function KnowledgeTree({
     // snapshot arriving after this mutation requested its own refresh may
     // confirm a clamped position or flush a queued keyboard step.
     const confirmedSnapshot = authoritativeTree.current
-      ? matchesCommittedTreeView(items, authoritativeTree.current)
+      ? matchesCommittedTreeView(items, authoritativeTree.current, includeArchived)
       : refreshRequested.current
         ? items !== itemsAtRefreshRequest.current
         : items !== itemsAtReorderStart.current; // legacy callback-free callers
