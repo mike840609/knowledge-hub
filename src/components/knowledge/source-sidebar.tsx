@@ -394,8 +394,9 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                     } satisfies FolderTarget,
                   })}
                   onRunAction={runAction}
-                  onReorder={async (input) => (await mutations.reorderNode(input)).ok}
-                  onMove={async (input) => (await mutations.moveNode(input, "toast")).ok}
+                  isSourceArrangementPending={() => mutations.isSourceArrangementPending(candidate.id)}
+                  onReorder={async (input) => (await mutations.reorderNode({ ...input, sourceId: candidate.id })).ok}
+                  onMove={async (input) => (await mutations.moveNode({ ...input, sourceId: candidate.id }, "toast")).ok}
                 /> : null}
               </div>
             </section>
