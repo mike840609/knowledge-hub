@@ -505,4 +505,64 @@ describe("tree dragging", () => {
     expect(positionReads).toBe(reads);
   });
 
+  it("does not treat a pre-PATCH unrelated tree refresh as the keyboard reorder response", async () => {
+    let finishFirst!: (ok: boolean) => void;
+    const onReorder = vi.fn((_input: { nodeId: string; position: number }, onRefreshRequested?: () => void) =>
+      new Promise<boolean>((resolve) => { finishFirst = (ok) => { if (ok) onRefreshRequested?.(); resolve(ok); }; }));
+    const { rerender } = render({ onReorder });
+    act(() => {
+      rowFor("B").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true, cancelable: true }));
+      rowFor("B").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", altKey: true, bubbles: true, cancelable: true }));
+    });
+    // Unrelated refresh, before the write's own router.refresh().
+    rerender({ items: items.map((item) => ({ ...item })) });
+    await act(async () => { finishFirst(true); });
+    expect(onReorder).toHaveBeenCalledTimes(1);
+    expect(said()).not.toContain("The tree changed while sorting");
+    rerender({ items: [doc("A", 0), doc("C", 1), doc("B", 2)] });
+    expect(onReorder).toHaveBeenCalledTimes(2);
+    expect(onReorder).toHaveBeenLastCalledWith({ nodeId: "n:B", position: 1 }, expect.any(Function));
+  });
+
+  it("releases a successful pointer drop after the server clamps its position", async () => {
+    let finish!: (ok: boolean) => void;
+    const onReorder = vi.fn((_input: { nodeId: string; position: number }, onRefreshRequested?: () => void) =>
+      new Promise<boolean>((resolve) => { finish = (ok) => { if (ok) onRefreshRequested?.(); resolve(ok); }; }));
+    const { rerender } = render({ onReorder, items: [doc("A", 0), doc("B", 1)] });
+    const target = rowFor("B");
+    target.getBoundingClientRect = () => ({ top: 0, bottom: 20, height: 20, left: 0, right: 100, width: 100, x: 0, y: 0, toJSON: () => ({}) });
+    const fire = (element: HTMLElement, name: string, y = 19) => {
+      const event = new Event(name, { bubbles: true, cancelable: true });
+      Object.defineProperties(event, { dataTransfer: { value: { effectAllowed: "", setData: vi.fn() } }, clientY: { value: y } });
+      element.dispatchEvent(event);
+      return event;
+    };
+    act(() => { fire(rowFor("A"), "dragstart"); fire(target, "drop"); });
+    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:A", position: 1 }, expect.any(Function));
+    // B was removed in another tab, so the successful PATCH clamps A back to zero.
+    await act(async () => { finish(true); });
+    rerender({ items: [doc("A", 0)] });
+    let next: Event | undefined;
+    act(() => { next = fire(rowFor("A"), "dragstart"); });
+    expect(next?.defaultPrevented).toBe(false);
+  });
+
+  it("does not scan each tree item again on repeated dragovers in the same zone", () => {
+    let idReads = 0;
+    const tracked = doc("B", 1);
+    Object.defineProperty(tracked, "id", { configurable: true, enumerable: true, get() { idReads++; return "n:B"; } });
+    render({ items: [doc("A", 0), tracked, doc("C", 2)] });
+    const target = rowFor("B");
+    target.getBoundingClientRect = () => ({ top: 0, bottom: 20, height: 20, left: 0, right: 100, width: 100, x: 0, y: 0, toJSON: () => ({}) });
+    const fire = (element: HTMLElement, type: string) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperties(event, { dataTransfer: { value: { effectAllowed: "", dropEffect: "", setData: vi.fn() } }, clientY: { value: 1 } });
+      element.dispatchEvent(event);
+    };
+    act(() => { fire(rowFor("A"), "dragstart"); fire(target, "dragover"); });
+    const reads = idReads;
+    act(() => { for (let i = 0; i < 12; i++) fire(target, "dragover"); });
+    expect(idReads).toBe(reads);
+  });
+
 });
