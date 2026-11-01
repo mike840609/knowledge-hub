@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { refreshOnArrival, refreshOnArrivalElsewhere } from "@/components/shell/refresh-on-arrival";
 import { useToast } from "@/components/ui/toast";
@@ -16,6 +16,12 @@ import {
   restoredDocument,
   restoredFolder,
 } from "./organize-messages";
+
+// A source's PATCH must outlive the Sidebar/Tree that started it: filtering,
+ // route navigation or a responsive drawer may unmount either client component.
+ // The lease is per browser module instance and is released by the pending
+ // request's finally block even when its initiating component is gone.
+const sourceArrangements = new Set<string>();
 
 export type OrganizeResult = { ok: true } | { ok: false; message: string };
 
@@ -70,7 +76,6 @@ export function useTreeMutations(): TreeMutations {
   const pathname = usePathname();
   const params = useParams<{ workspaceId?: string }>();
   const workspaceId = params?.workspaceId ?? "";
-  const sourceArrangements = useRef(new Set<string>());
 
   const refresh = useCallback(() => router.refresh(), [router]);
 
@@ -141,14 +146,14 @@ export function useTreeMutations(): TreeMutations {
     // lease here, shared by pointer moves and keyboard reorders of one source.
     async function serializeArrangement(sourceId: string | undefined, write: () => Promise<OrganizeResult>): Promise<OrganizeResult> {
       const key = sourceId ? `${workspaceId}:${sourceId}` : null;
-      if (key && sourceArrangements.current.has(key)) return { ok: false, message: "A tree change is still in progress." };
-      if (key) sourceArrangements.current.add(key);
+      if (key && sourceArrangements.has(key)) return { ok: false, message: "A tree change is still in progress." };
+      if (key) sourceArrangements.add(key);
       try { return await write(); }
-      finally { if (key) sourceArrangements.current.delete(key); }
+      finally { if (key) sourceArrangements.delete(key); }
     }
 
     return {
-      isSourceArrangementPending: (sourceId) => sourceArrangements.current.has(`${workspaceId}:${sourceId}`),
+      isSourceArrangementPending: (sourceId) => sourceArrangements.has(`${workspaceId}:${sourceId}`),
       async moveNode({ sourceId, nodeId, label, from, to }, report = "dialog") {
         return serializeArrangement(sourceId, async () => {
         try {
