@@ -230,3 +230,49 @@ it("cancels a queued search when opening the document, unread discussion, or bro
     empty.remove();
   }
 });
+
+
+it("ignores an older unread-count response after a newer notification refresh", async () => {
+  const responses: Array<{ resolve: (response: Response) => void; reject: (error: Error) => void }> = [];
+  vi.stubGlobal("fetch", () => new Promise<Response>((resolve, reject) => {
+    responses.push({ resolve, reject });
+  }));
+  const item: ManagedShareLink = {
+    id: "link", documentId: "doc", sourceId: "source", title: "Guide",
+    sourceName: "Wiki", label: null, path: "/s/token", status: "active",
+    createdAt: new Date(), expiresAt: new Date(Date.now() + 86_400_000),
+    revokedAt: null, totalViews: 0, lastViewedAt: null,
+  };
+  const host = document.createElement("div"); document.body.append(host);
+  const root = createRoot(host);
+  try {
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={{
+      items: [item], query: { q: "", status: "active", page: 1 }, hasNext: false,
+    }} />));
+    expect(responses).toHaveLength(1);
+    await act(async () => { window.dispatchEvent(new Event("kh:notification-changed")); });
+    expect(responses).toHaveLength(2);
+
+    // The latest refresh finishes first; its badge should survive older replies.
+    await act(async () => responses[1].resolve(Response.json({
+      counts: [{ documentId: "doc", unreadCount: 2, latestThreadId: "thread-2" }],
+    })));
+    expect(host.querySelector('a[aria-label="Open 2 unread comments for Guide"]')).not.toBeNull();
+
+    await act(async () => responses[0].resolve(Response.json({ counts: [] })));
+    expect(host.querySelector('a[aria-label="Open 2 unread comments for Guide"]')).not.toBeNull();
+
+    // A stale failure must not erase a subsequent successful refresh either.
+    await act(async () => { window.dispatchEvent(new Event("focus")); });
+    await act(async () => { window.dispatchEvent(new Event("kh:notification-changed")); });
+    expect(responses).toHaveLength(4);
+    await act(async () => responses[3].resolve(Response.json({
+      counts: [{ documentId: "doc", unreadCount: 3, latestThreadId: "thread-3" }],
+    })));
+    await act(async () => responses[2].reject(new Error("stale network failure")));
+    expect(host.querySelector('a[aria-label="Open 3 unread comments for Guide"]')).not.toBeNull();
+  } finally {
+    await act(async () => root.unmount());
+    host.remove();
+  }
+});

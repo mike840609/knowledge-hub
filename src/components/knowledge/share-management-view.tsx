@@ -91,13 +91,17 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
   // not the truncated/full-body notification preview used by the global Inbox.
   useEffect(() => {
     let mounted = true;
+    let latestRequest = 0;
     const refreshCounts = async () => {
+      // Focus and notification refreshes can overlap. Only the newest result
+      // (including an error) may update the unread badges.
+      const request = ++latestRequest;
       try {
         const result = await reviewRequest<{ counts: UnreadShareCount[] }>("/api/review-notifications/share-counts");
-        if (mounted) setUnreadCounts(result.counts);
+        if (mounted && request === latestRequest) setUnreadCounts(result.counts);
       } catch {
         // Shares remains usable if notification counts are temporarily unavailable.
-        if (mounted) setUnreadCounts([]);
+        if (mounted && request === latestRequest) setUnreadCounts([]);
       }
     };
     void refreshCounts();
