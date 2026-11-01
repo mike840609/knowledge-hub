@@ -31,6 +31,20 @@ export function useTreeDrag(input: Input) {
   };
   const dragging = useRef<string | null>(null);
   const destinations = useRef<ReadonlySet<string>>(new Set());
+  // Pointer events can fire dozens of times in one target zone. The sibling
+  // sort is only needed when its inputs change, not on every mouse movement.
+  const placementCache = useRef<{
+    items: KnowledgeTreeItem[]; draggedId: string; targetId: string; zone: DropZone;
+    destinations: ReadonlySet<string>; result: ReturnType<typeof dropPlacement>;
+  } | null>(null);
+  const placementFor = (draggedId: string, targetId: string, zone: DropZone) => {
+    const cached = placementCache.current;
+    if (cached && cached.items === input.items && cached.draggedId === draggedId
+      && cached.targetId === targetId && cached.zone === zone && cached.destinations === destinations.current) return cached.result;
+    const result = dropPlacement(input.items, draggedId, targetId, zone, destinations.current);
+    placementCache.current = { items: input.items, draggedId, targetId, zone, destinations: destinations.current, result };
+    return result;
+  };
   const busy = useRef(false);
   const operation = useRef(0);
   const expected = useRef<{ id: string; parentId: string | null; position: number | undefined; oldParent: string | null; oldPosition: number } | null>(null);
@@ -44,7 +58,7 @@ export function useTreeDrag(input: Input) {
   const expandFor = useRef<string | null>(null);
   const clearExpand = () => { window.clearTimeout(expandTimer.current); expandFor.current = null; };
   const cleanup = () => {
-    dragging.current = null; pointerY.current = null; setDraggingId(null); updateIndicator(null);
+    dragging.current = null; placementCache.current = null; pointerY.current = null; setDraggingId(null); updateIndicator(null);
     window.cancelAnimationFrame(frame.current ?? 0); clearExpand();
   };
   useEffect(() => {
@@ -101,6 +115,7 @@ export function useTreeDrag(input: Input) {
       event.stopPropagation(); event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("application/x-kh-tree-node", nodeId);
       destinations.current = new Set(moveDestinations(input.items, nodeId).map((destination) => destination.id));
+      placementCache.current = null;
       dragging.current = nodeId; setDraggingId(nodeId); frame.current = window.requestAnimationFrame(scroll);
     },
     onDragOver: (event: DragEvent<HTMLElement>) => {
@@ -110,7 +125,7 @@ export function useTreeDrag(input: Input) {
       const item = input.items.find((entry) => entry.id === nodeId);
       if (!item) return;
       const zone = zoneFor(event, item);
-      if (!dropPlacement(input.items, dragging.current, nodeId, zone, destinations.current)) {
+      if (!placementFor(dragging.current, nodeId, zone)) {
         event.dataTransfer.dropEffect = "none"; updateIndicator(null); clearExpand(); return;
       }
       event.preventDefault(); event.dataTransfer.dropEffect = "move";
@@ -140,7 +155,7 @@ export function useTreeDrag(input: Input) {
       const target = input.items.find((entry) => entry.id === nodeId);
       if (!source || !target) { cleanup(); return; }
       const zone = zoneFor(event, target);
-      const placement = dropPlacement(input.items, source.id, target.id, zone, destinations.current);
+      const placement = placementFor(source.id, target.id, zone);
       if (!placement) { cleanup(); return; }
       // Stored positions include hidden archived siblings. Equal numeric positions prove this is a no-op;
       // visible order alone cannot prove an append is unchanged.
