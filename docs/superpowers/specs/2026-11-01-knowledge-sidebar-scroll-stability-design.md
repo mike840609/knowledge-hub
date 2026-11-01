@@ -1,71 +1,66 @@
-# Stable Knowledge sidebar navigation
+# Recent documents as an on-demand menu
 
-## Intent and scope
+## Intent and decision
 
-The user reports that the left document tree jumps vertically while browsing
-articles with Favorites expanded. They selected approach A below and requested
-the fix. This short design is pending their approval before implementation.
-
-Opening a document through Favorites or Recent should change the article and
-selection indicators while preserving the reader's position in the explorer.
-Keep the existing sidebar arrangement and shared scroll container. Do not
-redesign Favorites, move Recent, or change article-pane scrolling.
-
-## Evidence
-
-`SourceSidebar` renders shortcuts and source trees inside the same scrolling
-`nav`. `KnowledgeTree` expands ancestors when the selected document changes
-and adjusts that nav's `scrollTop` to reveal its selected row. Its positioning
-effect also depends on tree data, readiness, and a layout key containing shortcut
-counts. These are plausible causes of the reported movement; browser reproduction
-is still required before claiming the cause is verified.
+The user clarified that the problem is items changing position inside Recent,
+not Favorites or the article pane. They selected moving Recent out of the
+permanent sidebar list into a clock-button menu on 2026-11-01. This replaces the
+previous design about navigation intent and tree positioning. This short written
+design is pending approval before implementation.
 
 ## Approaches
 
-- **A — navigation intent controls positioning (selected):** shortcut navigation
-  preserves position and expansion; explicit reveal locates the article in the
-  tree. This directly addresses unwanted movement without changing layout.
-- **B — separate shortcut and tree scrollers (not selected):** keeps Favorites
-  visible but still allows the tree to jump and divides the available height.
+- **Clock-button menu (selected):** remove the inline Recent section, open history
+  on demand, and close it when an article is chosen. This removes the shifting
+  list from everyday browsing and gives the document tree more room.
+- **Keep an inline list with stable order while expanded:** reduces movement but
+  adds deferred-refresh behavior to a section the user prefers to remove.
+- **Keep live ordering and include the current article:** prevents disappearance
+  of that article but still shifts other rows, so it does not solve the complaint.
 
-## Behavior
+## User-visible behavior
 
-- Opening Favorites or Recent, including their Show all menus, must not
-  automatically expand sources/folders or scroll the explorer to the selected
-  tree row. Selection highlighting still updates wherever the row is visible.
-- Clicking a tree document preserves the browsing position. Keyboard navigation
-  retains the minimum scrolling needed to keep the focused row visible.
-- Shortcut synchronization, Recent count changes, and tree-data refreshes do not
-  independently request selection positioning. A delayed load must not override
-  the shortcut-navigation intent.
-- Provide an accessible **Show in document tree** action for the current article
-  in the explorer's existing Documents options menu (proposed placement). It
-  opens the target source and ancestor folders, waits for required tree data,
-  and minimally scrolls the target into view. It works repeatedly for the same
-  article and does not move the article pane.
-- Preserve intentional positioning for direct entry and search navigation;
-  scope shortcut intent to its actual destination so it cannot leak to later
-  unrelated navigation. Modified clicks opening another tab retain normal link
-  behavior and do not change the current tab's navigation intent.
-- Preserve existing manual expansion/collapse, document filtering, and movement
-  behavior. If layout shrinkage makes the old scroll offset impossible, normal
-  browser clamping is acceptable; forced reveal of a distant row is not.
+- Favorites and source/document trees remain in the sidebar. Recent no longer
+  occupies a section there and has no separate Show all row.
+- Add a clock button labeled **Recent documents** to the Documents header toolbar,
+  before the filter control. Use the existing icon-button, tooltip, and menu
+  primitives so it works with pointer, keyboard, and touch.
+- Opening the menu shows the latest available recent documents, newest first,
+  with document icons/titles and source names. Show all eligible entries from
+  the existing history (up to eight recorded documents), without a second menu.
+- Choosing an article navigates to it and closes the menu. Reopening shows the
+  updated history. Do not continuously reorder an open, populated menu under the
+  pointer; async loading must still be able to finish and inaccessible entries
+  must not remain actionable.
+- Keep the clock button discoverable when history is empty; show **No recent
+  documents** in the menu. Distinguish loading and failed metadata lookup from
+  a genuinely empty history, using existing retry behavior where appropriate.
+- Preserve current eligibility rules (workspace/access/archive visibility and
+  exclusion of favorites and the currently open article), link semantics, and
+  the existing read-only descriptions and indicators.
 
-## Constraints and implementation discretion
+## Scope and constraints
 
-Use the existing React navigation, persisted expansion state, menus, and tree
-loading. No API, database, dependency, or sidebar width changes are needed.
-The builder may choose the internal representation of navigation/reveal intent;
-do not use arbitrary timeouts, smooth scrolling, or a blanket ban on keyboard
-and explicitly requested positioning to hide the symptom.
+Continue recording history and use the existing shortcut metadata, links, and
+shared menu components. No API, database, dependency, history-limit, or sidebar
+width changes. Remove obsolete inline Recent expansion/readiness state and its
+count from the tree reveal layout key because it no longer changes tree layout.
+The old persisted Recent expansion preference can remain unused in storage.
 
-## Verification
+Do not add Show in document tree, split the sidebar into separate scrollers,
+freeze the permanent history order, or redesign the tree's general positioning
+behavior. Do not change Favorites or article-pane scrolling.
 
-Reproduce with expanded Favorites and a tree long enough for target rows to be
-offscreen. Cover successive favorite opens, Recent and Show all, collapsed
-ancestors, cross-source navigation, delayed tree/shortcut loading, and passive
-updates. Assert stable explorer offset and expansion where the original offset
-remains valid, with the article and selection updating correctly. Check explicit
-reveal, repeated reveal, direct/search entry, and keyboard navigation still work.
-Use focused behavioral regression tests and browser geometry checks; report any
-environment limitation rather than claiming an unperformed browser verification.
+## Verification and implementation discretion
+
+Replace the test for four inline recents plus Show all with behavioral checks:
+no inline Recent list; clock opens eligible recent links; selection closes the
+menu; reopening reflects updated history; open-menu ordering stays stable; and
+empty/loading/error behavior remains distinguishable. Check keyboard activation,
+Escape dismissal, source/read-only cues, and existing Favorites behavior.
+
+Verify in a browser that successive article visits no longer produce an inline
+Recent list whose rows change position, and that the header/menu fit the existing
+sidebar and drawer. Report any unavailable browser verification honestly.
+Internal component/state structure and exact popup sizing are implementation
+choices within the existing design system.
