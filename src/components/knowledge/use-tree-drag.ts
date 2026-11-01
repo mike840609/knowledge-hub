@@ -5,13 +5,14 @@ import { dropPlacement, moveDestinations, type DropZone } from "@/lib/knowledge-
 import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledge-query-service";
 import { CLEAR_FILTER_TO_REORDER, placedNode } from "./organize-messages";
 import type { MoveNodeInput } from "./use-tree-mutations";
+import { matchesCommittedTreeView } from "./source-tree-cache";
 
 export type TreeDragIndicator = { kind: "line"; top: number; left: number; width: number } | { kind: "into"; nodeId: string } | null;
 
 type Input = {
   items: KnowledgeTreeItem[]; filtering: boolean; canMove: (id: string) => boolean; isKeyboardBusy: () => boolean; onDragStarted: () => void;
-  isCollapsed: (id: string) => boolean; onReorder: (input: { nodeId: string; position: number }, onRefreshRequested?: () => void) => Promise<boolean>;
-  onMove: (input: Omit<MoveNodeInput, "sourceId">, onRefreshRequested?: () => void) => Promise<boolean>; onPlaced: (id: string, parentId: string | null, refreshed: boolean) => void;
+  isCollapsed: (id: string) => boolean; onReorder: (input: { nodeId: string; position: number }, onRefreshRequested?: (tree?: KnowledgeTreeItem[]) => void) => Promise<boolean>;
+  onMove: (input: Omit<MoveNodeInput, "sourceId">, onRefreshRequested?: (tree?: KnowledgeTreeItem[]) => void) => Promise<boolean>; onPlaced: (id: string, parentId: string | null, refreshed: boolean) => void;
   onRefreshed: (id: string) => void;
   announce: (text: string) => void; expandFolder: (id: string) => void; treeRef: RefObject<HTMLUListElement | null>;
 };
@@ -54,6 +55,7 @@ export function useTreeDrag(input: Input) {
   const expected = useRef<{ id: string; parentId: string | null; position: number | undefined; oldParent: string | null; oldPosition: number } | null>(null);
   const itemsAtDrop = useRef(input.items);
   const refreshRequested = useRef(false);
+  const authoritativeTree = useRef<KnowledgeTreeItem[] | null>(null);
   const itemsAtRefreshRequest = useRef(input.items);
   const refreshMismatch = useRef(false);
   const awaitingResponse = useRef(false);
@@ -80,7 +82,10 @@ export function useTreeDrag(input: Input) {
     const mutationSnapshot = refreshRequested.current;
     // Never settle a drop from a snapshot that preceded the write's own
     // refresh; an unrelated router refresh may otherwise falsely unlock it.
-    if (input.items === (mutationSnapshot ? itemsAtRefreshRequest.current : itemsAtDrop.current)) return;
+    const confirmed = authoritativeTree.current
+      ? matchesCommittedTreeView(input.items, authoritativeTree.current)
+      : input.items !== (mutationSnapshot ? itemsAtRefreshRequest.current : itemsAtDrop.current);
+    if (!confirmed) return;
     const row = itemById.get(wanted.id);
     const changed = row && wanted && (row.parentId !== wanted.oldParent || row.position !== wanted.oldPosition);
     const appended = wanted?.position === undefined || wanted.position === Number.MAX_SAFE_INTEGER;
@@ -180,8 +185,10 @@ export function useTreeDrag(input: Input) {
       }
       busy.current = true; awaitingResponse.current = true; refreshed.current = false;
       refreshMismatch.current = false; refreshRequested.current = false;
+      authoritativeTree.current = null;
       itemsAtDrop.current = input.items;
-      const onRefreshRequested = () => {
+      const onRefreshRequested = (tree?: KnowledgeTreeItem[]) => {
+        authoritativeTree.current = tree ?? null;
         refreshRequested.current = true;
         itemsAtRefreshRequest.current = latestItems.current;
         refreshed.current = false; // discard unrelated pre-commit snapshots
