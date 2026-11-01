@@ -118,23 +118,33 @@ export class DocumentReviewService {
     return views;
   }
   /**
-   * The unread SQL window may be full of Team events whose access was revoked.
-   * Keep those unread for a future re-grant, but page past them so they cannot
-   * hide older personal or accessible Team notifications.
+   * Only the caller's current direct/group Team grants may enter the unread SQL
+   * head window. Otherwise 100k revoked Team events could trigger 1k sequential
+   * pages before a single older personal notification is considered.
+   * The returned IDs are a query optimization, never authorization by themselves:
+   * notificationViews rejudges each document against the current caller.
    */
-  private async readableUnreadEvents(r: KnowledgeRepositories, caller: CallerContext, access: RequestAccess): Promise<ShareCommentNotificationView[]> {
-    const visible: ShareCommentNotificationView[] = [];
-    let before: { createdAt: Date; id: string } | undefined;
-    while (visible.length < FOLLOW_LIMIT) {
-      const rows = await r.shareCommentEvents.listUnreadByRecipient(caller.identity.id, before, FOLLOW_LIMIT);
-      if (rows.length === 0) break;
-      const views = await this.notificationViews(r, rows, caller, access, false);
-      visible.push(...views.slice(0, FOLLOW_LIMIT - visible.length));
-      if (rows.length < FOLLOW_LIMIT) break;
-      const last = rows[rows.length - 1];
-      before = { createdAt: last.createdAt, id: last.id };
+  private async readableTeamWorkspaceIds(r: KnowledgeRepositories, caller: CallerContext, access: RequestAccess): Promise<string[]> {
+    if (!this.teamsEnabled()) return [];
+    const direct = await r.workspaces.listForUser(caller.identity.id);
+    const groupMappings = caller.validatedExternalGroupIds.length
+      ? await r.groupMappings.listByExternalGroupIds(caller.validatedExternalGroupIds)
+      : [];
+    const candidates = new Set([
+      ...direct.filter(workspace => workspace.workspaceType === "TEAM" && workspace.lifecycleState === "ACTIVE").map(workspace => workspace.id),
+      ...groupMappings.map(mapping => mapping.workspaceId),
+    ]);
+    const readable: string[] = [];
+    for (const workspaceId of candidates) {
+      if ((await access.capabilityOf(workspaceId)).has("document.read")) readable.push(workspaceId);
     }
-    return visible;
+    return readable;
+  }
+
+  private async readableUnreadEvents(r: KnowledgeRepositories, caller: CallerContext, access: RequestAccess): Promise<ShareCommentNotificationView[]> {
+    const allowedTeams = await this.readableTeamWorkspaceIds(r, caller, access);
+    const rows = await r.shareCommentEvents.listUnreadByRecipient(caller.identity.id, undefined, FOLLOW_LIMIT, allowedTeams);
+    return this.notificationViews(r, rows, caller, access, false);
   }
 
   /** The caller's unread: comments on their documents or team documents, replies in discussions they follow, and comments naming them. */
