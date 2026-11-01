@@ -1,10 +1,11 @@
 import type { ManagedShareLink, ShareManagementQuery } from "@/modules/knowledge/domain/share-management";
 import { toLikePattern } from "@/modules/knowledge/domain/search-query";
-import { shareLinkPath } from "@/modules/knowledge/domain/document-share-link";
+import { evaluateShareLinkValidity, shareLinkPath } from "@/modules/knowledge/domain/document-share-link";
 import { IntegrityViolationError } from "@/modules/knowledge/domain/errors";
 import type { DocumentShareLink } from "@/modules/knowledge/domain/document-share-link";
 import type { DocumentShareLinkRepository, ShareLinkViewTotals } from "@/modules/knowledge/ports/document-share-link-repository";
 import type { DbRow, QueryConnection } from "./shared";
+import type { WorkspaceRole } from "@/modules/workspaces/domain/workspace-membership";
 import { affectedRows, asDate, asNullableDate, asNumber } from "./shared";
 
 function mapLink(row: DbRow): DocumentShareLink {
@@ -80,6 +81,43 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
       [documentId],
     );
     return rows.map(mapLink);
+  }
+
+  /** Resolve the follower's link and all public validity inputs in one query.
+   * LEFT JOIN preserves revoked/missing-scope records as unavailable links.
+   */
+  async findWithValidityByIds(linkIds: readonly string[], now: Date): Promise<Map<string, { link: DocumentShareLink; valid: boolean }>> {
+    const states = new Map<string, { link: DocumentShareLink; valid: boolean }>();
+    if (linkIds.length === 0) return states;
+    const ids = [...new Set(linkIds)];
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT l.*, d.status AS document_status, s.status AS source_status,
+              w.workspace_type, w.lifecycle_state AS workspace_status, w.personal_owner_user_id,
+              m.user_id AS membership_user_id, m.role AS membership_role
+       FROM document_share_links l
+       LEFT JOIN knowledge_documents d ON d.id = l.document_id
+       LEFT JOIN knowledge_sources s ON s.id = d.source_id
+       LEFT JOIN workspaces w ON w.id = s.workspace_id
+       LEFT JOIN workspace_memberships m ON m.workspace_id = w.id AND m.user_id = l.created_by
+       WHERE l.id IN (${ids.map(() => "?").join(",")})`,
+      ids,
+    );
+    for (const row of rows) {
+      const link = mapLink(row);
+      const valid = row.document_status != null && row.source_status != null && row.workspace_type === "PERSONAL"
+        && evaluateShareLinkValidity({
+          link,
+          documentStatus: String(row.document_status) as "ACTIVE" | "ARCHIVED",
+          sourceStatus: String(row.source_status) as "ACTIVE" | "ARCHIVED",
+          workspaceLifecycle: row.workspace_status == null ? null : String(row.workspace_status) as "ACTIVE" | "ARCHIVED",
+          workspaceOwnerUserId: row.personal_owner_user_id == null ? null : String(row.personal_owner_user_id),
+          creatorDirectRole: row.membership_user_id == null ? undefined
+            : row.membership_role == null ? null : String(row.membership_role) as WorkspaceRole,
+          now,
+        }).valid;
+      states.set(link.id, { link, valid });
+    }
+    return states;
   }
 
   async countActiveByDocument(documentId: string, now: Date): Promise<number> {

@@ -10,6 +10,8 @@ export interface DocumentShareLinkRepository {
   lockById(id: string): Promise<DocumentShareLink | null>;
   /** Newest first, including revoked and expired links. */
   listByDocument(documentId: string): Promise<DocumentShareLink[]>;
+  /** Resolve followed links with their status and grant in one bounded read. */
+  findWithValidityByIds(linkIds: readonly string[], now: Date): Promise<Map<string, { link: DocumentShareLink; valid: boolean }>>;
   countActiveByDocument(documentId: string, now: Date): Promise<number>;
   /** Only an unrevoked link is revoked; revocation is final (spec §5.4). */
   revoke(id: string, revokedBy: string, revokedAt: Date): Promise<void>;

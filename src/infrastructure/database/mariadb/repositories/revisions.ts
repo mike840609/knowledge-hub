@@ -101,6 +101,34 @@ export class MariaDbRevisionRepository implements RevisionRepository {
     return rows[0] ? mapRevision(rows[0]) : null;
   }
 
+  async findCurrentByIds(documentIds: readonly string[]): Promise<KnowledgeRevision[]> {
+    if (documentIds.length === 0) return [];
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT r.* FROM knowledge_revisions r
+       INNER JOIN knowledge_documents d ON d.current_revision_id = r.id AND r.document_id = d.id
+       WHERE d.id IN (${documentIds.map(() => "?").join(",")})`,
+      [...documentIds],
+    );
+    return rows.map(mapRevision);
+  }
+
+  /** Only the fields required to render followed-discussion titles. */
+  async findCurrentTitlesByIds(documentIds: readonly string[]): Promise<Map<string, string>> {
+    const titles = new Map<string, string>();
+    for (let start = 0; start < documentIds.length; start += REVISION_ID_CHUNK) {
+      const ids = documentIds.slice(start, start + REVISION_ID_CHUNK);
+      const rows = await this.connection.query<DbRow[]>(
+        `SELECT d.id AS document_id, r.title
+         FROM knowledge_documents d
+         INNER JOIN knowledge_revisions r ON r.id = d.current_revision_id AND r.document_id = d.id
+         WHERE d.id IN (${placeholders(ids.length)})`,
+        [...ids],
+      );
+      for (const row of rows) titles.set(String(row.document_id), String(row.title));
+    }
+    return titles;
+  }
+
   async findByRevisionNo(documentId: string, revisionNo: number): Promise<KnowledgeRevision | null> {
     const rows = await this.connection.query<DbRow[]>(
       "SELECT * FROM knowledge_revisions WHERE document_id = ? AND revision_no = ?",

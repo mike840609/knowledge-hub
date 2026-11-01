@@ -44,7 +44,7 @@ async function fixture() {
   const start = async () => { const thread = await service.createForLink(reader, { token, expectedRevisionId: created.revisionId, anchor, body: "Reader asks", idempotencyKey: randomUUID() }); time.tick(); return thread; };
   const ownerReply = async (threadId: string, body = "Owner answers") => { await service.replyForOwner(owner, { documentId: created.documentId, threadId, body, idempotencyKey: randomUUID() }); time.tick(); };
   const follows = async (caller = reader) => (await service.listUnreadForOwner(caller)).notifications.filter(n => n.kind === "FOLLOW");
-  return { uow, service, shares, link, token, anchor, owner, reader, other, ...created, time, start, ownerReply, follows };
+  return { uow, service, shares, workspaceId: workspace.id, link, token, anchor, owner, reader, other, ...created, time, start, ownerReply, follows };
 }
 
 describe("a shared-page reader follows the discussions they write in", () => {
@@ -236,19 +236,159 @@ describe("the Inbox badge counts a reader's followed discussions as the Inbox li
   it("counts an answered discussion until it is seen, and nothing for an unanswered one or a dead link", async () => {
     const f = await fixture();
     const badge = async () => (await f.service.countUnreadForOwner(f.reader)).count;
+    const sharesBadge = async () => f.service.countUnreadFollowedDiscussions(f.reader);
     const listed = async () => (await f.service.listUnreadForOwner(f.reader)).notifications.length;
     const thread = await f.start();
-    expect([await badge(), await listed()]).toEqual([0, 0]);
+    expect([await badge(), await listed(), await sharesBadge()]).toEqual([0, 0, 0]);
     await f.ownerReply(thread.id);
     await f.ownerReply(thread.id, "And more");
     // One entry per discussion, however many replies it holds.
-    expect([await badge(), await listed()]).toEqual([1, 1]);
+    expect([await badge(), await listed(), await sharesBadge()]).toEqual([1, 1, 1]);
     await f.service.markSeenForLink(f.reader, { token: f.token, threadId: thread.id });
     f.time.tick();
-    expect([await badge(), await listed()]).toEqual([0, 0]);
+    expect([await badge(), await listed(), await sharesBadge()]).toEqual([0, 0, 0]);
     await f.ownerReply(thread.id, "Later");
-    expect([await badge(), await listed()]).toEqual([1, 1]);
+    expect([await badge(), await listed(), await sharesBadge()]).toEqual([1, 1, 1]);
     await f.shares.revoke(f.owner, f.link.id);
-    expect([await badge(), await listed()]).toEqual([0, 0]);
+    expect([await badge(), await listed(), await sharesBadge()]).toEqual([0, 0, 0]);
+  });
+
+  it("does not count a thread hidden by its owner", async () => {
+    const f = await fixture();
+    const thread = await f.start();
+    await f.ownerReply(thread.id);
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(1);
+    await f.service.setVisibility(f.owner, { documentId: f.documentId, threadId: thread.id, visibility: "HIDDEN", reason: "moderated" });
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(0);
+    expect(await f.follows()).toEqual([]);
+  });
+
+
+  it("excludes expired links from both SQL and the followed discussion list", async () => {
+    const f = await fixture();
+    const thread = await f.start();
+    await f.ownerReply(thread.id);
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(1);
+    // Use the fixed fixture clock rather than wall-clock time.
+    await pool.query("UPDATE document_share_links SET expires_at = ? WHERE id = ?", [
+      new Date(f.time.clock().getTime() - 1000), f.link.id,
+    ]);
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(0);
+    expect((await f.service.listFollowedDiscussions(f.reader)).items)
+      .toEqual([{ threadId: thread.id, linkAvailable: false }]);
+  });
+
+  it("excludes a link when its creator no longer has direct workspace membership", async () => {
+    const f = await fixture();
+    const thread = await f.start();
+    await f.ownerReply(thread.id);
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(1);
+    await f.uow.run(r => r.workspaceMemberships.remove(f.workspaceId, f.owner.identity.id));
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(0);
+    expect((await f.service.listFollowedDiscussions(f.reader)).items)
+      .toEqual([{ threadId: thread.id, linkAvailable: false }]);
+  });
+
+  it("does not count an unread reply after its author retracts it", async () => {
+    const f = await fixture();
+    const thread = await f.start();
+    await f.ownerReply(thread.id);
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(1);
+    const comments = await f.uow.run(r => r.reviewComments.listByThread(thread.id));
+    const reply = comments.find(comment => comment.authorUserId === f.owner.identity.id)!;
+    await f.uow.run(r => r.reviewComments.markDeleted(reply.id, f.time.clock()));
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(0);
+    expect((await f.service.listFollowedDiscussions(f.reader)).items)
+      .toEqual([expect.objectContaining({ threadId: thread.id, linkAvailable: true, unread: 0 })]);
+  });
+
+  it("applies the same most-recent-100-follows limit to SQL and list projections", async () => {
+    const f = await fixture();
+    const oldest = await f.start();
+    await f.ownerReply(oldest.id);
+    // Seed 100 newer follows directly to bypass the write API's per-creator limit.
+    // The newest has no reply: counting all 101 would incorrectly yield 100, not 99.
+    await f.uow.run(async r => {
+      for (let index = 0; index < 100; index++) {
+        const threadId = uuidv7();
+        const createdAt = f.time.clock();
+        const requestHash = "a".repeat(64);
+        await r.reviewThreads.insert({
+          id: threadId, documentId: f.documentId, createdRevisionId: f.revisionId,
+          createdBy: f.reader.identity.id, creationIdempotencyKey: randomUUID(),
+          creationRequestHash: requestHash, originShareLinkId: f.link.id, anchor: f.anchor,
+          status: "OPEN", visibility: "VISIBLE", hiddenBy: null, hiddenAt: null,
+          hiddenReason: null, resolvedBy: null, resolvedAt: null, createdAt, updatedAt: createdAt,
+        });
+        await r.reviewComments.insert({
+          id: uuidv7(), threadId, authorUserId: f.reader.identity.id,
+          body: "Reader asks", visibility: "VISIBLE", hiddenBy: null, hiddenAt: null,
+          hiddenReason: null, createdAt, editedAt: null, deletedAt: null,
+          idempotencyKey: randomUUID(), requestHash,
+        });
+        await r.reviewFollows.follow({
+          threadId, userId: f.reader.identity.id, shareLinkId: f.link.id, at: createdAt,
+        });
+        f.time.tick();
+        if (index < 99) {
+          await r.reviewComments.insert({
+            id: uuidv7(), threadId, authorUserId: f.owner.identity.id,
+            body: "Owner answers", visibility: "VISIBLE", hiddenBy: null, hiddenAt: null,
+            hiddenReason: null, createdAt: f.time.clock(), editedAt: null, deletedAt: null,
+            idempotencyKey: randomUUID(), requestHash,
+          });
+        }
+        f.time.tick();
+      }
+    });
+
+    const latest = await f.uow.run(r => r.reviewFollows.listFollowing(f.reader.identity.id, 100));
+    expect(latest).toHaveLength(100);
+    expect(latest.some(follow => follow.threadId === oldest.id)).toBe(false);
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(99);
+    const discussions = (await f.service.listFollowedDiscussions(f.reader)).items;
+    expect(discussions).toHaveLength(100);
+    expect(discussions.filter(item => item.linkAvailable && item.unread > 0)).toHaveLength(99);
+    expect(discussions.some(item => item.threadId === oldest.id)).toBe(false);
+  });
+
+  it("counts multiple unread replies in one thread as one discussion", async () => {
+    const f = await fixture();
+    const first = await f.start();
+    const second = await f.start();
+    await f.ownerReply(first.id);
+    await f.ownerReply(first.id, "Second reply");
+    await f.ownerReply(second.id);
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(2);
+    expect((await f.service.listFollowedDiscussions(f.reader)).items.filter(row => row.linkAvailable && row.unread > 0)).toHaveLength(2);
+  });
+});
+
+describe("batched review lookups", () => {
+  it("reads several threads and current revisions in one call each", async () => {
+    const f = await fixture();
+    const first = await f.start();
+    const second = await f.start();
+    const missing = randomUUID();
+    const threads = await f.uow.run(r => r.reviewThreads.findByIds([first.id, second.id, missing]));
+    expect(threads.map(thread => thread.id).sort()).toEqual([first.id, second.id].sort());
+    const titles = await f.uow.run(r => r.revisions.findCurrentTitlesByIds([f.documentId, missing]));
+    expect([...titles]).toEqual([[f.documentId, "Review"]]);
+    const revisions = await f.uow.run(r => r.revisions.findCurrentByIds([f.documentId, missing]));
+    expect(revisions.map(revision => ({ id: revision.id, documentId: revision.documentId })))
+      .toEqual([{ id: f.revisionId, documentId: f.documentId }]);
+  });
+});
+
+describe("batched followed-share validity", () => {
+  it("keeps revoked links unavailable without disclosing their content", async () => {
+    const f = await fixture();
+    const ids = [f.link.id, randomUUID()];
+    const before = await f.uow.run(r => r.shareLinks.findWithValidityByIds(ids, f.time.clock()));
+    expect(before.get(f.link.id)?.valid).toBe(true);
+    expect(before.size).toBe(1);
+    await f.shares.revoke(f.owner, f.link.id);
+    const after = await f.uow.run(r => r.shareLinks.findWithValidityByIds(ids, f.time.clock()));
+    expect(after.get(f.link.id)?.valid).toBe(false);
   });
 });

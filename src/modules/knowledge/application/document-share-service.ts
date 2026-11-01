@@ -55,11 +55,20 @@ export class DocumentShareService {
     private readonly clock: () => Date = () => new Date(),
   ) {}
 
+  /** The personal-workspace owner check Shares needs, without listing a page of links. */
+  private async requireManagementIn(r: KnowledgeRepositories, caller: CallerContext, workspaceId: string): Promise<void> {
+    await r.workspaceAccess.requireWorkspaceRead(caller, workspaceId);
+    const workspace = await r.workspaces.findById(workspaceId);
+    if (!workspace || workspace.workspaceType !== "PERSONAL" || workspace.personalOwnerUserId !== caller.identity.id || workspace.lifecycleState !== "ACTIVE") throw new DocumentNotFoundError();
+  }
+
+  async requireManagement(caller: CallerContext, workspaceId: string): Promise<void> {
+    return this.unitOfWork.run(r => this.requireManagementIn(r, caller, workspaceId));
+  }
+
   async listManagement(caller: CallerContext, workspaceId: string, input: ShareManagementInput) {
     return this.unitOfWork.run(async r => {
-      await r.workspaceAccess.requireWorkspaceRead(caller, workspaceId);
-      const workspace = await r.workspaces.findById(workspaceId);
-      if (!workspace || workspace.workspaceType !== "PERSONAL" || workspace.personalOwnerUserId !== caller.identity.id || workspace.lifecycleState !== "ACTIVE") throw new DocumentNotFoundError();
+      await this.requireManagementIn(r, caller, workspaceId);
       const query = parseShareManagementQuery(input);
       const rows = await r.shareLinks.listForWorkspace(workspaceId, caller.identity.id, query, this.clock(), SHARE_MANAGEMENT_PAGE_SIZE + 1, (query.page - 1) * SHARE_MANAGEMENT_PAGE_SIZE);
       return { query, items: rows.slice(0, SHARE_MANAGEMENT_PAGE_SIZE), hasNext: rows.length > SHARE_MANAGEMENT_PAGE_SIZE };

@@ -3,19 +3,17 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MessagesSquare } from "lucide-react";
-import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { Timestamp } from "@/components/ui/timestamp";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Illustration } from "./illustration";
-import { SharesNavigation } from "./shares-navigation";
 import { applyAndSearch, LiveSearch } from "@/components/search/live-search-submit";
 import { navigateListRows } from "@/lib/list-row-navigation";
 import type { DiscussionFilter, FollowedDiscussionView } from "@/modules/knowledge/domain/review-follow";
 
-export function FollowedDiscussionsView({ workspaceId, items, filter, unread, filterError }: { workspaceId: string; items: FollowedDiscussionView[]; filter: DiscussionFilter; unread: number; filterError?: string }) {
+export function FollowedDiscussionsView({ workspaceId, items, filter, filterError }: { workspaceId: string; items: FollowedDiscussionView[]; filter: DiscussionFilter; filterError?: string }) {
   const router = useRouter(), pending = useRef(false);
   const [status, setStatus] = useState<string>(filter);
   const filterForm = useRef<HTMLFormElement>(null);
@@ -36,10 +34,8 @@ export function FollowedDiscussionsView({ workspaceId, items, filter, unread, fi
     } catch { setError("Could not update this discussion. Try again."); }
     finally { pending.current = false; setBusy(null); }
   }
-  return <main className="kh-page pb-6">
-    <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" description="Discussions you follow on shared articles. Following never extends a link's access."/>
-    <SharesNavigation workspaceId={workspaceId} active="discussions" discussionsUnread={unread}/>
-    <form ref={filterForm} action={`/w/${workspaceId}/shares`} method="get" aria-label="Filter discussions" className="mt-4 flex flex-wrap items-center gap-2">
+  return <>
+    <form ref={filterForm} action={`/w/${workspaceId}/shares`} method="get" aria-label="Filter discussions" className="mt-3 flex flex-wrap items-center gap-2">
       <Input type="hidden" name="tab" value="discussions"/>
       <label className="sr-only" htmlFor="discussions-status">Discussion status</label>
       <SelectMenu id="discussions-status" name="status" value={status} onValueChange={(value) => applyAndSearch(filterForm.current, () => setStatus(value))} options={[{ value: "all", label: "All" }, { value: "unread", label: "Unread" }]}/>
@@ -62,5 +58,5 @@ export function FollowedDiscussionsView({ workspaceId, items, filter, unread, fi
             <Button variant="ghost" size="sm" aria-label="Remove discussion" disabled={busy !== null} onClick={() => void drop(item)}>Remove</Button>
           </div>}
     </li>)}</ul>
-  </main>;
+  </>;
 }

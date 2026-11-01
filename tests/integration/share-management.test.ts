@@ -57,3 +57,9 @@ it("paginates filtered links with stable ordering and no repeated rows", async (
   expect(second.items).toHaveLength(4); expect(second.hasNext).toBe(false);
   expect(new Set([...first.items, ...second.items].map(l => l.id)).size).toBe(54);
 });
+
+it("proves the personal workspace's owner without listing any links", async () => {
+  const f = await fixture(), foreign = await fixture();
+  await expect(f.shares.requireManagement(f.caller, f.workspace.id)).resolves.toBeUndefined();
+  await expect(f.shares.requireManagement(foreign.caller, f.workspace.id)).rejects.toBeDefined();
+});

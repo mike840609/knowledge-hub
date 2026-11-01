@@ -2,6 +2,8 @@ import type { ReviewThread, ReviewStatus, ReviewVisibility } from "../domain/doc
 export interface DocumentReviewThreadRepository {
  insert(thread:ReviewThread):Promise<void>;
  findById(id:string):Promise<ReviewThread|null>;
+ /** Many threads in one statement; returns only the ids that exist. */
+ findByIds(ids:readonly string[]):Promise<ReviewThread[]>;
  lockById(id:string):Promise<ReviewThread|null>;
  findByCreationKey(documentId:string,authorId:string,key:string):Promise<ReviewThread|null>;
  listByDocument(documentId:string):Promise<ReviewThread[]>;

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SavedSharesView } from "@/components/knowledge/saved-shares-view";
 import type { SavedShareList } from "@/modules/knowledge/domain/saved-share";
 import { userGuideContent } from "@/components/help/user-guide-content";
-vi.mock("next/navigation",()=>({useRouter:()=>({refresh:vi.fn()})}));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }), useSearchParams: () => new URLSearchParams("tab=saved") }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT=true;
 let host:HTMLDivElement,root:Root;
 beforeEach(()=>{host=document.createElement("div");document.body.append(host);root=createRoot(host);});
@@ -14,7 +14,8 @@ const model:SavedShareList={query:{q:"",status:"all",page:1},hasNext:false,items
 const mount=async(value=model)=>{await act(async()=>root.render(<SavedSharesView workspaceId="reader" model={value}/>));};
 it("separates saved shares, preserves route filters and links only to the public reader",async()=>{
  await mount({...model,query:{q:"guide",status:"all",page:2},hasNext:true});
- expect(host.querySelector('a[aria-current="page"]')?.textContent).toBe("Saved shares");expect(host.querySelector('a[href="/w/reader/shares"]')).not.toBeNull();expect(host.querySelector('a[href="/s/live-token"]')).not.toBeNull();
+ expect(host.querySelector('a[href="/s/live-token"]')).not.toBeNull();
+ const search=host.querySelector<HTMLInputElement>("#saved-shares-query")!;expect(search.parentElement?.className).toContain("sm:w-72");expect(search.parentElement?.className).not.toContain("sm:flex-1");
  expect(host.querySelector('input[name="tab"]')?.getAttribute("value")).toBe("saved");const next=[...host.querySelectorAll("a")].find(x=>x.textContent==="Next");expect(next?.getAttribute("href")).toContain("tab=saved");expect(next?.getAttribute("href")).toContain("page=3");
  expect(host.textContent).not.toContain("Revoke");expect(host.textContent).not.toContain("Views");expect(host.textContent).not.toContain("Favorite");
 });
@@ -36,4 +37,87 @@ it.each(["en","zh-TW"] as const)("explains saved shares versus favorites in %s g
 it("refresh can show a share re-saved on another device after local removal",async()=>{
  vi.stubGlobal("fetch",async()=>new Response(null,{status:204}));await mount();await act(async()=>host.querySelector<HTMLButtonElement>('button[aria-label="Remove saved share: A useful guide"]')!.click());expect(host.textContent).not.toContain("A useful guide");
  await mount({...model,items:[]});await mount({...model,items:[{...model.items[0],savedAt:new Date(Date.now()+1000)}]});expect(host.textContent).toContain("A useful guide");
+});
+
+it("keeps the focused saved-share search when a stale result is rendered",async()=>{
+ await mount({...model,query:{q:"guidebook",status:"all",page:1}});
+ const input=host.querySelector<HTMLInputElement>("#saved-shares-query")!;
+ await act(async()=>input.focus());
+ await mount({...model,query:{q:"guide",status:"all",page:1}});
+ expect(input.value).toBe("guidebook");
+ await act(async()=>{
+  window.history.replaceState(null,"","?tab=saved&q=previous");
+  window.dispatchEvent(new PopStateEvent("popstate"));
+ });
+ expect(input.value).toBe("previous");
+ await act(async()=>input.blur());
+ await mount({...model,query:{q:"other",status:"all",page:1}});
+ expect(input.value).toBe("previous");
+ await mount({...model,query:{q:"previous",status:"all",page:1}});
+ expect(input.value).toBe("previous");
+});
+
+it("ignores an older saved-share search reply after the latest edit loses focus", async () => {
+ await mount({...model,query:{q:"guide",status:"all",page:1}});
+ const input=host.querySelector<HTMLInputElement>("#saved-shares-query")!;
+ await act(async()=>{
+  input.focus();
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")!.set!.call(input,"guidebook");
+  input.dispatchEvent(new Event("input",{bubbles:true}));
+ });
+ expect(input.value).toBe("guidebook");
+ await act(async()=>input.blur());
+ await mount({...model,query:{q:"guides",status:"all",page:1}});
+ expect(input.value).toBe("guidebook");
+ await mount({...model,query:{q:"guidebook",status:"all",page:1}});
+ await mount({...model,query:{q:"guide",status:"all",page:1}});
+ expect(input.value).toBe("guidebook");
+});
+
+it("preserves saved-search text when Clear filters is opened in a new tab", async () => {
+ await mount({...model,query:{q:"guide",status:"all",page:1}});
+ const input=host.querySelector<HTMLInputElement>("#saved-shares-query")!;
+ const clear=[...host.querySelectorAll("a")].find(a=>a.textContent==="Clear filters")!;
+ await act(async()=>clear.dispatchEvent(new MouseEvent("click",{bubbles:true,cancelable:true,metaKey:true,button:0})));
+ expect(input.value).toBe("guide");
+});
+
+it("keeps saved pagination synchronized with the committed query", async () => {
+ await mount({...model,query:{q:"guide",status:"all",page:2},hasNext:true});
+ const input=host.querySelector<HTMLInputElement>("#saved-shares-query")!;
+ await act(async()=>{
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")!.set!.call(input,"new draft");
+  input.dispatchEvent(new Event("input",{bubbles:true}));
+ });
+ expect(input.value).toBe("new draft");
+ const form=host.querySelector("form")!;
+ const cancelled=vi.fn();
+ form.addEventListener("kh:live-search-cancel",cancelled);
+ const next=[...host.querySelectorAll("a")].find(a=>a.textContent==="Next")!;
+ const prevent=(event:MouseEvent)=>event.preventDefault();
+ document.addEventListener("click",prevent,{once:true});
+ await act(async()=>next.click());
+ expect(input.value).toBe("guide");
+ expect(cancelled).toHaveBeenCalledTimes(1);
+ expect(next.getAttribute("href")).toContain("q=guide");
+ document.removeEventListener("click",prevent);
+});
+
+
+it("cancels a queued search before opening a saved article, but not a modified click", async () => {
+  await mount();
+  const form = host.querySelector("form")!;
+  const cancelled = vi.fn();
+  form.addEventListener("kh:live-search-cancel", cancelled);
+  const link = host.querySelector<HTMLAnchorElement>('a[href="/s/live-token"]')!;
+  const prevent = (event: MouseEvent) => event.preventDefault();
+  document.addEventListener("click", prevent);
+  try {
+    await act(async () => { link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 })); });
+    expect(cancelled).toHaveBeenCalledOnce();
+    await act(async () => { link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, metaKey: true, button: 0 })); });
+    expect(cancelled).toHaveBeenCalledOnce();
+  } finally {
+    document.removeEventListener("click", prevent);
+  }
 });

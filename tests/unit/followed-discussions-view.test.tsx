@@ -4,21 +4,15 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FollowedDiscussionsView } from "@/components/knowledge/followed-discussions-view";
 import type { FollowedDiscussionView } from "@/modules/knowledge/domain/review-follow";
-vi.mock("next/navigation",()=>({useRouter:()=>({refresh:vi.fn()})}));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }), useSearchParams: () => new URLSearchParams("tab=discussions") }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT=true;
 let host:HTMLDivElement,root:Root;
 beforeEach(()=>{host=document.createElement("div");document.body.append(host);root=createRoot(host);});
 afterEach(async()=>{await act(async()=>root.unmount());host.remove();vi.unstubAllGlobals();});
 const live:FollowedDiscussionView={threadId:"t1",linkAvailable:true,token:"tok",documentTitle:"A useful guide",threadStatus:"OPEN",authorName:"Owner",excerpt:"Owner answers",latestAt:new Date(),unread:2};
 const dead:FollowedDiscussionView={threadId:"t2",linkAvailable:false};
-const mount=async(items=[live,dead],filter:"all"|"unread"="all")=>{await act(async()=>root.render(<FollowedDiscussionsView workspaceId="reader" items={items} filter={filter} unread={items.filter(i=>i.linkAvailable&&i.unread>0).length}/>));};
+const mount=async(items=[live,dead],filter:"all"|"unread"="all")=>{await act(async()=>root.render(<FollowedDiscussionsView workspaceId="reader" items={items} filter={filter}/>));};
 
-it("is the active Shares tab and counts unread discussions on its label",async()=>{
- await mount();
- const tab=host.querySelector('a[aria-current="page"]')!;
- expect(tab.textContent).toContain("Discussions");
- expect(tab.querySelector('[aria-label="1 unread"]')?.textContent).toBe("1");
-});
 it("links a live row to the discussion on the shared page and shows what is new",async()=>{
  await mount();
  const row=host.querySelector('a[href="/s/tok?thread=t1"]');expect(row?.textContent).toContain("A useful guide");
@@ -56,10 +50,9 @@ it("the filter submits tab=discussions with the chosen status",async()=>{
  expect(host.querySelector('#discussions-status')?.getAttribute("data-value")).toBe("unread");
 });
 it("a filter error is shown in place of the list and its empty state",async()=>{
- await act(async()=>root.render(<FollowedDiscussionsView workspaceId="reader" items={[]} filter="all" unread={3} filterError="Choose All or Unread."/>));
+ await act(async()=>root.render(<FollowedDiscussionsView workspaceId="reader" items={[]} filter="all" filterError="Choose All or Unread."/>));
  expect(host.querySelector('[role="alert"]')?.textContent).toBe("Choose All or Unread.");
  expect(host.textContent).not.toContain("No discussions yet.");
- expect(host.querySelector('[aria-label="3 unread"]')).not.toBeNull();
 });
 it("draws the discussions example when there are none",async()=>{
  await mount([]);
