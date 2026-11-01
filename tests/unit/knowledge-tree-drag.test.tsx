@@ -565,4 +565,48 @@ describe("tree dragging", () => {
     expect(idReads).toBe(reads);
   });
 
+  it("keeps pointer sorting locked when another source refreshes before this source's confirmed tree arrives", async () => {
+    const authoritative = [doc("B", 0), doc("A", 1), doc("C", 2)];
+    const onReorder = vi.fn(async (_input: {nodeId: string; position: number}, confirmed?: (tree?: KnowledgeTreeItem[]) => void) => {
+      confirmed?.(authoritative);
+      return true;
+    });
+    const { rerender } = render({ onReorder });
+    const target = rowFor("B");
+    target.getBoundingClientRect = () => ({top:0,bottom:20,height:20,left:0,right:100,width:100,x:0,y:0,toJSON:()=>({})});
+    const fire = (element: HTMLElement, name: string, y = 19) => {
+      const event = new Event(name, {bubbles:true,cancelable:true});
+      Object.defineProperties(event,{dataTransfer:{value:{effectAllowed:"",setData:vi.fn()}},clientY:{value:y}});
+      element.dispatchEvent(event);
+      return event;
+    };
+    await act(async () => { fire(rowFor("A"), "dragstart"); fire(target, "drop"); });
+    rerender({ items: items.map(item => ({...item})) }); // Other source loaded; A is still stale.
+    let attempted: Event | undefined;
+    act(() => { attempted = fire(rowFor("C"), "dragstart"); });
+    expect(attempted?.defaultPrevented).toBe(true);
+    rerender({items: authoritative});
+    act(() => { attempted = fire(rowFor("C"), "dragstart"); });
+    expect(attempted?.defaultPrevented).toBe(false);
+  });
+
+  it("keeps queued Alt+Arrow until this source matches its authoritative tree, not an unrelated load", async () => {
+    const authoritative = [doc("A", 0), doc("C", 1), doc("B", 2)];
+    const onReorder = vi.fn(async (_input: {nodeId:string;position:number}, confirmed?: (tree?: KnowledgeTreeItem[]) => void) => {
+      if (onReorder.mock.calls.length === 1) confirmed?.(authoritative);
+      return true;
+    });
+    const { rerender } = render({onReorder});
+    act(() => {
+      rowFor("B").dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowDown",altKey:true,bubbles:true,cancelable:true}));
+      rowFor("B").dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowUp",altKey:true,bubbles:true,cancelable:true}));
+    });
+    await act(async () => { await Promise.resolve(); });
+    rerender({items:items.map(item=>({...item}))}); // Unrelated source load.
+    expect(onReorder).toHaveBeenCalledTimes(1);
+    rerender({items:authoritative});
+    expect(onReorder).toHaveBeenCalledTimes(2);
+    expect(onReorder).toHaveBeenLastCalledWith({nodeId:"n:B",position:1},expect.any(Function));
+  });
+
 });
