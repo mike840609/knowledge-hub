@@ -38,3 +38,16 @@ passed; production build and retrieval-page-icons browser test passed;
 TypeScript, targeted ESLint, and diff checks passed. The first standalone
 TypeScript invocation overlapped the browser build clearing generated
 `.next/types`; rerunning sequentially after the build passed.
+
+## Second review follow-up
+
+Updated retrieval-layout E2E coverage to use the clock menu, including desktop
+and mobile history navigation and closed-menu state on drawer reopening/reload.
+The menu now freezes only after a display-eligible link has appeared, rather
+than after capturing nonempty raw history. Three regression cases cover history
+containing only the current document, favorites, or unavailable documents.
+
+Local validation: 3,982 unit tests passed; all seven retrieval-layout and
+retrieval-page-icons E2E tests passed after a production build. TypeScript,
+targeted ESLint, and diff checks passed. The metadata query duplication concern
+(P3) is deferred; query caching/optimization is outside this correction.

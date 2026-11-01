@@ -223,3 +223,18 @@ it.each([false, true])("keeps unloaded-source recents when unrelated favorite me
   expect(menu()?.textContent).not.toContain("could not be loaded");
   expect(menu()?.textContent).not.toContain("Loading recent documents");
 });
+
+it.each(["current", "favorite", "unavailable"])("waits for visible items before freezing a %s-only history", async kind => {
+  shortcuts.current.recent = kind === "unavailable" ? ["a:missing"] : ["a:d1"];
+  if (kind === "current") selectedDocumentId = "d1";
+  if (kind === "favorite") shortcuts.current.favorites = ["a:d1"];
+  const render = await mount();
+  await click(clock());
+  expect(menuHrefs()).toEqual([]);
+  shortcuts.current.recent = ["a:d2", "a:d3", ...shortcuts.current.recent];
+  await render();
+  expect(menuHrefs()).toEqual([href(2), href(3)]);
+  shortcuts.current.recent = ["a:d3", "a:d2"];
+  await render();
+  expect(menuHrefs()).toEqual([href(2), href(3)]);
+});

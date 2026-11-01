@@ -76,12 +76,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   const [recentMenuOpen, setRecentMenuOpen] = useState(false);
   const [recentMenuKeys, setRecentMenuKeys] = useState<string[] | null>(null);
   const sidebarReady = queryReady && filterReady && expandedReady && shortcutsReady && favoritesReady;
-  // History may hydrate after the reader opens the menu. Capture its order once
-  // ready, allowing an empty snapshot to receive its first history update.
-  // Once populated, subsequent visits/syncs must not move links under the pointer.
-  useEffect(() => {
-    if (recentMenuOpen && shortcutsReady && (recentMenuKeys === null || (recentMenuKeys.length === 0 && shortcuts.recent.length > 0))) setRecentMenuKeys([...shortcuts.recent]);
-  }, [recentMenuOpen, shortcutsReady, recentMenuKeys, shortcuts.recent]);
+  const recentMenuPopulated = useRef(false);
   const showArchived = searchParams.get("includeArchived") === "true";
   const resolvedDocumentId = selectedDocumentId ?? (typeof routeParams?.documentId === "string" ? routeParams.documentId : undefined);
   const needle = query.trim().toLowerCase();
@@ -123,6 +118,15 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   // The section is the same height however many are starred: the newest few, and a row for the rest.
   const { inPlace: favoritesInPlaceKeys, showAll: favoritesTotal } = favoritesInPlace(favoriteKeys);
   const recentCandidates = (recentMenuKeys ?? shortcuts.recent).filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== `${source?.id}:${resolvedDocumentId}`);
+  // Freeze only after a usable link has appeared. Raw history can contain
+  // exclusively current, favorite, or inaccessible documents and still be empty.
+  useEffect(() => {
+    if (!recentMenuOpen || !shortcutsReady) return;
+    if (recentCandidates.length > 0) recentMenuPopulated.current = true;
+    if (!recentMenuPopulated.current && (recentMenuKeys === null || recentMenuKeys.length !== shortcuts.recent.length || recentMenuKeys.some((key, index) => key !== shortcuts.recent[index]))) {
+      setRecentMenuKeys([...shortcuts.recent]);
+    }
+  }, [recentMenuOpen, shortcutsReady, recentCandidates.length, recentMenuKeys, shortcuts.recent]);
   const recentLoading = !shortcutsReady || recentMetadata.loading;
   const favoriteDocumentIds = new Set(shortcuts.favorites.map((key) => documents.get(key)?.documentId).filter((id): id is string => Boolean(id)));
 
@@ -265,6 +269,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
             </Tooltip>
           ) : null}
           <MenuRoot open={recentMenuOpen} onOpenChange={(open) => {
+            recentMenuPopulated.current = false;
             setRecentMenuOpen(open);
             setRecentMenuKeys(open && shortcutsReady ? [...shortcuts.recent] : null);
           }}>
