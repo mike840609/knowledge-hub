@@ -416,10 +416,18 @@ describe("team discussion in the Inbox", () => {
     await fixture.uow.run(async (r) => {
       const seed = await r.shareCommentEvents.findById(creator.identity.id, seedId);
       if (!seed) throw new Error("Missing seeded team event");
+      const seedComment = await r.reviewComments.findById(seed.commentId);
+      if (!seedComment) throw new Error("Missing seeded team comment");
       const after = Date.now() + 60_000;
       for (let i = 0; i < 101; i += 1) {
+        const commentId = uuidv7();
+        const createdAt = new Date(after + i * 1000);
+        // Every event must reference its own comment (uq_share_comment_event).
+        await r.reviewComments.insert({
+          ...seedComment, id: commentId, idempotencyKey: randomUUID(), createdAt,
+        });
         await r.shareCommentEvents.insert({
-          ...seed, id: uuidv7(), createdAt: new Date(after + i * 1000), readAt: null,
+          ...seed, id: uuidv7(), commentId, createdAt, readAt: null,
         });
       }
     });
