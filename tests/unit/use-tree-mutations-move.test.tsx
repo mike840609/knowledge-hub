@@ -79,7 +79,9 @@ function reorder(nodeId = "n2") {
 describe("source-scoped arrangement writes", () => {
   it("keeps the source locked after PATCH until the authoritative tree is retrieved", async () => {
     let finishRead!: (response: Response) => void;
-    const fetchTree = vi.fn(() => new Promise<Response>((resolve) => { finishRead = resolve; }));
+    const fetchTree = vi.fn()
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => { finishRead = resolve; }))
+      .mockImplementation(async () => Response.json({ tree: [] }));
     vi.stubGlobal("fetch", fetchTree);
     const first = move(input);
     // Wait for the successful PATCH to begin a source-specific post-write GET.
