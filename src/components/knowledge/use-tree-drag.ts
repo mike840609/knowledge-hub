@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type DragEvent, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type RefObject } from "react";
 import { dropPlacement, moveDestinations, type DropZone } from "@/lib/knowledge-navigation";
 import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledge-query-service";
 import { CLEAR_FILTER_TO_REORDER, placedNode } from "./organize-messages";
@@ -10,13 +10,17 @@ export type TreeDragIndicator = { kind: "line"; top: number; left: number; width
 
 type Input = {
   items: KnowledgeTreeItem[]; filtering: boolean; canMove: (id: string) => boolean; isKeyboardBusy: () => boolean; onDragStarted: () => void;
-  isCollapsed: (id: string) => boolean; onReorder: (input: { nodeId: string; position: number }) => Promise<boolean>;
-  onMove: (input: MoveNodeInput) => Promise<boolean>; onPlaced: (id: string, parentId: string | null, refreshed: boolean) => void;
+  isCollapsed: (id: string) => boolean; onReorder: (input: { nodeId: string; position: number }, onRefreshRequested?: () => void) => Promise<boolean>;
+  onMove: (input: Omit<MoveNodeInput, "sourceId">, onRefreshRequested?: () => void) => Promise<boolean>; onPlaced: (id: string, parentId: string | null, refreshed: boolean) => void;
   onRefreshed: (id: string) => void;
   announce: (text: string) => void; expandFolder: (id: string) => void; treeRef: RefObject<HTMLUListElement | null>;
 };
 
 export function useTreeDrag(input: Input) {
+  // Dragover is a hot path: lookup the node once per incoming tree snapshot.
+  const itemById = useMemo(() => new Map(input.items.map((item) => [item.id, item])), [input.items]);
+  const latestItems = useRef(input.items);
+  latestItems.current = input.items;
   const [enabled, setEnabled] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [indicator, setIndicator] = useState<TreeDragIndicator>(null);
@@ -49,6 +53,9 @@ export function useTreeDrag(input: Input) {
   const operation = useRef(0);
   const expected = useRef<{ id: string; parentId: string | null; position: number | undefined; oldParent: string | null; oldPosition: number } | null>(null);
   const itemsAtDrop = useRef(input.items);
+  const refreshRequested = useRef(false);
+  const itemsAtRefreshRequest = useRef(input.items);
+  const refreshMismatch = useRef(false);
   const awaitingResponse = useRef(false);
   const refreshed = useRef(false);
   const focusWaiting = useRef(false);
@@ -69,20 +76,28 @@ export function useTreeDrag(input: Input) {
     const wanted = expected.current;
     // A successful append can leave all positions unchanged. Only a new tree snapshot,
     // not a re-render of the old one, can confirm that its refresh has arrived.
-    if (!busy.current || !wanted || input.items === itemsAtDrop.current) return;
-    const row = input.items.find((item) => item.id === wanted.id);
+    if (!busy.current || !wanted) return;
+    const mutationSnapshot = refreshRequested.current;
+    // Never settle a drop from a snapshot that preceded the write's own
+    // refresh; an unrelated router refresh may otherwise falsely unlock it.
+    if (input.items === (mutationSnapshot ? itemsAtRefreshRequest.current : itemsAtDrop.current)) return;
+    const row = itemById.get(wanted.id);
     const changed = row && wanted && (row.parentId !== wanted.oldParent || row.position !== wanted.oldPosition);
     const appended = wanted?.position === undefined || wanted.position === Number.MAX_SAFE_INTEGER;
     const atDestination = row && wanted && row.parentId === wanted.parentId && (appended
       ? input.items.every((item) => item.parentId !== wanted.parentId || item.id === row.id || item.position < row.position)
       : row.position === wanted.position);
-    if ((changed || appended) && atDestination) {
-      if (awaitingResponse.current) refreshed.current = true;
-      else if (focusWaiting.current) {
+    if (mutationSnapshot || ((changed || appended) && atDestination)) {
+      // The authoritative server position may be clamped when siblings were
+      // concurrently moved away. It still completes this successful write.
+      refreshMismatch.current = !atDestination;
+      refreshed.current = true;
+      if (!awaitingResponse.current && focusWaiting.current) {
         focusWaiting.current = false;
         busy.current = false;
         expected.current = null;
-        input.onRefreshed(wanted.id);
+        if (refreshMismatch.current) input.announce("The tree changed while placing the item. Review its current position.");
+        else input.onRefreshed(wanted.id);
       }
     }
   }, [input.items]);
@@ -122,7 +137,7 @@ export function useTreeDrag(input: Input) {
       if (!dragging.current || busy.current) return;
       event.stopPropagation();
       pointerY.current = event.clientY;
-      const item = input.items.find((entry) => entry.id === nodeId);
+      const item = itemById.get(nodeId);
       if (!item) return;
       const zone = zoneFor(event, item);
       if (!placementFor(dragging.current, nodeId, zone)) {
@@ -151,8 +166,8 @@ export function useTreeDrag(input: Input) {
       if (!dragging.current || busy.current) return;
       event.stopPropagation(); event.preventDefault();
       if (input.isKeyboardBusy()) { cleanup(); return; }
-      const source = input.items.find((entry) => entry.id === dragging.current);
-      const target = input.items.find((entry) => entry.id === nodeId);
+      const source = itemById.get(dragging.current);
+      const target = itemById.get(nodeId);
       if (!source || !target) { cleanup(); return; }
       const zone = zoneFor(event, target);
       const placement = placementFor(source.id, target.id, zone);
@@ -164,7 +179,14 @@ export function useTreeDrag(input: Input) {
         cleanup(); return;
       }
       busy.current = true; awaitingResponse.current = true; refreshed.current = false;
+      refreshMismatch.current = false; refreshRequested.current = false;
       itemsAtDrop.current = input.items;
+      const onRefreshRequested = () => {
+        refreshRequested.current = true;
+        itemsAtRefreshRequest.current = latestItems.current;
+        refreshed.current = false; // discard unrelated pre-commit snapshots
+        refreshMismatch.current = false;
+      };
       expected.current = { id: source.id, parentId: placement.kind === "move" ? placement.parentId : source.parentId,
         position: placement.position, oldParent: source.parentId, oldPosition: source.position };
       const currentOperation = operation.current;
@@ -175,12 +197,16 @@ export function useTreeDrag(input: Input) {
       try {
         const parentId = placement.kind === "move" ? placement.parentId : source.parentId;
         const ok = placement.kind === "reorder"
-          ? await input.onReorder({ nodeId: source.id, position: placement.position })
-          : await input.onMove({ nodeId: source.id, label: source.label, from: { parentId: source.parentId, position: source.position }, to: { parentId, label: input.items.find((entry) => entry.id === parentId)?.label ?? null, position: placement.position } });
+          ? await input.onReorder({ nodeId: source.id, position: placement.position }, onRefreshRequested)
+          : await input.onMove({ nodeId: source.id, label: source.label, from: { parentId: source.parentId, position: source.position }, to: { parentId, label: itemById.get(parentId ?? "")?.label ?? null, position: placement.position } }, onRefreshRequested);
         if (operation.current !== currentOperation) return;
         succeeded = ok;
         if (ok && !refreshed.current) focusWaiting.current = true;
-        if (ok) { if (placement.kind === "reorder") input.announce(placedNode(source.label, placement.index, placement.count)); input.onPlaced(source.id, parentId, refreshed.current); }
+        if (ok) {
+          if (refreshed.current && refreshMismatch.current) input.announce("The tree changed while placing the item. Review its current position.");
+          else if (placement.kind === "reorder") input.announce(placedNode(source.label, placement.index, placement.count));
+          input.onPlaced(source.id, parentId, refreshed.current && !refreshMismatch.current);
+        }
       } finally {
         if (operation.current === currentOperation) {
           awaitingResponse.current = false;
