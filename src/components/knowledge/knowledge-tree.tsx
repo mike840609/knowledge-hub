@@ -19,6 +19,7 @@ import { REVEAL_FOLDER_EVENT } from "./move-request";
 import { CLEAR_FILTER_TO_REORDER, alreadyAtEdge, reorderedNode } from "./organize-messages";
 import { useTreeDrag } from "./use-tree-drag";
 import type { MoveNodeInput } from "./use-tree-mutations";
+import { matchesCommittedTreeView } from "./source-tree-cache";
 import { Status } from "@/components/ui/status";
 import { Tooltip } from "@/components/ui/tooltip";
 
@@ -49,12 +50,12 @@ export type KnowledgeTreeProps = {
    * Puts a node at a place among its siblings (Alt+↑/↓), and says whether that happened. The tree
    * decides which place from what it shows; whether it may is the actions' say, and the server's.
    */
-  onReorder: (input: { nodeId: string; position: number }, onRefreshRequested?: () => void) => Promise<boolean>;
+  onReorder: (input: { nodeId: string; position: number }, onRefreshRequested?: (tree?: KnowledgeTreeItem[]) => void) => Promise<boolean>;
   /**
    * Puts a node into another folder, or at a place among that folder's siblings, from a drop. The
    * tree decides where from what it shows; whether it may is the actions' say, and the server's.
    */
-  onMove: (input: Omit<MoveNodeInput, "sourceId">, onRefreshRequested?: () => void) => Promise<boolean>;
+  onMove: (input: Omit<MoveNodeInput, "sourceId">, onRefreshRequested?: (tree?: KnowledgeTreeItem[]) => void) => Promise<boolean>;
   isSourceArrangementPending?: () => boolean;
 };
 
@@ -362,6 +363,7 @@ export function KnowledgeTree({
   const latestItems = useRef(items);
   latestItems.current = items;
   const refreshRequested = useRef(false);
+  const authoritativeTree = useRef<KnowledgeTreeItem[] | null>(null);
   const itemsAtRefreshRequest = useRef(items);
   const reorderReplySeen = useRef(false);
   const [reorderReplyVersion, markReorderReply] = useState(0);
@@ -393,13 +395,16 @@ export function KnowledgeTree({
     // An unrelated refresh can render before PATCH commits. Only a tree
     // snapshot arriving after this mutation requested its own refresh may
     // confirm a clamped position or flush a queued keyboard step.
-    const confirmedSnapshot = refreshRequested.current
-      ? items !== itemsAtRefreshRequest.current
-      : items !== itemsAtReorderStart.current; // legacy callback-free callers
+    const confirmedSnapshot = authoritativeTree.current
+      ? matchesCommittedTreeView(items, authoritativeTree.current)
+      : refreshRequested.current
+        ? items !== itemsAtRefreshRequest.current
+        : items !== itemsAtReorderStart.current; // legacy callback-free callers
     if (!confirmedSnapshot) return;
     reordering.current = false;
     reorderReplySeen.current = false;
     refreshRequested.current = false;
+    authoritativeTree.current = null;
     expectedReorder.current = null;
     const queued = queuedReorder.current;
     queuedReorder.current = null;
@@ -441,6 +446,7 @@ export function KnowledgeTree({
     reordering.current = true;
     reorderReplySeen.current = false;
     refreshRequested.current = false;
+    authoritativeTree.current = null;
     itemsAtReorderStart.current = items;
     drag.invalidatePending();
     const operation = ++reorderOperation.current;
@@ -449,7 +455,8 @@ export function KnowledgeTree({
     // now, so the focus effect can put focus back on it as soon as that tree lands; waiting for the
     // promise would leave a tree that already arrived with nothing to focus.
     focusAfterReorder.current = item.id;
-    const ok = await onReorder({ nodeId: item.id, position: step.position }, () => {
+    const ok = await onReorder({ nodeId: item.id, position: step.position }, (tree) => {
+      authoritativeTree.current = tree ?? null;
       refreshRequested.current = true;
       itemsAtRefreshRequest.current = latestItems.current;
     });
