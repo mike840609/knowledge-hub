@@ -19,6 +19,27 @@ function equalTree(left: KnowledgeTreeItem[], right: KnowledgeTreeItem[]): boole
   });
 }
 
+/**
+ * Confirm that the UI shows the committed source snapshot, not merely a newly
+ * allocated array caused by a different source's lazy load. Normal explorer
+ * mode hides archived nodes and their descendants.
+ */
+export function matchesCommittedTreeView(displayed: KnowledgeTreeItem[], authoritative: KnowledgeTreeItem[]): boolean {
+  const showArchived = displayed.some(node => node.status === 'ARCHIVED');
+  if (showArchived) return equalTree(displayed, authoritative);
+  const byId = new Map(authoritative.map(node => [node.id, node]));
+  const visible = authoritative.filter(node => {
+    const visited = new Set<string>();
+    for (let cursor: KnowledgeTreeItem | undefined = node; cursor; cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined) {
+      if (cursor.status === 'ARCHIVED') return false;
+      if (visited.has(cursor.id)) return false;
+      visited.add(cursor.id);
+    }
+    return true;
+  });
+  return equalTree(displayed, visible);
+}
+
 export function commitSourceTree(workspaceId: string, sourceId: string, tree: KnowledgeTreeItem[]): void {
   committed.set(keyFor(workspaceId, sourceId), tree);
   for (const listener of listeners) listener(workspaceId, sourceId, tree);
