@@ -1,29 +1,61 @@
 import { expect, test } from "./fixtures/test";
 import { createReviewDocument } from "./fixtures/document-review";
 import { phase3Origin } from "./fixtures/phase3-identities";
-import type { Page } from "@playwright/test";
+import type { Page, Request } from "@playwright/test";
 
 /**
- * Gate Saved shares RSC requests (including eager prefetch), forcing the older
- * navigation to remain pending. Always release the gate in finally.
+ * Gate Saved shares RSC traffic, regardless of whether Next.js prefetches it
+ * or the tab click starts the request. Track terminal network events so the
+ * assertions run after a late response is actually completed or canceled.
  */
 async function delaySavedShares(page: Page, workspaceId: string) {
   let release!: () => void;
-  const pending = new Promise<void>(resolve => { release = resolve; });
-  let intercepted = 0;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const intercepted = new Set<Request>();
+  const settled = new Set<Request>();
+  const markSettled = (request: Request) => {
+    if (intercepted.has(request)) settled.add(request);
+  };
+  page.on("requestfinished", markSettled);
+  page.on("requestfailed", markSettled);
+
   await page.route("**/*", async route => {
     const req = route.request();
     const url = new URL(req.url());
-    if (req.headers()["rsc"] === "1"
+    const delayed = req.headers()["rsc"] === "1"
       && url.pathname === "/w/" + workspaceId + "/shares"
-      && url.searchParams.get("tab") === "saved") {
-      intercepted++;
-      await pending;
+      && url.searchParams.get("tab") === "saved";
+    if (delayed) {
+      intercepted.add(req);
+      await gate;
     }
-    // Next.js may cancel an obsolete RSC request after the user changes tabs.
-    await route.continue().catch(() => undefined);
+    try {
+      await route.continue();
+    } catch {
+      // A newer navigation can abort an intercepted request before continue().
+      // That is a terminal cancellation, not a request still in flight.
+      if (delayed) settled.add(req);
+    }
   });
-  return { release, intercepted: () => intercepted };
+
+  return {
+    release,
+    intercepted: () => intercepted.size,
+    async waitForSettled() {
+      await expect.poll(
+        () => intercepted.size > 0 && [...intercepted].every(request => settled.has(request)),
+        { message: "Delayed Saved shares RSC requests should finish or be canceled", timeout: 10_000 },
+      ).toBe(true);
+      // Allow React to process the delivered RSC payload before inspecting tabs.
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    },
+    async dispose() {
+      release();
+      await page.unroute("**/*");
+      page.off("requestfinished", markSettled);
+      page.off("requestfailed", markSettled);
+    },
+  };
 }
 
 
@@ -121,21 +153,22 @@ test("late Saved shares RSC responses cannot override the newer Discussions tab"
   try {
     await page.goto(phase3Origin("reviewOwner") + "/w/" + doc.workspaceId + "/shares");
     const nav = page.getByRole("navigation", { name: "Shares sections" });
-    // Prove that the test really has a pending RSC request, not just fast clicks.
-    await expect.poll(delayed.intercepted).toBeGreaterThan(0);
-
+    // A click must cause (or reuse) a held RSC request. Do not assume that
+    // speculative prefetch has run before the user interacts.
     await nav.getByRole("link", { name: "Saved shares", exact: true }).click({ noWaitAfter: true });
+    await expect.poll(delayed.intercepted).toBeGreaterThan(0);
     await nav.getByRole("link", { name: /^Discussions/ }).click({ noWaitAfter: true });
     await expect(page).toHaveURL(/tab=discussions/);
     await expect(page.getByRole("list", { name: "Followed discussions" })).toBeVisible();
 
-    // Finish the old request last; it must not replace the newest content.
+    // The old request must reach a terminal finished/failed state, not merely
+    // leave our route handler, before we assert the newest navigation survived.
     delayed.release();
+    await delayed.waitForSettled();
     await expect(nav.getByRole("link", { name: /^Discussions/ })).toHaveAttribute("aria-current", "page");
     await expect(page).toHaveURL(/tab=discussions/);
   } finally {
-    delayed.release();
-    await page.unroute("**/*");
+    await delayed.dispose();
   }
 });
 
@@ -144,23 +177,23 @@ test("search then tab switch cancels debounce while the destination RSC is delay
   const delayed = await delaySavedShares(page, doc.workspaceId);
   try {
     await page.goto(phase3Origin("reviewOwner") + "/w/" + doc.workspaceId + "/shares");
-    await expect.poll(delayed.intercepted).toBeGreaterThan(0);
     const nav = page.getByRole("navigation", { name: "Shares sections" });
     await page.getByRole("textbox", { name: "Find shares" }).fill("should-not-replace-tabs");
     await nav.getByRole("link", { name: "Saved shares", exact: true }).click({ noWaitAfter: true });
+    await expect.poll(delayed.intercepted).toBeGreaterThan(0);
 
     // The destination is blocked long enough for an uncancelled 250ms debounce
     // to navigate back to My shares. That must never happen.
     await page.waitForTimeout(350);
     expect(page.url()).not.toContain("q=should-not-replace-tabs");
     delayed.release();
+    await delayed.waitForSettled();
 
     await expect(page).toHaveURL(/tab=saved/);
     await expect(page.getByRole("textbox", { name: "Find saved shares" })).toBeVisible();
     await expect(nav.getByRole("link", { name: "Saved shares", exact: true }))
       .toHaveAttribute("aria-current", "page");
   } finally {
-    delayed.release();
-    await page.unroute("**/*");
+    await delayed.dispose();
   }
 });
