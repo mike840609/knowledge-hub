@@ -195,3 +195,31 @@ it("keeps links from unloaded sources visible when background history reorders",
   await render();
   expect(menuHrefs()).toEqual([href(1), href(2)]);
 });
+
+it("accepts the first history update in an already open empty menu then freezes order", async () => {
+  const render = await mount();
+  await click(clock());
+  expect(menu()?.textContent).toContain("No recent documents");
+  shortcuts.current.recent = ["a:d1", "a:d2"];
+  await render();
+  expect(menuHrefs()).toEqual([href(1), href(2)]);
+  shortcuts.current.recent = ["a:d2", "a:d1"];
+  await render();
+  expect(menuHrefs()).toEqual([href(1), href(2)]);
+});
+
+it.each([false, true])("keeps unloaded-source recents when unrelated favorite metadata is pending/fails (failure=%s)", async failure => {
+  loadedTree = false;
+  shortcuts.current.recent = ["a:d1"];
+  const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ documents: [
+    { documentId: "d1", sourceId: "a", label: "First", sourceName: "Alpha", ownership: "HUB_MANAGED", pageIcon: null },
+  ] })).mockImplementation(() => failure ? Promise.resolve(Response.json({}, { status: 503 })) : new Promise(() => {}));
+  const render = await mount(fetcher);
+  await click(clock());
+  expect(menuHrefs()).toEqual([href(1)]);
+  shortcuts.current.favorites = ["a:d6"];
+  await render();
+  expect(menuHrefs()).toEqual([href(1)]);
+  expect(menu()?.textContent).not.toContain("could not be loaded");
+  expect(menu()?.textContent).not.toContain("Loading recent documents");
+});

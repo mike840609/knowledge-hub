@@ -77,18 +77,21 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   const [recentMenuKeys, setRecentMenuKeys] = useState<string[] | null>(null);
   const sidebarReady = queryReady && filterReady && expandedReady && shortcutsReady && favoritesReady;
   // History may hydrate after the reader opens the menu. Capture its order once
-  // ready; subsequent visits/syncs must not move links under the pointer.
+  // ready, allowing an empty snapshot to receive its first history update.
+  // Once populated, subsequent visits/syncs must not move links under the pointer.
   useEffect(() => {
-    if (recentMenuOpen && shortcutsReady && recentMenuKeys === null) setRecentMenuKeys([...shortcuts.recent]);
+    if (recentMenuOpen && shortcutsReady && (recentMenuKeys === null || (recentMenuKeys.length === 0 && shortcuts.recent.length > 0))) setRecentMenuKeys([...shortcuts.recent]);
   }, [recentMenuOpen, shortcutsReady, recentMenuKeys, shortcuts.recent]);
   const showArchived = searchParams.get("includeArchived") === "true";
   const resolvedDocumentId = selectedDocumentId ?? (typeof routeParams?.documentId === "string" ? routeParams.documentId : undefined);
   const needle = query.trim().toLowerCase();
   const headers = useMemo(() => sources ?? collections.map(c => c.source), [sources, collections]);
-  // The open menu's keys also define its metadata request. Background history
-  // changes must not clear unloaded-source links while the reader is choosing.
-  const shortcutIds = [...new Set([...shortcuts.favorites, ...(recentMenuKeys ?? shortcuts.recent)].map(key => key.split(":")[1]))].sort().join(",");
+  // Favorites and Recent have independent requests: unrelated favorite changes
+  // must not clear the open menu's unloaded-source links or its error state.
+  const shortcutIds = [...new Set(shortcuts.favorites.map(key => key.split(":")[1]))].sort().join(",");
+  const recentIds = [...new Set((recentMenuKeys ?? shortcuts.recent).map(key => key.split(":")[1]))].sort().join(",");
   const shortcutMetadata = useSidebarShortcuts(workspaceId, ensureTree ? shortcutIds : "", showArchived, sources);
+  const recentMetadata = useSidebarShortcuts(workspaceId, ensureTree ? recentIds : "", showArchived, sources);
   useEffect(() => {
     if (!expandedReady) return;
     for (const candidate of headers) {
@@ -108,19 +111,19 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
         if (item.type === "document") map.set(`${collection.source.id}:${item.documentId}`, { documentId: item.documentId, sourceId: collection.source.id, sourceName: collection.source.name, ownership: collection.source.ownership, label: item.label, pageIcon: item.pageIcon ?? null });
       }
     }
-    for (const document of shortcutMetadata.documents) {
+    for (const document of [...shortcutMetadata.documents, ...recentMetadata.documents]) {
       // Loaded trees are authoritative about hidden archived ancestors.
       if (!collections.some(c => c.source.id === document.sourceId)) map.set(`${document.sourceId}:${document.documentId}`, document);
     }
     return map;
-  }, [visibleCollections, shortcutMetadata.documents, collections]);
+  }, [visibleCollections, shortcutMetadata.documents, recentMetadata.documents, collections]);
   // The newest few are listed in place; the rest are one click away in "Show all", which lists every one, so a
   // favorite that is starred and not shown is never one that cannot be found.
   const favoriteKeys = shortcuts.favorites.filter((key) => documents.has(key));
   // The section is the same height however many are starred: the newest few, and a row for the rest.
   const { inPlace: favoritesInPlaceKeys, showAll: favoritesTotal } = favoritesInPlace(favoriteKeys);
   const recentCandidates = (recentMenuKeys ?? shortcuts.recent).filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== `${source?.id}:${resolvedDocumentId}`);
-  const recentLoading = !shortcutsReady || shortcutMetadata.loading;
+  const recentLoading = !shortcutsReady || recentMetadata.loading;
   const favoriteDocumentIds = new Set(shortcuts.favorites.map((key) => documents.get(key)?.documentId).filter((id): id is string => Boolean(id)));
 
   const recordedOpen = useRef<string | null>(null);
@@ -271,9 +274,9 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
             <MenuContent align="start" className="max-h-[min(24rem,60vh)] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain">
               {recentCandidates.map(shortcutMenuItem)}
               {recentLoading ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Loading recent documents…</p>
-                : shortcutMetadata.error ? <>
+                : recentMetadata.error ? <>
                   <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Recent documents could not be loaded.</p>
-                  <MenuItem closeOnClick={false} onClick={shortcutMetadata.retry}>Retry</MenuItem>
+                  <MenuItem closeOnClick={false} onClick={recentMetadata.retry}>Retry</MenuItem>
                 </> : recentCandidates.length === 0 ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">No recent documents</p> : null}
             </MenuContent>
           </MenuRoot>

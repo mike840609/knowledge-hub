@@ -22,3 +22,19 @@ Favorites/general tree positioning. No blocking issue identified.
 Independent review was attempted but the review agent failed due to a usage
 limit before producing findings. This is an author self-review, not independent
 review approval. No remote push, merge, or deployment was performed.
+
+## PR #320 review follow-up
+
+Both P2 findings were reproduced by three failing regression cases and fixed:
+
+- An open empty history snapshot accepts its first nonempty history update,
+  then preserves its order until the menu is reopened.
+- Recent metadata has its own request/loading/error/retry state, independent
+  of Favorites. Unrelated favorite additions cannot clear unloaded-source
+  recent links while the favorite request is pending or fails.
+
+Follow-up validation: 331 unit files / 3,979 tests passed; 18 focused tests
+passed; production build and retrieval-page-icons browser test passed;
+TypeScript, targeted ESLint, and diff checks passed. The first standalone
+TypeScript invocation overlapped the browser build clearing generated
+`.next/types`; rerunning sequentially after the build passed.
