@@ -21,9 +21,10 @@ export function SharesNavigation({ workspaceId, discussionsBadge }: { workspaceI
   const router = useRouter();
   const derived = parseSharesTab(params.get("tab"));
   const [optimistic, setOptimistic] = useState<{ from: SharesTab; to: SharesTab } | null>(null);
-  const active = optimistic && derived === optimistic.from ? optimistic.to : derived;
+  // Keep the last click active even if an older navigation updates the URL first.
+  const active = optimistic?.to ?? derived;
   useEffect(() => {
-    if (optimistic && derived !== optimistic.from) setOptimistic(null);
+    if (optimistic && derived === optimistic.to) setOptimistic(null);
   }, [derived, optimistic]);
   // Inbox can mark all followed discussions read without leaving this route.
   // Refresh the server-projected badge (and list) when notifications change.

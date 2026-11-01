@@ -236,20 +236,21 @@ describe("the Inbox badge counts a reader's followed discussions as the Inbox li
   it("counts an answered discussion until it is seen, and nothing for an unanswered one or a dead link", async () => {
     const f = await fixture();
     const badge = async () => (await f.service.countUnreadForOwner(f.reader)).count;
+    const sharesBadge = async () => f.service.countUnreadFollowedDiscussions(f.reader);
     const listed = async () => (await f.service.listUnreadForOwner(f.reader)).notifications.length;
     const thread = await f.start();
-    expect([await badge(), await listed()]).toEqual([0, 0]);
+    expect([await badge(), await listed(), await sharesBadge()]).toEqual([0, 0, 0]);
     await f.ownerReply(thread.id);
     await f.ownerReply(thread.id, "And more");
     // One entry per discussion, however many replies it holds.
-    expect([await badge(), await listed()]).toEqual([1, 1]);
+    expect([await badge(), await listed(), await sharesBadge()]).toEqual([1, 1, 1]);
     await f.service.markSeenForLink(f.reader, { token: f.token, threadId: thread.id });
     f.time.tick();
-    expect([await badge(), await listed()]).toEqual([0, 0]);
+    expect([await badge(), await listed(), await sharesBadge()]).toEqual([0, 0, 0]);
     await f.ownerReply(thread.id, "Later");
-    expect([await badge(), await listed()]).toEqual([1, 1]);
+    expect([await badge(), await listed(), await sharesBadge()]).toEqual([1, 1, 1]);
     await f.shares.revoke(f.owner, f.link.id);
-    expect([await badge(), await listed()]).toEqual([0, 0]);
+    expect([await badge(), await listed(), await sharesBadge()]).toEqual([0, 0, 0]);
   });
 });
 
@@ -261,6 +262,8 @@ describe("batched review lookups", () => {
     const missing = randomUUID();
     const threads = await f.uow.run(r => r.reviewThreads.findByIds([first.id, second.id, missing]));
     expect(threads.map(thread => thread.id).sort()).toEqual([first.id, second.id].sort());
+    const titles = await f.uow.run(r => r.revisions.findCurrentTitlesByIds([f.documentId, missing]));
+    expect([...titles]).toEqual([[f.documentId, "Review"]]);
     const revisions = await f.uow.run(r => r.revisions.findCurrentByIds([f.documentId, missing]));
     expect(revisions.map(revision => ({ id: revision.id, documentId: revision.documentId })))
       .toEqual([{ id: f.revisionId, documentId: f.documentId }]);

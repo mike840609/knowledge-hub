@@ -10,11 +10,18 @@ export const requireSharesAccess = cache(async (workspaceId: string): Promise<vo
   await services.shares.requireManagement(caller, workspaceId);
 });
 
-/** Every followed discussion, once per request; the tab bar's badge and the Discussions tab share it. */
+/** Full followed discussions for the Discussions tab, request-cached. */
 export const getFollowedDiscussions = cache(async (): Promise<FollowedDiscussionView[]> => {
   const services = applicationServices();
   const { caller } = await services.establishTrustedCaller();
   return (await services.reviews.listFollowedDiscussions(caller)).items;
+});
+
+/** Count unread followed discussions without fetching their revision/title data. */
+export const getFollowedUnreadCount = cache(async (): Promise<number> => {
+  const services = applicationServices();
+  const { caller } = await services.establishTrustedCaller();
+  return services.reviews.countUnreadFollowedDiscussions(caller);
 });
 
 /** The four refusals that mean this route does not exist for this caller. */

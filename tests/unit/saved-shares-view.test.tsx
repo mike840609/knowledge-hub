@@ -52,5 +52,24 @@ it("keeps the focused saved-share search when a stale result is rendered",async(
  expect(input.value).toBe("previous");
  await act(async()=>input.blur());
  await mount({...model,query:{q:"other",status:"all",page:1}});
- expect(input.value).toBe("other");
+ expect(input.value).toBe("previous");
+ await mount({...model,query:{q:"previous",status:"all",page:1}});
+ expect(input.value).toBe("previous");
+});
+
+it("ignores an older saved-share search reply after the latest edit loses focus", async () => {
+ await mount({...model,query:{q:"guide",status:"all",page:1}});
+ const input=host.querySelector<HTMLInputElement>("#saved-shares-query")!;
+ await act(async()=>{
+  input.focus();
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")!.set!.call(input,"guidebook");
+  input.dispatchEvent(new Event("input",{bubbles:true}));
+ });
+ expect(input.value).toBe("guidebook");
+ await act(async()=>input.blur());
+ await mount({...model,query:{q:"guides",status:"all",page:1}});
+ expect(input.value).toBe("guidebook");
+ await mount({...model,query:{q:"guidebook",status:"all",page:1}});
+ await mount({...model,query:{q:"guide",status:"all",page:1}});
+ expect(input.value).toBe("guidebook");
 });

@@ -110,6 +110,29 @@ it("keeps the focused search draft when an older server query arrives", async ()
     expect(input.value).toBe("previous");
     await act(async () => input.blur());
     await act(async () => root.render(<ShareManagementView workspaceId="ws" model={model("other")} />));
-    expect(input.value).toBe("other");
+    expect(input.value).toBe("previous");
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={model("previous")} />));
+    expect(input.value).toBe("previous");
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});
+
+it("does not overwrite typed search after blur when an older response arrives", async () => {
+  const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+  const model = (q: string) => ({ items: [], query: { q, status: "all" as const, page: 1 }, hasNext: false });
+  try {
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={model("guide")} />));
+    const input = host.querySelector<HTMLInputElement>("#shares-query")!;
+    await act(async () => {
+      input.focus();
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "guidebook");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(input.value).toBe("guidebook");
+    await act(async () => input.blur());
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={model("guides")} />));
+    expect(input.value).toBe("guidebook");
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={model("guidebook")} />));
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={model("guide")} />));
+    expect(input.value).toBe("guidebook");
   } finally { await act(async () => root.unmount()); host.remove(); }
 });

@@ -124,6 +124,13 @@ export class DocumentReviewService {
       await r.reviewFollows.markSeen(input.threadId, caller.identity.id, this.clock());
     });
   }
+  /** A lightweight unread count: no revision titles, author names or Markdown. */
+  async countUnreadFollowedDiscussions(caller: CallerContext): Promise<number> {
+    return this.uow.run(async r => {
+      const followed = await this.followedThreads(r, caller.identity.id);
+      return followed.filter(({ summary }) => !("unavailable" in summary) && summary.unread > 0).length;
+    });
+  }
   /** Shares → Discussions: every discussion the caller follows, including ones no one has answered. */
   async listFollowedDiscussions(caller: CallerContext): Promise<{ items: FollowedDiscussionView[] }> {
     return this.uow.run(async r => {
@@ -136,10 +143,7 @@ export class DocumentReviewService {
         documentIds.add(thread.documentId);
         authorIds.add(summary.latest.authorUserId);
       }
-      const revisions = new Map(
-        (await r.revisions.findCurrentByIds([...documentIds]))
-          .map(revision => [revision.documentId, revision]),
-      );
+      const titles = await r.revisions.findCurrentTitlesByIds([...documentIds]);
       const users = new Map(
         (await r.users.findByIds([...authorIds]))
           .map(user => [user.id, user]),
@@ -147,7 +151,7 @@ export class DocumentReviewService {
       for (const { thread, link, summary } of followed) {
         if ("unavailable" in summary) { items.push({ threadId: thread.id, linkAvailable: false }); continue; }
         items.push({
-          threadId: thread.id, linkAvailable: true, token: link!.token, documentTitle: revisions.get(thread.documentId)?.title ?? "", threadStatus: thread.status,
+          threadId: thread.id, linkAvailable: true, token: link!.token, documentTitle: titles.get(thread.documentId) ?? "", threadStatus: thread.status,
           authorName: users.get(summary.latest.authorUserId)?.name,
           excerpt: [...summary.latest.body].slice(0, EXCERPT_LIMIT).join(""), latestAt: summary.latest.createdAt, unread: summary.unread,
         });
@@ -217,10 +221,7 @@ export class DocumentReviewService {
       documentIds.add(thread.documentId);
       if (summary.latestReply) authorIds.add(summary.latestReply.authorUserId);
     }
-    const titles = new Map(
-      (await r.revisions.findCurrentByIds([...documentIds]))
-        .map(revision => [revision.documentId, revision.title]),
-    );
+    const titles = await r.revisions.findCurrentTitlesByIds([...documentIds]);
     const names = new Map(
       (await r.users.findByIds([...authorIds]))
         .map(user => [user.id, user.name]),

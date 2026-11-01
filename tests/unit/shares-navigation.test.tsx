@@ -90,6 +90,28 @@ it("ignores an old link settling after a newer tab click", async () => {
   expect(tabs.mine.getAttribute("aria-current")).toBeNull();
 });
 
+it("keeps the newest tab selected when an older route commits first", async () => {
+  const tabs = await mount(null);
+  const savedHref = "/w/ws/shares?tab=saved";
+  const discussionsHref = "/w/ws/shares?tab=discussions";
+  state.pendingByHref[savedHref] = true;
+  await act(async () => tabs.saved.click());
+  await mount(null);
+  state.pendingByHref[discussionsHref] = true;
+  await act(async () => tabs.discussions.click());
+  await mount(null);
+  await mount("saved"); // The older transition commits out of order.
+  expect(tabs.discussions.getAttribute("aria-current")).toBe("page");
+  state.pendingByHref[savedHref] = false;
+  await mount("saved");
+  expect(tabs.discussions.getAttribute("aria-current")).toBe("page");
+  await mount("discussions"); // The most recent destination wins.
+  expect(tabs.discussions.getAttribute("aria-current")).toBe("page");
+  state.pendingByHref[discussionsHref] = false;
+  await mount("discussions");
+  expect(tabs.saved.getAttribute("aria-current")).toBeNull();
+});
+
 it("refreshes the server badge after Inbox notification changes", async () => {
   await mount(null);
   await act(async () => window.dispatchEvent(new Event("kh:notification-changed")));

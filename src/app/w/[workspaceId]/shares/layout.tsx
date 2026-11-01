@@ -2,7 +2,7 @@ import { Suspense, type ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/shell/page-header";
 import { SharesNavigation } from "@/components/knowledge/shares-navigation";
-import { getFollowedDiscussions, requireSharesAccess, sharesNotFound } from "@/server/shares-read";
+import { getFollowedUnreadCount, requireSharesAccess, sharesNotFound } from "@/server/shares-read";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +43,7 @@ export default async function SharesLayout({ children, params }: { children: Rea
 async function FollowedCountBadge() {
   let unread = 0;
   try {
-    unread = (await getFollowedDiscussions()).filter(item => item.linkAvailable && item.unread > 0).length;
+    unread = await getFollowedUnreadCount();
   } catch {
     // The badge is optional; a failure here must not take the page down.
   }

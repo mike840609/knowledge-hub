@@ -12,6 +12,8 @@ export interface RevisionRepository {
   findCurrent(documentId: string): Promise<KnowledgeRevision | null>;
   /** The current revision of many documents in one statement; returns only ids that exist. */
   findCurrentByIds(documentIds: readonly string[]): Promise<KnowledgeRevision[]>;
+  /** Titles for followed discussions, without full Markdown or metadata. */
+  findCurrentTitlesByIds(documentIds: readonly string[]): Promise<Map<string, string>>;
   findByRevisionNo(documentId: string, revisionNo: number): Promise<KnowledgeRevision | null>;
   listByDocument(documentId: string): Promise<KnowledgeRevision[]>;
   listSummariesByDocument(documentId: string): Promise<KnowledgeRevisionSummary[]>;
