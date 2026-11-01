@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { SourceTreeCache } from '@/components/knowledge/source-tree-cache';
+import { SourceTreeCache, commitSourceTree } from '@/components/knowledge/source-tree-cache';
 it('deduplicates concurrent expansion and caches even an empty result', async () => {
  let resolve!: (v: unknown) => void;
  const fetcher = vi.fn(() => new Promise(r => {resolve=r;}));
@@ -29,4 +29,22 @@ it('a fresh snapshot drops extra cached trees but seeds the updated current tree
  await old.ensure('extra');expect(old.snapshot().extra.status).toBe('loaded');
  const fresh=new SourceTreeCache('w',[{source,tree:[]}]);
  expect(fresh.snapshot().extra).toBeUndefined();expect(fresh.snapshot().s.status).toBe('loaded');
+});
+
+it('publishes the committed source tree to active caches, not other sources', () => {
+ const source={id:'source-a',name:'A'} as never;
+ const other={id:'source-b',name:'B'} as never;
+ const old=[{id:'a',type:'folder',label:'a',position:0,parentId:null,status:'ACTIVE'}] as never;
+ const fresh=[{id:'a',type:'folder',label:'a',position:1,parentId:null,status:'ACTIVE'}] as never;
+ const cache=new SourceTreeCache('workspace-commit-1',[{source,tree:old},{source:other,tree:[]}]);
+ const seen=vi.fn(); const unsubscribe=cache.subscribe(seen);
+ commitSourceTree('workspace-commit-1','source-a',fresh);
+ expect(cache.snapshot()['source-a']).toEqual({status:'loaded',tree:fresh});
+ expect(cache.snapshot()['source-b']).toEqual({status:'loaded',tree:[]});
+ expect(seen).toHaveBeenCalledTimes(1);
+ const remounted=new SourceTreeCache('workspace-commit-1',[{source,tree:old}]);
+ expect(remounted.snapshot()['source-a']).toEqual({status:'loaded',tree:fresh});
+ const reconciled=new SourceTreeCache('workspace-commit-1',[{source,tree:fresh}]);
+ expect(reconciled.snapshot()['source-a']).toEqual({status:'loaded',tree:fresh});
+ unsubscribe();
 });
