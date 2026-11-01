@@ -1,6 +1,6 @@
 # Recent Documents Menu Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Replace the shifting inline Recent list with a Documents toolbar history menu.
 
@@ -38,9 +38,9 @@
 - Consumes: `useSidebarShortcuts(workspaceId, idsKey, includeArchived, snapshot)` and existing `shortcutMenuItem(key)`.
 - Produces: hook adds `loading: boolean`; SourceSidebar props remain unchanged; clock button accessible name is `Recent documents`.
 
-- [ ] Write behavioral tests for no inline list, clock menu displaying all six fixture recents, close on selection, latest order on reopen, stable order while open, empty/loading/error/retry, delayed history, exclusions, and source/read-only cues. Adapt page-icon E2E to use the clock and verify keyboard/drawer behavior.
-- [ ] Run `npm run test:unit -- tests/unit/source-sidebar-recent-menu.test.tsx tests/unit/sidebar-shortcuts-transition.test.tsx`; expect missing clock/loading failures before implementation.
-- [ ] Implement the menu using existing controls. Capture history keys on opening (or on delayed history readiness), filter against current eligible metadata, and remove obsolete inline state/helper. Use existing menu links and close semantics.
-- [ ] Run the focused tests plus Favorites and shortcut tests; expect all pass. Run `npm run typecheck` and targeted ESLint; expect success.
-- [ ] Run `npm run test:unit`; expect success or identify unrelated failures. Run the isolated browser harness for `retrieval-page-icons.spec.ts`; expect current/new icon, navigation, keyboard, and layout assertions pass. Record infrastructure limitations if any.
-- [ ] Commit the implementation and tests. Obtain one fresh review under executing-plans, address substantive findings, and report actual verification.
+- [x] Write behavioral tests for no inline list, clock menu displaying all six fixture recents, close on selection, latest order on reopen, stable order while open, empty/loading/error/retry, delayed history, exclusions, and source/read-only cues. Adapt page-icon E2E to use the clock and verify keyboard/drawer behavior.
+- [x] Run `npm run test:unit -- tests/unit/source-sidebar-recent-menu.test.tsx tests/unit/sidebar-shortcuts-transition.test.tsx`; expect missing clock/loading failures before implementation.
+- [x] Implement the menu using existing controls. Capture history keys on opening (or on delayed history readiness), filter against current eligible metadata, and remove obsolete inline state/helper. Use existing menu links and close semantics.
+- [x] Run the focused tests plus Favorites and shortcut tests; expect all pass. Run `npm run typecheck` and targeted ESLint; expect success.
+- [x] Run `npm run test:unit`; expect success or identify unrelated failures. Run the isolated browser harness for `retrieval-page-icons.spec.ts`; expect current/new icon, navigation, keyboard, and layout assertions pass. Record infrastructure limitations if any.
+- [x] Commit the implementation and tests. Attempt one fresh review under executing-plans, address substantive findings, and report actual verification. The reviewer hit its usage limit before producing findings; an author self-review was completed instead, with this limitation recorded.
