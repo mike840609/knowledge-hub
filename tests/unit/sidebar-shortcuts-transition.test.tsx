@@ -15,10 +15,12 @@ it.each([true,false])('defers background shortcut response (success=%s) so it ca
  const host=document.createElement('div'),root=createRoot(host);
  try{
   await act(async()=>root.render(<Host/>));
+  expect(api.loading).toBe(true);
   await act(async()=>answer(Response.json({documents:[{documentId:'d',label:'Arrived'}]},{status:success?200:503})));
   expect(api.documents).toEqual([]);expect(api.error).toBeFalsy();
   expect(transitions).toHaveLength(1);
   await act(async()=>transitions.splice(0).forEach(run=>run()));
+  expect(api.loading).toBe(false);
   if(success)expect(api.documents).toEqual([{documentId:'d',label:'Arrived'}]);else expect(api.error).toBe(true);
  }finally{await act(async()=>root.unmount());}
 });

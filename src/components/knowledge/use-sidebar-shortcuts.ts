@@ -4,7 +4,7 @@ export type SidebarShortcut = { documentId: string; sourceId: string; label: str
 export function useSidebarShortcuts(workspaceId: string, idsKey: string, includeArchived: boolean, snapshot: unknown) {
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<{ key: string; documents: SidebarShortcut[]; error: boolean } | null>(null);
-  const key = `${workspaceId}:${includeArchived}:${idsKey}`;
+  const key = `${workspaceId}:${includeArchived}:${idsKey}:${attempt}`;
   useEffect(() => {
     let live = true; const controller = new AbortController();
     const ids = idsKey ? idsKey.split(',') : [];
@@ -23,5 +23,5 @@ export function useSidebarShortcuts(workspaceId: string, idsKey: string, include
     })().catch(() => { if (live) startTransition(() => setResult({ key, documents: [], error: true })); });
     return () => { live = false; controller.abort(); };
   }, [workspaceId, idsKey, includeArchived, key, snapshot, attempt]);
-  return { documents: result?.key === key ? result.documents : [], error: result?.key === key && result.error, retry: () => setAttempt(a => a + 1) };
+  return { loading: Boolean(idsKey) && result?.key !== key, documents: result?.key === key ? result.documents : [], error: result?.key === key && result.error, retry: () => setAttempt(a => a + 1) };
 }

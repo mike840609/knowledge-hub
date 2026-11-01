@@ -16,8 +16,7 @@ async function createNote(page: Page, workspaceId: string, title: string) {
 
 /**
  * Retrieval-first layout: at 1024–1279 the explorer is a strip and a drawer,
- * not a 288px column; above 1280 it is inline again. Favorites and Recent are
- * visible on arrival, because finding a document is the first job.
+ * not a 288px column; above 1280 it is inline again. Favorites stay visible on arrival; Recent is available from the toolbar menu.
  */
 test("the explorer becomes a drawer between the narrow and wide desktop layouts", async ({ page }) => {
   const workspaceId = await mySpace(page);
@@ -51,7 +50,7 @@ test("the explorer becomes a drawer between the narrow and wide desktop layouts"
   await expect(page.getByRole("button", { name: "Show documents", exact: true })).toHaveCount(0);
 });
 
-test("Favorites and Recent are open without a first click", async ({ page }) => {
+test("Favorites are visible on arrival and Recent opens from the toolbar", async ({ page }) => {
   const workspaceId = await mySpace(page);
   const recentTitle = unique("Retrieval recent");
   const favoriteTitle = unique("Retrieval favorite");
@@ -65,12 +64,15 @@ test("Favorites and Recent are open without a first click", async ({ page }) => 
   await page.getByRole("button", { name: `Add to favorites: ${favoriteTitle}`, exact: true }).click();
 
   const favorites = page.getByRole("region", { name: "Favorites" });
-  const recentRegion = page.getByRole("region", { name: "Recent" });
+  const clock = page.getByRole("button", { name: "Recent documents", exact: true });
+  await expect(page.getByRole("region", { name: "Recent documents", exact: true })).toHaveCount(0);
+  await expect(clock).toHaveAttribute("aria-expanded", "false");
   await expect(favorites.getByRole("link", { name: favoriteTitle, exact: true })).toBeVisible(ROUND_TRIP);
-  await expect(recentRegion.getByRole("link", { name: recentTitle, exact: true })).toBeVisible(ROUND_TRIP);
-  // The headings say they are open, which is the difference from the old default.
+
+  // Favorites remain expanded; history is shown only on demand.
   await expect(favorites.getByRole("button", { name: "Favorites", exact: true })).toHaveAttribute("aria-expanded", "true");
-  await expect(recentRegion.getByRole("button", { name: "Recent", exact: true })).toHaveAttribute("aria-expanded", "true");
+  await clock.click();
+  await expect(page.getByRole("menuitem").filter({ hasText: recentTitle })).toBeVisible(ROUND_TRIP);
 });
 
 // The explorer is what records an open, so it stays mounted where it is not shown: a document read at a width
@@ -87,11 +89,16 @@ for (const width of [1100, 390]) {
     await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(firstTitle, ROUND_TRIP);
     await page.goto(second.href);
     await page.getByRole("button", { name: width < 1024 ? "Open menu" : "Show documents", exact: true }).click();
-    await expect(page.getByRole("region", { name: "Recent" }).getByRole("link", { name: firstTitle, exact: true })).toBeVisible(ROUND_TRIP);
+    await page.getByRole("button", { name: "Recent documents", exact: true }).click();
+    const item = page.getByRole("menuitem").filter({ hasText: firstTitle });
+    await expect(item).toBeVisible(ROUND_TRIP);
+    await item.click();
+    await expect(page).toHaveURL(new RegExp(`${first.documentId}$`), ROUND_TRIP);
+    await expect(page.getByRole("menu")).toBeHidden();
   });
 }
 
-test("a section closed in the drawer is still closed when the drawer opens again", async ({ page }) => {
+test("Recent menu is closed on drawer reopening and page reload", async ({ page }) => {
   const workspaceId = await mySpace(page);
   const read = await createNote(page, workspaceId, unique("Closed recent read"));
   const note = await createNote(page, workspaceId, unique("Closed recent"));
@@ -105,17 +112,19 @@ test("a section closed in the drawer is still closed when the drawer opens again
   const heading = (name: string) => browse.getByRole("button", { name, exact: true });
 
   await strip.click();
-  await heading("Recent").click();
-  await expect(heading("Recent")).toHaveAttribute("aria-expanded", "false");
+  await heading("Recent documents").click();
+  await expect(heading("Recent documents")).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Escape");
+  await expect(heading("Recent documents")).toHaveAttribute("aria-expanded", "false");
   await page.keyboard.press("Escape");
   await expect(browse).toHaveCount(0);
   await expect(strip).toBeFocused();
 
   await strip.click();
-  await expect(heading("Recent")).toHaveAttribute("aria-expanded", "false", ROUND_TRIP);
+  await expect(heading("Recent documents")).toHaveAttribute("aria-expanded", "false", ROUND_TRIP);
   await page.reload();
   await strip.click();
-  await expect(heading("Recent")).toHaveAttribute("aria-expanded", "false", ROUND_TRIP);
+  await expect(heading("Recent documents")).toHaveAttribute("aria-expanded", "false", ROUND_TRIP);
 });
 
 test("the drawer closes when the page changes from outside it", async ({ page }) => {
