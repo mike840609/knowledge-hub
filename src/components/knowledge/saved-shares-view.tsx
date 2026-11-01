@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Bookmark, Search } from "lucide-react";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -26,6 +26,11 @@ export function SavedSharesView({ workspaceId,model,filterError }: { workspaceId
   const changeQuery = (value: string) => {
     intendedQuery.current = value.trim();
     setQuery(value);
+  };
+  // Opening the reset link in another tab must not reset this tab's draft.
+  const clearOnNavigation = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    changeQuery("");
   };
   useEffect(() => {
     if (intendedQuery.current !== null && model.query.q !== intendedQuery.current) return;
@@ -56,10 +61,10 @@ export function SavedSharesView({ workspaceId,model,filterError }: { workspaceId
       <div className="relative basis-full sm:w-72 sm:flex-none"><label className="sr-only" htmlFor="saved-shares-query">Find saved shares</label><Search size={15} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-kh-text-muted"/><Input ref={queryInput} id="saved-shares-query" name="q" value={query} onChange={event=>changeQuery(event.target.value)} placeholder="Find title or sharing person…" maxLength={200} className="kh-search-field"/></div>
       <label className="sr-only" htmlFor="saved-shares-status">Saved share status</label><SelectMenu id="saved-shares-status" name="status" value={status} onValueChange={(value)=>applyAndSearch(filterForm.current,()=>setStatus(value))} options={[{value:"all",label:"All statuses"},{value:"available",label:"Available"},{value:"unavailable",label:"Unavailable"}]}/>
       <LiveSearch/>
-      {filtered&&<Link className="kh-focus-ring rounded-md text-body-sm text-kh-link" href={clear} onClick={() => changeQuery("")}>Clear filters</Link>}
+      {filtered&&<Link className="kh-focus-ring rounded-md text-body-sm text-kh-link" href={clear} onClick={clearOnNavigation}>Clear filters</Link>}
     </form>
     {(error||filterError)&&<p role="alert" className="mt-3 text-body-sm text-kh-danger">{filterError||error}</p>}
-    {!filterError&&items.length===0&&<EmptyState icon={Bookmark} illustration={!filtered?<Illustration kind="shares"/>:undefined} title={filtered?"No saved shares match these filters.":"No saved shares yet."} description={filtered?"Clear the filters to see your other saved shares.":"Open an article shared with you and choose Save while signed in. Find it here on any device; the sender can still revoke access."} action={filtered?<Link className={buttonClasses({variant:"secondary"})} href={clear} onClick={() => changeQuery("")}>Clear filters</Link>:undefined}/>}
+    {!filterError&&items.length===0&&<EmptyState icon={Bookmark} illustration={!filtered?<Illustration kind="shares"/>:undefined} title={filtered?"No saved shares match these filters.":"No saved shares yet."} description={filtered?"Clear the filters to see your other saved shares.":"Open an article shared with you and choose Save while signed in. Find it here on any device; the sender can still revoke access."} action={filtered?<Link className={buttonClasses({variant:"secondary"})} href={clear} onClick={clearOnNavigation}>Clear filters</Link>:undefined}/>}
     {items.length>0&&<div aria-hidden="true" className="mt-4 hidden grid-cols-[minmax(0,1fr)_7rem_7rem_5rem] gap-3 border-b border-kh-border px-3 py-2 text-caption text-kh-text-muted md:grid"><span>Article / shared by</span><span>Saved</span><span>Expires</span><span/></div>}
     <ul aria-label="Saved shares" onKeyDown={navigateListRows} className="mt-4 space-y-2 md:mt-0 md:space-y-0">{items.map(item=><li key={item.id} className="group rounded-md border border-kh-border bg-kh-bg p-3 hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover md:rounded-none md:border-x-0 md:border-t-0 md:py-2">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 md:grid-cols-[minmax(0,1fr)_7rem_7rem_5rem]">

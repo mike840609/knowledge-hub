@@ -73,3 +73,11 @@ it("ignores an older saved-share search reply after the latest edit loses focus"
  await mount({...model,query:{q:"guide",status:"all",page:1}});
  expect(input.value).toBe("guidebook");
 });
+
+it("preserves saved-search text when Clear filters is opened in a new tab", async () => {
+ await mount({...model,query:{q:"guide",status:"all",page:1}});
+ const input=host.querySelector<HTMLInputElement>("#saved-shares-query")!;
+ const clear=[...host.querySelectorAll("a")].find(a=>a.textContent==="Clear filters")!;
+ await act(async()=>clear.dispatchEvent(new MouseEvent("click",{bubbles:true,cancelable:true,metaKey:true,button:0})));
+ expect(input.value).toBe("guide");
+});

@@ -136,3 +136,14 @@ it("does not overwrite typed search after blur when an older response arrives", 
     expect(input.value).toBe("guidebook");
   } finally { await act(async () => root.unmount()); host.remove(); }
 });
+
+it("does not clear the current search on a modified Clear filters click", async () => {
+  const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+  try {
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={{ items: [], query: { q: "guide", status: "all", page: 1 }, hasNext: false }} />));
+    const input = host.querySelector<HTMLInputElement>("#shares-query")!;
+    const clear = [...host.querySelectorAll("a")].find(a => a.textContent === "Clear filters")!;
+    await act(async () => clear.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, metaKey: true, button: 0 })));
+    expect(input.value).toBe("guide");
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});

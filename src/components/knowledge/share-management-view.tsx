@@ -5,7 +5,7 @@ import { Illustration } from "@/components/knowledge/illustration";
 import { Share2 } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { WorkspaceContentActions } from "./workspace-content-actions";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { reviewRequest } from "./review-thread-list";
 import Link from "next/link";
 import { Copy, MoreHorizontal, Search } from "lucide-react";
@@ -43,6 +43,11 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
   const changeQuery = (value: string) => {
     intendedQuery.current = value.trim();
     setQuery(value);
+  };
+  // Opening the reset link in another tab must not reset this tab's draft.
+  const clearOnNavigation = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    changeQuery("");
   };
   useEffect(() => {
     if (intendedQuery.current !== null && model.query.q !== intendedQuery.current) return;
@@ -125,13 +130,13 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
       <label htmlFor="shares-status" className="sr-only">Status</label>
       <SelectMenu id="shares-status" name="status" value={status} onValueChange={(value) => applyAndSearch(filterForm.current, () => setStatus(value))} options={[{ value: "all", label: "All statuses" }, ...Object.entries(labels).map(([value, label]) => ({ value, label }))]} />
       <LiveSearch />
-      {model.query.q || model.query.status !== "active" || model.query.page > 1 ? <Link className="kh-focus-ring rounded-md text-body-sm text-kh-link" href={`/w/${workspaceId}/shares`} onClick={() => changeQuery("")}>Clear filters</Link> : null}
+      {model.query.q || model.query.status !== "active" || model.query.page > 1 ? <Link className="kh-focus-ring rounded-md text-body-sm text-kh-link" href={`/w/${workspaceId}/shares`} onClick={clearOnNavigation}>Clear filters</Link> : null}
     </form>
     {model.items.length > 0 ? <p role="status" className="ml-auto text-caption text-kh-text-muted">{model.items.length} {model.items.length === 1 ? "share" : "shares"}{model.query.page > 1 || model.hasNext ? " on this page" : ""}</p> : null}
     </div>
     {filterError ? <p role="alert" className="mt-3 text-body text-kh-danger">{filterError}</p> : null}
     <GovernanceError error={error} />
-    {!filterError && model.items.length === 0 ? <EmptyState icon={Share2} illustration={!model.query.q && model.query.page === 1 && (model.query.status === "all" || (model.query.status === "active" && !hasDocuments)) ? <Illustration kind="shares" /> : undefined} title={!model.query.q && model.query.page === 1 && model.query.status === "active" ? "No active share links." : filtered ? "No shares match these filters." : "No share links yet."} description={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? "Clear the filters to see links with other titles or statuses." : hasDocuments ? "Open a document and choose Share to create a link." : "Links you share to your documents appear here."} action={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/shares?status=all`} onClick={() => changeQuery("")}>Show all shares</Link> : hasDocuments ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/knowledge`}>Browse documents</Link> : <WorkspaceContentActions workspaceId={workspaceId} />} /> : null}
+    {!filterError && model.items.length === 0 ? <EmptyState icon={Share2} illustration={!model.query.q && model.query.page === 1 && (model.query.status === "all" || (model.query.status === "active" && !hasDocuments)) ? <Illustration kind="shares" /> : undefined} title={!model.query.q && model.query.page === 1 && model.query.status === "active" ? "No active share links." : filtered ? "No shares match these filters." : "No share links yet."} description={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? "Clear the filters to see links with other titles or statuses." : hasDocuments ? "Open a document and choose Share to create a link." : "Links you share to your documents appear here."} action={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/shares?status=all`} onClick={clearOnNavigation}>Show all shares</Link> : hasDocuments ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/knowledge`}>Browse documents</Link> : <WorkspaceContentActions workspaceId={workspaceId} />} /> : null}
     {model.items.length > 0 ? <div aria-hidden="true" className="mt-4 hidden grid-cols-[minmax(0,1fr)_6rem_7rem_4rem_6rem] items-center gap-3 border-b border-kh-border px-3 py-2 text-caption text-kh-text-muted md:grid"><span>Document / link</span><span>Status</span><span>Expires</span><span className="text-right">Views</span><span /></div> : null}
     <ul aria-label="Share links" onKeyDown={navigateListRows} className="mt-4 space-y-2 md:mt-0 md:space-y-0">
       {model.items.map(item => {
