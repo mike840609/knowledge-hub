@@ -40,14 +40,36 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
     recipientUserId: string,
     before?: { createdAt: Date; id: string },
     limit = 100,
+    allowedTeamWorkspaceIds?: readonly string[],
   ): Promise<ShareCommentEvent[]> {
     const cursor = before ? "AND (e.created_at < ? OR (e.created_at = ? AND e.id < ?))" : "";
+    // Filter revoked Teams in SQL before LIMIT. The service supplies a freshly
+    // evaluated set per request, then independently rejudges each returned document.
+    // Keeping the unscoped form supports existing repository-only consumers.
+    const teamFilter = allowedTeamWorkspaceIds === undefined
+      ? ""
+      : allowedTeamWorkspaceIds.length === 0
+        ? "AND e.recipient_user_id IS NULL"
+        : `AND (e.recipient_user_id IS NULL OR e.workspace_id IN (${allowedTeamWorkspaceIds.map(() => "?").join(",")}))`;
+    const params: (string | Date | number)[] = [recipientUserId, recipientUserId];
+    if (allowedTeamWorkspaceIds?.length) params.push(...allowedTeamWorkspaceIds);
+    if (before) params.push(before.createdAt, before.createdAt, before.id);
+    params.push(limit);
     const rows = await this.connection.query<DbRow[]>(
-      `SELECT e.* FROM share_comment_events e JOIN workspaces w ON w.id=e.workspace_id
-       WHERE ${OWNED} AND e.read_at IS NULL ${cursor} ORDER BY e.created_at DESC, e.id DESC LIMIT ?`,
-      before
-        ? [recipientUserId, recipientUserId, before.createdAt, before.createdAt, before.id, limit]
-        : [recipientUserId, recipientUserId, limit],
+      `SELECT e.* FROM share_comment_events e
+       JOIN workspaces w ON w.id=e.workspace_id
+       JOIN knowledge_documents d ON d.id=e.document_id
+       JOIN knowledge_sources s ON s.id=d.source_id
+       JOIN document_review_threads t ON t.id=e.thread_id
+       JOIN document_review_comments c ON c.id=e.comment_id
+       WHERE ${OWNED} AND e.read_at IS NULL ${teamFilter}
+         AND t.visibility='VISIBLE' AND c.visibility='VISIBLE' AND c.deleted_at IS NULL
+         AND (e.recipient_user_id IS NULL OR
+              (w.lifecycle_state='ACTIVE' AND s.status='ACTIVE'
+               AND d.status='ACTIVE' AND s.source_type='PUBLICATION'))
+         ${cursor}
+       ORDER BY e.created_at DESC, e.id DESC LIMIT ?`,
+      params,
     );
     return rows.map(map);
   }
