@@ -30,10 +30,12 @@ const request = mocks.request;
 const toast = mocks.toast;
 
 /** The hook needs a component to live in; this one hands its `moveNode` to the test. */
-const harness: { moveNode: TreeMutations["moveNode"] | null } = { moveNode: null };
+const harness: { moveNode: TreeMutations["moveNode"] | null; reorderNode: TreeMutations["reorderNode"] | null } = { moveNode: null, reorderNode: null };
 
 function Harness() {
-  harness.moveNode = useTreeMutations().moveNode;
+  const mutations = useTreeMutations();
+  harness.moveNode = mutations.moveNode;
+  harness.reorderNode = mutations.reorderNode;
   return null;
 }
 
@@ -51,6 +53,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   harness.moveNode = null;
+  harness.reorderNode = null;
 });
 
 function move(input: MoveNodeInput, report?: "dialog" | "toast") {
@@ -59,13 +62,43 @@ function move(input: MoveNodeInput, report?: "dialog" | "toast") {
 }
 
 const input: MoveNodeInput = {
+  sourceId: "s1",
   nodeId: "n1",
   label: "B",
   from: { parentId: null, position: 0 },
   to: { parentId: "f1", label: "F" },
 };
 
+function reorder(nodeId = "n2") {
+  if (!harness.reorderNode) throw new Error("The harness did not render.");
+  return harness.reorderNode({ sourceId: input.sourceId!, nodeId, position: 0 });
+}
+
 describe("source-scoped arrangement writes", () => {
+  it("blocks a dialog move while the tree has a pending keyboard reorder", async () => {
+    let finish!: () => void;
+    request.mockImplementationOnce(() => new Promise<undefined>((resolve) => { finish = () => resolve(undefined); }));
+    const first = reorder();
+    const second = await move(input, "dialog");
+    expect(second).toEqual({ ok: false, message: "A tree change is still in progress." });
+    expect(request).toHaveBeenCalledTimes(1);
+    await act(async () => { finish(); await first; });
+    expect((await move(input, "dialog")).ok).toBe(true);
+  });
+
+  it("blocks Undo from issuing a competing PATCH during another arrangement", async () => {
+    await move(input);
+    const undo = toast.mock.calls[0][0].undo as { run: () => Promise<void> };
+    let finish!: () => void;
+    request.mockImplementationOnce(() => new Promise<undefined>((resolve) => { finish = () => resolve(undefined); }));
+    const first = reorder();
+    await expect(undo.run()).rejects.toThrow("A tree change is still in progress.");
+    expect(request).toHaveBeenCalledTimes(2);
+    await act(async () => { finish(); await first; });
+    await undo.run();
+    expect(request).toHaveBeenCalledTimes(3);
+  });
+
   it("does not send another PATCH for one source while a prior move is unresolved", async () => {
     let finishFirst!: () => void;
     request.mockImplementationOnce(() => new Promise<undefined>((resolve) => { finishFirst = () => resolve(undefined); }));
