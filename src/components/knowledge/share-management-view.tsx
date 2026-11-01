@@ -40,6 +40,12 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
   useEffect(() => {
     if (document.activeElement !== queryInput.current) setQuery(model.query.q);
   }, [model.query.q]);
+  // Back/Forward wins even while the user keeps the search field focused.
+  useEffect(() => {
+    const syncHistory = () => setQuery(new URLSearchParams(window.location.search).get("q") ?? "");
+    window.addEventListener("popstate", syncHistory);
+    return () => window.removeEventListener("popstate", syncHistory);
+  }, []);
   const [unreadCounts, setUnreadCounts] = useState<UnreadShareCount[]>([]);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);

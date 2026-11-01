@@ -45,6 +45,11 @@ it("keeps the focused saved-share search when a stale result is rendered",async(
  await act(async()=>input.focus());
  await mount({...model,query:{q:"guide",status:"all",page:1}});
  expect(input.value).toBe("guidebook");
+ await act(async()=>{
+  window.history.replaceState(null,"","?tab=saved&q=previous");
+  window.dispatchEvent(new PopStateEvent("popstate"));
+ });
+ expect(input.value).toBe("previous");
  await act(async()=>input.blur());
  await mount({...model,query:{q:"other",status:"all",page:1}});
  expect(input.value).toBe("other");

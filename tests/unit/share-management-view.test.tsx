@@ -103,6 +103,11 @@ it("keeps the focused search draft when an older server query arrives", async ()
     await act(async () => input.focus());
     await act(async () => root.render(<ShareManagementView workspaceId="ws" model={model("guide")} />));
     expect(input.value).toBe("guidebook");
+    await act(async () => {
+      window.history.replaceState(null, "", "?q=previous");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(input.value).toBe("previous");
     await act(async () => input.blur());
     await act(async () => root.render(<ShareManagementView workspaceId="ws" model={model("other")} />));
     expect(input.value).toBe("other");

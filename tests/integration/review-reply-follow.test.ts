@@ -266,3 +266,16 @@ describe("batched review lookups", () => {
       .toEqual([{ id: f.revisionId, documentId: f.documentId }]);
   });
 });
+
+describe("batched followed-share validity", () => {
+  it("keeps revoked links unavailable without disclosing their content", async () => {
+    const f = await fixture();
+    const ids = [f.link.id, randomUUID()];
+    const before = await f.uow.run(r => r.shareLinks.findWithValidityByIds(ids, f.time.clock()));
+    expect(before.get(f.link.id)?.valid).toBe(true);
+    expect(before.size).toBe(1);
+    await f.shares.revoke(f.owner, f.link.id);
+    const after = await f.uow.run(r => r.shareLinks.findWithValidityByIds(ids, f.time.clock()));
+    expect(after.get(f.link.id)?.valid).toBe(false);
+  });
+});

@@ -23,6 +23,12 @@ export function SavedSharesView({ workspaceId,model,filterError }: { workspaceId
   useEffect(()=>{
     if(document.activeElement!==queryInput.current)setQuery(model.query.q);
   },[model.query.q]);
+  // Back/Forward wins even while the user keeps the search field focused.
+  useEffect(() => {
+    const syncHistory = () => setQuery(new URLSearchParams(window.location.search).get("q") ?? "");
+    window.addEventListener("popstate", syncHistory);
+    return () => window.removeEventListener("popstate", syncHistory);
+  }, []);
   const [busy,setBusy]=useState<string|null>(null),[error,setError]=useState(""),[removed,setRemoved]=useState(new Set<string>());
   // Optimistic removals belong to this server snapshot; a refresh may contain a re-saved link.
   useEffect(()=>setRemoved(new Set()),[model.items]);

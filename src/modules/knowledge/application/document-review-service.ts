@@ -175,7 +175,7 @@ export class DocumentReviewService {
   }
   /**
    * The caller's followed discussions with their link's state, judged now.
-   * Comments, threads, revisions and users come in batches; links and their judgement once per document and link.
+   * Threads, comments, links and validity inputs come in bounded batches.
    * ponytail: at most FOLLOW_LIMIT follows; cursor paging once readers follow more.
    */
   private async followedThreads(r: KnowledgeRepositories, userId: string) {
@@ -189,16 +189,15 @@ export class DocumentReviewService {
       const list = commentsByThread.get(comment.threadId);
       if (list) list.push(comment); else commentsByThread.set(comment.threadId, [comment]);
     }
-    const linksByDocument = new Map<string, DocumentShareLink[]>();
-    const validByLink = new Map<string, boolean>();
+    const states = await r.shareLinks.findWithValidityByIds(follows.map(follow => follow.shareLinkId), this.clock());
     const found = [];
     for (const follow of follows) {
       const thread = threads.get(follow.threadId);
       if (!thread) continue;
-      if (!linksByDocument.has(thread.documentId)) linksByDocument.set(thread.documentId, await r.shareLinks.listByDocument(thread.documentId));
-      const link = linksByDocument.get(thread.documentId)!.find(candidate => candidate.id === follow.shareLinkId);
-      if (link && !validByLink.has(link.id)) validByLink.set(link.id, await this.linkValid(r, link));
-      const linkValid = !!link && validByLink.get(link.id)!;
+      const state = states.get(follow.shareLinkId);
+      // Only the original document's bearer link can disclose a followed discussion.
+      const link = state?.link.documentId === thread.documentId ? state.link : undefined;
+      const linkValid = !!link && !!state?.valid;
       const summary = summarizeFollowedThread({ thread, comments: commentsByThread.get(thread.id) ?? [], userId, seenAt: follow.seenAt, linkValid });
       if (summary) found.push({ follow, thread, link, summary });
     }
@@ -236,16 +235,6 @@ export class DocumentReviewService {
       });
     }
     return views;
-  }
-  /** Whether a link opens now: the same judgement `linkScope` makes, without refusing. */
-  private async linkValid(r: KnowledgeRepositories, link: DocumentShareLink): Promise<boolean> {
-    try {
-      const scope = await this.scope(r, link.documentId, false);
-      return this.opens(r, scope, link);
-    } catch (error) {
-      if (error instanceof ShareLinkNotFoundError) return false;
-      throw error;
-    }
   }
   private async opens(r: KnowledgeRepositories, scope: Awaited<ReturnType<DocumentReviewService["scope"]>>, link: DocumentShareLink): Promise<boolean> {
     const membership = await r.workspaceMemberships.find(scope.workspace.id, link.createdBy);

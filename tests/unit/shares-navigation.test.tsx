@@ -8,18 +8,23 @@ import { SharesNavigation, parseSharesTab } from "@/components/knowledge/shares-
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const state = vi.hoisted(() => ({ pending: false, refresh: vi.fn() }));
+const state = vi.hoisted(() => ({ pending: false, pendingByHref: {} as Record<string, boolean>, refresh: vi.fn() }));
 
 vi.mock("next/navigation", () => ({ useSearchParams: vi.fn(), useRouter: () => ({ refresh: state.refresh }) }));
-vi.mock("next/link", () => ({
-  default: ({ href, children, prefetch, onClick, ...rest }: { href: string; children: ReactNode; prefetch?: boolean; onClick?: (event: MouseEvent<HTMLAnchorElement>) => void } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href">) =>
-    <a href={href} data-prefetch={prefetch ? "true" : undefined} onClick={event => { event.preventDefault(); onClick?.(event); }} {...rest}>{children}</a>,
-  useLinkStatus: () => ({ pending: state.pending }),
-}));
+vi.mock("next/link", async () => {
+  const React = await import("react");
+  const Href = React.createContext("");
+  const Provider = Href.Provider;
+  return {
+    default: ({ href, children, prefetch, onClick, ...rest }: { href: string; children: ReactNode; prefetch?: boolean; onClick?: (event: MouseEvent<HTMLAnchorElement>) => void } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href">) =>
+      <Provider value={href}><a href={href} data-prefetch={prefetch ? "true" : undefined} onClick={event => { event.preventDefault(); onClick?.(event); }} {...rest}>{children}</a></Provider>,
+    useLinkStatus: () => ({ pending: state.pending || !!state.pendingByHref[React.useContext(Href)] }),
+  };
+});
 
 let host: HTMLDivElement, root: Root;
 beforeEach(() => { host = document.createElement("div"); document.body.append(host); root = createRoot(host); });
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.clearAllMocks(); state.pending = false; });
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.clearAllMocks(); state.pending = false; state.pendingByHref = {}; });
 
 async function mount(tab: string | null, unread = 0) {
   vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams(tab ? `tab=${tab}` : "") as unknown as ReturnType<typeof useSearchParams>);
@@ -68,6 +73,21 @@ it("preserves an in-flight optimistic tab when the deferred badge arrives", asyn
   await act(async () => root.render(<SharesNavigation workspaceId="ws" discussionsBadge={<span aria-label="3 unread">3</span>} />));
   expect(tabs.saved.getAttribute("aria-current")).toBe("page");
   expect(tabs.discussions.textContent).toContain("3");
+});
+
+it("ignores an old link settling after a newer tab click", async () => {
+  const savedHref = "/w/ws/shares?tab=saved", discussionsHref = "/w/ws/shares?tab=discussions";
+  const tabs = await mount(null);
+  state.pendingByHref[savedHref] = true;
+  await act(async () => tabs.saved.click());
+  await mount(null);
+  state.pendingByHref[discussionsHref] = true;
+  await act(async () => tabs.discussions.click());
+  await mount(null);
+  state.pendingByHref[savedHref] = false;
+  await mount(null);
+  expect(tabs.discussions.getAttribute("aria-current")).toBe("page");
+  expect(tabs.mine.getAttribute("aria-current")).toBeNull();
 });
 
 it("refreshes the server badge after Inbox notification changes", async () => {

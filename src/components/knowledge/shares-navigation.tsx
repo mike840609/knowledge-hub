@@ -53,7 +53,7 @@ export function SharesNavigation({ workspaceId, discussionsBadge }: { workspaceI
             setOptimistic({ from: derived, to: section.id });
           }}
         >
-          <TabLabel onSettled={() => setOptimistic(null)}>
+          <TabLabel onSettled={() => setOptimistic(current => current?.to === section.id ? null : current)}>
             {section.label}
             {section.id === "discussions" && discussionsBadge}
           </TabLabel>
