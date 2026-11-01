@@ -106,7 +106,7 @@ describe("tree dragging", () => {
       row.dispatchEvent(event);
     };
     act(() => { fire(rowFor("A"), "dragstart"); fire(target, "dragover"); fire(target, "drop"); });
-    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:A", position: 1 });
+    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:A", position: 1 }, expect.any(Function));
     act(() => { fire(rowFor("C"), "dragstart"); fire(target, "dragover"); fire(target, "drop"); });
     expect(onReorder).toHaveBeenCalledTimes(1);
     await act(async () => { finish(true); });
@@ -286,7 +286,7 @@ describe("tree dragging", () => {
     };
     await act(async () => { fire(rowFor("A"), "dragstart"); target.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true, cancelable: true })); fire(target, "drop"); });
     expect(onReorder).toHaveBeenCalledTimes(1);
-    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:A", position: 1 });
+    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:A", position: 1 }, expect.any(Function));
   });
   it("announces a slow successful drop when no newer operation has started", async () => {
     vi.useFakeTimers();
@@ -365,7 +365,7 @@ describe("tree dragging", () => {
     act(() => { next = fire(rowFor("C"), "dragstart", 1); });
     expect(next?.defaultPrevented).toBe(false);
     await act(async () => { fire(target, "drop", 1); });
-    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:C", position: 1 });
+    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:C", position: 1 }, expect.any(Function));
   });
   it("does not rerender the tree for repeated dragovers at the same location", () => {
     const onRender = vi.fn();
@@ -406,7 +406,7 @@ describe("tree dragging", () => {
     let over: Event | undefined;
     await act(async () => { fire(rowFor("A"), "dragstart"); over = fire(target, "dragover"); fire(target, "drop"); });
     expect(over?.defaultPrevented).toBe(true);
-    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:A", position: 1 });
+    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:A", position: 1 }, expect.any(Function));
   });
   it("does not infer an append is unchanged from visible siblings alone", async () => {
     const folder: KnowledgeTreeItem = { type: "folder", id: "n:F", parentId: null, label: "F", position: 0, status: "ACTIVE" };
@@ -419,7 +419,7 @@ describe("tree dragging", () => {
       row.dispatchEvent(event);
     };
     await act(async () => { fire(rowFor("A"), "dragstart"); fire(target, "drop"); });
-    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:A", position: Number.MAX_SAFE_INTEGER });
+    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:A", position: Number.MAX_SAFE_INTEGER }, expect.any(Function));
   });
   it("unlocks after a successful no-op append and an unchanged tree refresh", async () => {
     const folder: KnowledgeTreeItem = { type: "folder", id: "n:F", parentId: null, label: "F", position: 0, status: "ACTIVE" };
@@ -438,13 +438,13 @@ describe("tree dragging", () => {
       return event;
     };
     await act(async () => { fire(next, "dragstart", 10); fire(header, "drop", 10); });
-    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:B", position: Number.MAX_SAFE_INTEGER });
+    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:B", position: Number.MAX_SAFE_INTEGER }, expect.any(Function));
     // Successful append of an already-last node returns the same stored positions.
     rerender({ items: original.map((item) => ({ ...item })) });
     let start: Event | undefined;
     await act(async () => { start = fire(rowFor("A"), "dragstart", 10); fire(rowFor("B"), "drop", 19); });
     expect(start?.defaultPrevented).toBe(false);
-    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:A", position: 1 });
+    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:A", position: 1 }, expect.any(Function));
     expect(onReorder).toHaveBeenCalledTimes(2);
   });
 
@@ -463,7 +463,7 @@ describe("tree dragging", () => {
     expect(onReorder).toHaveBeenCalledTimes(1);
     await act(async () => { finishFirst(true); });
     expect(onReorder).toHaveBeenCalledTimes(2);
-    expect(onReorder).toHaveBeenLastCalledWith({ nodeId: "n:B", position: 1 });
+    expect(onReorder).toHaveBeenLastCalledWith({ nodeId: "n:B", position: 1 }, expect.any(Function));
   });
 
   it("unlocks keyboard navigation when the refreshed server position was clamped", async () => {
@@ -473,7 +473,7 @@ describe("tree dragging", () => {
     act(() => {
       rowFor("A").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true, cancelable: true }));
     });
-    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:A", position: 1 });
+    expect(onReorder).toHaveBeenCalledWith({ nodeId: "n:A", position: 1 }, expect.any(Function));
     // B was moved away concurrently, so the server clamps A to position zero.
     rerender({ items: [doc("A", 0)] });
     await act(async () => { finish(true); });
