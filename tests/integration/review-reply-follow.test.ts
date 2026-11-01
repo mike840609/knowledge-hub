@@ -44,7 +44,7 @@ async function fixture() {
   const start = async () => { const thread = await service.createForLink(reader, { token, expectedRevisionId: created.revisionId, anchor, body: "Reader asks", idempotencyKey: randomUUID() }); time.tick(); return thread; };
   const ownerReply = async (threadId: string, body = "Owner answers") => { await service.replyForOwner(owner, { documentId: created.documentId, threadId, body, idempotencyKey: randomUUID() }); time.tick(); };
   const follows = async (caller = reader) => (await service.listUnreadForOwner(caller)).notifications.filter(n => n.kind === "FOLLOW");
-  return { uow, service, shares, link, token, anchor, owner, reader, other, ...created, time, start, ownerReply, follows };
+  return { uow, service, shares, workspaceId: workspace.id, link, token, anchor, owner, reader, other, ...created, time, start, ownerReply, follows };
 }
 
 describe("a shared-page reader follows the discussions they write in", () => {
@@ -261,6 +261,95 @@ describe("the Inbox badge counts a reader's followed discussions as the Inbox li
     await f.service.setVisibility(f.owner, { documentId: f.documentId, threadId: thread.id, visibility: "HIDDEN", reason: "moderated" });
     expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(0);
     expect(await f.follows()).toEqual([]);
+  });
+
+
+  it("excludes expired links from both SQL and the followed discussion list", async () => {
+    const f = await fixture();
+    const thread = await f.start();
+    await f.ownerReply(thread.id);
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(1);
+    // Use the fixed fixture clock rather than wall-clock time.
+    await pool.query("UPDATE document_share_links SET expires_at = ? WHERE id = ?", [
+      new Date(f.time.clock().getTime() - 1000), f.link.id,
+    ]);
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(0);
+    expect((await f.service.listFollowedDiscussions(f.reader)).items)
+      .toEqual([{ threadId: thread.id, linkAvailable: false }]);
+  });
+
+  it("excludes a link when its creator no longer has direct workspace membership", async () => {
+    const f = await fixture();
+    const thread = await f.start();
+    await f.ownerReply(thread.id);
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(1);
+    await f.uow.run(r => r.workspaceMemberships.remove(f.workspaceId, f.owner.identity.id));
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(0);
+    expect((await f.service.listFollowedDiscussions(f.reader)).items)
+      .toEqual([{ threadId: thread.id, linkAvailable: false }]);
+  });
+
+  it("does not count an unread reply after its author retracts it", async () => {
+    const f = await fixture();
+    const thread = await f.start();
+    await f.ownerReply(thread.id);
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(1);
+    const comments = await f.uow.run(r => r.reviewComments.listByThread(thread.id));
+    const reply = comments.find(comment => comment.authorUserId === f.owner.identity.id)!;
+    await f.uow.run(r => r.reviewComments.markDeleted(reply.id, f.time.clock()));
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(0);
+    expect((await f.service.listFollowedDiscussions(f.reader)).items)
+      .toEqual([expect.objectContaining({ threadId: thread.id, linkAvailable: true, unread: 0 })]);
+  });
+
+  it("applies the same most-recent-100-follows limit to SQL and list projections", async () => {
+    const f = await fixture();
+    const oldest = await f.start();
+    await f.ownerReply(oldest.id);
+    // Seed 100 newer follows directly to bypass the write API's per-creator limit.
+    // The newest has no reply: counting all 101 would incorrectly yield 100, not 99.
+    await f.uow.run(async r => {
+      for (let index = 0; index < 100; index++) {
+        const threadId = uuidv7();
+        const createdAt = f.time.clock();
+        const requestHash = "a".repeat(64);
+        await r.reviewThreads.insert({
+          id: threadId, documentId: f.documentId, createdRevisionId: f.revisionId,
+          createdBy: f.reader.identity.id, creationIdempotencyKey: randomUUID(),
+          creationRequestHash: requestHash, originShareLinkId: f.link.id, anchor: f.anchor,
+          status: "OPEN", visibility: "VISIBLE", hiddenBy: null, hiddenAt: null,
+          hiddenReason: null, resolvedBy: null, resolvedAt: null, createdAt, updatedAt: createdAt,
+        });
+        await r.reviewComments.insert({
+          id: uuidv7(), threadId, authorUserId: f.reader.identity.id,
+          body: "Reader asks", visibility: "VISIBLE", hiddenBy: null, hiddenAt: null,
+          hiddenReason: null, createdAt, editedAt: null, deletedAt: null,
+          idempotencyKey: randomUUID(), requestHash,
+        });
+        await r.reviewFollows.follow({
+          threadId, userId: f.reader.identity.id, shareLinkId: f.link.id, at: createdAt,
+        });
+        f.time.tick();
+        if (index < 99) {
+          await r.reviewComments.insert({
+            id: uuidv7(), threadId, authorUserId: f.owner.identity.id,
+            body: "Owner answers", visibility: "VISIBLE", hiddenBy: null, hiddenAt: null,
+            hiddenReason: null, createdAt: f.time.clock(), editedAt: null, deletedAt: null,
+            idempotencyKey: randomUUID(), requestHash,
+          });
+        }
+        f.time.tick();
+      }
+    });
+
+    const latest = await f.uow.run(r => r.reviewFollows.listFollowing(f.reader.identity.id, 100));
+    expect(latest).toHaveLength(100);
+    expect(latest.some(follow => follow.threadId === oldest.id)).toBe(false);
+    expect(await f.service.countUnreadFollowedDiscussions(f.reader)).toBe(99);
+    const discussions = (await f.service.listFollowedDiscussions(f.reader)).items;
+    expect(discussions).toHaveLength(100);
+    expect(discussions.filter(item => item.linkAvailable && item.unread > 0)).toHaveLength(99);
+    expect(discussions.some(item => item.threadId === oldest.id)).toBe(false);
   });
 
   it("counts multiple unread replies in one thread as one discussion", async () => {
