@@ -12,8 +12,15 @@ export interface ShareCommentEventRepository {
   insert(event: ShareCommentEvent): Promise<void>;
   /** The caller's own row by id: a personal owner row or one naming them as the team recipient. */
   findById(recipientUserId: string, eventId: string): Promise<ShareCommentEvent | null>;
-  /** Cursor past unread rows that are no longer accessible without clearing their read state. */
-  listUnreadByRecipient(recipientUserId: string, before?: { createdAt: Date; id: string }, limit?: number): Promise<ShareCommentEvent[]>;
+  /** Pre-filter Team events by currently readable workspaces *before* LIMIT.
+   * An omitted list preserves unscoped repository behavior for older callers.
+   * An empty list returns only personal events; Team access is still rejudged in the service. */
+  listUnreadByRecipient(
+    recipientUserId: string,
+    before?: { createdAt: Date; id: string },
+    limit?: number,
+    allowedTeamWorkspaceIds?: readonly string[],
+  ): Promise<ShareCommentEvent[]>;
   /** Unread rows delivered to the caller as a team recipient, for access-judged bulk marking. */
   listUnreadTeamByRecipient(recipientUserId: string): Promise<ShareCommentEvent[]>;
   listUnreadCountsByRecipient(recipientUserId: string): Promise<ShareDocumentUnreadCount[]>;
