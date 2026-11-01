@@ -68,7 +68,7 @@ const input: MoveNodeInput = {
 describe("source-scoped arrangement writes", () => {
   it("does not send another PATCH for one source while a prior move is unresolved", async () => {
     let finishFirst!: () => void;
-    request.mockImplementationOnce(() => new Promise<void>((resolve) => { finishFirst = resolve; }));
+    request.mockImplementationOnce(() => new Promise<undefined>((resolve) => { finishFirst = () => resolve(undefined); }));
     const first = move({ ...input, sourceId: "s1" });
     expect(request).toHaveBeenCalledTimes(1);
     const second = await move({ ...input, sourceId: "s1", nodeId: "n2" });
@@ -80,9 +80,23 @@ describe("source-scoped arrangement writes", () => {
     expect(request).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps the source write lease even when the owning Sidebar remounts", async () => {
+    let finishFirst!: () => void;
+    request.mockImplementationOnce(() => new Promise<undefined>((resolve) => { finishFirst = () => resolve(undefined); }));
+    const first = move({ ...input, sourceId: "s1" });
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await act(async () => root.render(<Harness />));
+    const second = await move({ ...input, sourceId: "s1", nodeId: "n2" });
+    expect(second.ok).toBe(false);
+    expect(request).toHaveBeenCalledTimes(1);
+    await act(async () => { finishFirst(); await first; });
+    expect((await move({ ...input, sourceId: "s1", nodeId: "n3" })).ok).toBe(true);
+  });
+
   it("allows independent source writes while another source has a pending PATCH", async () => {
     let finishFirst!: () => void;
-    request.mockImplementationOnce(() => new Promise<void>((resolve) => { finishFirst = resolve; }));
+    request.mockImplementationOnce(() => new Promise<undefined>((resolve) => { finishFirst = () => resolve(undefined); }));
     const first = move({ ...input, sourceId: "s1" });
     const second = await move({ ...input, sourceId: "s2", nodeId: "n2" });
     expect(second.ok).toBe(true);
