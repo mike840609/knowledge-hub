@@ -50,16 +50,52 @@ test("a page icon follows the document to Home, the palette, the explorer and se
   expect(await searchOption.textContent()).toContain("📌");
   await page.keyboard.press("Escape");
 
-  // The explorer's Recent section, with another document open so the first one is recent, not current.
+  // Recent is an on-demand menu; visiting articles must not add a shifting list above the tree.
   const otherTitle = unique("Icon parity other");
   const other = await createNote(page, workspaceId, otherTitle);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(other.href);
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(otherTitle, ROUND_TRIP);
-  const explorerRecent = page.getByRole("region", { name: "Recent documents" });
-  const explorerRow = explorerRecent.getByRole("link", { name: title, exact: true });
+  const explorer = page.getByRole("complementary", { name: "Knowledge explorer", exact: true });
+  await expect(explorer.getByRole("region", { name: "Recent documents", exact: true })).toHaveCount(0);
+  const clock = explorer.getByRole("button", { name: "Recent documents", exact: true });
+  await clock.focus();
+  await page.keyboard.press("Enter");
+  const recentMenu = page.getByRole("menu");
+  const explorerRow = recentMenu.getByRole("menuitem").filter({ hasText: title });
   await expect(explorerRow).toBeVisible(ROUND_TRIP);
   expect(await explorerRow.textContent()).toContain("📌");
+  await explorerRow.click();
+  await expect(page).toHaveURL(note.href, ROUND_TRIP);
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(title, ROUND_TRIP);
+  await expect(recentMenu).toBeHidden();
+  await expect(explorer.getByRole("region", { name: "Recent documents", exact: true })).toHaveCount(0);
+
+  // Reopening reflects the new history, and Escape returns focus to the clock.
+  await clock.click();
+  await expect(recentMenu.getByRole("menuitem").filter({ hasText: otherTitle })).toBeVisible(ROUND_TRIP);
+  await page.keyboard.press("Escape");
+  await expect(recentMenu).toBeHidden();
+  await expect(clock).toBeFocused();
+
+  // The same menu remains reachable in the narrower desktop drawer.
+  await page.setViewportSize({ width: 1100, height: 800 });
+  await page.getByRole("button", { name: "Show documents", exact: true }).click();
+  const drawer = page.getByRole("dialog", { name: "Browse", exact: true });
+  const drawerClock = drawer.getByRole("button", { name: "Recent documents", exact: true });
+  await expect(drawerClock).toBeInViewport();
+  const fits = await drawerClock.evaluate(button => {
+    const toolbar = button.closest('aside')!;
+    const bounds = toolbar.getBoundingClientRect();
+    return [...toolbar.querySelectorAll(':scope > div:first-child button, :scope > div:first-child a')]
+      .every(control => { const rect = control.getBoundingClientRect(); return rect.left >= bounds.left && rect.right <= bounds.right; });
+  });
+  expect(fits).toBe(true);
+  await drawerClock.click();
+  await expect(recentMenu.getByRole("menuitem").filter({ hasText: otherTitle })).toBeVisible(ROUND_TRIP);
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   // The full search page's own result row.
   await page.goto(`/w/${workspaceId}/search?q=${encodeURIComponent(title)}`);

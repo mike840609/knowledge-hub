@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, ChevronsLeft, Plus, ListFilter, Star } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
-import { favoritesInPlace, recentInPlace, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
+import { favoritesInPlace, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { MenuCheckboxItem, MenuContent, MenuItem, MenuRoot, MenuTrigger } from "@/components/ui/menu";
@@ -73,13 +73,21 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   const [expanded, setExpanded, expandedReady] = usePersistedJson<Record<string, boolean>>(`kh:tree-expanded:${workspaceId}`, {}, isBooleanRecord);
   const { shortcuts, update: updateShortcuts, ready: shortcutsReady } = useDocumentShortcuts(workspaceId);
   const [favoritesOpen, setFavoritesOpen, favoritesReady] = usePersistedJson(`kh:sidebar-favorites:${workspaceId}`, true, isBoolean);
-  const [recentOpen, setRecentOpen, recentReady] = usePersistedJson(`kh:sidebar-recent:${workspaceId}`, true, isBoolean);
-  const sidebarReady = queryReady && filterReady && expandedReady && shortcutsReady && favoritesReady && recentReady;
+  const [recentMenuOpen, setRecentMenuOpen] = useState(false);
+  const [recentMenuKeys, setRecentMenuKeys] = useState<string[] | null>(null);
+  const sidebarReady = queryReady && filterReady && expandedReady && shortcutsReady && favoritesReady;
+  // History may hydrate after the reader opens the menu. Capture its order once
+  // ready; subsequent visits/syncs must not move links under the pointer.
+  useEffect(() => {
+    if (recentMenuOpen && shortcutsReady && recentMenuKeys === null) setRecentMenuKeys([...shortcuts.recent]);
+  }, [recentMenuOpen, shortcutsReady, recentMenuKeys, shortcuts.recent]);
   const showArchived = searchParams.get("includeArchived") === "true";
   const resolvedDocumentId = selectedDocumentId ?? (typeof routeParams?.documentId === "string" ? routeParams.documentId : undefined);
   const needle = query.trim().toLowerCase();
   const headers = useMemo(() => sources ?? collections.map(c => c.source), [sources, collections]);
-  const shortcutIds = [...new Set([...shortcuts.favorites, ...shortcuts.recent].map(key => key.split(":")[1]))].join(",");
+  // The open menu's keys also define its metadata request. Background history
+  // changes must not clear unloaded-source links while the reader is choosing.
+  const shortcutIds = [...new Set([...shortcuts.favorites, ...(recentMenuKeys ?? shortcuts.recent)].map(key => key.split(":")[1]))].sort().join(",");
   const shortcutMetadata = useSidebarShortcuts(workspaceId, ensureTree ? shortcutIds : "", showArchived, sources);
   useEffect(() => {
     if (!expandedReady) return;
@@ -111,8 +119,8 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   const favoriteKeys = shortcuts.favorites.filter((key) => documents.has(key));
   // The section is the same height however many are starred: the newest few, and a row for the rest.
   const { inPlace: favoritesInPlaceKeys, showAll: favoritesTotal } = favoritesInPlace(favoriteKeys);
-  const recentCandidates = shortcuts.recent.filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== `${source?.id}:${resolvedDocumentId}`);
-  const { inPlace: recentKeys, showAll: recentTotal } = recentInPlace(recentCandidates);
+  const recentCandidates = (recentMenuKeys ?? shortcuts.recent).filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== `${source?.id}:${resolvedDocumentId}`);
+  const recentLoading = !shortcutsReady || shortcutMetadata.loading;
   const favoriteDocumentIds = new Set(shortcuts.favorites.map((key) => documents.get(key)?.documentId).filter((id): id is string => Boolean(id)));
 
   const recordedOpen = useRef<string | null>(null);
@@ -253,6 +261,22 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
               </Link>
             </Tooltip>
           ) : null}
+          <MenuRoot open={recentMenuOpen} onOpenChange={(open) => {
+            setRecentMenuOpen(open);
+            setRecentMenuKeys(open && shortcutsReady ? [...shortcuts.recent] : null);
+          }}>
+            <MenuTrigger aria-label="Recent documents" title="Recent documents" className={buttonClasses({ variant: "ghost", icon: true })}>
+              <Clock3 size={16} aria-hidden="true" />
+            </MenuTrigger>
+            <MenuContent align="start" className="max-h-[min(24rem,60vh)] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain">
+              {recentCandidates.map(shortcutMenuItem)}
+              {recentLoading ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Loading recent documents…</p>
+                : shortcutMetadata.error ? <>
+                  <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Recent documents could not be loaded.</p>
+                  <MenuItem closeOnClick={false} onClick={shortcutMetadata.retry}>Retry</MenuItem>
+                </> : recentCandidates.length === 0 ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">No recent documents</p> : null}
+            </MenuContent>
+          </MenuRoot>
           <Tooltip label="Filter documents and sources">
             <button
               ref={filterTriggerRef}
@@ -302,16 +326,6 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
             {favoritesTotal !== null ? <li>{shortcutMenu(favoriteKeys, favoritesTotal)}</li> : null}
           </ul> : null}
         </section> : null}
-        {!needle && recentKeys.length > 0 ? <section aria-label="Recent documents" className="pb-1">
-          <h3><button type="button" aria-expanded={recentOpen} onClick={() => setRecentOpen((open) => !open)} className="kh-control kh-interactive-row flex kh-rail-row w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
-            {recentOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
-            <span>Recent</span>
-          </button></h3>
-          {recentOpen ? <ul className="mt-0.5 space-y-0.5">
-            {recentKeys.map((key) => shortcutRow(key, false))}
-            {recentTotal !== null ? <li>{shortcutMenu(recentCandidates, recentTotal)}</li> : null}
-          </ul> : null}
-        </section> : null}
         {getStarted ? <SidebarGetStarted actions={getStarted} compact={pathname === `/w/${workspaceId}/knowledge`} /> : null}
         {!getStarted && !hasNotes && canCreate && (!needle || "notes".includes(needle)) ? (
           <div className="flex items-center justify-between pl-2">
@@ -347,7 +361,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                   workspaceId={workspaceId}
                   sourceId={candidate.id}
                   selectedDocumentId={resolvedDocumentId}
-                  revealLayoutKey={`${shortcutsAutoOpened}:${favoriteKeys.length}:${recentKeys.length}:${filterOpen}`}
+                  revealLayoutKey={`${shortcutsAutoOpened}:${favoriteKeys.length}:${filterOpen}`}
                   includeArchived={showArchived}
                   query={candidate.name.toLowerCase().includes(needle) ? "" : query}
                   favoriteDocumentIds={favoriteDocumentIds}

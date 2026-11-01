@@ -5,8 +5,8 @@
 The user clarified that the problem is items changing position inside Recent,
 not Favorites or the article pane. They selected moving Recent out of the
 permanent sidebar list into a clock-button menu on 2026-11-01. This replaces the
-previous design about navigation intent and tree positioning. This short written
-design is pending approval before implementation.
+previous design about navigation intent and tree positioning. The user approved this short written
+design on 2026-11-01.
 
 ## Approaches
 
@@ -23,8 +23,9 @@ design is pending approval before implementation.
 - Favorites and source/document trees remain in the sidebar. Recent no longer
   occupies a section there and has no separate Show all row.
 - Add a clock button labeled **Recent documents** to the Documents header toolbar,
-  before the filter control. Use the existing icon-button, tooltip, and menu
-  primitives so it works with pointer, keyboard, and touch.
+  before the filter control. Use the existing icon-button and menu primitives, with an accessible label
+  and native title (the shared Tooltip intentionally excludes menu triggers),
+  so it works with pointer, keyboard, and touch.
 - Opening the menu shows the latest available recent documents, newest first,
   with document icons/titles and source names. Show all eligible entries from
   the existing history (up to eight recorded documents), without a second menu.
