@@ -178,3 +178,55 @@ test("an anonymous reader sees a mention highlighted and who it is", async ({ re
     await anonymous.close();
   }
 });
+
+// Spec 2026-11-02: Chinese writers type `請@王`, not `請 @王`.
+test("a mention opens after CJK text", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  const viewer = phase3Origin("viewer");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${viewer}${doc.links[0].path}`);
+  await openReviewDiscussions(page);
+  await selectPassage(page);
+  await page.getByRole("button", { name: "Comment on selection" }).click();
+  const composer = page.getByRole("textbox", { name: "Add comment" });
+  await composer.click();
+  await composer.pressSequentially("請@groupAd");
+  const option = page.getByRole("listbox", { name: "People to mention" }).getByRole("option");
+  await expect(option).toHaveCount(1);
+  await expect(option.first()).toContainText("Phase3 groupAdmin");
+  await composer.press("Enter");
+  await expect(composer).toHaveValue("請@Phase3 groupAdmin ");
+});
+
+// Spec 2026-11-02: a dead mention is a placeholder in Activity, with no link and none of the words.
+test("a revoked link leaves a mention naming nothing", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  const token = doc.links[0].path.split("/").pop()!;
+  const owner = phase3Origin("reviewOwner"), viewer = phase3Origin("viewer"), mentioned = phase3Origin("groupAdmin");
+  expect((await request.post(`${mentioned}/api/review-notifications/activity`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
+  const { candidates } = await (await request.get(`${viewer}/api/review-mentions/candidates?query=groupAdmin&token=${token}`, { headers: { Origin: viewer } })).json();
+  const body = "請@Phase3 groupAdmin 你看";
+  const created = await request.post(`${viewer}/api/share-review/threads`, { headers: { Origin: viewer }, data: { token, expectedRevisionId: doc.revisionId, anchor: ANCHOR, body, idempotencyKey: crypto.randomUUID(), mentions: [candidates[0].id] } });
+  expect(created.status()).toBe(201);
+  const query = await (await request.post(`${viewer}/api/share-review/threads/query`, { headers: { Origin: viewer }, data: { token } })).json();
+  const thread = query.threads.find((candidate: { comments: Array<{ body: string }> }) => candidate.comments[0].body === body);
+  const commentId: string = thread.comments[0].id;
+  expect((await request.post(`${owner}/api/share-links/${doc.links[0].id}/revoke`)).ok()).toBe(true);
+
+  const unread = await (await request.get(`${mentioned}/api/review-notifications/unread`, { headers: { Origin: mentioned } })).json();
+  // A dead entry has no thread id; its id is still `mention:<commentId>`.
+  expect(unread.notifications.filter((notice: { id: string }) => notice.id === `mention:${commentId}`)).toEqual([]);
+
+  const workspaceId = await personalWorkspaceId(request, mentioned);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${mentioned}/w/${workspaceId}/inbox`);
+  await page.getByRole("tab", { name: "All activity" }).click();
+  const dead = page.getByRole("list", { name: "Activity history" })
+    .getByRole("listitem")
+    .filter({ hasText: "A shared discussion" })
+    .filter({ hasText: "This link is no longer available." })
+    .first();
+  await expect(dead).toBeVisible();
+  await expect(dead.getByRole("link")).toHaveCount(0);
+  await expect(dead).not.toContainText("請@Phase3 groupAdmin");
+});

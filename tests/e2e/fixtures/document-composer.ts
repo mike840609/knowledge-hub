@@ -96,13 +96,22 @@ export function sentBody(request: Awaited<ReturnType<typeof nextSave>>) {
   return JSON.parse(request.postData() ?? "{}") as { title?: string; markdown?: string };
 }
 
-/** Types into a note's body, then into its H1: the editor's last output is the one that renames it. */
+/**
+ * Types into a note's body, then into its H1: the editor's last output is the one that renames it.
+ *
+ * The caret goes to the end of each block by clicking there. A press of End would ask the browser
+ * for that, but Chromium here does not move a contenteditable's caret on a synthetic End (a
+ * pre-existing no-op on main too), and a plain click lands mid-word on a long heading, so the
+ * suffix was typed into the middle of the title.
+ */
 export async function editBodyThenHeading(page: Page, surface: Locator) {
-  await surface.locator("p").click();
-  await page.keyboard.press("End");
+  const clickAtEnd = async (block: Locator) => {
+    const box = (await block.boundingBox())!;
+    await page.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
+  };
+  await clickAtEnd(surface.locator("p"));
   await page.keyboard.type(" typed");
-  await surface.getByRole("heading", { level: 1 }).click();
-  await page.keyboard.press("End");
+  await clickAtEnd(surface.getByRole("heading", { level: 1 }));
   await page.keyboard.type(" renamed");
 }
 
