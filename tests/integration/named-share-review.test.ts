@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Pool } from "mariadb";
+import { RandomShareTokenIssuer } from "@/infrastructure/security/random-share-token-issuer";
 import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
+import { DocumentShareService } from "@/modules/knowledge/application/document-share-service";
 import { DocumentReviewService } from "@/modules/knowledge/application/document-review-service";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import { SavedShareService } from "@/modules/knowledge/application/saved-share-service";
@@ -38,7 +40,8 @@ async function fixture() {
   const owner = callerFromIdentity(ids.owner), recipient = callerFromIdentity(ids.recipient);
   const colleague = callerFromIdentity(ids.colleague), stranger = callerFromIdentity(ids.stranger);
   const { workspace } = await new PersonalWorkspaceService(uow).ensurePersonalWorkspace(ids.owner.id);
-  await new PersonalWorkspaceService(uow).ensurePersonalWorkspace(ids.recipient.id);
+  const { workspace: recipientWorkspace } = await new PersonalWorkspaceService(uow).ensurePersonalWorkspace(ids.recipient.id);
+  const { workspace: colleagueWorkspace } = await new PersonalWorkspaceService(uow).ensurePersonalWorkspace(ids.colleague.id);
   const sourceId = await ensureDefaultHubSource(uow, owner, workspace.id);
   const doc = await new HubKnowledgeCommandServiceImpl(uow).createDocument(owner, { sourceId, parentId: null, title: "Named doc", markdown: MARKDOWN, metadata: {} });
   const at = new Date();
@@ -57,7 +60,7 @@ async function fixture() {
   const reply = (caller: typeof owner, threadId: string, mentions?: string[]) => service.replyForLink(caller, { token: link.token, threadId, body: "An answer", idempotencyKey: randomUUID(), mentions });
   const removeRecipient = (userId: string) => uow.run(r => r.shareLinks.removeRecipient(link.id, userId));
   const storedMentions = async () => (await pool.query("SELECT m.mentioned_user_id AS id FROM review_comment_mentions m JOIN document_review_comments c ON c.id=m.comment_id JOIN document_review_threads t ON t.id=c.thread_id WHERE t.document_id=?", [doc.documentId])).map((row: { id: string }) => row.id);
-  return { uow, tag, ids, owner, recipient, colleague, stranger, doc, link, anchor, service, start, reply, removeRecipient, storedMentions };
+  return { uow, tag, ids, owner, recipient, colleague, stranger, recipientWorkspace, colleagueWorkspace, doc, link, anchor, service, start, reply, removeRecipient, storedMentions };
 }
 
 describe("discussions on a NAMED link", () => {
@@ -89,7 +92,7 @@ describe("mentions through a NAMED link", () => {
     const thread = await f.start(f.recipient, [f.ids.colleague.id]);
     expect(await f.storedMentions()).toEqual([f.ids.colleague.id]);
     expect((await f.service.listUnreadForOwner(f.colleague)).notifications.filter(n => n.kind === "MENTION"))
-      .toEqual([expect.objectContaining({ threadId: thread.id, token: f.link.token, linkAvailable: true })]);
+      .toEqual([expect.objectContaining({ threadId: thread.id, token: f.link.token, linkAvailable: true, href: `/w/${f.colleagueWorkspace.id}/shares/${f.link.token}?thread=${thread.id}` })]);
   });
 
   it("refuse a mention of a non-recipient on a thread or a reply, storing nothing", async () => {
@@ -136,7 +139,10 @@ describe("a recipient's follow on a NAMED link", () => {
     await f.service.replyForOwner(f.owner, { documentId: f.doc.documentId, threadId: thread.id, body: "Owner answers", idempotencyKey: randomUUID() });
     // Being named also put the share itself in their Inbox (named-share-inbox.test.ts); this is about the follow.
     expect((await f.service.listUnreadForOwner(f.recipient)).notifications.filter(n => n.kind === "FOLLOW"))
-      .toEqual([expect.objectContaining({ kind: "FOLLOW", threadId: thread.id, token: f.link.token, linkAvailable: true })]);
+      .toEqual([expect.objectContaining({ kind: "FOLLOW", threadId: thread.id, token: f.link.token, linkAvailable: true, href: `/w/${f.recipientWorkspace.id}/shares/${f.link.token}?thread=${thread.id}` })]);
+    // Shares → Discussions opens the same Hub reader: `/s/<token>` is the dead link's page for a NAMED share.
+    expect((await f.service.listFollowedDiscussions(f.recipient)).items)
+      .toEqual([expect.objectContaining({ threadId: thread.id, linkAvailable: true, href: `/w/${f.recipientWorkspace.id}/shares/${f.link.token}?thread=${thread.id}` })]);
     await f.reply(f.recipient, thread.id);
     await f.removeRecipient(f.ids.recipient.id);
     expect((await f.service.listUnreadForOwner(f.recipient)).notifications).toEqual([]);
@@ -166,5 +172,45 @@ describe("saving a NAMED link", () => {
   it("is refused to a recipient, as a dead link is", async () => {
     const f = await fixture();
     await expect(new SavedShareService(f.uow).save(f.recipient, f.link.token)).rejects.toMatchObject(notFound);
+  });
+});
+
+/**
+ * Shared/
+ *   Inside    (discussed through the folder's NAMED link)
+ * The folder's link names `recipient` only; `targetScope`'s folder branch judges every write.
+ */
+describe("writes through a NAMED folder link", () => {
+  async function folderFixture() {
+    const f = await fixture();
+    const hub = new HubKnowledgeCommandServiceImpl(f.uow);
+    const sourceId = (await f.uow.run(r => r.documents.findById(f.doc.documentId)))!.sourceId;
+    const { treeNodeId: folderNodeId } = await hub.createFolder(f.owner, { sourceId, parentId: null, name: "Shared" });
+    const inside = await hub.createDocument(f.owner, { sourceId, parentId: folderNodeId, title: "Inside", markdown: MARKDOWN, metadata: {} });
+    const shares = new DocumentShareService(f.uow, new RandomShareTokenIssuer());
+    const token = (await shares.createForFolder(f.owner, { folderNodeId, recipients: [f.ids.recipient.id] })).path.slice("/s/".length);
+    const write = (caller: typeof f.owner) => f.service.createForLink(caller, { token, documentId: inside.documentId, expectedRevisionId: inside.revisionId, anchor: f.anchor, body: "Folder question", idempotencyKey: randomUUID() });
+    const move = (newParentId: string | null) => hub.moveTreeNode(f.owner, { nodeId: inside.treeNodeId, newParentId, newPosition: 0 });
+    return { ...f, token, inside, folderNodeId, write, move };
+  }
+
+  it("succeed for a recipient on a document under the folder", async () => {
+    const f = await folderFixture();
+    const thread = await f.write(f.recipient);
+    expect((await f.service.queryForLink(f.recipient, f.token, f.inside.documentId)).threads.map(t => t.id)).toEqual([thread.id]);
+  });
+
+  it("are refused to a signed-in reader the link does not name, as a dead link is", async () => {
+    const f = await folderFixture();
+    await expect(f.write(f.stranger)).rejects.toMatchObject(notFound);
+    await expect(f.write(f.colleague)).rejects.toMatchObject(notFound);
+  });
+
+  it("are refused to a recipient once the document is moved out of the folder", async () => {
+    const f = await folderFixture();
+    const thread = await f.write(f.recipient);
+    await f.move(null);
+    await expect(f.write(f.recipient)).rejects.toMatchObject(notFound);
+    await expect(f.service.replyForLink(f.recipient, { token: f.token, documentId: f.inside.documentId, threadId: thread.id, body: "Still here?", idempotencyKey: randomUUID() })).rejects.toMatchObject(notFound);
   });
 });

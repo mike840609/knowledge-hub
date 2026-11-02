@@ -9,7 +9,7 @@ vi.mock("next/navigation",()=>({useRouter:()=>({refresh:vi.fn()})}));
 let host:HTMLDivElement,root:Root;
 beforeEach(()=>{host=document.createElement("div");document.body.append(host);root=createRoot(host);});
 afterEach(async()=>{await act(async()=>root.unmount());host.remove();vi.unstubAllGlobals();});
-const live:FollowedDiscussionView={threadId:"t1",linkAvailable:true,token:"tok",documentTitle:"A useful guide",threadStatus:"OPEN",authorName:"Owner",excerpt:"Owner answers",latestAt:new Date(),unread:2};
+const live:FollowedDiscussionView={threadId:"t1",linkAvailable:true,token:"tok",href:"/s/tok?thread=t1",documentTitle:"A useful guide",threadStatus:"OPEN",authorName:"Owner",excerpt:"Owner answers",latestAt:new Date(),unread:2};
 const dead:FollowedDiscussionView={threadId:"t2",linkAvailable:false};
 const mount=async(items=[live,dead],filter:"all"|"unread"="all")=>{await act(async()=>root.render(<FollowedDiscussionsView workspaceId="reader" items={items} filter={filter} unread={items.filter(i=>i.linkAvailable&&i.unread>0).length}/>));};
 
@@ -49,10 +49,14 @@ it("a discussion followed through a folder link opens, and is unfollowed, at its
  const calls:string[]=[];
  vi.stubGlobal("fetch",async(url:string,init:RequestInit)=>{calls.push(`${url} ${init.body??""}`);return Response.json({following:false});});
  const documentId="0192f3a4-0000-7000-8000-000000000002";
- await mount([{...live,documentId}]);
+ await mount([{...live,documentId,href:`/s/tok?d=${documentId}&thread=t1`}]);
  expect([...host.querySelectorAll("a")].map(a=>a.getAttribute("href"))).toContain(`/s/tok?d=${documentId}&thread=t1`);
  await act(async()=>host.querySelector<HTMLButtonElement>('button[aria-label="Unfollow: A useful guide"]')!.click());
  expect(calls).toEqual([`/api/share-review/threads/t1/follow ${JSON.stringify({token:"tok",documentId,following:false})}`]);
+});
+it("a discussion on a NAMED share opens the Hub reader the server names, not /s/",async()=>{
+ await mount([{...live,href:"/w/reader/shares/tok?thread=t1"}]);
+ expect([...host.querySelectorAll("a[data-list-row]")].map(a=>a.getAttribute("href"))).toEqual(["/w/reader/shares/tok?thread=t1"]);
 });
 it("shows Untitled when the discussion's document has no current title",async()=>{
  await mount([{ ...live, documentTitle: "" }]);

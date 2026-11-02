@@ -129,7 +129,7 @@ it("a followed discussion is read through its link's token, never the owner's do
 
 it("a discussion followed through a folder link is read, and opened, at its document in that folder", async () => {
   const documentId = "0192f3a4-0000-7000-8000-000000000002";
-  notifications = [entry("g", { kind: "FOLLOW", token: "tok", linkAvailable: true, workspaceId: "", documentId, sourceId: "" })];
+  notifications = [entry("g", { kind: "FOLLOW", token: "tok", linkAvailable: true, workspaceId: "", documentId, sourceId: "", href: `/s/tok?d=${documentId}&thread=thread-g` })];
   threads["token:tok"] = [thread("thread-g")];
   await mount();
   await click(row("g"));
@@ -295,7 +295,7 @@ it("a mark that failed is asked again by choosing the entry again", async () => 
 });
 
 const mention = (id: string, over: Partial<ShareCommentNotificationView> = {}) =>
-  entry(`mention:${id}`, { kind: "MENTION", workspaceId: "", documentId: "", sourceId: "", token: "tok", linkAvailable: true, ...over });
+  entry(`mention:${id}`, { kind: "MENTION", workspaceId: "", documentId: "", sourceId: "", token: "tok", linkAvailable: true, href: "/s/tok?thread=thread-m", ...over });
 
 it("a mention is labelled, links through its token without prefetch, and shows no reply count", async () => {
   notifications = [mention("c1", { threadId: "thread-m", authorName: "Ann", excerpt: "see this" })];

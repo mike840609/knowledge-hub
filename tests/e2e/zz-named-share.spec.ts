@@ -60,7 +60,7 @@ test.describe("named-recipient share, end to end", () => {
     test.setTimeout(90_000);
     const owner = phase3Origin("reviewOwner"), reader = phase3Origin(A);
     const readerWorkspace = await personalWorkspace(request, reader);
-    await personalWorkspace(request, phase3Origin(B)); // provisions B, who must exist to be named
+    const mentionedWorkspace = await personalWorkspace(request, phase3Origin(B)); // also provisions B, who must exist to be named
     const ownerWorkspace = await personalWorkspace(request, owner);
     const title = `Named flow ${Date.now()}`;
     const doc = await apiDocument(request, owner, ownerWorkspace, title, "A 😀 **bold** passage to review.");
@@ -89,12 +89,27 @@ test.describe("named-recipient share, end to end", () => {
 
     // A comments; the mention list offers B only (not A, not the owner, not anyone else in the directory).
     const query = await (await request.post(`${reader}/api/share-review/threads/query`, { headers: { Origin: reader }, data: { token } })).json();
-    const created = await request.post(`${reader}/api/share-review/threads`, { headers: { Origin: reader }, data: { token, expectedRevisionId: query.revisionId, anchor: PASSAGE, body: "Reader remark", idempotencyKey: crypto.randomUUID() } });
+    const created = await request.post(`${reader}/api/share-review/threads`, { headers: { Origin: reader }, data: { token, expectedRevisionId: query.revisionId, anchor: PASSAGE, body: "Reader remark @Phase3 viewer", idempotencyKey: crypto.randomUUID(), mentions: [phase3UserId(B)] } });
     expect(created.status()).toBe(201);
+    const threadId = ((await created.json()) as { id: string }).id;
     const offered = await (await request.get(`${reader}/api/review-mentions/candidates?token=${token}&query=Phase3`)).json();
     expect(offered.candidates.map((person: { id: string }) => person.id)).toEqual([phase3UserId(B)]);
     const everyone = await (await request.get(`${reader}/api/review-mentions/candidates?token=${token}&query=P3-`)).json();
     expect(everyone.candidates.map((person: { id: string }) => person.id)).toEqual([phase3UserId(B)]);
+
+    // B's Inbox mention opens the Hub reader at the discussion, never the anonymous /s/ page (a dead link for a NAMED share).
+    const mentioned = phase3Origin(B);
+    const atDiscussion = `/w/${mentionedWorkspace}/shares/${token}?thread=${threadId}`;
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${mentioned}/w/${mentionedWorkspace}/inbox`);
+    const mention = page.getByRole("list", { name: "Inbox discussions" }).locator(`a[href="${atDiscussion}"]`);
+    await expect(mention).toContainText("Mentioned you", ROUND_TRIP);
+    await mention.click();
+    await page.getByRole("region", { name: "Selected discussion" }).getByRole("link", { name: "Open document" }).click();
+    await expect(page).toHaveURL(`${mentioned}${atDiscussion}`, ROUND_TRIP);
+    const card = page.locator(`[data-review-thread="${threadId}"]`);
+    await expect(card).toHaveAttribute("data-active", "", ROUND_TRIP);
+    await expect(card.getByText("Reader remark @Phase3 viewer", { exact: true })).toBeVisible();
 
     // The owner comes back to the dialog and removes A.
     await page.goto(`${owner}/w/${ownerWorkspace}/knowledge/${doc.sourceId}/${doc.documentId}`);
@@ -113,7 +128,7 @@ test.describe("named-recipient share, end to end", () => {
     await expect(page.getByText(`shared 《${title}》 with you`)).toHaveCount(0);
     await page.goto(`${owner}/w/${ownerWorkspace}/knowledge/${doc.sourceId}/${doc.documentId}`);
     await openReviewDiscussions(page);
-    await expect(page.getByRole("region", { name: "Discussion thread" }).filter({ hasText: "Reader remark" })).toBeVisible(ROUND_TRIP);
+    await expect(page.getByRole("region", { name: "Discussion thread" }).filter({ hasText: "Reader remark @Phase3 viewer" })).toBeVisible(ROUND_TRIP);
   });
 
   test("a named share on a folder is read in the Hub and its links stay under /w/<ws>/shares/<token>", async ({ page, request }) => {

@@ -55,6 +55,9 @@ describe("a shared-page reader follows the discussions they write in", () => {
     await f.ownerReply(thread.id);
     const [entry] = await f.follows();
     expect(entry).toMatchObject({ id: `follow:${thread.id}`, kind: "FOLLOW", threadId: thread.id, token: f.token, linkAvailable: true, replyCount: 1, authorName: "Owner", excerpt: "Owner answers", documentTitle: "Review", readAt: null });
+    // A LINK share's discussion opens on its anonymous page, byte for byte as before named shares.
+    expect(entry.href).toBe(`/s/${f.token}?thread=${thread.id}`);
+    expect((await f.service.listFollowedDiscussions(f.reader)).items).toEqual([expect.objectContaining({ threadId: thread.id, href: `/s/${f.token}?thread=${thread.id}` })]);
     await f.ownerReply(thread.id, "And more");
     expect(await f.follows()).toEqual([expect.objectContaining({ replyCount: 2, excerpt: "And more" })]);
     await f.service.markSeenForLink(f.reader, { token: f.token, threadId: thread.id });

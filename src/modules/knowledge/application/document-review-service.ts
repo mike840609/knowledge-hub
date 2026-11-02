@@ -13,6 +13,7 @@ import type { DocumentShareLink } from "../domain/document-share-link";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
 import { judgeNamedShares, namedShareTitle } from "./internal/named-share-judgement";
 import { audienceAdmits, documentReachesFolder, linkOpens, openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
+import { hubSharePath, shareDiscussionHref } from "@/lib/share-paths";
 
 function fail(code:string, message:string):never { throw new DomainError(code,message); }
 function canonicalAnchor(a:ReviewAnchor) { if(!a || typeof a!=="object") fail("INVALID_REQUEST","Provide an anchor."); return {schemaVersion:a.schemaVersion,blockPath:a.blockPath,blockKind:a.blockKind,startUtf16:a.startUtf16,endUtf16:a.endUtf16,exact:a.exact,prefix:a.prefix,suffix:a.suffix}; }
@@ -77,7 +78,7 @@ export class DocumentReviewService {
       const owner = (await r.shareCommentEvents.listUnreadCountsByRecipient(caller.identity.id)).reduce((sum, row) => sum + row.unreadCount, 0);
       const follows = (await this.followedThreads(r, caller.identity.id)).filter(({ summary }) => !("unavailable" in summary) && !!summary.latestReply && summary.unread > 0).length;
       const mentions = (await this.judgedMentions(r, await this.unreadMentions(r, caller.identity.id), caller.identity.id)).filter(judged => "comment" in judged).length;
-      const named = (await this.judgedShares(r, caller.identity.id)).filter(share => share.target && share.readAt === null).length;
+      const named = (await this.judgedShares(r, caller.identity.id, true)).filter(share => share.target).length;
       return { count: owner + follows + mentions + named };
     });
   }
@@ -209,11 +210,14 @@ export class DocumentReviewService {
   async listFollowedDiscussions(caller: CallerContext): Promise<{ items: FollowedDiscussionView[] }> {
     return this.uow.run(async r => {
       const items: FollowedDiscussionView[] = [];
+      const hrefOf = this.discussionHrefs(r, caller.identity.id);
       for (const { thread, link, summary } of await this.followedThreads(r, caller.identity.id)) {
-        if ("unavailable" in summary) { items.push({ threadId: thread.id, linkAvailable: false }); continue; }
+        // A NAMED link read by someone without a personal Workspace has nowhere to open: it is shown as one that no longer opens.
+        const href = "unavailable" in summary ? null : await hrefOf(link!, thread.id, thread.documentId);
+        if (!href || "unavailable" in summary) { items.push({ threadId: thread.id, linkAvailable: false }); continue; }
         const revision = await r.revisions.findCurrent(thread.documentId);
         items.push({
-          threadId: thread.id, linkAvailable: true, token: link!.token, ...folderDocument(link!, thread.documentId), documentTitle: revision?.title ?? "", threadStatus: thread.status,
+          threadId: thread.id, linkAvailable: true, token: link!.token, ...folderDocument(link!, thread.documentId), href, documentTitle: revision?.title ?? "", threadStatus: thread.status,
           authorName: (await r.users.findById(summary.latest.authorUserId))?.name,
           excerpt: [...summary.latest.body].slice(0, EXCERPT_LIMIT).join(""), latestAt: summary.latest.createdAt, unread: summary.unread,
         });
@@ -233,6 +237,16 @@ export class DocumentReviewService {
     const thread = typeof threadId === "string" ? await r.reviewThreads.findById(threadId) : null;
     if (!thread || thread.documentId !== s.document.id || thread.visibility === "HIDDEN" || isRetractedThread(await r.reviewComments.listByThread(thread.id))) throw new ShareLinkNotFoundError();
     return s;
+  }
+  /**
+   * Where each discussion read through a link opens for `userId` (`shareDiscussionHref`). Their personal Workspace
+   * is read once, and only when a NAMED link asks for it.
+   */
+  private discussionHrefs(r: KnowledgeRepositories, userId: string) {
+    let readerWorkspace: Promise<string | null> | undefined;
+    return async (link: DocumentShareLink, threadId: string, documentId: string) => shareDiscussionHref(link,
+      link.audience === "NAMED" ? await (readerWorkspace ??= r.workspaces.findPersonalByOwnerUserId(userId).then(found => found?.id ?? null)) : null,
+      threadId, link.target.kind === "FOLDER" ? documentId : undefined);
   }
   private async withFollowing(r: KnowledgeRepositories, s: Awaited<ReturnType<DocumentReviewService["scope"]>>, caller: CallerContext | null, threads: ReviewThreadView[]): Promise<ReviewThreadView[]> {
     if (!caller || s.workspace.personalOwnerUserId === caller.identity.id) return threads;
@@ -296,6 +310,7 @@ export class DocumentReviewService {
     const views: ShareCommentNotificationView[] = [];
     const titles = new Map<string, string>();
     const authorNames = new Map<string, string | undefined>();
+    const hrefOf = this.discussionHrefs(r, userId);
     for (const { follow, thread, link, summary } of await this.followedThreads(r, userId)) {
       const base = { id: `${FOLLOW_PREFIX}${thread.id}`, workspaceId: "", documentId: "", sourceId: "", threadId: thread.id };
       if ("unavailable" in summary) { views.push({ ...base, kind: "FOLLOW", documentTitle: "", commentId: "", authorName: undefined, excerpt: "", createdAt: follow.seenAt, readAt: follow.seenAt, threadStatus: "OPEN", linkAvailable: false }); continue; }
@@ -303,9 +318,10 @@ export class DocumentReviewService {
       if (!titles.has(thread.documentId)) titles.set(thread.documentId, (await r.revisions.findCurrent(thread.documentId))?.title ?? "");
       const authorId = summary.latestReply.authorUserId;
       if (!authorNames.has(authorId)) authorNames.set(authorId, (await r.users.findById(authorId))?.name);
+      const href = await hrefOf(link!, thread.id, thread.documentId);
       views.push({
         ...projectShareCommentNotification({ ...base, documentTitle: titles.get(thread.documentId)!, commentId: summary.latestReply.id, authorName: authorNames.get(authorId), body: summary.latestReply.body, createdAt: summary.latestReply.createdAt, readAt: summary.unread > 0 ? null : follow.seenAt, threadStatus: thread.status }),
-        ...folderDocument(link!, thread.documentId), kind: "FOLLOW", token: link!.token, replyCount: summary.unread, linkAvailable: true,
+        ...folderDocument(link!, thread.documentId), kind: "FOLLOW", token: link!.token, replyCount: summary.unread, linkAvailable: true, ...(href ? { href } : {}),
       });
     }
     return views;
@@ -360,6 +376,7 @@ export class DocumentReviewService {
     const views: ShareCommentNotificationView[] = [];
     const titles = new Map<string, string>();
     const authorNames = new Map<string, string | undefined>();
+    const hrefOf = this.discussionHrefs(r, userId);
     for (const judged of await this.judgedMentions(r, mentions, userId)) {
       const { mention } = judged;
       const base = { id: `${MENTION_PREFIX}${mention.commentId}`, workspaceId: "", documentId: "", sourceId: "", commentId: mention.commentId, createdAt: mention.createdAt };
@@ -367,28 +384,29 @@ export class DocumentReviewService {
       const { thread, comment, link } = judged;
       if (!titles.has(thread.documentId)) titles.set(thread.documentId, (await r.revisions.findCurrent(thread.documentId))?.title ?? "");
       if (!authorNames.has(comment.authorUserId)) authorNames.set(comment.authorUserId, (await r.users.findById(comment.authorUserId))?.name);
+      const href = await hrefOf(link, thread.id, thread.documentId);
       views.push({
         ...projectShareCommentNotification({ ...base, threadId: thread.id, documentTitle: titles.get(thread.documentId)!, authorName: authorNames.get(comment.authorUserId), body: comment.body, readAt: mention.readAt, threadStatus: thread.status }),
-        ...folderDocument(link, thread.documentId), kind: "MENTION", token: link.token, linkAvailable: true,
+        ...folderDocument(link, thread.documentId), kind: "MENTION", token: link.token, linkAvailable: true, ...(href ? { href } : {}),
       });
     }
     return views;
   }
-  /** The caller's named shares, each judged now (see `judgeNamedShares`). A removed recipient has no row. */
-  private judgedShares(r: KnowledgeRepositories, userId: string) {
-    return judgeNamedShares(r, userId, FOLLOW_LIMIT, this.clock());
+  /** The caller's named shares, each judged now (see `judgeNamedShares`); `unreadOnly` judges only unread rows. A removed recipient has no row. */
+  private judgedShares(r: KnowledgeRepositories, userId: string, unreadOnly = false) {
+    return judgeNamedShares(r, userId, FOLLOW_LIMIT, this.clock(), unreadOnly);
   }
   /** Named shares as Inbox entries. One that no longer opens names nothing and is never unread; `unreadOnly` leaves out read ones. */
   private async sharedViews(r: KnowledgeRepositories, caller: CallerContext, unreadOnly: boolean): Promise<ShareCommentNotificationView[]> {
     const views: ShareCommentNotificationView[] = [];
     const personal = await r.workspaces.findPersonalByOwnerUserId(caller.identity.id);
-    for (const { link, addedAt, readAt, target } of await this.judgedShares(r, caller.identity.id)) {
-      if (unreadOnly && !(target && readAt === null)) continue;
+    for (const { link, addedAt, readAt, target } of await this.judgedShares(r, caller.identity.id, unreadOnly)) {
+      if (unreadOnly && !target) continue;
       const base = { id: `${SHARED_PREFIX}${link.id}`, workspaceId: "", documentId: "", sourceId: "", threadId: "", commentId: "", excerpt: "", createdAt: addedAt, threadStatus: "OPEN" as const, kind: "SHARED_WITH_YOU" as const };
       if (!target) { views.push({ ...base, documentTitle: "", authorName: undefined, readAt: addedAt, linkAvailable: false }); continue; }
       views.push({
         ...base, documentTitle: await namedShareTitle(r, caller, target), authorName: (await r.users.findById(link.createdBy))?.name, readAt, linkAvailable: true,
-        ...(personal ? { href: `/w/${personal.id}/shares/${link.token}` } : {}),
+        ...(personal ? { href: hubSharePath(personal.id, link.token) } : {}),
       });
     }
     return views;

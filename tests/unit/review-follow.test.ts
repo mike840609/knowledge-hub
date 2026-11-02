@@ -52,7 +52,7 @@ describe("a followed discussion's replies, as the follower's Inbox reads them", 
   });
 });
 
-const live = (threadId: string, unread: number, minute: number): FollowedDiscussionView => ({ threadId, linkAvailable: true, token: "t", documentTitle: "Doc", threadStatus: "OPEN", authorName: "A", excerpt: "x", latestAt: at(minute), unread });
+const live = (threadId: string, unread: number, minute: number): FollowedDiscussionView => ({ threadId, linkAvailable: true, token: "t", href: `/s/t?thread=${threadId}`, documentTitle: "Doc", threadStatus: "OPEN", authorName: "A", excerpt: "x", latestAt: at(minute), unread });
 const dead = (threadId: string): FollowedDiscussionView => ({ threadId, linkAvailable: false });
 
 describe("the reader's list of followed discussions", () => {
