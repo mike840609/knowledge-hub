@@ -62,10 +62,13 @@ describe("revision writers record a publication event", () => {
       const singleInserts = source.match(/\.revisions\.insert\(/g)?.length ?? 0;
       const bulkInserts = source.match(/\.revisions\.insertMany\(/g)?.length ?? 0;
       const eventCalls = source.match(RECORD_CALLS)?.length ?? 0;
+      // "Keep version" on unchanged content inserts nothing but promotes the
+      // current revision; the team copy of it must be kept too, so it records.
+      const keptVersions = source.match(/markCheckpoint\(current\.id, "NAMED"/g)?.length ?? 0;
       expect(
         eventCalls,
-        `${file}: ${singleInserts} single + ${bulkInserts} bulk revision inserts, ${eventCalls} event calls`,
-      ).toBe(singleInserts + bulkInserts);
+        `${file}: ${singleInserts} single + ${bulkInserts} bulk revision inserts, ${keptVersions} kept versions, ${eventCalls} event calls`,
+      ).toBe(singleInserts + bulkInserts + keptVersions);
     }
   });
 

@@ -1581,3 +1581,162 @@ describe("publication drain cost and recovery", () => {
     expect(currentReads).toBe(0);
   });
 });
+
+describe("publication drain follows ordinary use", () => {
+  const drainAsMike = () => drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+
+  it("keeps a version kept in My Space as a kept team version through later autosaves", async () => {
+    const hub = new HubKnowledgeCommandServiceImpl(fixture.uow);
+    const folder = await hub.createFolder(fixture.mike, {
+      sourceId: fixture.mikeHubSourceId, parentId: null, name: `keep-${uuidv7()}`,
+    });
+    const original = await hub.createDocument(fixture.mike, {
+      sourceId: fixture.mikeHubSourceId, parentId: folder.treeNodeId,
+      title: "Keep", markdown: "# Keep\n\nv0\n", metadata: {},
+    });
+    const publication = await publishFolder(
+      fixture.mike, fixture.teamWorkspaceId, `Keep ${uuidv7()}`, folder.treeNodeId);
+    await drainAsMike();
+    const [teamDocument] = await publicationDocuments(publication.publication.id);
+
+    const draft = await hub.createRevision(fixture.mike, {
+      documentId: original.documentId, expectedCurrentRevisionId: original.revisionId,
+      title: "Keep", markdown: "# Keep\n\nkept text\n", metadata: {}, saveMode: "AUTOSAVE",
+    });
+    await drainAsMike();
+    // "Keep version" resubmits the unchanged content.
+    const kept = await hub.createRevision(fixture.mike, {
+      documentId: original.documentId, expectedCurrentRevisionId: draft.revisionId,
+      title: "Keep", markdown: "# Keep\n\nkept text\n", metadata: {}, saveMode: "CHECKPOINT", versionName: "v1",
+    });
+    expect(kept.changed).toBe(false);
+    await drainAsMike();
+    const current = await fixture.uow.run((repositories) =>
+      repositories.revisions.findCurrent(teamDocument.teamDocumentId));
+    expect(current?.history).toMatchObject({ state: "CHECKPOINT", name: "v1" });
+
+    await hub.createRevision(fixture.mike, {
+      documentId: original.documentId, expectedCurrentRevisionId: kept.revisionId,
+      title: "Keep", markdown: "# Keep\n\nafter\n", metadata: {}, saveMode: "AUTOSAVE",
+    });
+    await drainAsMike();
+
+    const rows = await fixture.pool.query<{ history_state: string; version_name: string | null; markdown: string }[]>(
+      "SELECT history_state, version_name, markdown FROM knowledge_revisions WHERE document_id = ? ORDER BY revision_no",
+      [teamDocument.teamDocumentId],
+    );
+    expect(rows.some((row) =>
+      row.history_state === "CHECKPOINT" && row.version_name === "v1" && row.markdown.includes("kept text"))).toBe(true);
+    expect(rows.at(-1)?.markdown).toContain("after");
+  });
+
+  it("moves a document between two published folders of one team, both ways", async () => {
+    const hub = new HubKnowledgeCommandServiceImpl(fixture.uow);
+    const label = uuidv7();
+    const from = await hub.createFolder(fixture.mike, { sourceId: fixture.mikeHubSourceId, parentId: null, name: `from-${label}` });
+    const to = await hub.createFolder(fixture.mike, { sourceId: fixture.mikeHubSourceId, parentId: null, name: `to-${label}` });
+    const mover = await hub.createDocument(fixture.mike, {
+      sourceId: fixture.mikeHubSourceId, parentId: from.treeNodeId, title: "Mover", markdown: "# Mover\n\nbody\n", metadata: {},
+    });
+    await hub.createDocument(fixture.mike, {
+      sourceId: fixture.mikeHubSourceId, parentId: to.treeNodeId, title: "Stay", markdown: "# Stay\n\nbody\n", metadata: {},
+    });
+    const first = await publishFolder(fixture.mike, fixture.teamWorkspaceId, `From ${label}`, from.treeNodeId);
+    const second = await publishFolder(fixture.mike, fixture.teamWorkspaceId, `To ${label}`, to.treeNodeId);
+    await drainAsMike();
+    const fedByMover = async (publicationId: string) => (await publicationDocuments(publicationId))
+      .find((document) => document.currentOriginalDocumentId === mover.documentId);
+    const firstCopy = await fedByMover(first.publication.id);
+    expect(firstCopy?.status).toBe("ACTIVE");
+
+    await hub.moveTreeNode(fixture.mike, { nodeId: mover.treeNodeId, newParentId: to.treeNodeId, newPosition: 0 });
+    await drainAsMike();
+    expect((await fedByMover(first.publication.id))?.status).toBe("ARCHIVED");
+    const secondCopy = await fedByMover(second.publication.id);
+    expect(secondCopy?.status).toBe("ACTIVE");
+    // A new document publication of the moved original is refused by the live claim only.
+    await expect(new PublicationService(fixture.uow).publish(fixture.mike, {
+      teamWorkspaceId: fixture.teamWorkspaceId, name: `Alone ${label}`,
+      origin: { kind: "DOCUMENT", documentId: mover.documentId },
+    })).rejects.toMatchObject({ code: "PUBLICATION_ORIGINAL_TAKEN" });
+
+    await hub.moveTreeNode(fixture.mike, { nodeId: mover.treeNodeId, newParentId: from.treeNodeId, newPosition: 0 });
+    await drainAsMike();
+    const back = await fedByMover(first.publication.id);
+    expect(back?.teamDocumentId).toBe(firstCopy?.teamDocumentId);
+    expect(back?.status).toBe("ACTIVE");
+    expect((await fedByMover(second.publication.id))?.status).toBe("ARCHIVED");
+  });
+
+  it("releases an original once it leaves a published folder, so it can be published alone", async () => {
+    const hub = new HubKnowledgeCommandServiceImpl(fixture.uow);
+    const label = uuidv7();
+    const folder = await hub.createFolder(fixture.mike, { sourceId: fixture.mikeHubSourceId, parentId: null, name: `leave-${label}` });
+    const leaver = await hub.createDocument(fixture.mike, {
+      sourceId: fixture.mikeHubSourceId, parentId: folder.treeNodeId, title: "Leaver", markdown: "# Leaver\n\nbody\n", metadata: {},
+    });
+    await publishFolder(fixture.mike, fixture.teamWorkspaceId, `Leave ${label}`, folder.treeNodeId);
+    await drainAsMike();
+    await hub.moveTreeNode(fixture.mike, { nodeId: leaver.treeNodeId, newParentId: null, newPosition: 0 });
+    await drainAsMike();
+
+    const alone = await new PublicationService(fixture.uow).publish(fixture.mike, {
+      teamWorkspaceId: fixture.teamWorkspaceId, name: `Leaver alone ${label}`,
+      origin: { kind: "DOCUMENT", documentId: leaver.documentId },
+    });
+    expect(alone.report.notices).toEqual([]);
+  });
+
+  it("reaches the caller's own save behind another user's older backlog", async () => {
+    const hub = new HubKnowledgeCommandServiceImpl(fixture.uow);
+    const folder = await hub.createFolder(fixture.mike, { sourceId: fixture.mikeHubSourceId, parentId: null, name: `backlog-${uuidv7()}` });
+    const original = await hub.createDocument(fixture.mike, {
+      sourceId: fixture.mikeHubSourceId, parentId: folder.treeNodeId, title: "Backlog", markdown: "# Backlog\n\nv0\n", metadata: {},
+    });
+    const publication = await publishFolder(fixture.mike, fixture.teamWorkspaceId, `Backlog ${uuidv7()}`, folder.treeNodeId);
+    await drainAsMike();
+    const [teamDocument] = await publicationDocuments(publication.publication.id);
+
+    // 150 older unprepared events that are not Mike's (a team document's), more than one batch.
+    const old = Date.UTC(2000, 0, 1);
+    await fixture.uow.run((repositories) => repositories.publicationEvents.recordMany(
+      Array.from({ length: 150 }, (_, index) => ({
+        documentId: teamDocument.teamDocumentId, treeNodeId: null, sourceId: null,
+        kind: "REVISION" as const, revisionId: null, at: new Date(old + index * 1000),
+      })),
+    ));
+    await hub.createRevision(fixture.mike, {
+      documentId: original.documentId, expectedCurrentRevisionId: original.revisionId,
+      title: "Backlog", markdown: "# Backlog\n\nv1\n", metadata: {},
+    });
+    await drainAsMike();
+
+    expect((await fixture.uow.run((repositories) =>
+      repositories.revisions.findCurrent(teamDocument.teamDocumentId)))?.markdown).toContain("v1");
+  });
+
+  it("makes a publish wait for an in-flight write to its personal origin", async () => {
+    const hub = new HubKnowledgeCommandServiceImpl(fixture.uow);
+    const folder = await hub.createFolder(fixture.mike, { sourceId: fixture.mikeHubSourceId, parentId: null, name: `race-${uuidv7()}` });
+    await hub.createDocument(fixture.mike, {
+      sourceId: fixture.mikeHubSourceId, parentId: folder.treeNodeId, title: "Race", markdown: "# Race\n\nv0\n", metadata: {},
+    });
+    const connection = await fixture.pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      // What every personal writer holds until it commits.
+      await connection.query("SELECT id FROM knowledge_sources WHERE id = ? FOR UPDATE", [fixture.mikeHubSourceId]);
+      let settled = false;
+      const publishing = new PublicationService(fixture.uow).publish(fixture.mike, {
+        teamWorkspaceId: fixture.teamWorkspaceId, name: `Race ${uuidv7()}`,
+        origin: { kind: "FOLDER", folderNodeId: folder.treeNodeId },
+      }).finally(() => { settled = true; });
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(settled).toBe(false);
+      await connection.commit();
+      await expect(publishing).resolves.toMatchObject({ publicationId: expect.any(String) });
+    } finally {
+      connection.release();
+    }
+  });
+});

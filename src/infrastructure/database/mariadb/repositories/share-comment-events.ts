@@ -14,6 +14,18 @@ function map(row: DbRow): ShareCommentEvent {
 }
 /** A personal owner's row, or one delivered to this caller as a team recipient. */
 const OWNED = "(w.personal_owner_user_id=? OR e.recipient_user_id=?)";
+/**
+ * The same rows as `OWNED` for the polled Inbox reads, as two indexed branches:
+ * an OR across the two joined tables can use neither index. The first branch
+ * leaves out rows the second returns, so the union is exactly `OWNED` with no
+ * duplicates. Takes the recipient id three times, before any other placeholder.
+ */
+const OWNED_EVENTS = `(
+         SELECT owned.* FROM share_comment_events owned JOIN workspaces pw ON pw.id=owned.workspace_id
+         WHERE pw.personal_owner_user_id=? AND NOT (owned.recipient_user_id <=> ?)
+         UNION ALL
+         SELECT received.* FROM share_comment_events received WHERE received.recipient_user_id=?
+       ) e JOIN workspaces w ON w.id=e.workspace_id`;
 export class MariaDbShareCommentEventsRepository implements ShareCommentEventRepository {
   constructor(private readonly connection: QueryConnection) {}
   async insert(event: ShareCommentEvent): Promise<void> {
@@ -59,18 +71,17 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
          AND (e.recipient_user_id IS NULL OR
               (w.lifecycle_state='ACTIVE' AND s.status='ACTIVE'
                AND d.status='ACTIVE' AND s.source_type='PUBLICATION'))`;
-    const params: (string | Date | number)[] = [recipientUserId, recipientUserId];
+    const params: (string | Date | number)[] = [recipientUserId, recipientUserId, recipientUserId];
     if (allowedTeamWorkspaceIds?.length) params.push(...allowedTeamWorkspaceIds);
     if (before) params.push(before.createdAt, before.createdAt, before.id);
     params.push(limit);
     const rows = await this.connection.query<DbRow[]>(
-      `SELECT e.* FROM share_comment_events e
-       JOIN workspaces w ON w.id=e.workspace_id
+      `SELECT e.* FROM ${OWNED_EVENTS}
        JOIN knowledge_documents d ON d.id=e.document_id
        JOIN knowledge_sources s ON s.id=d.source_id
        JOIN document_review_threads t ON t.id=e.thread_id
        JOIN document_review_comments c ON c.id=e.comment_id
-       WHERE ${OWNED} AND e.read_at IS NULL ${teamFilter}
+       WHERE e.read_at IS NULL ${teamFilter}
          ${visibleInboxFilter} ${cursor}
        ORDER BY e.created_at DESC, e.id DESC LIMIT ?`,
       params,
@@ -112,19 +123,17 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
                 COUNT(*) OVER (PARTITION BY COALESCE(l.id, e.document_id)) AS unread_count,
                 ROW_NUMBER() OVER (PARTITION BY COALESCE(l.id, e.document_id)
                                    ORDER BY e.created_at DESC, e.id DESC) AS row_num
-         FROM share_comment_events e
-         JOIN workspaces w ON w.id = e.workspace_id
+         FROM ${OWNED_EVENTS}
          LEFT JOIN document_share_links l ON l.id = e.origin_share_link_id AND l.folder_node_id IS NOT NULL
          JOIN document_review_threads t ON t.id = e.thread_id
          JOIN document_review_comments c ON c.id = e.comment_id
-         WHERE ${OWNED}
-           AND e.read_at IS NULL
+         WHERE e.read_at IS NULL
            AND t.visibility = 'VISIBLE'
            AND c.deleted_at IS NULL AND c.visibility = 'VISIBLE'
            ${teamFilter}
        ) unread
        WHERE unread.row_num = 1`,
-      [recipientUserId, recipientUserId, ...(allowedTeamWorkspaceIds ?? [])],
+      [recipientUserId, recipientUserId, recipientUserId, ...(allowedTeamWorkspaceIds ?? [])],
     );
     return rows.map(row => ({
       documentId: String(row.document_id),
@@ -137,12 +146,12 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
   }
   async listRecentByRecipient(recipientUserId: string, before: { createdAt: Date; id: string } | undefined, limit: number): Promise<ShareCommentEvent[]> {
     const cursor = before ? "AND (e.created_at < ? OR (e.created_at = ? AND e.id < ?))" : "";
-    const args: (string | Date | number)[] = [recipientUserId, recipientUserId];
+    const args: (string | Date | number)[] = [recipientUserId, recipientUserId, recipientUserId];
     if (before) args.push(before.createdAt, before.createdAt, before.id);
     args.push(limit);
     const rows = await this.connection.query<DbRow[]>(
-      `SELECT e.* FROM share_comment_events e JOIN workspaces w ON w.id=e.workspace_id
-       WHERE ${OWNED} ${cursor}
+      `SELECT e.* FROM ${OWNED_EVENTS}
+       WHERE 1=1 ${cursor}
        ORDER BY e.created_at DESC, e.id DESC LIMIT ?`,
       args,
     );

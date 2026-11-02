@@ -270,10 +270,13 @@ export async function bindPublicationProjection(
       createdBy: actorId,
       createdAt: now,
       // An autosave draft stays a draft in the team: it is replaced by the next
-      // copy instead of piling up as permanent history.
+      // copy instead of piling up as permanent history. A kept version keeps
+      // its name.
       ...(originalRevision.history?.state === "WORKING"
         ? { history: { state: "WORKING" as const, activityId: revisionId, windowStartedAt: now, name: null, reason: "AUTOSAVE" } }
-        : {}),
+        : originalRevision.history?.name
+          ? { history: { state: "CHECKPOINT" as const, activityId: revisionId, windowStartedAt: now, name: originalRevision.history.name, reason: originalRevision.history.reason } }
+          : {}),
     });
     await repositories.documents.setCurrentRevision(teamDocumentId, revisionId, actorId);
     await repositories.links.replaceForDocument({
@@ -391,6 +394,7 @@ export async function bindPublicationProjection(
         sourcePath: input.sourcePath,
         status: "ACTIVE",
         currentContentHash: contentHash,
+        currentIsDraft: original.history?.state === "WORKING",
       };
       documents.push(created);
       documentById.set(documentId, created);
@@ -412,18 +416,27 @@ export async function bindPublicationProjection(
       const creator = creatorContributionOf(teamDocument);
       const original = knownOriginal ?? await currentRevision(originalDocumentId);
       // Same canonical content hashes alike, so a no-op refresh reads nothing more.
-      if (teamDocument.currentContentHash != null && teamDocument.currentContentHash === original.contentHash) {
+      const sameHash = teamDocument.currentContentHash != null && teamDocument.currentContentHash === original.contentHash;
+      if (sameHash && !(teamDocument.currentIsDraft && original.history?.state !== "WORKING")) {
         return { changed: false };
       }
       const teamCurrent = await currentRevision(teamDocumentId);
-      if (unchangedRevision(teamCurrent, {
+      if (sameHash || unchangedRevision(teamCurrent, {
         title: original.title,
         markdown: original.markdown,
         metadata: original.metadata,
       })) {
+        // Same content, but the original kept it as a version: keep the team's
+        // draft copy of it too, so the next copy cannot prune it.
+        if (teamCurrent.history?.state === "WORKING" && original.history?.state !== "WORKING") {
+          await repositories.revisions.markCheckpoint(
+            teamCurrent.id, original.history?.reason ?? "MANUAL", original.history?.name ?? undefined);
+          teamDocument.currentIsDraft = false;
+        }
         return { changed: false };
       }
       teamDocument.currentContentHash = await createRevisionCopy(teamDocumentId, original, creator.userId);
+      teamDocument.currentIsDraft = original.history?.state === "WORKING";
       return { changed: true };
     },
 

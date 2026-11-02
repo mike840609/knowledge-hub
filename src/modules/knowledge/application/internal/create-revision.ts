@@ -62,6 +62,11 @@ export async function createRevisionInTransaction(
   if (isRevisionContentUnchanged(current, input) && input.saveMode !== "RESTORE") {
     if (input.saveMode === "CHECKPOINT") {
       await repositories.revisions.markCheckpoint(current.id, "NAMED", input.versionName?.trim());
+      // The content is unchanged, but a team copy of this draft must become a
+      // kept version too, or the next copy prunes it.
+      await recordPersonalPublicationEvent(repositories, workspace, {
+        documentId: document.id, treeNodeId: null, sourceId: null, kind: "REVISION", revisionId: current.id, at: now,
+      });
       return { revisionId: current.id, revisionNo: current.revisionNo, changed: false, history: { state: "CHECKPOINT", activityId: current.history?.activityId ?? current.id, windowStartedAt: current.history?.windowStartedAt ?? current.createdAt, name: input.versionName?.trim() ?? null, reason: "NAMED" } };
     }
     return { revisionId: current.id, revisionNo: current.revisionNo, changed: false, history: current.history };

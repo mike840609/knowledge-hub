@@ -6,6 +6,8 @@ export interface SourceRepository {
   findByWorkspaceId(workspaceId: string, options?: { includeArchived?: boolean }): Promise<KnowledgeSource[]>;
   findActiveByWorkspaceId(workspaceId: string): Promise<KnowledgeSource[]>;
   lockById(sourceId: string): Promise<KnowledgeSource | null>;
+  /** A shared lock: readers that must not interleave with a writer of this source. */
+  lockSharedById(sourceId: string): Promise<KnowledgeSource | null>;
   insert(source: KnowledgeSource): Promise<void>;
   updateStatus(sourceId: string, status: "ACTIVE" | "ARCHIVED", actorId: string): Promise<void>;
   updateName(sourceId: string, name: string, actorId: string): Promise<void>;

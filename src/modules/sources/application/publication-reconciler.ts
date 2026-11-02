@@ -319,13 +319,19 @@ async function applyReconciliation(
    */
   async function rememberBinding(originalDocumentId: string, teamDocumentId: string): Promise<boolean> {
     const existing = bindingOf(originalDocumentId);
-    if (existing?.teamDocumentId === teamDocumentId) return true;
+    const sameCopy = existing?.teamDocumentId === teamDocumentId;
+    if (sameCopy && existing.claimed !== false) return true;
     const claim = await findClaimName(originalDocumentId);
     if (claim !== null) {
       pushClaimNotice(originalDocumentId, claim);
       return false;
     }
     const attempt = await repositories.publications.runClaimAttempt(async () => {
+      if (sameCopy) {
+        // A released claim on the same copy is taken back, not rebound.
+        await repositories.publications.setClaim(contribution.id, originalDocumentId, true);
+        return;
+      }
       if (existing) {
         await repositories.publications.unbind(publication.id, contribution.id, originalDocumentId);
       }
@@ -344,7 +350,7 @@ async function applyReconciliation(
       throw attempt.error;
     }
     bindings = bindings.filter((binding) => binding.originalDocumentId !== originalDocumentId);
-    bindings.push({ contributionId: contribution.id, originalDocumentId, teamDocumentId });
+    bindings.push({ contributionId: contribution.id, originalDocumentId, teamDocumentId, claimed: true });
     return true;
   }
 
@@ -358,6 +364,12 @@ async function applyReconciliation(
   async function archive(document: PublicationDocument): Promise<void> {
     if (document.status === "ARCHIVED") return;
     await projection.setDocumentStatus(document.teamDocumentId, "ARCHIVED");
+    // An archived copy no longer holds its originals: they may be published
+    // elsewhere in this team, and a restore here re-claims them.
+    await repositories.publications.releaseClaimsOfTeamDocument(document.teamDocumentId);
+    for (const binding of bindings) {
+      if (binding.teamDocumentId === document.teamDocumentId) binding.claimed = false;
+    }
     document.status = "ARCHIVED";
     archivedThisRun.add(document.teamDocumentId);
   }
@@ -418,6 +430,7 @@ async function applyReconciliation(
       contributionId: contribution.id,
       originalDocumentId: original.documentId,
       teamDocumentId: holder.teamDocumentId,
+      claimed: true,
     });
     holder.currentOriginalDocumentId = original.documentId;
     if (holder.status === "ARCHIVED") {
@@ -445,7 +458,9 @@ async function applyReconciliation(
     const bound = binding === undefined ? undefined : documentOf(binding.teamDocumentId);
     if (bound && !isOwn(bound)) {
       // Mapped to another creator's copy: only report it, never create or
-      // overwrite. The remembered binding is what keeps the message stable.
+      // overwrite. The remembered binding is what keeps the message stable,
+      // and it holds the original's claim again once the original is back.
+      if (!(await rememberBinding(original.documentId, bound.teamDocumentId))) continue;
       report.notices.push(notice(
         publication.id, original.documentId, "MAINTAINED_BY_OTHER", { maintainerUserId: maintainerOf(bound) }));
       continue;
@@ -477,10 +492,13 @@ async function applyReconciliation(
     ) {
       if (!(await reattach(holder, original, target))) continue;
       target = holder;
+      if (!(await rememberBinding(original.documentId, target.teamDocumentId))) continue;
     } else {
+      // Claim before restoring, so a copy whose original another publication
+      // took meanwhile stays archived.
+      if (!(await rememberBinding(original.documentId, target.teamDocumentId))) continue;
       await restore(target);
     }
-    if (!(await rememberBinding(original.documentId, target.teamDocumentId))) continue;
     mapped.push({ original, teamDocumentId: target.teamDocumentId });
   }
 
@@ -613,6 +631,16 @@ async function applyReconciliation(
     }
     // `copy` inserts the binding in the same transaction.
     report.created += 1;
+  }
+
+  // A binding keeps its claim only while its original is eligible and its copy
+  // is live; otherwise it stays as matching memory and releases the original.
+  for (const binding of bindings) {
+    if (binding.claimed === false) continue;
+    const live = documentOf(binding.teamDocumentId)?.status === "ACTIVE";
+    if (eligibleIds.has(binding.originalDocumentId) && live) continue;
+    await repositories.publications.setClaim(contribution.id, binding.originalDocumentId, false);
+    binding.claimed = false;
   }
 
   await projection.pruneEmptyFolders();

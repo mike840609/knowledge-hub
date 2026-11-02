@@ -60,6 +60,7 @@ function mapDocument(row: DbRow): PublicationDocument {
     currentContentHash: row.current_content_hash === null || row.current_content_hash === undefined
       ? null
       : String(row.current_content_hash),
+    currentIsDraft: row.current_history_state === "WORKING",
   };
 }
 
@@ -68,6 +69,7 @@ function mapBinding(row: DbRow): DocumentBinding {
     contributionId: String(row.contribution_id),
     originalDocumentId: String(row.original_document_id),
     teamDocumentId: String(row.team_document_id),
+    claimed: row.active_team_workspace_id !== null && row.active_team_workspace_id !== undefined,
   };
 }
 
@@ -207,7 +209,7 @@ export class MariaDbPublicationRepository implements PublicationRepository {
 
   async listDocuments(publicationId: string): Promise<PublicationDocument[]> {
     const rows = await this.connection.query<DbRow[]>(
-      `SELECT pd.*, d.status, r.content_hash AS current_content_hash
+      `SELECT pd.*, d.status, r.content_hash AS current_content_hash, r.history_state AS current_history_state
        FROM publication_documents pd JOIN knowledge_documents d ON d.id = pd.team_document_id
        LEFT JOIN knowledge_revisions r ON r.id = d.current_revision_id
        WHERE pd.publication_id = ? ORDER BY pd.team_document_id`,
@@ -326,6 +328,32 @@ export class MariaDbPublicationRepository implements PublicationRepository {
        JOIN publications p ON p.id = c.publication_id
        WHERE b.contribution_id = ? AND b.original_document_id = ? AND p.id = ?`,
       [contributionId, originalDocumentId, publicationId],
+    );
+  }
+
+  async setClaim(contributionId: string, originalDocumentId: string, claimed: boolean): Promise<void> {
+    try {
+      await this.connection.query(
+        `UPDATE publication_bindings b
+         JOIN publication_contributors c ON c.id = b.contribution_id
+         JOIN publications p ON p.id = c.publication_id
+         JOIN knowledge_sources s ON s.id = p.source_id
+         SET b.active_team_workspace_id = CASE WHEN ? AND s.status = 'ACTIVE' THEN s.workspace_id ELSE NULL END,
+             b.updated_at = CURRENT_TIMESTAMP(6)
+         WHERE b.contribution_id = ? AND b.original_document_id = ?`,
+        [claimed, contributionId, originalDocumentId],
+      );
+    } catch (error) {
+      if (isDuplicateKey(error)) throw claimDuplicateError("Another publication in this team now holds this original.");
+      throw error;
+    }
+  }
+
+  async releaseClaimsOfTeamDocument(teamDocumentId: string): Promise<void> {
+    await this.connection.query(
+      `UPDATE publication_bindings SET active_team_workspace_id = NULL, updated_at = CURRENT_TIMESTAMP(6)
+       WHERE team_document_id = ? AND active_team_workspace_id IS NOT NULL`,
+      [teamDocumentId],
     );
   }
 
@@ -488,8 +516,12 @@ export class MariaDbPublicationRepository implements PublicationRepository {
       await this.connection.query(
         `UPDATE publication_bindings b
          JOIN publication_contributors c ON c.id = b.contribution_id
-         SET b.active_team_workspace_id = ?, b.updated_at = CURRENT_TIMESTAMP(6)
+         JOIN knowledge_documents td ON td.id = b.team_document_id
+         SET b.active_team_workspace_id = CASE WHEN td.status = 'ACTIVE' THEN ? ELSE NULL END,
+             b.updated_at = CURRENT_TIMESTAMP(6)
          WHERE c.publication_id = ?`,
+        // A restore re-claims only originals whose copy is live; a binding whose
+        // copy was archived as ineligible stays released.
         [status === "ACTIVE" ? workspaceId : null, publicationId],
       );
     } catch (error) {
@@ -500,8 +532,38 @@ export class MariaDbPublicationRepository implements PublicationRepository {
     }
   }
 
-  async prepareDeliveries(limit: number): Promise<void> {
-    const events = await this.connection.query<DbRow[]>(
+  async prepareDeliveries(limit: number, ownerUserId?: string): Promise<void> {
+    if (ownerUserId !== undefined) {
+      // Find the owner's events with a plain read: a locking read over these
+      // joins would also lock their personal source, tree and document rows.
+      const own = await this.connection.query<DbRow[]>(
+        `SELECT e.id
+         FROM publication_events e
+         LEFT JOIN knowledge_documents d ON d.id = e.document_id
+         LEFT JOIN knowledge_tree_nodes n ON n.id = e.tree_node_id
+         JOIN knowledge_sources s ON s.id = COALESCE(e.source_id, d.source_id, n.source_id)
+         JOIN workspaces w ON w.id = s.workspace_id
+         WHERE e.consumed_at IS NULL
+           AND w.personal_owner_user_id = ?
+           AND NOT EXISTS (SELECT 1 FROM publication_event_deliveries x WHERE x.event_id = e.id)
+         ORDER BY e.created_at, e.id
+         LIMIT ?`,
+        [ownerUserId, limit],
+      );
+      if (own.length > 0) {
+        await this.prepareEvents(await this.connection.query<DbRow[]>(
+          `SELECT e.id, e.document_id, e.tree_node_id, e.source_id
+           FROM publication_events e
+           WHERE e.id IN (${own.map(() => "?").join(", ")})
+             AND e.consumed_at IS NULL
+             AND NOT EXISTS (SELECT 1 FROM publication_event_deliveries d WHERE d.event_id = e.id)
+           ORDER BY e.created_at, e.id
+           FOR UPDATE SKIP LOCKED`,
+          own.map((row) => String(row.id)),
+        ));
+      }
+    }
+    await this.prepareEvents(await this.connection.query<DbRow[]>(
       `SELECT e.id, e.document_id, e.tree_node_id, e.source_id
        FROM publication_events e
        WHERE e.consumed_at IS NULL
@@ -509,7 +571,10 @@ export class MariaDbPublicationRepository implements PublicationRepository {
        ORDER BY e.created_at, e.id
        LIMIT ? FOR UPDATE SKIP LOCKED`,
       [limit],
-    );
+    ));
+  }
+
+  private async prepareEvents(events: readonly DbRow[]): Promise<void> {
     for (const event of events) {
       const contributions = await this.affectedContributions(event);
       if (contributions.length === 0) {

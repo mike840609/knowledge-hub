@@ -117,6 +117,7 @@ describe("publication projection", () => {
       contributionId: publication.contributionId,
       originalDocumentId: original.documentId,
       teamDocumentId: copied.documentId,
+      claimed: true,
     }]);
   });
 

@@ -324,6 +324,7 @@ describe("reconciling a creator's originals", () => {
       contributionId: publication.contributionId,
       originalDocumentId: original.documentId,
       teamDocumentId: team.teamDocumentId,
+      claimed: true,
     }]);
   });
 
@@ -357,6 +358,7 @@ describe("reconciling a creator's originals", () => {
       contributionId: annContributionId,
       originalDocumentId: annOriginal.documentId,
       teamDocumentId: team.teamDocumentId,
+      claimed: true,
     }]);
 
     await renameOriginalPath("ann", fixture.annFolderSourceId, annOriginal.documentId, "ann-reconcile/owner/b.md");
@@ -394,6 +396,7 @@ describe("reconciling a creator's originals", () => {
       contributionId: publication.contributionId,
       originalDocumentId: b.documentId,
       teamDocumentId: teamB!.teamDocumentId,
+      claimed: true,
     });
   });
 
@@ -436,11 +439,13 @@ describe("reconciling a creator's originals", () => {
       contributionId: publication.contributionId,
       originalDocumentId: mikeOriginal.documentId,
       teamDocumentId: winner.teamDocumentId,
+      claimed: true,
     }]);
     expect(annBindings).toEqual([{
       contributionId: annContributionId,
       originalDocumentId: loser.documentId,
       teamDocumentId: winner.teamDocumentId,
+      claimed: true,
     }]);
   });
 
@@ -552,6 +557,7 @@ describe("path reservations and moves", () => {
       contributionId: publication.contributionId,
       originalDocumentId: replacement.documentId,
       teamDocumentId: team.teamDocumentId,
+      claimed: true,
     }]);
   });
 

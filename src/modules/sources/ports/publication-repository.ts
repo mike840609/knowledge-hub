@@ -77,6 +77,14 @@ export interface PublicationRepository {
    * document.
    */
   unbind(publicationId: string, contributionId: string, originalDocumentId: string): Promise<void>;
+  /**
+   * Takes (`true`, only while the publication is ACTIVE) or releases one
+   * binding's claim. Taking a claim another publication holds throws
+   * `PUBLICATION_ORIGINAL_TAKEN`; run it inside `runClaimAttempt`.
+   */
+  setClaim(contributionId: string, originalDocumentId: string, claimed: boolean): Promise<void>;
+  /** Releases every binding's claim on a team document that was archived. */
+  releaseClaimsOfTeamDocument(teamDocumentId: string): Promise<void>;
   /** Reattaches a team document to a new original, replacing its creator binding only. */
   repoint(teamDocumentId: string, originalDocumentId: string): Promise<void>;
   /**
@@ -108,9 +116,11 @@ export interface PublicationRepository {
   /**
    * Idempotently creates delivery rows for unconsumed events, targets that
    * have no affected contribution at all complete the event. Called only while
-   * team publishing is enabled.
+   * team publishing is enabled. With `ownerUserId`, that person's own
+   * unprepared events are prepared first, so another user's large backlog
+   * cannot keep a caller's drain from ever reaching their save.
    */
-  prepareDeliveries(limit: number): Promise<void>;
+  prepareDeliveries(limit: number, ownerUserId?: string): Promise<void>;
   /**
    * Pending deliveries in event order. `publicationId` is joined from the
    * contribution so a drain can reconcile without a second lookup per row.

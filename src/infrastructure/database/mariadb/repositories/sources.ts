@@ -42,6 +42,12 @@ export class MariaDbSourceRepository implements SourceRepository {
     return rows[0] ? mapSource(rows[0]) : null;
   }
 
+  async lockSharedById(sourceId: string): Promise<KnowledgeSource | null> {
+    // MariaDB 10.11 rejects MySQL's FOR SHARE as a parse error.
+    const rows = await this.connection.query<DbRow[]>("SELECT * FROM knowledge_sources WHERE id = ? LOCK IN SHARE MODE", [sourceId]);
+    return rows[0] ? mapSource(rows[0]) : null;
+  }
+
   async insert(source: KnowledgeSource): Promise<void> {
     await this.connection.query(
       `INSERT INTO knowledge_sources (id, name, workspace_id, source_type, ownership, status, sync_version, created_by, updated_by, archived_by, archived_at, created_at, updated_at)

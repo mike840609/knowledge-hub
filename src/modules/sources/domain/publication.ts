@@ -51,6 +51,8 @@ export type PublicationDocument = {
   status: "ACTIVE" | "ARCHIVED";
   /** Hash of the team copy's current revision; lets a no-op refresh skip reading it. */
   currentContentHash?: string | null;
+  /** Whether that revision is an autosave draft the next copy may replace. */
+  currentIsDraft?: boolean;
 };
 
 /** contributor's original document → team document, remembered per contribution. */
@@ -58,6 +60,12 @@ export type DocumentBinding = {
   contributionId: string;
   originalDocumentId: string;
   teamDocumentId: string;
+  /**
+   * Whether the binding holds the original's one-per-team claim. A binding whose
+   * copy was archived, or whose original left the origin, stays as matching
+   * memory but releases the claim, so the original can be published elsewhere.
+   */
+  claimed?: boolean;
 };
 
 /**

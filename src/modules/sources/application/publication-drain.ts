@@ -77,13 +77,19 @@ async function deferBatch(
   }
 }
 
+type Delivered = {
+  state: ReconcileState | "FAILED";
+  /** The run met an original another publication still claims. */
+  blocked: boolean;
+};
+
 async function deliverContribution(
   uow: SourceUnitOfWork,
   batch: ContributionBatch,
   judge: RightsJudge,
   now: Date,
   retryDelayMs: number,
-): Promise<ReconcileState | "FAILED"> {
+): Promise<Delivered> {
   const nextAttemptAt = new Date(now.getTime() + retryDelayMs);
   const attempt = () => uow.run(async (repositories) => {
     const reconciled = await reconcileContribution(repositories, {
@@ -117,7 +123,10 @@ async function deliverContribution(
         );
       }
     }
-    return reconciled.state;
+    return {
+      state: reconciled.state,
+      blocked: reconciled.report.notices.some((notice) => notice.code === "ORIGINAL_ALREADY_PUBLISHED"),
+    };
   });
   try {
     try {
@@ -134,7 +143,7 @@ async function deliverContribution(
       error instanceof Error ? error.name : "UnknownError",
     );
     if (judge.kind === "NO_CALLER") await deferBatch(uow, batch, nextAttemptAt);
-    return "FAILED";
+    return { state: "FAILED", blocked: false };
   }
 }
 
@@ -178,11 +187,12 @@ export async function drainPublicationEvents(
   const clock = input.now ?? (() => new Date());
   const retryDelayMs = input.retryDelayMs ?? 60_000;
 
-  await uow.run((repositories) => repositories.publications.prepareDeliveries(batchSize));
+  await uow.run((repositories) => repositories.publications.prepareDeliveries(batchSize, userId));
 
   let remaining = batchSize;
   const attempted = new Set<string>();
   const reconciledContributions = new Set<string>();
+  const blocked = new Map<string, ContributionBatch>();
   while (remaining > 0) {
     const now = clock();
     const rows = await uow.run((repositories) =>
@@ -199,7 +209,8 @@ export async function drainPublicationEvents(
 
     for (const batch of groupByContribution(fresh)) {
       reconciledContributions.add(batch.contributionId);
-      const state = await deliverContribution(uow, batch, input.judge, now, retryDelayMs);
+      const { state, blocked: isBlocked } = await deliverContribution(uow, batch, input.judge, now, retryDelayMs);
+      if (isBlocked) blocked.set(batch.contributionId, batch);
       const count = batch.rows.length;
       if (state === "APPLIED") summary.applied += count;
       else if (state === "SKIPPED") summary.skipped += count;
@@ -217,11 +228,15 @@ export async function drainPublicationEvents(
     const now = clock();
     for (const contribution of flagged) {
       if (reconciledContributions.has(contribution.contributionId)) continue;
-      const state = await deliverContribution(uow, {
+      const flaggedBatch = {
         contributionId: contribution.contributionId,
         publicationId: contribution.publicationId,
         rows: [],
-      }, input.judge, now, retryDelayMs);
+      };
+      const { state, blocked: isBlocked } = await deliverContribution(
+        uow, flaggedBatch, input.judge, now, retryDelayMs);
+      if (isBlocked) blocked.set(contribution.contributionId, flaggedBatch);
+      reconciledContributions.add(contribution.contributionId);
       if (state === "APPLIED") summary.applied += 1;
       else if (state === "SKIPPED") summary.skipped += 1;
       else if (state === "PENDING") summary.pending += 1;
@@ -229,6 +244,18 @@ export async function drainPublicationEvents(
       else if (state === "FAILED") summary.failed += 1;
     }
   }
+  // One event can archive an original's copy in one publication and add it to
+  // another (a move between published folders). Which contribution ran first
+  // is arbitrary, so one that met a claim another run in this drain may have
+  // just released is reconciled once more. Its deliveries are already
+  // complete, so the pass is not counted.
+  if (blocked.size > 0 && reconciledContributions.size > 1) {
+    const now = clock();
+    for (const batch of blocked.values()) {
+      await deliverContribution(uow, { ...batch, rows: [] }, input.judge, now, retryDelayMs);
+    }
+  }
+
   // SKIPPED is real work: a caller that loops until "no work" must not stop on
   // a batch made only of left/archived deliveries and leave later rows behind.
   summary.processed = summary.applied + summary.skipped

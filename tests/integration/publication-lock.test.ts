@@ -9,6 +9,7 @@ import { FinalizeFolderImportService } from "@/modules/sources/application/final
 import { UploadFolderImportEntriesService } from "@/modules/sources/application/upload-folder-import-entries";
 import { hashReadyImportSnapshot } from "@/modules/sources/domain/import-integrity";
 import { bindSourceProjection } from "@/modules/sources/application/source-knowledge-projection-service";
+import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { createPublicationFixture, type PublicationFixture } from "../fixtures/publications";
 
@@ -211,5 +212,29 @@ describe("publication source is read-only to ordinary writers", () => {
 
     const after = await snapshot();
     expect(after).toEqual(before);
+  });
+});
+
+describe("publication source refusals do not reveal it to a non-member", () => {
+  it("answers a non-member's write as any other team write it may not make", async () => {
+    const folder = await fixture.createFolder(fixture.mike, `repo/outsider-${uuidv7()}`, "outsider");
+    const publication = await fixture.createPublication({
+      name: `Outsider ${uuidv7()}`,
+      kind: "FOLDER",
+      creator: fixture.mike,
+      origin: { kind: "FOLDER", folderNodeId: folder.treeNodeId },
+    });
+    const identity = { id: uuidv7(), emp_id: `OUT-${uuidv7()}`, name: "Outsider", org_code: "OUT" };
+    await fixture.uow.run((repositories) => repositories.users.upsertIdentity(identity));
+    const outsider = callerFromIdentity(identity);
+    const denied = { code: "WORKSPACE_ACCESS_DENIED" };
+    const sources = new SourceApplicationService(fixture.uow);
+    const hub = new HubKnowledgeCommandServiceImpl(fixture.uow);
+
+    await expect(sources.archiveSource(outsider, publication.sourceId)).rejects.toMatchObject(denied);
+    await expect(sources.renameSource(outsider, publication.sourceId, "Nope")).rejects.toMatchObject(denied);
+    await expect(hub.createFolder(outsider, {
+      sourceId: publication.sourceId, parentId: null, name: "Nope",
+    })).rejects.toMatchObject(denied);
   });
 });

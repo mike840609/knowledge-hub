@@ -191,8 +191,9 @@ export class SourceApplicationService implements SourceLifecycleCommands {
       await syncCallerIdentity(repositories.users, caller);
       const source = await repositories.sources.lockById(sourceId);
       if (!source) throw new SourceNotFoundError();
-      requireOrdinarySource(source);
+      // Membership first: a non-member gets the same not-found as an unknown id.
       await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
+      requireOrdinarySource(source);
       if (source.name === next) return;
       await repositories.sources.updateName(sourceId, next, caller.identity.id);
     });
@@ -207,8 +208,9 @@ export class SourceApplicationService implements SourceLifecycleCommands {
       await syncCallerIdentity(repositories.users, caller);
       const source = await repositories.sources.lockById(sourceId);
       if (!source) throw new SourceNotFoundError();
-      requireOrdinarySource(source);
+      // Membership first: a non-member gets the same not-found as an unknown id.
       const workspace = await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
+      requireOrdinarySource(source);
       if (source.status === status) return;
       await repositories.sources.updateStatus(sourceId, status, caller.identity.id);
       // Whole-source lifecycle: the target is the Source itself, and the

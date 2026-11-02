@@ -441,6 +441,7 @@ export class PublicationService {
         await lockActiveTeamWorkspace(repositories, publication.teamWorkspaceId);
 
         const folder = await requireOwnedFolder(repositories, caller, input.folderNodeId);
+        await holdOriginSource(repositories, folder.sourceId);
         const contributions = await repositories.publications.listContributions(publication.id);
         const existing = contributions.find((candidate) => candidate.userId === caller.identity.id);
 
@@ -906,12 +907,12 @@ function canManagePublication(
   own: Contribution | null,
   callerId: string,
 ): boolean {
-  // Mirrors `requirePublicationLifecycleRights`: an admin's effective rights
-  // survive an archived team; a creator needs an active team and their own
-  // non-left contribution.
+  // Mirrors what `lockPublication` accepts: every lifecycle command refuses an
+  // archived team, so nobody is offered one there. An admin may manage any
+  // publication; a creator needs their own non-left contribution.
+  if (workspace.lifecycleState !== "ACTIVE") return false;
   if (capabilities.has("membership.manage_basic")) return true;
-  return workspace.lifecycleState === "ACTIVE"
-    && capabilities.has("source.manage")
+  return capabilities.has("source.manage")
     && publication.creatorUserId === callerId
     && own !== null
     && own.leftAt === null;
@@ -1032,10 +1033,24 @@ async function resolveOrigin(
 ): Promise<OriginOriginal[]> {
   if (origin.kind === "DOCUMENT") {
     await requireOwnedDocument(repositories, caller, origin.documentId);
+    const document = await repositories.documents.findById(origin.documentId);
+    if (document) await holdOriginSource(repositories, document.sourceId);
     return [{ documentId: origin.documentId, path: null }];
   }
   const folder = await requireOwnedFolder(repositories, caller, origin.folderNodeId);
+  await holdOriginSource(repositories, folder.sourceId);
   return loadFolderOriginals(repositories, folder);
+}
+
+/**
+ * Holds the personal origin's source (shared) until the publish or join
+ * commits. A save to that source then either commits first, so the copy reads
+ * it, or waits, so its drain sees the new contribution. Without this a save
+ * committed mid-publish is consumed with no delivery and the copy stays old.
+ * Personal writers never lock a team source, so this order cannot deadlock.
+ */
+async function holdOriginSource(repositories: SourceRepositories, sourceId: string): Promise<void> {
+  await repositories.sources.lockSharedById(sourceId);
 }
 
 /**

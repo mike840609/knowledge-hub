@@ -259,6 +259,7 @@ describe("publication claims", () => {
       contributionId: publication.contributionId,
       originalDocumentId: newOriginal.documentId,
       teamDocumentId: teamDocument.teamDocumentId,
+      claimed: true,
     }]);
     const [document] = await fixture.pool.query<{ current_original_document_id: string }[]>(
       "SELECT current_original_document_id FROM publication_documents WHERE team_document_id = ?",

@@ -74,18 +74,20 @@ async function requireOwnedSource(
   const source = await repositories.sourcePolicy.lockById(sourceId);
   if (!source) throw new SourceNotFoundError();
   if (source.status !== "ACTIVE") throw new SourceArchivedError();
-  // A publication source has no ordinary writer. Only the publication
-  // mechanism, which acts for one document's creator, writes it (spec
-  // "Publication sources are locked server-side"); `document.write` and
-  // `source.manage` never override this.
-  if (source.sourceType === "PUBLICATION") {
-    throw new SourceReadOnlyError("Publication content is written only by the publication mechanism.");
-  }
-  if (source.ownership !== ownership) {
+  const publication = source.sourceType === "PUBLICATION";
+  if (!publication && source.ownership !== ownership) {
     if (ownership === "HUB_MANAGED") throw new SourceReadOnlyError();
     throw new HubManagedOperationRequiredError();
   }
   const workspace = await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "content-write");
+  // A publication source has no ordinary writer. Only the publication
+  // mechanism, which acts for one document's creator, writes it (spec
+  // "Publication sources are locked server-side"); `document.write` and
+  // `source.manage` never override this. Judged after membership, so a
+  // non-member cannot tell a publication source from an unknown id.
+  if (publication) {
+    throw new SourceReadOnlyError("Publication content is written only by the publication mechanism.");
+  }
   return { source, workspace };
 }
 
