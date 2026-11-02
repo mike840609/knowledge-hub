@@ -25,3 +25,15 @@ it("hides the section when nothing is shared with the reader",async()=>{
  await mount([]);expect(host.querySelector('section[aria-label="Shared with you"]')).toBeNull();expect(host.textContent).not.toContain("Shared with you");
  await mount(undefined);expect(host.querySelector('section[aria-label="Shared with you"]')).toBeNull();
 });
+it("shows the section only on the unfiltered first page, where it belongs above the whole list",async()=>{
+ for(const query of [{q:"plan",status:"all",page:1},{q:"",status:"available",page:1},{q:"",status:"all",page:2}] as const){
+  await act(async()=>root.render(<SavedSharesView workspaceId="me" model={{...model,query}} sharedWithYou={named}/>));
+  expect(host.querySelector('section[aria-label="Shared with you"]')).toBeNull();
+ }
+});
+it("an owner without a name is left out rather than shown as an empty 'Shared by'",async()=>{
+ await mount([{...named[0],sharedByName:""}]);
+ const line=host.querySelector('section[aria-label="Shared with you"] li p')!;
+ expect(line.textContent).not.toContain("Shared by");
+ expect(line.textContent?.startsWith(" ·")).toBe(false);
+});

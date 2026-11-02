@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { SharedReviewPanel } from "@/components/knowledge/shared-review-panel";
-import { SharedReading, SHARED_CONTENT_ID } from "@/components/knowledge/shared-reading";
+import { SharedReading, SharedSkipLink, SHARED_CONTENT_ID } from "@/components/knowledge/shared-reading";
 import { hubSharePath, sharedDocumentParam } from "@/lib/share-paths";
 import type { SharedView } from "@/modules/knowledge/application/document-share-service";
 import { SHARED_PREFIX } from "@/modules/knowledge/domain/share-comment-event";
@@ -62,6 +62,7 @@ export default async function HubSharePage(props: HubSharePageProps) {
   }
   return (
     <div className="kh-share-page min-h-full bg-kh-bg">
+      <SharedSkipLink />
       <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={pagePath}>
         <SharedReading document={shared} contentId={SHARED_CONTENT_ID} />
       </SharedReviewPanel>

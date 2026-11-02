@@ -14,7 +14,8 @@ export function OpenInHubHint() {
   const pathname = usePathname();
   const documentId = useSearchParams()?.get("d");
   const token = pathname ? SHARE_PATH.exec(pathname)?.[1] : undefined;
-  if (!token) return null;
+  // The open route's own not-found would link to itself: there is nowhere further to go.
+  if (!token || /\/open\/?$/.test(pathname!)) return null;
   const href = `/s/${token}/open${documentId ? `?${new URLSearchParams({ d: documentId })}` : ""}`;
   return (
     <a href={href} className="rounded-md text-body text-kh-link underline underline-offset-4 kh-focus-ring">

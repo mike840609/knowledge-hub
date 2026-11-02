@@ -123,8 +123,10 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
   const step = (event: KeyboardEvent<HTMLUListElement>) => {
     if (!split || (event.key !== "ArrowDown" && event.key !== "ArrowUp")) return;
     event.preventDefault();
-    const at = shown.findIndex(item => item.id === selectedId);
-    const next = shown[at === -1 ? 0 : Math.min(shown.length - 1, Math.max(0, at + (event.key === "ArrowDown" ? 1 : -1)))];
+    // A shared document has no pane to show beside the list: ↑/↓ step over it, as clicking it leaves the pane alone.
+    const panes = shown.filter(item => !isSharedEntry(item.kind));
+    const at = panes.findIndex(item => item.id === selectedId);
+    const next = panes[at === -1 ? 0 : Math.min(panes.length - 1, Math.max(0, at + (event.key === "ArrowDown" ? 1 : -1)))];
     if (!next) return;
     if (next.id !== selectedId) select(next);
     event.currentTarget.querySelector<HTMLElement>(`[data-inbox-entry="${next.id}"]`)?.focus();

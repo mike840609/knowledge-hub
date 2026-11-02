@@ -52,6 +52,10 @@ beforeEach(() => {
       recipients = recipients.filter((item) => item.userId !== id);
       return new Response(null, { status: 204 });
     }
+    if (/\/api\/share-links\/[^/]+\/revoke$/.test(url) && method === "POST") {
+      existingLinks = existingLinks.map((item) => ({ ...(item as object), active: false, revokedAt: "2026-11-03T01:00:00.000Z" }));
+      return new Response(null, { status: 204 });
+    }
     throw new Error(`unexpected ${method} ${url}`);
   }));
   host = document.createElement("div");
@@ -190,4 +194,18 @@ it("a failed removal shows the server's message and leaves the person listed", a
   await flush();
   expect(document.querySelector('[role="alert"]')?.textContent).toBeTruthy();
   expect(document.querySelector('ul[aria-label="People who can open this link"]')!.textContent).toContain("愛麗絲");
+});
+
+it("a revoked named link offers no Manage people, and revoking closes the people it had open", async () => {
+  existingLinks = [link({ id: "l1", path: "/s/tok-1", audience: "NAMED", recipientCount: 0 })];
+  await open();
+  await act(async () => { byText<HTMLButtonElement>("button", "Manage people")!.click(); });
+  await flush();
+  expect(document.querySelector('[data-share-link="/s/tok-1"]')!.textContent).toContain("No one yet — only you can open it.");
+  await act(async () => { byText<HTMLButtonElement>("button", "Revoke")!.click(); });
+  await act(async () => { byText<HTMLButtonElement>("button", "Confirm revoke")!.click(); });
+  await flush();
+  expect(byText("button", "Manage people")).toBeUndefined();
+  expect(document.body.textContent).not.toContain("No one yet — only you can open it.");
+  expect(document.body.textContent).toContain("Expired or revoked (1)");
 });

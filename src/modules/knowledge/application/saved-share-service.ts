@@ -6,6 +6,7 @@ import { NotFoundError, IntegrityViolationError } from "../domain/errors";
 import { parseSavedShareQuery, SAVED_SHARE_PAGE_SIZE, type NamedShareView, type SavedShareInput, type SavedShareList, type SavedShareState } from "../domain/saved-share";
 import { judgeNamedShares, namedShareTitle } from "./internal/named-share-judgement";
 import { uuidv7, isUuid } from "@/shared/ids/uuidv7";
+import { hubSharePath } from "@/lib/share-paths";
 const NAMED_SHARE_LIMIT = 100;
 export class SavedShareService {
   constructor(private readonly unitOfWork: KnowledgeUnitOfWork, private readonly clock: () => Date = () => new Date()) {}
@@ -58,7 +59,7 @@ export class SavedShareService {
       const items: NamedShareView[] = [];
       for (const { link, addedAt, target } of await judgeNamedShares(r,caller.identity.id,NAMED_SHARE_LIMIT,this.clock())) {
         if (!target) continue;
-        items.push({ linkId:link.id,title:await namedShareTitle(r,caller,target),sharedByName:(await r.users.findById(link.createdBy))?.name ?? "",addedAt,href:`/w/${workspaceId}/shares/${link.token}` });
+        items.push({ linkId:link.id,title:await namedShareTitle(r,caller,target),sharedByName:(await r.users.findById(link.createdBy))?.name ?? "",addedAt,href:hubSharePath(workspaceId,link.token) });
       }
       return items;
     });

@@ -37,9 +37,11 @@ describe("OpenInHubHint", () => {
     expect(hintHref()).toBe("/s/abc/open");
   });
 
-  it("does not stack a second /open on the open route's own not-found", () => {
+  it("is not shown on the open route's own not-found, where it would link to itself", () => {
     navigation.pathname = "/s/abc/open";
-    expect(hintHref()).toBe("/s/abc/open");
+    expect(renderToStaticMarkup(<OpenInHubHint />)).toBe("");
+    navigation.search = `d=${DOCUMENT_ID}`;
+    expect(renderToStaticMarkup(<OpenInHubHint />)).toBe("");
   });
 
   it("renders nothing outside a share path", () => {

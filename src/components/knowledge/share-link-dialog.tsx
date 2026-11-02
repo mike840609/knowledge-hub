@@ -300,6 +300,8 @@ export function ShareLinkDialog({
                                 await governanceRequest<null>(`/api/share-links/${link.id}/revoke`, "POST");
                                 announceShareLinksChanged();
                                 setConfirmingRevoke(null);
+                                // A revoked link moves to the inactive list, where its people are not managed.
+                                setManaging((open) => (open === link.id ? null : open));
                                 if (revoking) await load(revoking);
                                 toast({ message: `Link revoked. Anyone holding it can no longer open the ${isFolder ? "folder" : "document"}.` });
                               } catch (failure) {

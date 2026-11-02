@@ -91,3 +91,16 @@ it("reads from the entry alone", () => {
   expect(notificationTitle(dead())).toBe("A shared document");
   expect(notificationLine(sharedEntry({ authorName: undefined }))).toBe("Someone shared 《Quarterly plan》 with you");
 });
+
+it("arrow keys in a wide window step over it: it has no discussion to show beside the list", async () => {
+  const owner = (id: string): ShareCommentNotificationView => ({ ...sharedEntry(), id, kind: "OWNER", workspaceId: "w", sourceId: "s", documentId: "d", threadId: `t-${id}`, commentId: "c", excerpt: "Hi", href: undefined });
+  notifications = [owner("e1"), sharedEntry(), owner("e2")];
+  await mount();
+  const first = host.querySelector<HTMLElement>('[data-inbox-entry="e1"]')!;
+  await act(async () => { first.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 })); });
+  const list = host.querySelector<HTMLElement>('ul[aria-label="Inbox discussions"]')!;
+  await act(async () => { list.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true })); });
+  expect(new URL(window.location.href).searchParams.get("item")).toBe("e2");
+  await act(async () => { list.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true })); });
+  expect(new URL(window.location.href).searchParams.get("item")).toBe("e1");
+});
