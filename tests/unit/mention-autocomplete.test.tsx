@@ -213,6 +213,7 @@ test("mentionedIds: a pick needs its own whole @name", () => {
   expect(mentionedIds("x@陳小明", [ming])).toEqual([]);
   expect(mentionedIds("foo_bar@陳小明", [ming])).toEqual([]);
   expect(mentionedIds("@@陳小明", [ming])).toEqual([]);
+  expect(mentionedIds("https://x.test/@陳小明", [ming])).toEqual([]);
   // Whitespace, punctuation and the end all close a name.
   expect(mentionedIds("@陳小明", [ming])).toEqual([MING.id]);
   expect(mentionedIds("@陳小明，請看", [ming])).toEqual([MING.id]);

@@ -18,6 +18,12 @@ describe("the @ trigger", () => {
     expect(mentionTrigger("@@Amy", 5)).toBeNull();
   });
 
+  it("does not open inside a URL, but does after one", () => {
+    for (const text of ["see https://medium.com/@john", "https://medium.com/@john/post-1", "(http://x.test/@a"]) expect(mentionTrigger(text, text.length)).toBeNull();
+    expect(mentionTrigger("https://x.test/ @jo", 19)).toEqual({ start: 16, query: "jo" });
+    expect(mentionTrigger("A/@B", 4)).toEqual({ start: 2, query: "B" });
+  });
+
   it("stops at whitespace and at 32 characters", () => {
     expect(mentionTrigger("@Amy Chen", 9)).toBeNull();
     expect(mentionTrigger("@" + "a".repeat(32), 33)).toEqual({ start: 0, query: "a".repeat(32) });

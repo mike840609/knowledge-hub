@@ -34,7 +34,8 @@ trigger and the start rule below remain.
 ### When the `@` list opens
 
 `mentionTrigger(text, caret)` returns the `@` token when the character before
-it is not `[A-Za-z0-9_@]`:
+it is not `[A-Za-z0-9_@]` and the `@` is not inside a URL (the run of
+non-whitespace before it contains no `://`):
 
 | Text before the caret | Opens? |
 | --- | --- |
@@ -46,6 +47,9 @@ it is not `[A-Za-z0-9_@]`:
 | `foo_bar@x` | no — the previous character is an underscore |
 | `@@Amy` | no — the previous character is `@` |
 | `@Amy Chen` (space in the query) | no list; the token stops at whitespace |
+| `https://medium.com/@john` | no — the `@` is inside a URL; Enter there would otherwise replace part of the address with a name |
+| `https://x.test/ @jo` | yes — the URL ended at the space |
+| `A/@B` | yes — a slash alone is punctuation |
 
 The query is at most 32 code points; the list still waits for one non-empty
 character. A bare `@` opens the trigger but shows nothing until the next
@@ -54,8 +58,8 @@ unchanged.
 
 ### One start rule in three places
 
-The same "previous character is not `[A-Za-z0-9_@]`" rule decides where a
-mention starts in:
+`startsMention(text, at)` in `src/modules/knowledge/domain/mention-text.ts`
+holds that rule, and it decides where a mention starts in:
 
 1. `mentionTrigger` — whether the list opens;
 2. `mentionedIds` (its `occurrences`) — whether a pick is still in the text when
@@ -75,12 +79,12 @@ any view.
 ## Testing
 
 - Unit: `mentionTrigger` after CJK, punctuation, space, start, ASCII letter,
-  underscore, `@`, whitespace in the query, the 32/33 code-point boundary and a
+  underscore, `@`, inside and after a URL, whitespace in the query, the 32/33 code-point boundary and a
   caret before the text (`tests/unit/mention-trigger.test.ts`).
-- Unit: `mentionedIds` keeps no pick for `x@…`, `foo_bar@…`, `@@…`
+- Unit: `mentionedIds` keeps no pick for `x@…`, `foo_bar@…`, `@@…`, a URL
   (`tests/unit/mention-autocomplete.test.tsx`).
 - Unit: `splitMentions` starts after CJK and punctuation and not after a
-  letter, digit, `_` or `@` (`tests/unit/review-mention.test.ts`).
+  letter, digit, `_` or `@`, nor inside a URL (`tests/unit/review-mention.test.ts`).
 - E2E (`tests/e2e/zz-review-mentions.spec.ts`): typing `請@groupAd` opens the
   people list and inserts `@Phase3 groupAdmin`; after the owner revokes the
   link, the mention is not unread and All activity shows "A shared
