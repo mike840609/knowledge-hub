@@ -160,9 +160,8 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
     setPicks(previous => [...previous.filter(item => item.id !== candidate.id), { id: candidate.id, name: candidate.name }]);
     setCaret(at);
     setFound(undefined);
-    // Only if nothing was typed since: a key pressed before this frame would be put back behind the caret.
-    requestAnimationFrame(() => { if (ref.current?.value === next) ref.current.setSelectionRange(at, at); });
-    // Synchronously too: a test, or a fast Enter, reads the caret before the next frame.
+    // Now, not on a later frame: a key or arrow pressed before that frame would be undone. React's
+    // render then finds the value already written and leaves the caret alone.
     if (ref.current) { ref.current.value = next; ref.current.setSelectionRange(at, at); }
   }
 

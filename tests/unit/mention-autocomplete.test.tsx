@@ -105,6 +105,16 @@ test("arrow keys move the row in force; Enter inserts the name and sends its id"
   expect(sent).toEqual([{ body: "Hi @陳小明 ", mentions: [MING.id], linkId: undefined }]);
 });
 
+test("a caret moved right after a pick stays where it was moved", async () => {
+  stubFetch();
+  const textarea = render({ token: "tok" });
+  await type(textarea, "Hi @m");
+  key(textarea, "Enter");
+  textarea.setSelectionRange(0, 0);
+  await act(async () => { await new Promise(requestAnimationFrame); });
+  expect(textarea.selectionStart).toBe(0);
+});
+
 test("Tab picks too, and the name goes in at the caret, not at the end", async () => {
   stubFetch();
   const textarea = render({ token: "tok" });
