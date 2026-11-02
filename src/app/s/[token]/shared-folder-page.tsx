@@ -19,16 +19,26 @@ import { buttonClasses } from "@/components/ui/button";
  * scrolled it stay as they move; only its phone button sits in the panel's bar.
  * Save keeps the folder link, as one entry. Open takes the document being read into the Hub, where
  * ordinary access decides what opens.
+ *
+ * The Hub's own share reader (`/w/<ws>/shares/<token>`, a named share) draws the same page inside the
+ * app shell: `platformEntry` is null there, so it has no brand, Save, Open or footer, and `pagePath`
+ * points the tree and the in-folder links at that reader instead of `/s/<token>`.
  */
-export function SharedFolderPage({ token, folder, platformEntry, signInHref }: { token: string; folder: SharedFolderView; platformEntry: string; signInHref: string }) {
+export function SharedFolderPage({ token, folder, platformEntry, signInHref, pagePath }: { token: string; folder: SharedFolderView; platformEntry: string | null; signInHref: string; pagePath?: string }) {
   const { document } = folder;
+  // In the shell the page is its scroll pane's content, not a window: layout containment holds the
+  // tree's fixed rail inside it rather than over the shell's own navigation.
+  const Root = platformEntry === null ? "div" : "main";
+  const rootClass = `kh-share-page kh-share-folder bg-kh-bg ${platformEntry === null ? "min-h-full [contain:layout]" : "min-h-screen"}`;
   const crumbs = document ? [folder.folderName, ...document.path.map((ancestor) => ancestor.name), document.title] : [folder.folderName];
-  const tree = <SharedFolderTree token={token} nodes={folder.tree} currentDocumentId={document?.documentId ?? null} folderName={folder.folderName} />;
+  const tree = <SharedFolderTree token={token} nodes={folder.tree} currentDocumentId={document?.documentId ?? null} folderName={folder.folderName} pagePath={pagePath} />;
   const lead = (
     <>
       <SharedFolderTreeButton />
-      <span className="shrink-0 text-body font-semibold text-kh-text">Knowledge Hub</span>
-      <span aria-hidden="true" className="text-body text-kh-text-muted max-sm:hidden">/</span>
+      {platformEntry === null ? null : <>
+        <span className="shrink-0 text-body font-semibold text-kh-text">Knowledge Hub</span>
+        <span aria-hidden="true" className="text-body text-kh-text-muted max-sm:hidden">/</span>
+      </>}
       <nav aria-label="Breadcrumb" className="min-w-0 flex-1 max-sm:hidden">
         <ol className="flex min-w-0 items-center gap-2 text-body text-kh-text-muted">
           {crumbs.map((name, index) => {
@@ -42,7 +52,7 @@ export function SharedFolderPage({ token, folder, platformEntry, signInHref }: {
       </nav>
     </>
   );
-  const actions = (
+  const actions = platformEntry === null ? null : (
     <>
       <SaveShareButton token={token} />
       <span aria-hidden="true" className="mx-1 h-4 w-px bg-kh-border max-sm:hidden" />
@@ -51,7 +61,7 @@ export function SharedFolderPage({ token, folder, platformEntry, signInHref }: {
   );
   if (!document) {
     return (
-      <main className="kh-share-page kh-share-folder min-h-screen bg-kh-bg">
+      <Root className={rootClass}>
         <SharedSkipLink />
         <SharedFolderTreeScope>
           <div className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-kh-border bg-kh-bg px-4">
@@ -67,13 +77,13 @@ export function SharedFolderPage({ token, folder, platformEntry, signInHref }: {
             <SharedByline sharedByName={folder.sharedByName} expiresAt={folder.expiresAt} />
             <p className="mt-6 text-body text-kh-text-muted">This folder has no documents yet.</p>
           </div>
-          <SharedFooter platformEntry={platformEntry} />
+          {platformEntry === null ? null : <SharedFooter platformEntry={platformEntry} />}
         </div>
-      </main>
+      </Root>
     );
   }
   return (
-    <main className="kh-share-page kh-share-folder min-h-screen bg-kh-bg">
+    <Root className={rootClass}>
       <SharedSkipLink />
       {/* The bar is the panel's, inside the body beside the tree; it reaches back over the tree's column (globals.css). */}
       <SharedFolderTreeScope>
@@ -81,11 +91,11 @@ export function SharedFolderPage({ token, folder, platformEntry, signInHref }: {
         {tree}
         <div className="kh-share-folder-body">
           <SharedReviewPanel key={document.documentId} token={token} documentId={document.documentId} revisionId={document.revisionId} markdown={document.markdown} signInHref={signInHref} brand={lead} actions={actions} wide>
-            <SharedReading document={document} links={sharedFolderLinks(token, document.links)} contentId={SHARED_CONTENT_ID} />
+            <SharedReading document={document} links={sharedFolderLinks(token, document.links, pagePath)} contentId={SHARED_CONTENT_ID} />
           </SharedReviewPanel>
-          <SharedFooter platformEntry={platformEntry} />
+          {platformEntry === null ? null : <SharedFooter platformEntry={platformEntry} />}
         </div>
       </SharedFolderTreeScope>
-    </main>
+    </Root>
   );
 }

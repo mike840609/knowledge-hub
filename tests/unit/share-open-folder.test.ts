@@ -14,7 +14,7 @@ vi.mock("@/server/share-read", () => ({ sharedOpenTarget: fixture.target }));
 vi.mock("@/server/share-platform-destination", () => ({ sharePlatformDestination: fixture.destination }));
 vi.mock("@/server/composition", () => ({
   applicationServices: () => ({
-    establishTrustedCaller: async () => ({ caller: { userId: "reader" }, personalWorkspace: { id: "personal" } }),
+    establishTrustedCaller: async () => ({ caller: { identity: { id: "reader" } }, personalWorkspace: { id: "personal" } }),
     unitOfWork: { run: async () => undefined },
     queries: {},
   }),
@@ -39,13 +39,13 @@ describe("/s/:token/open for a folder link", () => {
     fixture.target.mockResolvedValue({ kind: "FOLDER", documentId: inFolder });
     await expect(open(inFolder)).rejects.toThrow(`redirect:/w/ws/knowledge/src/${inFolder}`);
     expect(fixture.target).toHaveBeenCalledWith("tok", inFolder);
-    expect(fixture.destination).toHaveBeenCalledWith({ userId: "reader" }, inFolder, "personal", {});
+    expect(fixture.destination).toHaveBeenCalledWith({ identity: { id: "reader" } }, inFolder, "personal", {});
   });
 
   it("opens the landing document the one read chose when the requested one is no longer reachable", async () => {
     await expect(open(inFolder)).rejects.toThrow(`redirect:/w/ws/knowledge/src/${landing}`);
     expect(fixture.target).toHaveBeenCalledWith("tok", inFolder);
-    expect(fixture.destination).toHaveBeenCalledWith({ userId: "reader" }, landing, "personal", {});
+    expect(fixture.destination).toHaveBeenCalledWith({ identity: { id: "reader" } }, landing, "personal", {});
   });
 
   it("opens the landing document without `?d=`", async () => {
@@ -81,6 +81,39 @@ describe("/s/:token/open for a document link", () => {
   it("refuses any `?d=`, even a well-formed one", async () => {
     fixture.target.mockResolvedValue(null);
     await expect(open(inFolder)).rejects.toThrow("notFound");
+    expect(fixture.destination).not.toHaveBeenCalled();
+  });
+});
+
+describe("/s/:token/open for a NAMED link", () => {
+  it("judges a LINK once, without a viewer, as before", async () => {
+    fixture.target.mockResolvedValue({ kind: "DOCUMENT", documentId: "linked-doc", audience: "LINK" });
+    await expect(open()).rejects.toThrow("redirect:/w/ws/knowledge/src/linked-doc");
+    expect(fixture.target.mock.calls).toEqual([["tok", undefined]]);
+  });
+
+  it("judges again with the signed-in reader, and opens a document in the Hub's share reader", async () => {
+    fixture.target.mockResolvedValueOnce(null).mockResolvedValueOnce({ kind: "DOCUMENT", documentId: "named-doc", audience: "NAMED" });
+    await expect(open()).rejects.toThrow("redirect:/w/personal/shares/tok");
+    expect(fixture.target.mock.calls).toEqual([["tok", undefined], ["tok", undefined, "reader"]]);
+    expect(fixture.destination).not.toHaveBeenCalled();
+  });
+
+  it("carries a folder's document as `?d=`", async () => {
+    fixture.target.mockResolvedValueOnce(null).mockResolvedValueOnce({ kind: "FOLDER", documentId: inFolder, audience: "NAMED" });
+    await expect(open(inFolder)).rejects.toThrow(`redirect:/w/personal/shares/tok?d=${inFolder}`);
+    expect(fixture.target).toHaveBeenLastCalledWith("tok", inFolder, "reader");
+  });
+
+  it("opens an empty named folder without `?d=`", async () => {
+    fixture.target.mockResolvedValueOnce(null).mockResolvedValueOnce({ kind: "FOLDER", documentId: null, audience: "NAMED" });
+    await expect(open()).rejects.toThrow("redirect:/w/personal/shares/tok");
+  });
+
+  it("is not available to a reader the link does not name", async () => {
+    fixture.target.mockResolvedValue(null);
+    await expect(open()).rejects.toThrow("notFound");
+    expect(fixture.target.mock.calls).toEqual([["tok", undefined], ["tok", undefined, "reader"]]);
     expect(fixture.destination).not.toHaveBeenCalled();
   });
 });

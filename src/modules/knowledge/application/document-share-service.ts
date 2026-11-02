@@ -93,7 +93,11 @@ export type SharedFolderView = {
   expiresAt: Date | null;
 };
 
-export type SharedView = (({ kind: "DOCUMENT" } & SharedDocumentView) | SharedFolderView) & { audience: ShareAudience };
+/**
+ * `linkId` is on a NAMED read only, whose reader is a signed-in recipient or the owner: the Hub marks
+ * their Inbox entry (`shared:<linkId>`) read with it. A LINK read serves anyone and names no link.
+ */
+export type SharedView = (({ kind: "DOCUMENT" } & SharedDocumentView) | SharedFolderView) & { audience: ShareAudience; linkId?: string };
 
 export const SHARE_LINK_CREATED_EVENT = "DOCUMENT_SHARE_LINK_CREATED";
 export const SHARE_LINK_REVOKED_EVENT = "DOCUMENT_SHARE_LINK_REVOKED";
@@ -389,6 +393,7 @@ export class DocumentShareService {
         view: { kind: "DOCUMENT", revisionId: revision.id, title: revision.title, markdown: revision.markdown, pageIcon: document.pageIcon ?? null, sharedByName: creator.name, updatedAt: revision.createdAt, expiresAt: link.expiresAt, audience: link.audience },
       };
     });
+    if (view.audience === "NAMED") view.linkId = linkId;
     if (!recordView) return view;
     try {
       // Separate transaction: the count is a statistic, not an audit record,

@@ -166,6 +166,22 @@ describe("a NAMED folder link", () => {
   });
 });
 
+describe("the link id a NAMED read carries", () => {
+  it("names the link to its reader, so the Hub can mark their Inbox entry read", async () => {
+    const { documentLink, folderLink, recipient, inside } = await setup();
+    expect(await service().readShared(documentLink.token, { viewerId: recipient })).toMatchObject({ linkId: documentLink.id });
+    expect(await service().readShared(folderLink.token, { viewerId: recipient, documentId: inside.documentId })).toMatchObject({ linkId: folderLink.id });
+    expect(await service().readShared(documentLink.token, { viewerId: recipient, recordView: false })).toMatchObject({ linkId: documentLink.id });
+  });
+
+  it("is never on a LINK read, which serves anyone", async () => {
+    const { caller, inside, folderNodeId } = await setup();
+    for (const created of [await service().create(caller, { documentId: inside.documentId }), await service().createForFolder(caller, { folderNodeId })]) {
+      expect(await service().readShared(created.path.slice("/s/".length))).not.toHaveProperty("linkId");
+    }
+  });
+});
+
 describe("a LINK share is unchanged", () => {
   it("opens without a caller, and for any caller, with audience LINK", async () => {
     const { caller, inside, folderNodeId, stranger } = await setup();

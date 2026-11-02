@@ -64,7 +64,7 @@ export function SharedFolderTreeButton() {
  * document's path start open, the others closed, and a document reached another way (a tree click,
  * an in-folder link) opens its path without closing what the reader opened.
  */
-export function SharedFolderTree({ token, nodes, currentDocumentId, folderName }: { token: string; nodes: SharedTreeNode[]; currentDocumentId: string | null; folderName: string }) {
+export function SharedFolderTree({ token, nodes, currentDocumentId, folderName, pagePath }: { token: string; nodes: SharedTreeNode[]; currentDocumentId: string | null; folderName: string; pagePath?: string }) {
   const { navId, buttonRef, open, setOpen } = useDisclosure();
   const navRef = useRef<HTMLElement>(null);
   const [expanded, setExpanded] = useState(() => new Set(foldersAbove(nodes, currentDocumentId)));
@@ -125,17 +125,18 @@ export function SharedFolderTree({ token, nodes, currentDocumentId, folderName }
         <Folder size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
         <span className="truncate">{folderName}</span>
       </p>
-      <Branch parentId={null} tree={children} expanded={expanded} toggle={toggle} token={token} currentDocumentId={currentDocumentId} onNavigate={() => setOpen(false)} />
+      <Branch parentId={null} tree={children} expanded={expanded} toggle={toggle} token={token} pagePath={pagePath} currentDocumentId={currentDocumentId} onNavigate={() => setOpen(false)} />
     </nav>
   );
 }
 
-function Branch({ parentId, tree, expanded, toggle, token, currentDocumentId, onNavigate }: {
+function Branch({ parentId, tree, expanded, toggle, token, pagePath, currentDocumentId, onNavigate }: {
   parentId: string | null;
   tree: Children;
   expanded: ReadonlySet<string>;
   toggle: (id: string) => void;
   token: string;
+  pagePath?: string;
   currentDocumentId: string | null;
   onNavigate: () => void;
 }) {
@@ -150,7 +151,7 @@ function Branch({ parentId, tree, expanded, toggle, token, currentDocumentId, on
           return (
             <li key={node.id}>
               <Link
-                href={sharedFolderHref(token, node.documentId)}
+                href={sharedFolderHref(token, node.documentId, pagePath)}
                 prefetch={false}
                 aria-current={current ? "page" : undefined}
                 onClick={onNavigate}
@@ -170,7 +171,7 @@ function Branch({ parentId, tree, expanded, toggle, token, currentDocumentId, on
               {open ? <ChevronDown size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : <ChevronRight size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
               <span className="truncate">{node.name}</span>
             </button>
-            {open ? <Branch parentId={node.id} tree={tree} expanded={expanded} toggle={toggle} token={token} currentDocumentId={currentDocumentId} onNavigate={onNavigate} /> : null}
+            {open ? <Branch parentId={node.id} tree={tree} expanded={expanded} toggle={toggle} token={token} pagePath={pagePath} currentDocumentId={currentDocumentId} onNavigate={onNavigate} /> : null}
           </li>
         );
       })}

@@ -16,7 +16,17 @@ export function sharedDocumentParam(value: string | string[] | undefined): strin
   return typeof value === "string" && DOCUMENT_ID.test(value) ? value : null;
 }
 
-/** A document of a shared folder, read through the folder's link. */
-export function sharedFolderHref(token: string, documentId: string): string {
-  return `/s/${encodeURIComponent(token)}?d=${documentId}`;
+/** The anonymous page a share link opens. */
+export function sharedPagePath(token: string): string {
+  return `/s/${encodeURIComponent(token)}`;
+}
+
+/** The Hub's own reader of a share, in the caller's personal Workspace shell (named-recipient share spec). */
+export function hubSharePath(workspaceId: string, token: string): string {
+  return `/w/${workspaceId}/shares/${encodeURIComponent(token)}`;
+}
+
+/** A document of a shared folder, read through the folder's link on `pagePath`: the anonymous page, or the Hub's reader. */
+export function sharedFolderHref(token: string, documentId: string, pagePath = sharedPagePath(token)): string {
+  return `${pagePath}?d=${documentId}`;
 }

@@ -104,7 +104,7 @@ describe("the share link is the single caller-less content path", () => {
     const passing = files.filter((file) => /\blinks=/.test(readFileSync(file, "utf8")));
     expect(passing).toEqual([path.join("src", "app", "s", "[token]", "shared-folder-page.tsx")]);
     const folderPage = readFileSync(passing[0], "utf8");
-    expect(folderPage.match(/\blinks=\{[^}]*\}/g)).toEqual(["links={sharedFolderLinks(token, document.links)}"]);
+    expect(folderPage.match(/\blinks=\{[^}]*\}/g)).toEqual(["links={sharedFolderLinks(token, document.links, pagePath)}"]);
     // And the reading column reads whatever it is not given as text, never as a link that is missing.
     const reading = readFileSync(path.join("src", "components", "knowledge", "shared-reading.tsx"), "utf8");
     expect(reading).toMatch(/<MarkdownRenderer\s+markdown=\{document\.markdown\}\s+links=\{links\}\s+unresolvedAsText\b/);
