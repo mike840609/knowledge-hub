@@ -21,7 +21,7 @@ it("requires confirmation before revoke and disables copying after success", asy
     }
     return Response.json({ counts: [] });
   });
-  const item: ManagedShareLink = { id: "link", kind: "DOCUMENT", documentId: "doc", folderNodeId: null, sourceId: "source", title: "Guide", sourceName: "Wiki", label: "For team", path: "/s/token", status: "active", createdAt: new Date(), expiresAt: new Date(Date.now()+86400000), revokedAt: null, totalViews: 3, lastViewedAt: null };
+  const item: ManagedShareLink = { id: "link", kind: "DOCUMENT", audience: "LINK", recipientCount: null, documentId: "doc", folderNodeId: null, sourceId: "source", title: "Guide", sourceName: "Wiki", label: "For team", path: "/s/token", status: "active", createdAt: new Date(), expiresAt: new Date(Date.now()+86400000), revokedAt: null, totalViews: 3, lastViewedAt: null };
   const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
   const click = async (name: string) => { await act(async () => [...document.querySelectorAll<HTMLElement>("button,[role=menuitem]")].find(b => (b.getAttribute("aria-label") ?? b.textContent) === name)!.click()); };
   try {
@@ -37,7 +37,7 @@ it("requires confirmation before revoke and disables copying after success", asy
 });
 it("selects the full share URL when clipboard writing is denied", async () => {
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new Error("denied"); } } });
-  const item: ManagedShareLink = { id: "link", kind: "DOCUMENT", documentId: "doc", folderNodeId: null, sourceId: "source", title: "Guide", sourceName: "Wiki", label: null, path: "/s/token", status: "active", createdAt: new Date(), expiresAt: new Date(Date.now()+86400000), revokedAt: null, totalViews: 0, lastViewedAt: null };
+  const item: ManagedShareLink = { id: "link", kind: "DOCUMENT", audience: "LINK", recipientCount: null, documentId: "doc", folderNodeId: null, sourceId: "source", title: "Guide", sourceName: "Wiki", label: null, path: "/s/token", status: "active", createdAt: new Date(), expiresAt: new Date(Date.now()+86400000), revokedAt: null, totalViews: 0, lastViewedAt: null };
   const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
   try {
     await act(async () => root.render(<ShareManagementView workspaceId="ws" model={{ items: [item], query: { q: "", status: "active", page: 1 }, hasNext: false }} />));
@@ -70,7 +70,7 @@ it.each([
   } finally { await act(async () => root.unmount()); host.remove(); }
 });
 
-const folderItem: ManagedShareLink = { id: "folder-link", kind: "FOLDER", documentId: null, folderNodeId: "node", sourceId: "source", title: "Handbook", sourceName: "Wiki", label: "Onboarding", path: "/s/folder-token", status: "active", createdAt: new Date(), expiresAt: new Date(Date.now()+86400000), revokedAt: null, totalViews: 4, lastViewedAt: null };
+const folderItem: ManagedShareLink = { id: "folder-link", kind: "FOLDER", documentId: null, folderNodeId: "node", sourceId: "source", title: "Handbook", sourceName: "Wiki", label: "Onboarding", path: "/s/folder-token", status: "active", createdAt: new Date(), expiresAt: new Date(Date.now()+86400000), revokedAt: null, totalViews: 4, lastViewedAt: null, audience: "LINK", recipientCount: null };
 it("draws a folder row with its source link, its own unread badge and the folder's view tooltip", async () => {
   // A document link's count on the same page must not leak onto the folder row, nor the folder's onto the document.
   const documentItem: ManagedShareLink = { ...folderItem, id: "doc-link", kind: "DOCUMENT", documentId: "doc-a", folderNodeId: null, title: "Guide" };
@@ -145,4 +145,23 @@ it("tells the tree's shared-folder marker when a link is revoked here", async ()
     await click("Confirm revoke");
     expect(announced).toHaveBeenCalledTimes(1);
   } finally { window.removeEventListener("kh:share-links-changed", announced); await act(async () => root.unmount()); host.remove(); }
+});
+
+it("draws a named share with no expiry, its recipient count, and copies the /open address", async () => {
+  const writeText = vi.fn(async () => undefined);
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  vi.stubGlobal("fetch", async () => Response.json({ counts: [] }));
+  const named: ManagedShareLink = { ...folderItem, id: "named", kind: "DOCUMENT", documentId: "doc-n", folderNodeId: null, title: "Plan", path: "/s/named-token", expiresAt: null, audience: "NAMED", recipientCount: 3 };
+  const lonely: ManagedShareLink = { ...named, id: "lonely", title: "Empty", path: "/s/lonely-token", recipientCount: 0 };
+  const plain: ManagedShareLink = { ...named, id: "plain", title: "Open", path: "/s/plain-token", audience: "LINK", recipientCount: null };
+  const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+  try {
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={{ items: [named, lonely, plain], query: { q: "", status: "all", page: 1 }, hasNext: false }} />));
+    const [row, empty, other] = [...host.querySelectorAll("ul[aria-label='Share links'] > li")];
+    expect(row.textContent).toContain("No expiry"); expect(row.textContent).toContain("3 people");
+    expect(empty.textContent).toContain("0 people");
+    expect(other.textContent).not.toMatch(/\d+ (people|person)/);
+    await act(async () => row.querySelector<HTMLButtonElement>('button[aria-label="Copy link for Plan · Onboarding"]')!.click());
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/s/named-token/open`);
+  } finally { await act(async () => root.unmount()); host.remove(); }
 });

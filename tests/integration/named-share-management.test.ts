@@ -237,3 +237,18 @@ describe("recipient candidates", () => {
     expect(found.candidates.map((c) => c.id)).not.toContain(me.identity.id);
   });
 });
+
+describe("the owner's My shares list", () => {
+  it("carries each link's audience and, for a NAMED one, how many people it names", async () => {
+    const f = await setup();
+    const named = await namedDocLink(f, [f.alice.id, f.bob.id]);
+    const plain = await f.shares.createForFolder(f.caller, { folderNodeId: f.folderNodeId, expiresInDays: 7 });
+    const { items } = await f.shares.listManagement(f.caller, f.workspaceId, { status: "all" });
+    const byId = new Map(items.map((item) => [item.id, item]));
+    expect(byId.get(named.id)).toMatchObject({ audience: "NAMED", recipientCount: 2, expiresAt: null });
+    expect(byId.get(plain.id)).toMatchObject({ audience: "LINK", recipientCount: null });
+    await f.shares.removeRecipient(f.caller, named.id, f.bob.id);
+    const after = await f.shares.listManagement(f.caller, f.workspaceId, { status: "all" });
+    expect(after.items.find((item) => item.id === named.id)).toMatchObject({ recipientCount: 1 });
+  });
+});

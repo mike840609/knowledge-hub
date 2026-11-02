@@ -26,9 +26,12 @@ import { GovernanceError, governanceFailure, governanceRequest, type GovernanceF
 import { writeLinkToClipboard } from "@/components/actions/action-menu";
 import { navigateListRows } from "@/lib/list-row-navigation";
 import { announceShareLinksChanged } from "./shared-folders";
+import { peopleCount } from "./people-count";
 import type { ManagedShareLink, ShareManagementQuery, ShareManagementStatus } from "@/modules/knowledge/domain/share-management";
 const labels: Record<ShareManagementStatus, string> = { active: "Active", expired: "Expired", revoked: "Revoked", unavailable: "Unavailable" };
 type UnreadShareCount = { documentId: string; shareLinkId: string | null; unreadCount: number; latestThreadId: string };
+/** What a holder is given: a named share opens through the sign-in-aware route. */
+const sharePath = (item: ManagedShareLink) => (item.audience === "NAMED" ? `${item.path}/open` : item.path);
 export type ShareManagementModel = { query: ShareManagementQuery; items: ManagedShareLink[]; hasNext: boolean };
 export function ShareManagementView({ workspaceId, model, filterError, hasDocuments = true, discussionsUnread = 0 }: { workspaceId: string; model: ShareManagementModel; filterError?: string; hasDocuments?: boolean; discussionsUnread?: number }) {
   const router = useRouter(), toast = useToast();
@@ -99,7 +102,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
     finally { pending.current = false; setBusy(null); }
   }
   async function copy(item: ManagedShareLink) {
-    if (await writeLinkToClipboard(item.path)) { toast({ message: "Link copied." }); setError(null); }
+    if (await writeLinkToClipboard(sharePath(item))) { toast({ message: "Link copied." }); setError(null); }
     else { setDetails(item.id); setManualCopy({ id: item.id }); setError({ code: "COPY_FAILED", message: "Clipboard unavailable. The link is selected; copy it manually." }); }
   }
   return <main className="kh-page pb-6">
@@ -146,7 +149,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
                   className="kh-focus-ring shrink-0 rounded-full bg-kh-bg-selected px-2 py-0.5 text-caption font-semibold text-kh-selected-text hover:bg-kh-highlight"
                 >{notice.unreadCount} new</Link> : null}
               </div>
-              <p className="truncate text-caption text-kh-text-muted" title={`${item.sourceName} · ${item.label ?? "Untitled link"}`}>{item.sourceName} · {item.label ?? "Untitled link"}</p>
+              <p className="truncate text-caption text-kh-text-muted" title={`${item.sourceName} · ${item.label ?? "Untitled link"}`}>{item.sourceName} · {item.label ?? "Untitled link"}{item.recipientCount === null ? "" : ` · ${peopleCount(item.recipientCount)}`}</p>
             </div>
             <span className="row-start-2 text-caption text-kh-text-muted md:row-auto"><Status kind={status === "active" ? "active" : "none"}>{labels[status]}</Status></span>
             <span className="col-span-2 text-caption text-kh-text-muted md:col-span-1"><span className="md:sr-only">Expires </span>{item.expiresAt ? <Timestamp value={item.expiresAt} variant="date" /> : "No expiry"}</span>
@@ -164,10 +167,10 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
             </div>
           </div>
           {details === item.id ? <div className="mt-3 space-y-2 border-t border-kh-border pt-3">
-            <p className="break-words text-caption text-kh-text-muted">{item.sourceName} · {item.label ?? "Untitled link"}</p>
+            <p className="break-words text-caption text-kh-text-muted">{item.sourceName} · {item.label ?? "Untitled link"}{item.recipientCount === null ? "" : ` · ${peopleCount(item.recipientCount)}`}</p>
             <p className="text-caption text-kh-text-muted">Created <Timestamp value={item.createdAt} /> · {item.expiresAt ? <>Expires <Timestamp value={item.expiresAt} /></> : "No expiry"}{item.lastViewedAt ? <> · Last viewed <Timestamp value={item.lastViewedAt} /></> : " · Not viewed yet"}</p>
             {status === "unavailable" ? <p className="text-caption text-kh-text-muted">Sharing is paused. Restoring the {folder ? "folder" : "document"} or its source may reactivate this link until expiry. Revoke it to end sharing permanently.</p> : null}
-            {status === "active" ? <div ref={field => { if (field) fields.current.set(item.id, field); else fields.current.delete(item.id); }}><Input readOnly size="sm" aria-label={`Share URL for ${linkName}`} value={`${origin}${item.path}`} onFocus={event => event.currentTarget.select()} /></div> : null}
+            {status === "active" ? <div ref={field => { if (field) fields.current.set(item.id, field); else fields.current.delete(item.id); }}><Input readOnly size="sm" aria-label={`Share URL for ${linkName}`} value={`${origin}${sharePath(item)}`} onFocus={event => event.currentTarget.select()} /></div> : null}
           </div> : null}
 
         </li>;

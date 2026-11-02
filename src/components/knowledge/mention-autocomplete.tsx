@@ -16,7 +16,7 @@ export type MentionPick = { id: string; name: string };
 type Candidate = { id: string; name: string; nameEn: string | null; empId: string };
 type MentionLink = { id: string; label: string | null };
 
-const DEBOUNCE_MS = 150;
+export const DEBOUNCE_MS = 150;
 export const NO_LINK_HINT = "Create a share link first to mention someone";
 const NO_MATCH_HINT = "No one found.";
 

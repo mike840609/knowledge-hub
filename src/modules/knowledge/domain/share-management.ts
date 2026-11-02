@@ -1,3 +1,4 @@
+import type { ShareAudience } from "./document-share-link";
 import { ValidationError } from "./errors";
 export const SHARE_MANAGEMENT_PAGE_SIZE = 50;
 export type ShareManagementStatus = "active" | "expired" | "revoked" | "unavailable";
@@ -8,6 +9,9 @@ type ManagedShareLinkBase = {
   label: string | null; path: string; status: ShareManagementStatus;
   createdAt: Date; expiresAt: Date | null; revokedAt: Date | null;
   totalViews: number; lastViewedAt: Date | null;
+  audience: ShareAudience;
+  /** The people a NAMED link names; null for a LINK. */
+  recipientCount: number | null;
 };
 /**
  * A link in My shares: a document link names its document and no folder, a folder link the
