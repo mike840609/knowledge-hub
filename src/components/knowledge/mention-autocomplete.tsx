@@ -109,17 +109,19 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   const searchable = open && query.length > 0 && (!owner || (links?.length ?? 0) > 0);
 
   const triggerStart = trigger?.start;
-  // The owner mentions through a live link of the document. Its links are read on each new `@`.
+  // Who the text names now: a link naming specific people is offered only when it names them all.
+  const mentionKey = owner ? mentionedIds(body, picks).join(",") : "";
+  // The owner mentions through a live link of the document. Its links are read on each new `@`, and again when who is named changes.
   useEffect(() => {
-    if (!open || !owner || linksLoading.current) return;
+    if ((!open && !mentionKey) || !owner || linksLoading.current) return;
     linksLoading.current = true;
-    reviewRequest<{ links: MentionLink[] }>(`/api/review-mentions/links?documentId=${encodeURIComponent(owner)}`)
+    reviewRequest<{ links: MentionLink[] }>(`/api/review-mentions/links?documentId=${encodeURIComponent(owner)}&mentionedUserIds=${encodeURIComponent(mentionKey)}`)
       .then(result => {
         setLinks(result.links); setFailure(undefined);
       })
       .catch(error => setFailure(error instanceof Error ? error.message : "Could not load share links."))
       .finally(() => { linksLoading.current = false; });
-  }, [open, owner, triggerStart]);
+  }, [open, owner, triggerStart, mentionKey]);
 
   useEffect(() => {
     if (!searchable) return;

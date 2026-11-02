@@ -244,7 +244,7 @@ test("owner with no live link: @ says to create one and offers nobody", async ()
   expect(options()).toHaveLength(0);
   expect(requests.filter(url => url.includes("candidates"))).toEqual([]);
   // Links are loaded once, when the list first opens.
-  expect(requests).toEqual(["/api/review-mentions/links?documentId=doc-1"]);
+  expect(requests).toEqual(["/api/review-mentions/links?documentId=doc-1&mentionedUserIds="]);
 });
 
 test("owner's links are read on each new @: a created link is offered, a revoked one is not", async () => {
@@ -286,6 +286,18 @@ test("owner with two live links chooses one under Share via, and it is sent", as
   act(() => { select.value = "link-b"; select.dispatchEvent(new Event("change", { bubbles: true })); });
   await submit();
   expect(sent).toEqual([{ body: "@陳小明 ", mentions: [MING.id], linkId: "link-b" }]);
+});
+
+test("owner's links are asked again for who the comment names, so a link naming specific people is judged for them", async () => {
+  stubFetch({ links: [{ id: "link-a", label: "Team", active: true }] });
+  const textarea = render({ documentId: "doc-1" });
+  await type(textarea, "@ming");
+  key(textarea, "Enter");
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
+  expect(requests.filter(url => url.includes("/review-mentions/links"))).toEqual([
+    "/api/review-mentions/links?documentId=doc-1&mentionedUserIds=",
+    `/api/review-mentions/links?documentId=doc-1&mentionedUserIds=${MING.id}`,
+  ]);
 });
 
 test("owner with one live link: no choice, its id is sent", async () => {

@@ -11,7 +11,7 @@ import { projectShareCommentNotification, EXCERPT_LIMIT, type ShareCommentNotifi
 import { orderFollowedDiscussions, summarizeFollowedThread, type FollowedDiscussionView } from "../domain/review-follow";
 import type { DocumentShareLink } from "../domain/document-share-link";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
-import { documentReachesFolder, linkOpens, openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
+import { audienceAdmits, documentReachesFolder, linkOpens, openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
 
 function fail(code:string, message:string):never { throw new DomainError(code,message); }
 function canonicalAnchor(a:ReviewAnchor) { if(!a || typeof a!=="object") fail("INVALID_REQUEST","Provide an anchor."); return {schemaVersion:a.schemaVersion,blockPath:a.blockPath,blockKind:a.blockKind,startUtf16:a.startUtf16,endUtf16:a.endUtf16,exact:a.exact,prefix:a.prefix,suffix:a.suffix}; }
@@ -32,7 +32,7 @@ export class DocumentReviewService {
    * `documentId` is the document a folder link's page is reading (folder share spec §6).
    */
   async queryForLink(caller:CallerContext | null,token:string,documentId?:string) {
-    return this.uow.run(async r => { const s=await this.linkScope(r,token,false,documentId); return {threads:await this.withFollowing(r,s,caller,await this.views(r,s.document.id,false,caller?.identity.id)),revisionId:s.document.currentRevisionId,writesEnabled:!!caller && this.writesEnabled(),callerUserId:caller?.identity.id ?? null}; });
+    return this.uow.run(async r => { const s=await this.linkScope(r,token,false,documentId,caller?.identity.id ?? null); return {threads:await this.withFollowing(r,s,caller,await this.views(r,s.document.id,false,caller?.identity.id)),revisionId:s.document.currentRevisionId,writesEnabled:!!caller && this.writesEnabled(),callerUserId:caller?.identity.id ?? null}; });
   }
   async queryForOwner(caller:CallerContext,documentId:string) {
     return this.uow.run(async r => { const s=await this.ownerScope(r,caller,documentId,false); return {threads:await this.views(r,documentId,true,caller.identity.id),revisionId:s.document.currentRevisionId,writesEnabled:this.writesEnabled(),callerUserId:caller.identity.id}; });
@@ -65,7 +65,7 @@ export class DocumentReviewService {
       notifications: newestFirst([
         ...await this.notificationViews(r, await r.shareCommentEvents.listUnreadByRecipient(caller.identity.id)),
         ...(await this.followViews(r, caller.identity.id)).filter(view => view.readAt === null),
-        ...(await this.mentionViews(r, await this.unreadMentions(r, caller.identity.id))).filter(view => view.readAt === null),
+        ...(await this.mentionViews(r, await this.unreadMentions(r, caller.identity.id), caller.identity.id)).filter(view => view.readAt === null),
       ]),
     }));
   }
@@ -74,7 +74,7 @@ export class DocumentReviewService {
     return this.uow.run(async r => {
       const owner = (await r.shareCommentEvents.listUnreadCountsByRecipient(caller.identity.id)).reduce((sum, row) => sum + row.unreadCount, 0);
       const follows = (await this.followedThreads(r, caller.identity.id)).filter(({ summary }) => !("unavailable" in summary) && !!summary.latestReply && summary.unread > 0).length;
-      const mentions = (await this.judgedMentions(r, await this.unreadMentions(r, caller.identity.id))).filter(judged => "comment" in judged).length;
+      const mentions = (await this.judgedMentions(r, await this.unreadMentions(r, caller.identity.id), caller.identity.id)).filter(judged => "comment" in judged).length;
       return { count: owner + follows + mentions };
     });
   }
@@ -90,7 +90,7 @@ export class DocumentReviewService {
       const page = events.slice(0, size);
       // Follows and mentions are not paged: at most FOLLOW_LIMIT each, all on the first page (specs 2026-10-22, 2026-10-29, deviation).
       const follows = before ? [] : await this.followViews(r, caller.identity.id);
-      const mentions = before ? [] : await this.mentionViews(r, await r.reviewMentions.listRecentByRecipient(caller.identity.id, FOLLOW_LIMIT));
+      const mentions = before ? [] : await this.mentionViews(r, await r.reviewMentions.listRecentByRecipient(caller.identity.id, FOLLOW_LIMIT), caller.identity.id);
       return {
         notifications: newestFirst([...await this.notificationViews(r, page), ...follows, ...mentions]),
         nextCursor: events.length > size && page.length
@@ -128,7 +128,7 @@ export class DocumentReviewService {
   /** A signed-in reader on a live link follows, or stops following, one of its discussions. Adds no words, so writes need not be enabled. */
   async followForLink(caller: CallerContext, input: { token: string; documentId?: string; threadId: string; following: boolean }) {
     return this.uow.run(async r => {
-      const s = await this.linkThread(r, input.token, input.threadId, input.documentId);
+      const s = await this.linkThread(r, input.token, input.threadId, input.documentId, caller.identity.id);
       if (s.workspace.personalOwnerUserId === caller.identity.id) return { following: false };
       if (input.following) await r.reviewFollows.follow({ threadId: input.threadId, userId: caller.identity.id, shareLinkId: s.link.id, at: this.clock() });
       else await r.reviewFollows.unfollow(input.threadId, caller.identity.id, this.clock());
@@ -141,38 +141,55 @@ export class DocumentReviewService {
     // A malformed id would make MariaDB's UUID column raise rather than match nothing.
     if (input.token === undefined && !isUuid(input.documentId!)) throw new ShareLinkNotFoundError();
     return this.uow.run(async r => {
-      const s = input.token !== undefined ? await this.linkScope(r, input.token, false, input.documentId) : await this.ownerScope(r, caller, input.documentId!, false);
+      const s: Awaited<ReturnType<DocumentReviewService["scope"]>> & { link?: DocumentShareLink } = input.token !== undefined ? await this.linkScope(r, input.token, false, input.documentId, caller.identity.id) : await this.ownerScope(r, caller, input.documentId!, false);
       this.enabled(); this.active(s);
       const query = input.query.trim().slice(0, 200);
       if (!query) return { candidates: [] };
       // The writer and the Workspace owner are never recorded as mentioned (`normalizeMentions`), so they are not offered.
       const skip = new Set([caller.identity.id, s.workspace.personalOwnerUserId]);
-      const found = (await r.users.searchExisting(query, MENTION_LIMIT + skip.size)).filter(u => !skip.has(u.id)).slice(0, MENTION_LIMIT);
+      const named = s.link?.audience === "NAMED" ? await this.recipientsMatching(r, s.link, query) : null;
+      const found = (named ?? await r.users.searchExisting(query, MENTION_LIMIT + skip.size)).filter(u => !skip.has(u.id)).slice(0, MENTION_LIMIT);
       return { candidates: found.map(u => ({ id: u.id, name: u.name, nameEn: u.nameEn, empId: u.emp_id })) };
     });
   }
   /**
-   * The links an owner may hand over when mentioning on their document: those that open it now, a link of the
-   * document itself or of a folder above it. Reads only.
+   * A NAMED link's recipients matching the query as `searchExisting` matches (name, emp_id or name_en, ignoring
+   * case), in its order. The link's list is the whole directory here: nobody else is offered.
    */
-  async mentionLinksForOwner(caller: CallerContext, input: { documentId: string }) {
+  private async recipientsMatching(r: KnowledgeRepositories, link: DocumentShareLink, query: string) {
+    const recipients = await r.shareLinks.listRecipients(link.id);
+    const needle = query.toLowerCase();
+    return (await r.users.findByIds(recipients.map(recipient => recipient.userId)))
+      .filter(u => [u.name, u.emp_id, u.nameEn ?? ""].some(text => text.toLowerCase().includes(needle)))
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  }
+  /**
+   * The links an owner may hand over when mentioning on their document: those that open it now, a link of the
+   * document itself or of a folder above it. Reads only. A NAMED link is listed only when every person in
+   * `mentionedUserIds` is its recipient; without that list it cannot be judged, so it is not listed.
+   */
+  async mentionLinksForOwner(caller: CallerContext, input: { documentId: string; mentionedUserIds?: string[] }) {
     if (!isUuid(input.documentId)) throw new ShareLinkNotFoundError();
     return this.uow.run(async r => {
       const s = await this.ownerScope(r, caller, input.documentId, false);
       this.enabled(); this.active(s);
+      const mentioned = input.mentionedUserIds === undefined ? null : normalizeMentions(input.mentionedUserIds, { writerId: caller.identity.id, ownerId: s.workspace.personalOwnerUserId ?? null });
       const chain = (await r.tree.listChainsByDocumentIds([s.document.id], s.document.sourceId)).get(s.document.id) ?? [];
       const folderIds = chain.slice(1).filter(node => node.nodeType === "FOLDER").map(node => node.id);
       const candidates = [...await r.shareLinks.listByDocument(s.document.id)];
       for (const folderId of folderIds) candidates.push(...await r.shareLinks.listByFolder(folderId));
       const links: Array<{ id: string; label: string | null }> = [];
-      for (const link of candidates) if (await this.linkValid(r, link, s.document.id)) links.push({ id: link.id, label: link.label });
+      for (const link of candidates) {
+        if (link.audience === "NAMED" && (mentioned === null || !await this.admitsAll(r, link, mentioned))) continue;
+        if (await this.linkValid(r, link, s.document.id, caller.identity.id)) links.push({ id: link.id, label: link.label });
+      }
       return { links };
     });
   }
   /** The reader has looked at a discussion: its follow, if any, is seen and their mentions in it are read. */
   async markSeenForLink(caller: CallerContext, input: { token: string; documentId?: string; threadId: string }) {
     await this.uow.run(async r => {
-      await this.linkThread(r, input.token, input.threadId, input.documentId);
+      await this.linkThread(r, input.token, input.threadId, input.documentId, caller.identity.id);
       await r.reviewFollows.markSeen(input.threadId, caller.identity.id, this.clock());
       await r.reviewMentions.markThreadRead(caller.identity.id, input.threadId, this.clock());
     });
@@ -200,8 +217,8 @@ export class DocumentReviewService {
     return { following: false };
   }
   /** A visible, standing discussion on a live link's document; any other is not found. */
-  private async linkThread(r: KnowledgeRepositories, token: string, threadId: string, documentId: string | undefined) {
-    const s = await this.linkScope(r, token, false, documentId);
+  private async linkThread(r: KnowledgeRepositories, token: string, threadId: string, documentId: string | undefined, viewerId: string) {
+    const s = await this.linkScope(r, token, false, documentId, viewerId);
     const thread = typeof threadId === "string" ? await r.reviewThreads.findById(threadId) : null;
     if (!thread || thread.documentId !== s.document.id || thread.visibility === "HIDDEN" || isRetractedThread(await r.reviewComments.listByThread(thread.id))) throw new ShareLinkNotFoundError();
     return s;
@@ -227,7 +244,7 @@ export class DocumentReviewService {
     // A comment naming the caller is its own Inbox entry; it is not counted again as a follow reply.
     // Only a live mention is that entry: a dead one shows nothing, so its comment still counts here if the follow's link opens.
     const named = await r.reviewMentions.findByThreads(userId, [...commentsByThread.keys()]);
-    const excludeCommentIds = new Set((await this.judgedMentions(r, named)).filter(judged => "comment" in judged).map(judged => judged.mention.commentId));
+    const excludeCommentIds = new Set((await this.judgedMentions(r, named, userId)).filter(judged => "comment" in judged).map(judged => judged.mention.commentId));
     const threadIds = [...new Set(follows.map(follow => follow.threadId))];
     const threads = new Map((await r.reviewThreads.findByIds(threadIds)).map(thread => [thread.id, thread]));
     const linkIds = [...new Set(follows.map(follow => follow.shareLinkId))];
@@ -246,7 +263,7 @@ export class DocumentReviewService {
       const link = links.get(linkId);
       if (!link) { reachable.set(linkId, null); continue; }
       reachable.set(linkId, link.target.kind === "DOCUMENT"
-        ? (await this.linkValid(r, link, link.target.documentId) ? new Set([link.target.documentId]) : null)
+        ? (await this.linkValid(r, link, link.target.documentId, userId) ? new Set([link.target.documentId]) : null)
         : await this.folderLinkDocuments(r, link, [...documentIds], userId));
     }
     const found = [];
@@ -287,7 +304,7 @@ export class DocumentReviewService {
    * comment and its discussion stand visible (`projectReviewerThread`'s rules). Anything else is dead.
    * ponytail: at most FOLLOW_LIMIT mentions, one comment lookup each; paging once readers are named more.
    */
-  private async judgedMentions(r: KnowledgeRepositories, mentions: readonly ReviewMention[]) {
+  private async judgedMentions(r: KnowledgeRepositories, mentions: readonly ReviewMention[], userId: string) {
     if (mentions.length === 0) return [];
     // Comments, threads and links each come in one query; only a link's reach is judged per document.
     const named = new Map((await r.reviewComments.findByIds(mentions.map(mention => mention.commentId))).map(comment => [comment.id, comment]));
@@ -307,7 +324,7 @@ export class DocumentReviewService {
       const link = links.get(mention.shareLinkId.toLowerCase());
       // One judgement per link and document: a folder link reaches each document by its own chain.
       const key = `${mention.shareLinkId}:${thread.documentId}`;
-      if (link && !opens.has(key)) opens.set(key, await this.linkValid(r, link, thread.documentId));
+      if (link && !opens.has(key)) opens.set(key, await this.linkValid(r, link, thread.documentId, userId));
       judged.push(link && opens.get(key) ? { mention, thread, comment, link } : { mention });
     }
     return judged;
@@ -321,18 +338,18 @@ export class DocumentReviewService {
   private async unreadMentions(r: KnowledgeRepositories, userId: string) {
     for (;;) {
       const unread = await r.reviewMentions.listUnreadByRecipient(userId, FOLLOW_LIMIT);
-      const dead = (await this.judgedMentions(r, unread)).filter(judged => !("comment" in judged));
+      const dead = (await this.judgedMentions(r, unread, userId)).filter(judged => !("comment" in judged));
       if (dead.length === 0) return unread;
       for (const { mention } of dead) await r.reviewMentions.markRead(userId, mention.commentId, this.clock());
       if (unread.length < FOLLOW_LIMIT) return unread.filter(mention => !dead.some(gone => gone.mention.commentId === mention.commentId));
     }
   }
   /** Mentions as Inbox entries, one per comment. A dead one names nothing and is never unread. */
-  private async mentionViews(r: KnowledgeRepositories, mentions: readonly ReviewMention[]): Promise<ShareCommentNotificationView[]> {
+  private async mentionViews(r: KnowledgeRepositories, mentions: readonly ReviewMention[], userId: string): Promise<ShareCommentNotificationView[]> {
     const views: ShareCommentNotificationView[] = [];
     const titles = new Map<string, string>();
     const authorNames = new Map<string, string | undefined>();
-    for (const judged of await this.judgedMentions(r, mentions)) {
+    for (const judged of await this.judgedMentions(r, mentions, userId)) {
       const { mention } = judged;
       const base = { id: `${MENTION_PREFIX}${mention.commentId}`, workspaceId: "", documentId: "", sourceId: "", commentId: mention.commentId, createdAt: mention.createdAt };
       if (!("comment" in judged)) { views.push({ ...base, kind: "MENTION", commentId: "", threadId: "", documentTitle: "", authorName: undefined, excerpt: "", readAt: mention.createdAt, threadStatus: "OPEN", linkAvailable: false }); continue; }
@@ -366,19 +383,23 @@ export class DocumentReviewService {
     return reachable;
   }
 
-  /** Whether the link opens now on this document: the same judgement `linkScope` makes, without refusing. */
-  private async linkValid(r: KnowledgeRepositories, link: DocumentShareLink, documentId: string): Promise<boolean> {
+  /** Whether the link opens now on this document for this viewer: the same judgement `linkScope` makes, without refusing. */
+  private async linkValid(r: KnowledgeRepositories, link: DocumentShareLink, documentId: string, viewerId: string | null): Promise<boolean> {
     if (link.target.kind === "DOCUMENT" && link.target.documentId !== documentId) return false;
     try {
-      await this.targetScope(r, link, link.target.kind === "FOLDER" ? documentId : undefined, false);
+      await this.targetScope(r, link, link.target.kind === "FOLDER" ? documentId : undefined, false, viewerId);
       return true;
     } catch (error) {
       if (error instanceof ShareLinkNotFoundError) return false;
       throw error;
     }
   }
-  /** `targetStatus` is the link's target's: its document's, or its folder node's (folder share spec §2). */
-  private async opens(r: KnowledgeRepositories, scope: Awaited<ReturnType<DocumentReviewService["scope"]>>, link: DocumentShareLink, targetStatus: "ACTIVE" | "ARCHIVED"): Promise<boolean> {
+  /**
+   * `targetStatus` is the link's target's: its document's, or its folder node's (folder share spec §2).
+   * `viewerId` is whose access is at stake (null: no one signed in); outside a NAMED link's audience it never opens.
+   */
+  private async opens(r: KnowledgeRepositories, scope: Awaited<ReturnType<DocumentReviewService["scope"]>>, link: DocumentShareLink, targetStatus: "ACTIVE" | "ARCHIVED", viewerId: string | null): Promise<boolean> {
+    if (!await audienceAdmits(r, link, viewerId)) return false;
     const membership = await r.workspaceMemberships.find(scope.workspace.id, link.createdBy);
     return linkOpens(link, targetStatus, scope.source, scope.workspace, membership ? membership.role ?? null : undefined, this.clock());
   }
@@ -463,7 +484,7 @@ export class DocumentReviewService {
    * takes no `documentId`; a folder link takes the one its page is reading and reaches it only while
    * it stays inside the folder (folder share spec §2, §6). Every failure is the same not-found.
    */
-  private async linkScope(r:KnowledgeRepositories,token:string,lock=true,documentId?:string) {
+  private async linkScope(r:KnowledgeRepositories,token:string,lock:boolean,documentId:string|undefined,viewerId:string|null) {
     if(typeof token!=="string" || !isShareToken(token)) throw new ShareLinkNotFoundError();
     // A malformed id would make MariaDB's UUID column raise rather than match nothing.
     if(documentId!==undefined && (typeof documentId!=="string" || !isUuid(documentId))) throw new ShareLinkNotFoundError();
@@ -471,14 +492,14 @@ export class DocumentReviewService {
     const link=found&&lock?await r.shareLinks.lockById(found.id):found;
     // The UUID column matches and returns lower case whatever case the URL carried, as readShared accepts it.
     if(!link || link.token!==token.toLowerCase()) throw new ShareLinkNotFoundError();
-    return {...await this.targetScope(r,link,documentId,lock),link};
+    return {...await this.targetScope(r,link,documentId,lock,viewerId),link};
   }
   /** Lock order as every link write: the link (taken by the caller), then the document's Source, then its Workspace. */
-  private async targetScope(r:KnowledgeRepositories,link:DocumentShareLink,documentId:string|undefined,lock:boolean) {
+  private async targetScope(r:KnowledgeRepositories,link:DocumentShareLink,documentId:string|undefined,lock:boolean,viewerId:string|null) {
     if(link.target.kind==="DOCUMENT") {
       if(documentId!==undefined) throw new ShareLinkNotFoundError();
       const scope=await this.scope(r,link.target.documentId,lock);
-      if(!await this.opens(r,scope,link,scope.document.status)) throw new ShareLinkNotFoundError();
+      if(!await this.opens(r,scope,link,scope.document.status,viewerId)) throw new ShareLinkNotFoundError();
       return scope;
     }
     if(documentId===undefined) throw new ShareLinkNotFoundError();
@@ -492,7 +513,7 @@ export class DocumentReviewService {
     const scope=await this.scope(r,documentId,lock);
     // Read under the Source lock a move takes, so the chain judged is the one a write lands on.
     const folder=await r.tree.findById(link.target.folderNodeId);
-    if(!folder || !await reachableChain(r,folder,scope.document) || !await this.opens(r,scope,link,folder.status)) throw new ShareLinkNotFoundError();
+    if(!folder || !await reachableChain(r,folder,scope.document) || !await this.opens(r,scope,link,folder.status,viewerId)) throw new ShareLinkNotFoundError();
     return scope;
   }
   private async ownerScope(r:KnowledgeRepositories,caller:CallerContext,documentId:string,lock=true) {
@@ -513,7 +534,7 @@ export class DocumentReviewService {
   }
   async createForLink(caller:CallerContext,input:CreateReviewThreadInput) {
     const request=this.creation(input);
-    return this.uow.run(async r => { const s=await this.linkScope(r,input.token,true,input.documentId); return this.create(r,caller,s,s.link.id,request,input,async()=>(await this.views(r,s.document.id,false,caller.identity.id))); });
+    return this.uow.run(async r => { const s=await this.linkScope(r,input.token,true,input.documentId,caller.identity.id); return this.create(r,caller,s,s.link.id,request,input,async()=>(await this.views(r,s.document.id,false,caller.identity.id))); });
   }
   /** The owner's own discussion, on a passage of their own document. No link is involved, so none is recorded. */
   async createForOwner(caller:CallerContext,input:CreateOwnerReviewThreadInput) {
@@ -525,7 +546,7 @@ export class DocumentReviewService {
     return {body,key,expectedRevisionId:input.expectedRevisionId,anchor:input.anchor,hashed:{expectedRevisionId:input.expectedRevisionId,anchor:canonicalAnchor(input.anchor),body}};
   }
   /** One way to start a discussion, whoever starts it: the scope is what the caller was let in by. */
-  private async create<V extends ReviewThreadView>(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>,originShareLinkId:string|null,request:ReturnType<DocumentReviewService["creation"]>,input:{mentions?:unknown;mentionLinkId?:unknown},views:()=>Promise<V[]>):Promise<V> {
+  private async create<V extends ReviewThreadView>(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>&{link?:DocumentShareLink},originShareLinkId:string|null,request:ReturnType<DocumentReviewService["creation"]>,input:{mentions?:unknown;mentionLinkId?:unknown},views:()=>Promise<V[]>):Promise<V> {
     const {body,key}=request,mentions=this.mentionRequest(caller,s,originShareLinkId,input),requestHash=hash({...request.hashed,...mentions.hashed});
     const existing=await r.reviewThreads.findByCreationKey(s.document.id,caller.identity.id,key);
     if(existing) { if(existing.creationRequestHash!==requestHash) fail("IDEMPOTENCY_KEY_REUSED","The idempotency key was already used for a different request."); const view=(await views()).find(t=>t.id===existing.id); if(!view) throw new ShareLinkNotFoundError(); return view; }
@@ -534,7 +555,7 @@ export class DocumentReviewService {
     if(!revision || revision.id!==request.expectedRevisionId) fail("STALE_DOCUMENT_REVISION","Refresh the document before selecting a passage.");
     const anchor=validateReviewAnchor(revision.markdown,request.anchor);
     await this.capacity(r,s.document.id,caller.identity.id); await this.quota(r,caller.identity.id,s.document.id);
-    const carriedLinkId=await this.mentionLink(r,s,originShareLinkId,mentions);
+    const carriedLinkId=await this.mentionLink(r,s,originShareLinkId,mentions,caller.identity.id);
     const now=this.clock(); const thread:ReviewThread={id:uuidv7(),documentId:s.document.id,createdRevisionId:revision.id,createdBy:caller.identity.id,creationIdempotencyKey:key,creationRequestHash:requestHash,originShareLinkId,anchor,status:"OPEN",visibility:"VISIBLE",hiddenBy:null,hiddenAt:null,hiddenReason:null,resolvedBy:null,resolvedAt:null,createdAt:now,updatedAt:now};
     const firstComment=this.comment(thread.id,caller.identity.id,body,key,requestHash);
     if (revision.history?.state === "WORKING") await r.revisions.markCheckpoint(revision.id,"COMMENT");
@@ -545,7 +566,7 @@ export class DocumentReviewService {
     await this.mentionOnWrite(r,s,carriedLinkId,firstComment,mentions.ids);
     return (await views()).find(t=>t.id===thread.id)!;
   }
-  async replyForLink(caller:CallerContext,input:ReplyReviewInput) { return this.uow.run(async r=> {const s=await this.linkScope(r,input.token,true,input.documentId); return this.reply(r,caller,s,s.link.id,input);}); }
+  async replyForLink(caller:CallerContext,input:ReplyReviewInput) { return this.uow.run(async r=> {const s=await this.linkScope(r,input.token,true,input.documentId,caller.identity.id); return this.reply(r,caller,s,s.link.id,input);}); }
   async replyForOwner(caller:CallerContext,input:ReplyOwnerReviewInput) {return this.uow.run(async r=>{const s=await this.ownerScope(r,caller,input.documentId);return this.reply(r,caller,s,null,input);});}
   private comment(threadId:string,userId:string,body:string,key:string,requestHash:string):ReviewComment {return {id:uuidv7(),threadId,authorUserId:userId,body,idempotencyKey:key,requestHash,createdAt:this.clock(),editedAt:null,deletedAt:null,visibility:"VISIBLE",hiddenBy:null,hiddenAt:null,hiddenReason:null};}
   /** A comment written through a link is news to the owner, unless the owner wrote it (share-comment-notify spec). */
@@ -569,28 +590,35 @@ export class DocumentReviewService {
     return {ids,linkId,hashed};
   }
   /**
-   * Every check a mention needs, before anything is written: each person exists, and the link handed to them
-   * belongs to this document and opens now. Returns that link, or null when nobody is named.
+   * Every check a mention needs, before anything is written: each person exists, the link handed to them
+   * belongs to this document and opens now, and a NAMED link names each of them (named-recipient share spec,
+   * "Discussions and mentions"). Returns that link's id, or null when nobody is named.
    */
-  private async mentionLink(r:KnowledgeRepositories,s:Awaited<ReturnType<DocumentReviewService["scope"]>>,originShareLinkId:string|null,mentions:MentionRequest):Promise<string|null> {
+  private async mentionLink(r:KnowledgeRepositories,s:Awaited<ReturnType<DocumentReviewService["scope"]>>&{link?:DocumentShareLink},originShareLinkId:string|null,mentions:MentionRequest,writerId:string):Promise<string|null> {
     if(!mentions.ids.length) return null;
     if((await r.users.findByIds(mentions.ids)).length!==mentions.ids.length) fail("INVALID_REQUEST","Mention only people who have signed in here.");
-    if(originShareLinkId!==null) return originShareLinkId;
-    const link=mentions.linkId===null?undefined:(await r.shareLinks.findByIds([mentions.linkId]))[0];
-    if(!link || !await this.linkValid(r,link,s.document.id)) fail("INVALID_REQUEST","Mention someone through a live share link of this document.");
+    const link=originShareLinkId!==null?s.link:mentions.linkId===null?undefined:(await r.shareLinks.findByIds([mentions.linkId]))[0];
+    if(!link || (originShareLinkId===null && !await this.linkValid(r,link,s.document.id,writerId))) fail("INVALID_REQUEST","Mention someone through a live share link of this document.");
+    if(!await this.admitsAll(r,link,mentions.ids)) fail("MENTION_NOT_RECIPIENT","Mention only people this document is shared with.");
     return link.id;
+  }
+  /** Whether everyone named is in the link's audience; a LINK admits anyone. */
+  private async admitsAll(r:KnowledgeRepositories,link:DocumentShareLink,userIds:readonly string[]) {
+    for(const userId of userIds) if(!await audienceAdmits(r,link,userId)) return false;
+    return true;
   }
   /** The people a comment names get a mention carrying the link, and follow the discussion through it (spec 2026-10-29 § Writing a mention). */
   private async mentionOnWrite(r:KnowledgeRepositories,s:Awaited<ReturnType<DocumentReviewService["scope"]>>,carriedLinkId:string|null,comment:ReviewComment,mentions:string[]) {
     if(carriedLinkId===null || !mentions.length) return;
     await r.reviewMentions.insertMany(mentions.map(mentionedUserId=>({commentId:comment.id,mentionedUserId,shareLinkId:carriedLinkId,createdAt:comment.createdAt,readAt:null})));
-    const currentLinkValid=async(linkId:string)=>{
+    // Judged for the person followed: their current follow may sit on a NAMED link they were removed from.
+    const currentLinkValid=(userId:string)=>async(linkId:string)=>{
       const link=(await r.shareLinks.findByIds([linkId]))[0];
-      return !!link && this.linkValid(r,link,s.document.id);
+      return !!link && this.linkValid(r,link,s.document.id,userId);
     };
-    for(const userId of mentions) await followForMention(r.reviewFollows,{threadId:comment.threadId,userId,shareLinkId:carriedLinkId,at:this.clock(),currentLinkValid});
+    for(const userId of mentions) await followForMention(r.reviewFollows,{threadId:comment.threadId,userId,shareLinkId:carriedLinkId,at:this.clock(),currentLinkValid:currentLinkValid(userId)});
   }
-  private async reply(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>,originShareLinkId:string|null,input:{threadId:string;body:string;idempotencyKey:string;mentions?:unknown;mentionLinkId?:unknown}) {
+  private async reply(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>&{link?:DocumentShareLink},originShareLinkId:string|null,input:{threadId:string;body:string;idempotencyKey:string;mentions?:unknown;mentionLinkId?:unknown}) {
     const body=validateReviewBody(input.body),key=validateReviewIdempotencyKey(input.idempotencyKey),mentions=this.mentionRequest(caller,s,originShareLinkId,input),requestHash=hash({threadId:input.threadId,body,...mentions.hashed});
     const thread=await r.reviewThreads.lockById(input.threadId);
     if(!thread || thread.documentId!==s.document.id || thread.visibility==="HIDDEN" || isRetractedThread(await r.reviewComments.listByThread(thread.id))) throw new ShareLinkNotFoundError();
@@ -600,16 +628,16 @@ export class DocumentReviewService {
     if(thread.status!=="OPEN") fail("REVIEW_THREAD_CLOSED","Reopen the discussion before replying.");
     if(await r.reviewComments.countByThread(thread.id)>REVIEW_LIMITS.replies) fail("CAPACITY_EXCEEDED","The discussion reply limit was reached.");
     await this.quota(r,caller.identity.id,s.document.id);
-    const carriedLinkId=await this.mentionLink(r,s,originShareLinkId,mentions);
+    const carriedLinkId=await this.mentionLink(r,s,originShareLinkId,mentions,caller.identity.id);
     const comment=this.comment(thread.id,caller.identity.id,body,key,requestHash);await r.reviewComments.insert(comment);await this.charge(r,caller.identity.id,s.document.id);
     await this.notifyOwner(r,caller,s,originShareLinkId,comment);
     await this.followOnWrite(r,caller,s,originShareLinkId,thread.id);
     await this.mentionOnWrite(r,s,carriedLinkId,comment,mentions.ids);
     return projectReviewComment(comment,caller.identity.id);
   }
-  async editForLink(caller:CallerContext,input:{token:string;documentId?:string;threadId:string;commentId:string;body:string}) { return this.uow.run(async r=>this.edit(r,caller,await this.linkScope(r,input.token,true,input.documentId),input)); }
+  async editForLink(caller:CallerContext,input:{token:string;documentId?:string;threadId:string;commentId:string;body:string}) { return this.uow.run(async r=>this.edit(r,caller,await this.linkScope(r,input.token,true,input.documentId,caller.identity.id),input)); }
   async editForOwner(caller:CallerContext,input:{documentId:string;threadId:string;commentId:string;body:string}) { return this.uow.run(async r=>this.edit(r,caller,await this.ownerScope(r,caller,input.documentId),input)); }
-  async deleteForLink(caller:CallerContext,input:{token:string;documentId?:string;threadId:string;commentId:string}) { await this.uow.run(async r=>this.retract(r,caller,await this.linkScope(r,input.token,true,input.documentId),input)); }
+  async deleteForLink(caller:CallerContext,input:{token:string;documentId?:string;threadId:string;commentId:string}) { await this.uow.run(async r=>this.retract(r,caller,await this.linkScope(r,input.token,true,input.documentId,caller.identity.id),input)); }
   async deleteForOwner(caller:CallerContext,input:{documentId:string;threadId:string;commentId:string}) { await this.uow.run(async r=>this.retract(r,caller,await this.ownerScope(r,caller,input.documentId),input)); }
   /** A comment as its author reaches it. To anyone else — the document's owner included — it is not there. */
   private async authored(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>,input:{threadId:string;commentId:string}) {

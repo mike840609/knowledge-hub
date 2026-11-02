@@ -7,6 +7,7 @@ import {
   ShareLinkNotPersonalError,
 } from "@/modules/knowledge/domain/document-share-link";
 import { toWorkspaceErrorResponse } from "@/server/http-error-response";
+import { DomainError } from "@/shared/domain/errors";
 
 describe("share-link error mapping (share-link spec §9.4)", () => {
   it("hides an unusable link as a generic 404", () => {
@@ -23,5 +24,10 @@ describe("share-link error mapping (share-link spec §9.4)", () => {
   it("maps invalid expiry and label to 400 with their codes", () => {
     expect(toWorkspaceErrorResponse(new InvalidShareLinkExpiryError())).toMatchObject({ status: 400, body: { error: { code: "INVALID_SHARE_LINK_EXPIRY" } } });
     expect(toWorkspaceErrorResponse(new InvalidShareLinkLabelError())).toMatchObject({ status: 400, body: { error: { code: "INVALID_SHARE_LINK_LABEL" } } });
+  });
+
+  it("maps a mention of someone a NAMED link does not name to 400 with its code", () => {
+    expect(toWorkspaceErrorResponse(new DomainError("MENTION_NOT_RECIPIENT", "Mention only people this document is shared with.")))
+      .toMatchObject({ status: 400, body: { error: { code: "MENTION_NOT_RECIPIENT" } } });
   });
 });
