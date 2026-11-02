@@ -2,8 +2,8 @@ import type { ManagedShareLink, ShareManagementQuery, ShareManagementStatus } fr
 import { toLikePattern } from "@/modules/knowledge/domain/search-query";
 import { shareLinkPath } from "@/modules/knowledge/domain/document-share-link";
 import { IntegrityViolationError } from "@/modules/knowledge/domain/errors";
-import type { DocumentShareLink, ShareLinkTarget } from "@/modules/knowledge/domain/document-share-link";
-import type { DocumentShareLinkRepository, OpenFolderLink, ShareLinkViewTotals } from "@/modules/knowledge/ports/document-share-link-repository";
+import type { DocumentShareLink, ShareAudience, ShareLinkTarget } from "@/modules/knowledge/domain/document-share-link";
+import type { DocumentShareLinkRepository, NamedRecipient, OpenFolderLink, ReceivedShareLink, ShareLinkViewTotals } from "@/modules/knowledge/ports/document-share-link-repository";
 import type { DbRow, QueryConnection } from "./shared";
 import { affectedRows, asDate, asNullableDate, asNumber } from "./shared";
 
@@ -20,9 +20,10 @@ function mapLink(row: DbRow): DocumentShareLink {
     target: mapTarget(row),
     token: String(row.token),
     label: row.label === null ? null : String(row.label),
+    audience: String(row.audience) as ShareAudience,
     createdBy: String(row.created_by),
     createdAt: asDate(row.created_at),
-    expiresAt: asDate(row.expires_at),
+    expiresAt: asNullableDate(row.expires_at),
     revokedBy: row.revoked_by === null ? null : String(row.revoked_by),
     revokedAt: asNullableDate(row.revoked_at),
   };
@@ -35,7 +36,7 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
     // Status follows the bearer reader's validity rules. The owner and workspace
     // predicates remain inside the query so pagination never mixes scopes.
     const state = `CASE WHEN l.revoked_at IS NOT NULL THEN 'revoked'
-      WHEN l.expires_at <= ? THEN 'expired'
+      WHEN l.expires_at IS NOT NULL AND l.expires_at <= ? THEN 'expired'
       WHEN COALESCE(d.status, f.status) <> 'ACTIVE' OR s.status <> 'ACTIVE' OR w.lifecycle_state <> 'ACTIVE' OR m.user_id IS NULL THEN 'unavailable'
       ELSE 'active' END`;
     const rows = await this.connection.query<DbRow[]>(
@@ -62,7 +63,7 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
       const base = {
         id: String(row.id), sourceId: String(row.source_id), title: String(row.title), sourceName: String(row.source_name),
         label: row.label === null ? null : String(row.label), path: shareLinkPath(String(row.token)), status: String(row.link_status) as ShareManagementStatus,
-        createdAt: asDate(row.created_at), expiresAt: asDate(row.expires_at), revokedAt: asNullableDate(row.revoked_at), totalViews: totals.get(String(row.id))?.totalViews ?? 0, lastViewedAt: totals.get(String(row.id))?.lastViewedAt ?? null,
+        createdAt: asDate(row.created_at), expiresAt: asNullableDate(row.expires_at), revokedAt: asNullableDate(row.revoked_at), totalViews: totals.get(String(row.id))?.totalViews ?? 0, lastViewedAt: totals.get(String(row.id))?.lastViewedAt ?? null,
       };
       return row.folder_node_id === null
         ? { ...base, kind: "DOCUMENT", documentId: String(row.document_id), folderNodeId: null }
@@ -80,7 +81,7 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
        JOIN workspaces w ON w.id = s.workspace_id AND w.workspace_type = 'PERSONAL' AND w.lifecycle_state = 'ACTIVE'
        JOIN workspace_memberships m ON m.workspace_id = w.id AND m.user_id = l.created_by
        WHERE w.id = ? AND w.personal_owner_user_id = ? AND l.created_by = ?
-         AND l.revoked_at IS NULL AND l.expires_at > ?
+         AND l.revoked_at IS NULL AND (l.expires_at IS NULL OR l.expires_at > ?)
        ORDER BY f.name, f.id`,
       [workspaceId, ownerId, ownerId, now],
     );
@@ -89,9 +90,9 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
 
   async insert(link: DocumentShareLink): Promise<void> {
     await this.connection.query(
-      `INSERT INTO document_share_links (id, document_id, folder_node_id, token, label, created_by, created_at, expires_at, revoked_by, revoked_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [link.id, link.target.kind === "DOCUMENT" ? link.target.documentId : null, link.target.kind === "FOLDER" ? link.target.folderNodeId : null, link.token, link.label, link.createdBy, link.createdAt, link.expiresAt, link.revokedBy, link.revokedAt],
+      `INSERT INTO document_share_links (id, document_id, folder_node_id, token, label, audience, created_by, created_at, expires_at, revoked_by, revoked_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [link.id, link.target.kind === "DOCUMENT" ? link.target.documentId : null, link.target.kind === "FOLDER" ? link.target.folderNodeId : null, link.token, link.label, link.audience, link.createdBy, link.createdAt, link.expiresAt, link.revokedBy, link.revokedAt],
     );
   }
 
@@ -131,7 +132,7 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
 
   async countActiveByDocument(documentId: string, now: Date): Promise<number> {
     const rows = await this.connection.query<DbRow[]>(
-      "SELECT COUNT(*) AS active FROM document_share_links WHERE document_id = ? AND revoked_at IS NULL AND expires_at > ?",
+      "SELECT COUNT(*) AS active FROM document_share_links WHERE document_id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)",
       [documentId, now],
     );
     return asNumber(rows[0]?.active ?? 0, "active share link count");
@@ -147,7 +148,7 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
 
   async countActiveByFolder(folderNodeId: string, now: Date): Promise<number> {
     const rows = await this.connection.query<DbRow[]>(
-      "SELECT COUNT(*) AS active FROM document_share_links WHERE folder_node_id = ? AND revoked_at IS NULL AND expires_at > ?",
+      "SELECT COUNT(*) AS active FROM document_share_links WHERE folder_node_id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)",
       [folderNodeId, now],
     );
     return asNumber(rows[0]?.active ?? 0, "active share link count");
@@ -185,6 +186,63 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
        VALUES (?, ?, ?, ?, 1)
        ON DUPLICATE KEY UPDATE last_viewed_at = VALUES(last_viewed_at), view_count = view_count + 1`,
       [linkId, at.toISOString().slice(0, 10), at, at],
+    );
+  }
+
+  async insertRecipients(linkId: string, userIds: readonly string[], addedBy: string, at: Date): Promise<void> {
+    if (userIds.length === 0) return;
+    await this.connection.query(
+      `INSERT IGNORE INTO document_share_link_recipients (share_link_id, user_id, added_by, added_at) VALUES ${userIds.map(() => "(?, ?, ?, ?)").join(", ")}`,
+      userIds.flatMap(userId => [linkId, userId, addedBy, at]),
+    );
+  }
+
+  async removeRecipient(linkId: string, userId: string): Promise<boolean> {
+    const result = await this.connection.query(
+      "DELETE FROM document_share_link_recipients WHERE share_link_id = ? AND user_id = ?",
+      [linkId, userId],
+    );
+    return affectedRows(result) === 1;
+  }
+
+  async isRecipient(linkId: string, userId: string): Promise<boolean> {
+    const rows = await this.connection.query<DbRow[]>(
+      "SELECT 1 AS found FROM document_share_link_recipients WHERE share_link_id = ? AND user_id = ?",
+      [linkId, userId],
+    );
+    return rows.length === 1;
+  }
+
+  async listRecipients(linkId: string): Promise<NamedRecipient[]> {
+    const rows = await this.connection.query<DbRow[]>(
+      "SELECT user_id, added_at FROM document_share_link_recipients WHERE share_link_id = ? ORDER BY added_at DESC, user_id DESC",
+      [linkId],
+    );
+    return rows.map(row => ({ userId: String(row.user_id), addedAt: asDate(row.added_at) }));
+  }
+
+  async countRecipients(linkId: string): Promise<number> {
+    const rows = await this.connection.query<DbRow[]>(
+      "SELECT COUNT(*) AS recipients FROM document_share_link_recipients WHERE share_link_id = ?",
+      [linkId],
+    );
+    return asNumber(rows[0]?.recipients ?? 0, "share link recipient count");
+  }
+
+  async listForRecipient(userId: string, limit: number): Promise<ReceivedShareLink[]> {
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT l.*, r.added_at AS recipient_added_at, r.read_at AS recipient_read_at
+       FROM document_share_link_recipients r JOIN document_share_links l ON l.id = r.share_link_id
+       WHERE r.user_id = ? ORDER BY r.added_at DESC, l.id DESC LIMIT ?`,
+      [userId, limit],
+    );
+    return rows.map(row => ({ link: mapLink(row), addedAt: asDate(row.recipient_added_at), readAt: asNullableDate(row.recipient_read_at) }));
+  }
+
+  async markRecipientRead(linkId: string, userId: string, at: Date): Promise<void> {
+    await this.connection.query(
+      "UPDATE document_share_link_recipients SET read_at = ? WHERE share_link_id = ? AND user_id = ? AND read_at IS NULL",
+      [at, linkId, userId],
     );
   }
 }

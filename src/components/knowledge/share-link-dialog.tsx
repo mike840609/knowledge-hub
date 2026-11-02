@@ -25,7 +25,7 @@ type ShareLink = {
   label: string | null;
   path: string;
   createdAt: string;
-  expiresAt: string;
+  expiresAt: string | null;
   revokedAt: string | null;
   active: boolean;
   totalViews: number;
@@ -237,7 +237,7 @@ export function ShareLinkDialog({
                           {created === link.id ? <span className="ml-2 text-caption text-kh-text-muted">Created</span> : null}
                         </p>
                         <p className="text-caption text-kh-text-muted">
-                          Expires <Timestamp value={link.expiresAt} variant="date" /> · {link.totalViews} {link.totalViews === 1 ? "view" : "views"}
+                          {link.expiresAt ? <>Expires <Timestamp value={link.expiresAt} variant="date" /></> : "No expiry"} · {link.totalViews} {link.totalViews === 1 ? "view" : "views"}
                         </p>
                       </div>
                       <Button variant={created === link.id ? "primary" : "secondary"} size="sm" type="button" onClick={() => void copy(link)}>

@@ -20,7 +20,7 @@ async function columns(table: string): Promise<string[]> {
 describe("migrations 011 and 027 (share-link spec §7)", () => {
   it("stores no workspace or source scope on the link", async () => {
     expect(await columns("document_share_links")).toEqual([
-      "id", "document_id", "folder_node_id", "token", "label", "created_by", "created_at", "expires_at", "revoked_by", "revoked_at",
+      "id", "document_id", "folder_node_id", "token", "label", "created_by", "created_at", "expires_at", "revoked_by", "revoked_at", "audience",
     ]);
   });
 

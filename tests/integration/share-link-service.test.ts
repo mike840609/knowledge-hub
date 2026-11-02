@@ -85,7 +85,7 @@ describe("DocumentShareService.create (share-link spec §5.1, §7.3, §8)", () =
     const now = new Date("2026-09-23T08:00:00.000Z");
     const link = await service(undefined, () => now).create(caller, { documentId });
     expect(link.path).toMatch(/^\/s\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-    expect(link.expiresAt.toISOString()).toBe("2026-10-23T08:00:00.000Z");
+    expect(link.expiresAt?.toISOString()).toBe("2026-10-23T08:00:00.000Z");
     expect(link.active).toBe(true);
   });
 

@@ -53,7 +53,7 @@ export function SavedSharesView({ workspaceId,model,filterError,discussionsUnrea
           <p className="text-caption text-kh-text-muted">{item.status==="available"?<>Available{item.updatedAt&&<> · Updated <Timestamp value={item.updatedAt}/></>}</>:item.status==="expired"?"Expired":"Link unavailable"}</p>
         </div>
         <span className="col-start-1 row-start-2 text-caption text-kh-text-muted md:col-auto md:row-auto"><span className="md:sr-only">Saved </span><Timestamp value={item.savedAt}/></span>
-        <span className="col-span-2 text-caption text-kh-text-muted md:col-span-1"><span className="md:sr-only">Expires </span><Timestamp value={item.expiresAt} variant="date"/></span>
+        <span className="col-span-2 text-caption text-kh-text-muted md:col-span-1"><span className="md:sr-only">Expires </span>{item.expiresAt?<Timestamp value={item.expiresAt} variant="date"/>:"No expiry"}</span>
         <Button variant="ghost" size="sm" className="col-start-2 row-start-1 justify-self-end md:col-auto md:row-auto" aria-label={`Remove saved share: ${item.title}`} disabled={busy!==null} onClick={()=>void remove(item.id)}>Remove</Button>
       </div>
     </li>)}</ul>

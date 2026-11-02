@@ -27,7 +27,8 @@ export class SavedShareService {
       await syncCallerIdentity(r.users,caller);
       const workspaceId = await this.personal(r,caller);
       const snapshot=await r.savedShares.findSnapshotByToken(token),now=this.clock();
-      if(!snapshot||!evaluateShareLinkValidity({link:snapshot.link,...snapshot.validity,now}).valid)throw new ShareLinkNotFoundError();
+      // A NAMED link reaches its recipients by name; there is nothing to save, and no expiry to keep.
+      if(!snapshot||snapshot.link.audience==='NAMED'||snapshot.link.expiresAt===null||!evaluateShareLinkValidity({link:snapshot.link,...snapshot.validity,now}).valid)throw new ShareLinkNotFoundError();
       if(snapshot.title===null||snapshot.sharedByName===null)throw new IntegrityViolationError("Share metadata is unavailable.");
       const record=await r.savedShares.save({id:uuidv7(),userId:caller.identity.id,shareLinkId:snapshot.link.id,savedTitle:snapshot.title,savedSharedByName:snapshot.sharedByName,savedExpiresAt:snapshot.link.expiresAt,savedAt:now,updatedAt:now,removedAt:null});
       return { saved:true,id:record.id,workspaceId };

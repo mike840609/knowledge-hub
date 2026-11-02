@@ -6,7 +6,7 @@ export type ShareManagementQuery = { q: string; status: ShareManagementStatus | 
 type ManagedShareLinkBase = {
   id: string; sourceId: string; title: string; sourceName: string;
   label: string | null; path: string; status: ShareManagementStatus;
-  createdAt: Date; expiresAt: Date; revokedAt: Date | null;
+  createdAt: Date; expiresAt: Date | null; revokedAt: Date | null;
   totalViews: number; lastViewedAt: Date | null;
 };
 /**

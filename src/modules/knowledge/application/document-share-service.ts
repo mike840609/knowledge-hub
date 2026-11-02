@@ -29,7 +29,7 @@ export type ShareLinkView = {
   /** `/s/<token>`; the browser composes the absolute URL (spec §9.4). */
   path: string;
   createdAt: Date;
-  expiresAt: Date;
+  expiresAt: Date | null;
   revokedAt: Date | null;
   active: boolean;
   totalViews: number;
@@ -43,7 +43,7 @@ export type SharedDocumentView = {
   pageIcon: string | null;
   sharedByName: string;
   updatedAt: Date;
-  expiresAt: Date;
+  expiresAt: Date | null;
 };
 
 /** One node of a shared folder's subtree: names and icons only, never a body. */
@@ -78,7 +78,7 @@ export type SharedFolderView = {
   /** `null` only when the folder holds no document. */
   document: SharedFolderDocument | null;
   sharedByName: string;
-  expiresAt: Date;
+  expiresAt: Date | null;
 };
 
 export type SharedView = ({ kind: "DOCUMENT" } & SharedDocumentView) | SharedFolderView;
@@ -193,6 +193,7 @@ export class DocumentShareService {
       target: scope.target,
       token: this.tokens.issue(),
       label: normalized.label,
+      audience: "LINK",
       createdBy: caller.identity.id,
       createdAt: now,
       expiresAt: shareLinkExpiry(now, normalized.expiresInDays),
@@ -210,7 +211,7 @@ export class DocumentShareService {
       eventType: SHARE_LINK_CREATED_EVENT,
       targetType: "DOCUMENT_SHARE_LINK",
       targetId: link.id,
-      payload: { ...targetPayload(link.target), expiresAt: link.expiresAt.toISOString(), label: link.label },
+      payload: { ...targetPayload(link.target), expiresAt: link.expiresAt?.toISOString() ?? null, label: link.label },
       correlationId: null,
       createdAt: now,
     });

@@ -149,7 +149,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
               <p className="truncate text-caption text-kh-text-muted" title={`${item.sourceName} · ${item.label ?? "Untitled link"}`}>{item.sourceName} · {item.label ?? "Untitled link"}</p>
             </div>
             <span className="row-start-2 text-caption text-kh-text-muted md:row-auto"><Status kind={status === "active" ? "active" : "none"}>{labels[status]}</Status></span>
-            <span className="col-span-2 text-caption text-kh-text-muted md:col-span-1"><span className="md:sr-only">Expires </span><Timestamp value={item.expiresAt} variant="date" /></span>
+            <span className="col-span-2 text-caption text-kh-text-muted md:col-span-1"><span className="md:sr-only">Expires </span>{item.expiresAt ? <Timestamp value={item.expiresAt} variant="date" /> : "No expiry"}</span>
             <span title={folder ? "Documents opened through this link" : undefined} className="col-start-2 row-start-2 whitespace-nowrap text-right text-caption tabular-nums text-kh-text-muted md:col-auto md:row-auto">{item.totalViews.toLocaleString()}<span className="md:sr-only"> {item.totalViews === 1 ? "view" : "views"}</span></span>
             <div className="col-start-2 row-start-1 flex items-center gap-1 justify-self-end md:col-auto md:row-auto">
               {status === "active" ? <Button variant="ghost" size="sm" icon aria-label={`Copy link for ${linkName}`} disabled={busy !== null} onClick={() => void copy(item)}><Copy size={15} aria-hidden="true" /></Button> : null}
@@ -165,7 +165,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
           </div>
           {details === item.id ? <div className="mt-3 space-y-2 border-t border-kh-border pt-3">
             <p className="break-words text-caption text-kh-text-muted">{item.sourceName} · {item.label ?? "Untitled link"}</p>
-            <p className="text-caption text-kh-text-muted">Created <Timestamp value={item.createdAt} /> · Expires <Timestamp value={item.expiresAt} />{item.lastViewedAt ? <> · Last viewed <Timestamp value={item.lastViewedAt} /></> : " · Not viewed yet"}</p>
+            <p className="text-caption text-kh-text-muted">Created <Timestamp value={item.createdAt} /> · {item.expiresAt ? <>Expires <Timestamp value={item.expiresAt} /></> : "No expiry"}{item.lastViewedAt ? <> · Last viewed <Timestamp value={item.lastViewedAt} /></> : " · Not viewed yet"}</p>
             {status === "unavailable" ? <p className="text-caption text-kh-text-muted">Sharing is paused. Restoring the {folder ? "folder" : "document"} or its source may reactivate this link until expiry. Revoke it to end sharing permanently.</p> : null}
             {status === "active" ? <div ref={field => { if (field) fields.current.set(item.id, field); else fields.current.delete(item.id); }}><Input readOnly size="sm" aria-label={`Share URL for ${linkName}`} value={`${origin}${item.path}`} onFocus={event => event.currentTarget.select()} /></div> : null}
           </div> : null}
