@@ -43,4 +43,5 @@ export interface DocumentShareLinkRepository {
   /** Links naming this user, newest first, unfiltered: whether each opens now is judged by the caller. */
   listForRecipient(userId: string, limit: number): Promise<ReceivedShareLink[]>;
   markRecipientRead(linkId: string, userId: string, at: Date): Promise<void>;
+  markAllRecipientRead(userId: string, at: Date): Promise<void>;
 }

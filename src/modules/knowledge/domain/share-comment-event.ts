@@ -15,9 +15,14 @@ export type ShareCommentNotificationView = {
    * link opens (`linkAvailable`) — with the document id too when it is a folder link, whose page
    * needs it (`?d=`) — and `replyCount` replies not yet seen. A dead link's entry names neither.
    * MENTION: one comment naming the caller, carried like FOLLOW.
+   * SHARED_WITH_YOU: an owner named the caller on a NAMED share. `documentTitle` is the document's or the folder's
+   * name, `authorName` the owner's, `createdAt` when the caller was added, and `href` the reader in the caller's own
+   * Workspace; it carries no ids and no token. A link that no longer opens gives `linkAvailable: false` and none of it.
    */
-  kind?: "OWNER" | "FOLLOW" | "MENTION"; token?: string; replyCount?: number; linkAvailable?: boolean;
+  kind?: "OWNER" | "FOLLOW" | "MENTION" | "SHARED_WITH_YOU"; token?: string; replyCount?: number; linkAvailable?: boolean; href?: string;
 };
+/** `shared:<linkId>` is the Inbox id of a named share, as `follow:` and `mention:` are of theirs. */
+export const SHARED_PREFIX = "shared:";
 export const EXCERPT_LIMIT = 80;
 export function projectShareCommentNotification(input: {
   id: string; workspaceId: string; documentId: string; sourceId: string; documentTitle: string;

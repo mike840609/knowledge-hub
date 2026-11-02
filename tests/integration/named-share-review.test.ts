@@ -134,7 +134,8 @@ describe("a recipient's follow on a NAMED link", () => {
     const thread = await f.start(f.owner);
     await f.service.followForLink(f.recipient, { token: f.link.token, threadId: thread.id, following: true });
     await f.service.replyForOwner(f.owner, { documentId: f.doc.documentId, threadId: thread.id, body: "Owner answers", idempotencyKey: randomUUID() });
-    expect((await f.service.listUnreadForOwner(f.recipient)).notifications)
+    // Being named also put the share itself in their Inbox (named-share-inbox.test.ts); this is about the follow.
+    expect((await f.service.listUnreadForOwner(f.recipient)).notifications.filter(n => n.kind === "FOLLOW"))
       .toEqual([expect.objectContaining({ kind: "FOLLOW", threadId: thread.id, token: f.link.token, linkAvailable: true })]);
     await f.reply(f.recipient, thread.id);
     await f.removeRecipient(f.ids.recipient.id);

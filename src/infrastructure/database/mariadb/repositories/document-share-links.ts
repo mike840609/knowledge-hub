@@ -245,4 +245,11 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
       [at, linkId, userId],
     );
   }
+
+  async markAllRecipientRead(userId: string, at: Date): Promise<void> {
+    await this.connection.query(
+      "UPDATE document_share_link_recipients SET read_at = ? WHERE user_id = ? AND read_at IS NULL",
+      [at, userId],
+    );
+  }
 }
