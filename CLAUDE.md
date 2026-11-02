@@ -128,7 +128,8 @@ pass.
   (`docs/superpowers/specs/2026-10-23-followed-discussions-tab-design.md`).
   A **mention** hands a link's reference to one named, signed-in Hub user's Inbox:
   the writer passes on the link they already hold or own, recorded instead of
-  pasted. It reads only through `/s/:token` like any holder, is judged per
+  pasted. It reads only where that link is read, like any holder (`/s/:token`;
+  a NAMED link's Hub reader, `/w/<ws>/shares/:token`), is judged per
   request against the link's validity, never extends its lifetime, and grants no
   Workspace membership, search, tree, history, MCP, Markdown edits or revision
   writes. Its candidate search (`/api/review-mentions/candidates`) answers
@@ -154,8 +155,10 @@ pass.
   visible comment mentions, that person's `name`, `name_en` and `emp_id`
   (`docs/superpowers/specs/2026-10-30-review-mention-highlight-design.md`). A third,
   `readSharedTarget`, answers without one but serves no content: it judges the
-  link for `/s/:token/open` and names only the document id to open, before
-  sign-in is asked for (so a dead link is a plain 404). Every other entry,
+  link for `/s/:token/open` and names only the document id to open. That route
+  establishes the caller first (a NAMED link needs one), so even a dead LINK
+  token reaches sign-in before its 404
+  (`docs/superpowers/specs/2026-11-03-named-recipient-share-design.md`, deviation 2). Every other entry,
   and every write, requires one; `tests/unit/share-link-single-exception.test.ts`
   enforces it.
 - **`org_code` does not decide access.** It answers which company org a user
