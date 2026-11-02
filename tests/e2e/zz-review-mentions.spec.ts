@@ -179,10 +179,13 @@ test("an anonymous reader sees a mention highlighted and who it is", async ({ re
   }
 });
 
-// Spec 2026-11-02: Chinese writers type `請@王`, not `請 @王`.
-test("a mention opens after CJK text", async ({ page, request }) => {
+// Spec 2026-11-02: Chinese writers type `請@王`, not `請 @王`. Written that way, it is recorded,
+// reaches the person's Inbox, and is drawn as a mention.
+test("a mention written after CJK text is recorded and reaches the person", async ({ page, request }) => {
   const doc = await createReviewDocument(request);
-  const viewer = phase3Origin("viewer");
+  const token = doc.links[0].path.split("/").pop()!;
+  const viewer = phase3Origin("viewer"), mentioned = phase3Origin("groupAdmin");
+  expect((await request.post(`${mentioned}/api/review-notifications/activity`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${viewer}${doc.links[0].path}`);
   await openReviewDiscussions(page);
@@ -196,6 +199,18 @@ test("a mention opens after CJK text", async ({ page, request }) => {
   await expect(option.first()).toContainText("Phase3 groupAdmin");
   await composer.press("Enter");
   await expect(composer).toHaveValue("請@Phase3 groupAdmin ");
+  await composer.pressSequentially("看一下");
+  await page.getByRole("button", { name: "Add comment", exact: true }).click();
+  const body = "請@Phase3 groupAdmin 看一下";
+  await expect(page.locator("[data-review-thread]").getByText(body, { exact: true })).toBeVisible();
+  // Drawn as a mention: the server kept the person because the `@` after `請` starts one.
+  await expect(page.locator("[data-review-thread]").getByRole("button", { name: "Phase3 groupAdmin, mentioned" })).toHaveText("@Phase3 groupAdmin");
+
+  const query = await (await request.post(`${viewer}/api/share-review/threads/query`, { headers: { Origin: viewer }, data: { token } })).json();
+  const threadId: string = query.threads.find((thread: { comments: Array<{ body: string }> }) => thread.comments[0].body === body).id;
+  const unread = await (await request.get(`${mentioned}/api/review-notifications/unread`, { headers: { Origin: mentioned } })).json();
+  expect(unread.notifications.filter((notice: { threadId: string }) => notice.threadId === threadId))
+    .toEqual([expect.objectContaining({ kind: "MENTION", excerpt: body, authorName: "Phase3 viewer", linkAvailable: true })]);
 });
 
 // Spec 2026-11-02: a dead mention is a placeholder in Activity, with no link and none of the words.

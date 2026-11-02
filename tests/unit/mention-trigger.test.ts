@@ -22,6 +22,9 @@ describe("the @ trigger", () => {
     for (const text of ["see https://medium.com/@john", "https://medium.com/@john/post-1", "(http://x.test/@a"]) expect(mentionTrigger(text, text.length)).toBeNull();
     expect(mentionTrigger("https://x.test/ @jo", 19)).toEqual({ start: 16, query: "jo" });
     expect(mentionTrigger("A/@B", 4)).toEqual({ start: 2, query: "B" });
+    // linkify ends a URL at a quote, so the @ after it starts a mention.
+    expect(mentionTrigger('https://x.test/a"@An', 20)).toEqual({ start: 17, query: "An" });
+    expect(mentionTrigger("ftp://x.test/@jo", 16)).toEqual({ start: 13, query: "jo" });
   });
 
   it("stops at whitespace and at 32 characters", () => {

@@ -99,19 +99,27 @@ export function sentBody(request: Awaited<ReturnType<typeof nextSave>>) {
 /**
  * Types into a note's body, then into its H1: the editor's last output is the one that renames it.
  *
- * The caret goes to the end of each block by clicking there. A press of End would ask the browser
- * for that, but Chromium here does not move a contenteditable's caret on a synthetic End (a
- * pre-existing no-op on main too), and a plain click lands mid-word on a long heading, so the
- * suffix was typed into the middle of the title.
+ * The caret is put at the end of each block through the DOM Selection API. A press of End does not
+ * move a contenteditable's caret in Chromium here, a plain click lands mid-word on a long heading,
+ * and a click at the box's right edge lands mid-text once the heading wraps.
  */
 export async function editBodyThenHeading(page: Page, surface: Locator) {
-  const clickAtEnd = async (block: Locator) => {
-    const box = (await block.boundingBox())!;
-    await page.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
+  const caretAtEnd = async (block: Locator) => {
+    await block.click();
+    await block.evaluate(element => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      range.collapse(false);
+      const selection = window.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+    });
+    // The editor reads the DOM selection on `selectionchange`, which fires after this task.
+    await page.evaluate(() => new Promise(requestAnimationFrame));
   };
-  await clickAtEnd(surface.locator("p"));
+  await caretAtEnd(surface.locator("p"));
   await page.keyboard.type(" typed");
-  await clickAtEnd(surface.getByRole("heading", { level: 1 }));
+  await caretAtEnd(surface.getByRole("heading", { level: 1 }));
   await page.keyboard.type(" renamed");
 }
 

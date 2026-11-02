@@ -34,8 +34,8 @@ trigger and the start rule below remain.
 ### When the `@` list opens
 
 `mentionTrigger(text, caret)` returns the `@` token when the character before
-it is not `[A-Za-z0-9_@]` and the `@` is not inside a URL (the run of
-non-whitespace before it contains no `://`):
+it is not `[A-Za-z0-9_@]` and the `@` is not inside a link as `linkify` (which
+draws the comment) finds one:
 
 | Text before the caret | Opens? |
 | --- | --- |
@@ -49,6 +49,7 @@ non-whitespace before it contains no `://`):
 | `@Amy Chen` (space in the query) | no list; the token stops at whitespace |
 | `https://medium.com/@john` | no — the `@` is inside a URL; Enter there would otherwise replace part of the address with a name |
 | `https://x.test/ @jo` | yes — the URL ended at the space |
+| `https://x.test/a"@Ann` | yes — `linkify` ends a URL at `"` |
 | `A/@B` | yes — a slash alone is punctuation |
 
 The query is at most 32 code points; the list still waits for one non-empty
@@ -58,8 +59,10 @@ unchanged.
 
 ### One start rule in three places
 
-`startsMention(text, at)` in `src/modules/knowledge/domain/mention-text.ts`
-holds that rule, and it decides where a mention starts in:
+`mentionStarts(text)` in `src/modules/knowledge/domain/mention-text.ts` holds
+that rule. It runs `linkify` once per text, not once per `@`: a per-`@` scan of
+the text before it made one 3,000-character comment take about a second to
+split. It decides where a mention starts in:
 
 1. `mentionTrigger` — whether the list opens;
 2. `mentionedIds` (its `occurrences`) — whether a pick is still in the text when
@@ -86,7 +89,8 @@ any view.
 - Unit: `splitMentions` starts after CJK and punctuation and not after a
   letter, digit, `_` or `@`, nor inside a URL (`tests/unit/review-mention.test.ts`).
 - E2E (`tests/e2e/zz-review-mentions.spec.ts`): typing `請@groupAd` opens the
-  people list and inserts `@Phase3 groupAdmin`; after the owner revokes the
+  people list and inserts `@Phase3 groupAdmin`, and once sent the comment draws
+  it as a mention and the person has one unread mention entry; after the owner revokes the
   link, the mention is not unread and All activity shows "A shared
   discussion" / "This link is no longer available." with no link and none of
   the comment's words.

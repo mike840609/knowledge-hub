@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ReviewReplyForm, ReviewThreadList, reviewDraftKey } from "@/components/knowledge/review-thread-list";
+import { splitMentions } from "@/modules/knowledge/domain/mention-text";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -230,9 +231,11 @@ function popup() {
   return document.body.querySelector<HTMLElement>("[data-mention-card]");
 }
 
-// Review of #321: the reader splits the runs between links, so each run must know what came before it.
-test("a mention right after a link is judged as the server judges it", () => {
-  const body = "@陳小明 see https://x.test/a\"@陳小明";
+// Review of #321: the reader splits the runs between links; the run after one is judged as the
+// whole body is, so a mention right after a link that ended at a quote is drawn, as the server keeps it.
+test("a mention right after a link is drawn as the server draws it", () => {
+  const body = "see https://x.test/a\"@陳小明 and https://x.test/@陳小明";
+  expect(splitMentions(body, [ming]).filter(part => part.people).map(part => part.text)).toEqual(["@陳小明"]);
   renderList([thread("t1", [0], "Para zero.", body, [ming])], { writesEnabled: false });
   expect(mentionButtons()).toHaveLength(1);
   expect(mentionButtons()[0].closest("p")?.textContent).toBe(body);

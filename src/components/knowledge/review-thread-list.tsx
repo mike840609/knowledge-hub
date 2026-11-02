@@ -307,18 +307,12 @@ function CommentBody({ body, compact, onClamped, mentions }: { body: string; com
     observer.observe(element);
     return () => observer.disconnect();
   }, [compact, body, onClamped]);
-  let offset = 0;
   return <p ref={ref} className={`whitespace-pre-wrap break-words ${compact ? "line-clamp-2" : ""}`}>
-    {linkify(body).map((part, index) => {
-      // A run is split knowing the text before it, so a mention right after a link is judged as the server judges it.
-      const before = body.slice(0, offset);
-      offset += part.text.length;
-      return part.href
-        ? <a key={index} href={part.href} target="_blank" rel="noopener noreferrer" className="font-medium text-kh-link underline decoration-kh-link underline-offset-2 kh-focus-ring" onClick={event => event.stopPropagation()}>{part.text}</a>
-        : splitMentions(part.text, mentions ?? [], before).map((piece, at) => piece.people
-          ? <MentionCard key={`${index}-${at}`} text={piece.text} people={piece.people} />
-          : piece.text);
-    })}
+    {linkify(body).map((part, index) => part.href
+      ? <a key={index} href={part.href} target="_blank" rel="noopener noreferrer" className="font-medium text-kh-link underline decoration-kh-link underline-offset-2 kh-focus-ring" onClick={event => event.stopPropagation()}>{part.text}</a>
+      : splitMentions(part.text, mentions ?? []).map((piece, at) => piece.people
+        ? <MentionCard key={`${index}-${at}`} text={piece.text} people={piece.people} />
+        : piece.text))}
   </p>;
 }
 
