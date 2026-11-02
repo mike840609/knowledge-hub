@@ -70,7 +70,7 @@ Explore links between documents, find a note, and filter the graph by source or 
 | Search and retrieval | Workspace search with source, path and date filters; quick search and recent documents in the `⌘K` / `Ctrl+K` palette; saved searches |
 | Knowledge links | `[[wikilinks]]`, relative `.md` links, backlinks, and workspace and local graphs |
 | Discussions | Owner discussions beside the passage, comments on shared pages, replies, resolve and hide, unread notifications, and followed discussions |
-| Sharing | Anonymous read-only My Space document links with expiry and revocation; recipient-owned saved shares; owner moderation |
+| Sharing | Anonymous read-only My Space document links with expiry and revocation; permanent links named for chosen signed-in people; recipient-owned saved shares; owner moderation |
 | Export | Individual Markdown downloads and a My Space ZIP with directory structure and a stable ID/path manifest |
 | Agent context | Copy for Agent and workspace-scoped read/context APIs that follow the application's access rules, including discussions |
 | Team workspaces (opt-in) | Workspace administration, membership, roles and capabilities, external group mapping, and audit records |
@@ -350,6 +350,7 @@ These documents define the core contracts and their implementation plans. Later 
 | Review anchors and owner threads | [Spec](docs/superpowers/specs/2026-10-13-review-anchors-and-owner-threads-design.md) | — | Comments on table cells and code; a selection that cannot take one says why; the owner starts a discussion; a callout, task list or footnote no longer disables commenting. |
 | Saved shares | [Spec](docs/superpowers/specs/2026-10-12-saved-shares-design.md) | [Plan](docs/superpowers/plans/2026-10-12-saved-shares.md) | Account-backed recipient bookmarks, separate from favorites; access remains controlled by the original link. |
 | Folder share link | [Spec](docs/superpowers/specs/2026-10-29-folder-share-link-design.md) | [Plan](docs/superpowers/plans/2026-10-29-folder-share-link.md) | One expiring, revocable link to a My Space folder's live subtree: a tree beside the reader, in-folder links followed, the rest left as text; comments, saving and the owner's Inbox work as for a document link. |
+| Named-recipient share | [Spec](docs/superpowers/specs/2026-11-03-named-recipient-share-design.md) | — | A share link with a named audience: it opens only for the signed-in people its owner lists, is read in the Hub rather than on `/s/:token`, never expires, and grants nothing beyond a link. |
 | Followed discussions | [Spec](docs/superpowers/specs/2026-10-23-followed-discussions-tab-design.md) | [Plan](docs/superpowers/plans/2026-10-23-followed-discussions-tab.md) | Shares → Discussions lists the discussions a reader follows; a reader drops their own follow without a live link. |
 | Reader callouts | [Spec](docs/superpowers/specs/2026-10-12-reader-callouts-design.md) | — | `> [!NOTE]` and GitHub's four other kinds drawn as callouts in the reader and on shared pages; the stored Markdown is unchanged. |
 | Reader HTML subset | [Spec](docs/superpowers/specs/2026-10-12-reader-html-subset-design.md) | — | Seven bare HTML tags drawn in the reader and on shared pages; everything else stays text, and no HTML is ever passed through. |

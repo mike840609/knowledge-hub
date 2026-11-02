@@ -1,7 +1,7 @@
 import { expect, test } from "./fixtures/test";
 import { phase3Origin, phase3UnconfiguredOrigin, phase3UserId } from "./fixtures/phase3-identities";
-import { createReviewDocument } from "./fixtures/document-review";
-import type { APIRequestContext } from "@playwright/test";
+import { createReviewDocument, openReviewDiscussions } from "./fixtures/document-review";
+import type { APIRequestContext, Locator, Page } from "@playwright/test";
 
 /**
  * Named-recipient share spec, "Where a NAMED share is read". The company Gateway sends no identity to
@@ -30,6 +30,136 @@ async function namedShare(request: APIRequestContext) {
   expect(link.audience).toBe("NAMED");
   return { doc, path: link.path, token: link.path.slice("/s/".length), recipientOrigin, recipientWorkspace };
 }
+
+const A = "nonCreator", B = "viewer";
+const PASSAGE = { schemaVersion: 1, blockPath: [0], blockKind: "paragraph", startUtf16: 2, endUtf16: 9, exact: "😀 bold", prefix: "A ", suffix: " passage to review." };
+
+async function apiDocument(request: APIRequestContext, owner: string, workspaceId: string, title: string, markdown: string, parentId: string | null = null) {
+  const response = await request.post(`${owner}/api/workspaces/${workspaceId}/documents`, { data: { title, markdown, parentId } });
+  expect(response.status()).toBe(201);
+  return (await response.json()) as { documentId: string; sourceId: string };
+}
+
+/** Pick a person in a recipient combobox by typing their employee ID, which finds exactly one. */
+async function pickRecipient(scope: Locator, empId: string, name: string) {
+  const field = scope.getByRole("combobox", { name: "People who can open it" });
+  await field.fill(empId);
+  await scope.getByRole("option", { name: new RegExp(empId) }).click();
+  await expect(scope.getByRole("list", { name: "Selected people" }).getByText(name, { exact: true })).toBeVisible();
+}
+
+async function openNamedTab(page: Page) {
+  await page.locator("main").getByRole("button", { name: "Share link…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Share link" });
+  await dialog.getByRole("tab", { name: "指定人員（永久）" }).click();
+  return dialog;
+}
+
+test.describe("named-recipient share, end to end", () => {
+  test("the owner names two people; one reads and comments, mentions reach only the other, and removal ends it", async ({ page, request }) => {
+    test.setTimeout(90_000);
+    const owner = phase3Origin("reviewOwner"), reader = phase3Origin(A);
+    const readerWorkspace = await personalWorkspace(request, reader);
+    await personalWorkspace(request, phase3Origin(B)); // provisions B, who must exist to be named
+    const ownerWorkspace = await personalWorkspace(request, owner);
+    const title = `Named flow ${Date.now()}`;
+    const doc = await apiDocument(request, owner, ownerWorkspace, title, "A 😀 **bold** passage to review.");
+
+    // The owner creates it through the dialog.
+    await page.goto(`${owner}/w/${ownerWorkspace}/knowledge/${doc.sourceId}/${doc.documentId}`);
+    const dialog = await openNamedTab(page);
+    await pickRecipient(dialog, "P3-102", "Phase3 nonCreator");
+    await pickRecipient(dialog, "P3-105", "Phase3 viewer");
+    await dialog.getByLabel(/Label/).fill("named flow");
+    await dialog.getByRole("button", { name: "Create link" }).click();
+    const item = dialog.locator("[data-share-link]").first();
+    await expect(item).toContainText("2 people", ROUND_TRIP);
+    const token = (await item.getAttribute("data-share-link"))!.slice("/s/".length);
+    expect(token).toMatch(/^[0-9a-f-]{36}$/);
+    await expect(item.getByRole("textbox", { name: "Link for named flow" })).toHaveValue(`${owner}/s/${token}/open`);
+
+    // A's Inbox says so, and the entry opens the share in the Hub.
+    await page.goto(`${reader}/w/${readerWorkspace}/inbox`);
+    const line = page.getByText(`Phase3 reviewOwner shared 《${title}》 with you`, { exact: true });
+    await expect(line).toBeVisible(ROUND_TRIP);
+    const hubUrl = `${reader}/w/${readerWorkspace}/shares/${token}`;
+    await page.goto(`${reader}/s/${token}/open`);
+    await expect(page).toHaveURL(hubUrl, ROUND_TRIP);
+    await expect(page.getByText("passage to review.")).toBeVisible(ROUND_TRIP);
+
+    // A comments; the mention list offers B only (not A, not the owner, not anyone else in the directory).
+    const query = await (await request.post(`${reader}/api/share-review/threads/query`, { headers: { Origin: reader }, data: { token } })).json();
+    const created = await request.post(`${reader}/api/share-review/threads`, { headers: { Origin: reader }, data: { token, expectedRevisionId: query.revisionId, anchor: PASSAGE, body: "Reader remark", idempotencyKey: crypto.randomUUID() } });
+    expect(created.status()).toBe(201);
+    const offered = await (await request.get(`${reader}/api/review-mentions/candidates?token=${token}&query=Phase3`)).json();
+    expect(offered.candidates.map((person: { id: string }) => person.id)).toEqual([phase3UserId(B)]);
+    const everyone = await (await request.get(`${reader}/api/review-mentions/candidates?token=${token}&query=P3-`)).json();
+    expect(everyone.candidates.map((person: { id: string }) => person.id)).toEqual([phase3UserId(B)]);
+
+    // The owner comes back to the dialog and removes A.
+    await page.goto(`${owner}/w/${ownerWorkspace}/knowledge/${doc.sourceId}/${doc.documentId}`);
+    await page.locator("main").getByRole("button", { name: "Share link…" }).click();
+    const manage = page.getByRole("dialog", { name: "Share link" }).locator(`[data-share-link="/s/${token}"]`);
+    await manage.getByRole("button", { name: "Manage people" }).click();
+    await manage.getByRole("button", { name: "Remove Phase3 nonCreator from this link" }).click();
+    await expect(manage).toContainText("1 person", ROUND_TRIP);
+    await expect(manage.getByRole("list", { name: "People who can open this link" }).getByText(/Phase3 nonCreator/)).toHaveCount(0);
+
+    // A's reload is the dead link's 404, the Inbox entry is gone, and the owner still reads A's comment.
+    const gone = await request.get(hubUrl, { maxRedirects: 0 });
+    expect(gone.status()).toBe(404);
+    await page.goto(`${reader}/w/${readerWorkspace}/inbox`);
+    await expect(page.getByRole("heading", { name: "Inbox", level: 1 })).toBeVisible(ROUND_TRIP);
+    await expect(page.getByText(`shared 《${title}》 with you`)).toHaveCount(0);
+    await page.goto(`${owner}/w/${ownerWorkspace}/knowledge/${doc.sourceId}/${doc.documentId}`);
+    await openReviewDiscussions(page);
+    await expect(page.getByRole("region", { name: "Discussion thread" }).filter({ hasText: "Reader remark" })).toBeVisible(ROUND_TRIP);
+  });
+
+  test("a named share on a folder is read in the Hub and its links stay under /w/<ws>/shares/<token>", async ({ page, request }) => {
+    const owner = phase3Origin("reviewOwner"), reader = phase3Origin(A);
+    const readerWorkspace = await personalWorkspace(request, reader);
+    const ownerWorkspace = await personalWorkspace(request, owner);
+    const stamp = Date.now();
+    const names = { folder: `Named F ${stamp}`, intro: `Named Intro ${stamp}`, deep: `Named Deep ${stamp}` };
+    const folder = await request.post(`${owner}/api/workspaces/${ownerWorkspace}/folders`, { data: { name: names.folder, parentId: null } });
+    expect(folder.status()).toBe(201);
+    const folderId = ((await folder.json()) as { treeNodeId: string }).treeNodeId;
+    const deep = await apiDocument(request, owner, ownerWorkspace, names.deep, "Deep body.", folderId);
+    const intro = await apiDocument(request, owner, ownerWorkspace, names.intro, `Intro body with [[${names.deep}]] inside.`, folderId);
+    const created = await request.post(`${owner}/api/tree-nodes/${folderId}/share-links`, { data: { recipients: [phase3UserId(A)] } });
+    expect(created.status()).toBe(201);
+    const link = (await created.json()).link as { path: string; audience: string };
+    expect(link.audience).toBe("NAMED");
+    const token = link.path.slice("/s/".length);
+    const base = `/w/${readerWorkspace}/shares/${token}`;
+
+    await page.goto(`${reader}${link.path}/open?d=${intro.documentId}`);
+    await expect(page).toHaveURL(`${reader}${base}?d=${intro.documentId}`, ROUND_TRIP);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(names.intro, ROUND_TRIP);
+    const inFolder = page.locator("article").first().getByRole("link", { name: names.deep, exact: true });
+    await expect(inFolder).toHaveAttribute("href", `${base}?d=${deep.documentId}`);
+    await inFolder.click();
+    await expect(page).toHaveURL(`${reader}${base}?d=${deep.documentId}`, ROUND_TRIP);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(names.deep);
+    expect(new URL(page.url()).pathname.startsWith("/s/")).toBe(false);
+  });
+
+  test("Escape in the recipient list closes the list, not the dialog", async ({ page, request }) => {
+    const owner = phase3Origin("reviewOwner");
+    const ownerWorkspace = await personalWorkspace(request, owner);
+    await personalWorkspace(request, phase3Origin(A));
+    const doc = await apiDocument(request, owner, ownerWorkspace, `Escape ${Date.now()}`, "Body.");
+    await page.goto(`${owner}/w/${ownerWorkspace}/knowledge/${doc.sourceId}/${doc.documentId}`);
+    const dialog = await openNamedTab(page);
+    await dialog.getByRole("combobox", { name: "People who can open it" }).fill("P3-102");
+    const list = dialog.getByRole("listbox", { name: "People matching your search" });
+    await expect(list).toBeVisible(ROUND_TRIP);
+    await page.keyboard.press("Escape");
+    await expect(list).toBeHidden();
+    await expect(dialog).toBeVisible();
+  });
+});
 
 test.describe("named-recipient share routing", () => {
   test("anonymous /s/<named> answers exactly as an unknown token, with the line into the Hub", async ({ request, playwright, browser }) => {

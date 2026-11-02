@@ -1,5 +1,7 @@
 # Folder share links: share a My Space folder, its subfolders and documents
 
+Amended by `2026-11-03-named-recipient-share-design.md`.
+
 ## Intent
 
 Today a share link carries exactly one document

@@ -235,3 +235,28 @@ MCP, Markdown edits or revision writes.
 - How the optional caller is resolved on `/s/*` without forcing sign-in.
 - Whether the Inbox entry is a new table or reuses an existing event table,
   provided it is judged per request.
+
+## Deviations recorded during planning and build
+
+Where the build differs from the text above, this section is the record.
+
+1. **A removed recipient's "shared with you" entry disappears.** Removing a
+   recipient deletes their row, so the Inbox and Shares entry is gone rather
+   than present and naming nothing. A link that is revoked or expired while the
+   person is still named does keep an entry that names nothing.
+2. **A dead LINK token on `/s/<token>/open` reaches sign-in before its 404** when
+   the visitor is not yet signed in. The route establishes the caller (needed
+   for NAMED) before it can answer 404, so LINK's judge-first order no longer
+   spares a signed-out visitor the sign-in step.
+3. **"Shared with you" on the Shares page is its own section**, above the saved
+   shares, not rows merged into that list. Its entries are not saved shares and
+   offer no Save or Remove.
+4. **Mentioning a non-recipient through a NAMED link is refused at write time**
+   (`MENTION_NOT_RECIPIENT`). The owner's mention-link offers
+   (`mentionLinksForOwner`) omit NAMED links when no mentioned ids are given,
+   since such a link cannot be judged without them.
+5. **List, add and remove on a revoked NAMED share answer not-found.** Removing
+   the last recipient is allowed; the share then opens only for its owner.
+6. **Shared views carry `linkId` only on NAMED reads.** It is used to mark the
+   recipient's Inbox entry read when the share is opened; LINK reads do not
+   carry it.

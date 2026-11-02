@@ -138,6 +138,13 @@ pass.
   a folder link hands over that link, which opens the whole folder; it is judged
   per document, and an owner may name the links that open the document now (its own or a folder's above it)
   (`docs/superpowers/specs/2026-10-29-review-mentions-design.md`, "Folder share links").
+  A share link has an **audience**. `LINK` opens for anyone holding it; `NAMED`
+  opens only for a signed-in recipient its owner listed, or for the owner. A NAMED
+  link never expires, is never read caller-less (`/s/:token` answers it as a dead
+  link does), and is read in the Hub at `/w/<ws>/shares/:token`, reached through
+  `/s/:token/open`. It grants nothing beyond what a link grants, and a mention
+  through it reaches only its recipients
+  (`docs/superpowers/specs/2026-11-03-named-recipient-share-design.md`).
   Review access never grants Workspace membership, search, tree, history,
   MCP, Markdown edits or revision writes. Review responses include only
   validated current-revision selected-text fragments; hidden bodies and
