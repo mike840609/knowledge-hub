@@ -1,6 +1,6 @@
 import { WorkspaceAccessDeniedError, WorkspaceNotFoundError } from "@/modules/workspaces/domain/errors";
 import { NotFoundError, SourceNotFoundError } from "@/modules/knowledge/domain/errors";
-import type { KnowledgeRevision } from "@/modules/knowledge/domain/revision";
+import type { KnowledgeRevisionHead } from "@/modules/knowledge/domain/revision";
 import {
   planPublicationMoves,
   relativePublicationPath,
@@ -24,7 +24,8 @@ export type ReconcileState = "APPLIED" | "FROZEN" | "PENDING" | "SKIPPED";
 /** One eligible original with the placement its current state asks for. */
 type EligibleOriginal = {
   documentId: string;
-  revision: KnowledgeRevision;
+  /** No body: a copy reads the original's Markdown only when it must change. */
+  revision: KnowledgeRevisionHead;
   /** Publication-relative Folder Sync path; `null` for Hub-written documents and document publications. */
   teamPath: string | null;
   /** Personal-tree folder names for a `null` path, relative to the publication root. */
@@ -104,7 +105,7 @@ async function loadEligibleOriginals(
 
   const documentIds = documentNodes.map((node) => node.documentId as string);
   const chains = await repositories.tree.listChainsByDocumentIds(documentIds, folder.sourceId);
-  const revisions = await repositories.revisions.findByIds(
+  const revisions = await repositories.revisions.findHeadsByIds(
     documentNodes.map((node) => node.currentRevisionId as string),
   );
   const revisionById = new Map(revisions.map((revision) => [revision.id, revision]));

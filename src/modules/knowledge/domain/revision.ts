@@ -11,6 +11,12 @@ export type KnowledgeRevision = ContentInput & {
   createdAt: Date;
 };
 
+/** What a reconcile needs to decide whether a copy is stale, without the body. */
+export type KnowledgeRevisionHead = Pick<
+  KnowledgeRevision,
+  "id" | "documentId" | "title" | "contentHash" | "history"
+>;
+
 export type KnowledgeRevisionSummary = Pick<
   KnowledgeRevision,
   "id" | "revisionNo" | "createdAt" | "history"

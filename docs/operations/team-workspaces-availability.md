@@ -45,7 +45,7 @@ A personal save updates its Team copies in a drain that runs after the response.
 - Schedule `make db-catch-up-publications` (with `KM_TEAM_WORKSPACES_ENABLED=true`) on a recurring cron, for example hourly. It is idempotent, and it drains pending events and reconciles every contribution from current state.
 - Alert on a non-zero exit (`failed=<n>`), not on `pending`: `pending` contributors wait for their own next save by design.
 - An autosave draft is mirrored as a draft: the next copy replaces it instead of adding permanent team history. Checkpoint and manual saves become permanent team revisions. Readers still see a draft as soon as the creator's autosave drains; it is just never kept. The team therefore holds only the checkpoints that were current when a drain ran, not every named or windowed checkpoint of the original.
-- Known cost: each drain re-reads every original of the contributor's publication (all Markdown bodies) under the publication lock, so one autosave in a very large Folder Sync folder reloads the whole folder. Unchanged team copies are no longer re-read or rewritten. Reconciling only the changed document is a follow-up.
+- Cost: each drain still walks the contributor's whole published folder (its tree, entries and revision titles and hashes) under the publication lock, but reads Markdown only for originals whose copy must change. Unchanged copies are neither read nor rewritten.
 
 ## Publication event retention
 

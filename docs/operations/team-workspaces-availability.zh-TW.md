@@ -47,7 +47,7 @@ make db-catch-up-publications
 - 以週期性排程執行 `make db-catch-up-publications`（需 `KM_TEAM_WORKSPACES_ENABLED=true`），例如每小時一次。它是冪等的，會處理待消費事件，並從目前狀態 reconcile 每個 contribution。
 - 以非零結束碼（`failed=<n>`）告警，不要以 `pending` 告警：`pending` 的 contributor 依設計要等自己的下一次儲存。
 - 自動儲存的草稿在 Team 也是草稿：下一次複製會取代它，不會累積成永久的團隊歷史。checkpoint 與手動儲存才會成為永久的團隊修訂。讀者仍會在創作者的自動儲存被 drain 之後立刻看到草稿，只是它不會被保留；因此團隊只會保留 drain 執行當下是最新版的 checkpoint，而不是原稿每一個具名或視窗 checkpoint。
-- 已知成本：每次 drain 都會在 publication 鎖內重新讀取該 contributor 發佈範圍內所有原稿（含全部 Markdown 內文），因此在很大的 Folder Sync 資料夾裡存一次自動儲存就會重讀整個資料夾。未變動的團隊副本不會再被重讀或重寫。只 reconcile 有變動的文件是後續工作。
+- 成本：每次 drain 仍會在 publication 鎖內走訪該 contributor 整個發佈資料夾（樹、entry、revision 的標題與雜湊），但只有副本需要更新的原稿才會讀取 Markdown 內文。未變動的副本不會被讀取或重寫。
 
 ## Publication 事件保留
 

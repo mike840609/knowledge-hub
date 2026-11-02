@@ -16,7 +16,7 @@ import { fingerprintRevisionContent } from "@/modules/knowledge/domain/content";
 import { isRevisionContentUnchanged as unchangedRevision } from "@/modules/knowledge/domain/revision";
 import { normalizeFolderName, orderSiblingsByPosition } from "@/modules/knowledge/domain/tree-rules";
 import { placeNodeAtIndex, renumberSiblingPositions } from "@/modules/knowledge/application/internal/tree-transaction";
-import type { KnowledgeRevision } from "@/modules/knowledge/domain/revision";
+import type { KnowledgeRevisionHead } from "@/modules/knowledge/domain/revision";
 import type { TreeViewNode } from "@/modules/knowledge/ports/tree-repository";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import type {
@@ -41,8 +41,11 @@ export interface PublicationProjection {
     nodeName: string;
     sourcePath: string | null;
   }): Promise<{ documentId: string; treeNodeId: string }>;
-  /** `original` is the caller's already-read current revision; omit it to read it here. */
-  refresh(teamDocumentId: string, originalDocumentId: string, original?: KnowledgeRevision): Promise<{ changed: boolean }>;
+  /**
+   * `original` is the caller's already-read head of the current revision; the
+   * body is read only when the copy must change. Omit it to read it here.
+   */
+  refresh(teamDocumentId: string, originalDocumentId: string, original?: KnowledgeRevisionHead): Promise<{ changed: boolean }>;
   place(input: { teamDocumentId: string; parentId: string | null; nodeName: string }): Promise<void>;
   setDocumentStatus(teamDocumentId: string, status: "ACTIVE" | "ARCHIVED"): Promise<void>;
   ensureFolder(parentId: string | null, name: string): Promise<string>;
@@ -414,12 +417,14 @@ export async function bindPublicationProjection(
       requireSameSource(stored);
 
       const creator = creatorContributionOf(teamDocument);
-      const original = knownOriginal ?? await currentRevision(originalDocumentId);
+      const read = knownOriginal ? null : await currentRevision(originalDocumentId);
+      const head = knownOriginal ?? read!;
       // Same canonical content hashes alike, so a no-op refresh reads nothing more.
-      const sameHash = teamDocument.currentContentHash != null && teamDocument.currentContentHash === original.contentHash;
-      if (sameHash && !(teamDocument.currentIsDraft && original.history?.state !== "WORKING")) {
+      const sameHash = teamDocument.currentContentHash != null && teamDocument.currentContentHash === head.contentHash;
+      if (sameHash && !(teamDocument.currentIsDraft && head.history?.state !== "WORKING")) {
         return { changed: false };
       }
+      const original = read ?? await currentRevision(originalDocumentId);
       const teamCurrent = await currentRevision(teamDocumentId);
       if (sameHash || unchangedRevision(teamCurrent, {
         title: original.title,

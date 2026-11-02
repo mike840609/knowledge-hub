@@ -1543,6 +1543,7 @@ describe("publication drain cost and recovery", () => {
 
     let listings = 0;
     let currentReads = 0;
+    let bodyReads = 0;
     const counting: SourceUnitOfWork = {
       async run<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
         return fixture.uow.run(async (repositories) => {
@@ -1558,6 +1559,9 @@ describe("publication drain cost and recovery", () => {
             get(target, property, receiver) {
               if (property === "findCurrent") {
                 return async (id: string) => { currentReads += 1; return target.findCurrent(id); };
+              }
+              if (property === "findByIds") {
+                return async (ids: readonly string[]) => { bodyReads += 1; return target.findByIds(ids); };
               }
               return Reflect.get(target, property, receiver);
             },
@@ -1579,6 +1583,8 @@ describe("publication drain cost and recovery", () => {
     expect(summary.applied).toBeGreaterThanOrEqual(1);
     expect(listings).toBe(1);
     expect(currentReads).toBe(0);
+    // The originals are judged by their revision heads; no Markdown is loaded.
+    expect(bodyReads).toBe(0);
   });
 });
 
@@ -1738,5 +1744,58 @@ describe("publication drain follows ordinary use", () => {
     } finally {
       connection.release();
     }
+  });
+});
+
+describe("publication drain reads bodies only for what changed", () => {
+  it("reads one original's Markdown when one of several published documents changes", async () => {
+    const hub = new HubKnowledgeCommandServiceImpl(fixture.uow);
+    const folder = await hub.createFolder(fixture.mike, { sourceId: fixture.mikeHubSourceId, parentId: null, name: `bodies-${uuidv7()}` });
+    const created: { documentId: string; revisionId: string }[] = [];
+    for (const name of ["One", "Two", "Three"]) {
+      created.push(await hub.createDocument(fixture.mike, {
+        sourceId: fixture.mikeHubSourceId, parentId: folder.treeNodeId, title: name, markdown: `# ${name}\n\nv0\n`, metadata: {},
+      }));
+    }
+    const publication = await publishFolder(fixture.mike, fixture.teamWorkspaceId, `Bodies ${uuidv7()}`, folder.treeNodeId);
+    await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+    await hub.createRevision(fixture.mike, {
+      documentId: created[0].documentId, expectedCurrentRevisionId: created[0].revisionId,
+      title: "One", markdown: "# One\n\nv1\n", metadata: {},
+    });
+
+    const read: string[] = [];
+    const counting: SourceUnitOfWork = {
+      async run<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
+        return fixture.uow.run(async (repositories) => {
+          const revisions = new Proxy(repositories.revisions, {
+            get(target, property, receiver) {
+              if (property === "findCurrent") {
+                return async (id: string) => { read.push(id); return target.findCurrent(id); };
+              }
+              if (property === "findByIds") {
+                return async (ids: readonly string[]) => { read.push(...ids); return target.findByIds(ids); };
+              }
+              return Reflect.get(target, property, receiver);
+            },
+          });
+          return work(new Proxy(repositories, {
+            get(target, property, receiver) {
+              return property === "revisions" ? revisions : Reflect.get(target, property, receiver);
+            },
+          }));
+        });
+      },
+      runWithCreatorQuotaLock: (creatorId, timeoutSeconds, work) =>
+        fixture.uow.runWithCreatorQuotaLock(creatorId, timeoutSeconds, work),
+    };
+    await drainPublicationEvents(counting, { judge: { kind: "CALLER", caller: fixture.mike } });
+
+    const copies = await publicationDocuments(publication.publication.id);
+    const changedCopy = copies.find((copy) => copy.currentOriginalDocumentId === created[0].documentId);
+    // The changed original and its copy only; the two unchanged ones are never read.
+    expect(new Set(read)).toEqual(new Set([created[0].documentId, changedCopy?.teamDocumentId]));
+    expect((await fixture.uow.run((repositories) =>
+      repositories.revisions.findCurrent(changedCopy!.teamDocumentId)))?.markdown).toContain("v1");
   });
 });

@@ -1,4 +1,4 @@
-import type { KnowledgeRevision, KnowledgeRevisionSummary } from "@/modules/knowledge/domain/revision";
+import type { KnowledgeRevision, KnowledgeRevisionHead, KnowledgeRevisionSummary } from "@/modules/knowledge/domain/revision";
 import type { RevisionRepository } from "@/modules/knowledge/ports/revision-repository";
 import type { QueryConnection, DbRow } from "./shared";
 import { asDate, asJsonObject, asNumber, insertBatches, valueRows } from "./shared";
@@ -9,6 +9,17 @@ function mapRevision(row: DbRow): KnowledgeRevision {
     id: String(row.id), documentId: String(row.document_id), revisionNo: asNumber(row.revision_no, "revision number"),
     title: String(row.title), markdown: String(row.markdown), metadata: asJsonObject(row.metadata, "metadata") as KnowledgeRevision["metadata"],
     contentHash: String(row.content_hash), createdBy: String(row.created_by), createdAt: asDate(row.created_at),
+  };
+}
+
+function mapHistory(row: DbRow): KnowledgeRevision["history"] {
+  return { state: row.history_state === "WORKING" ? "WORKING" : "CHECKPOINT", activityId: row.history_activity_id ? String(row.history_activity_id) : null, windowStartedAt: row.history_window_started_at ? asDate(row.history_window_started_at) : null, name: row.version_name ? String(row.version_name) : null, reason: String(row.history_reason ?? "LEGACY") };
+}
+
+function mapRevisionHead(row: DbRow): KnowledgeRevisionHead {
+  return {
+    history: mapHistory(row),
+    id: String(row.id), documentId: String(row.document_id), title: String(row.title), contentHash: String(row.content_hash),
   };
 }
 
@@ -89,6 +100,21 @@ export class MariaDbRevisionRepository implements RevisionRepository {
       revisions.push(...rows.map(mapRevision));
     }
     return revisions;
+  }
+
+  async findHeadsByIds(ids: readonly string[]): Promise<KnowledgeRevisionHead[]> {
+    const heads: KnowledgeRevisionHead[] = [];
+    for (let start = 0; start < ids.length; start += REVISION_ID_CHUNK) {
+      const batch = ids.slice(start, start + REVISION_ID_CHUNK);
+      const rows = await this.connection.query<DbRow[]>(
+        `SELECT id, document_id, title, content_hash, history_state, history_activity_id,
+                history_window_started_at, version_name, history_reason
+         FROM knowledge_revisions WHERE id IN (${placeholders(batch.length)})`,
+        [...batch],
+      );
+      heads.push(...rows.map(mapRevisionHead));
+    }
+    return heads;
   }
 
   async findCurrent(documentId: string): Promise<KnowledgeRevision | null> {
