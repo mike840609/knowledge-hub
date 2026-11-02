@@ -13,8 +13,8 @@ import { Illustration } from "@/components/knowledge/illustration";
 import { SharesNavigation } from "./shares-navigation";
 import { applyAndSearch, LiveSearch } from "@/components/search/live-search-submit";
 import { navigateListRows } from "@/lib/list-row-navigation";
-import type { SavedShareList } from "@/modules/knowledge/domain/saved-share";
-export function SavedSharesView({ workspaceId,model,filterError,discussionsUnread=0 }: { workspaceId:string;model:SavedShareList;filterError?:string;discussionsUnread?:number }) {
+import type { NamedShareView, SavedShareList } from "@/modules/knowledge/domain/saved-share";
+export function SavedSharesView({ workspaceId,model,filterError,discussionsUnread=0,sharedWithYou=[] }: { workspaceId:string;model:SavedShareList;filterError?:string;discussionsUnread?:number;sharedWithYou?:NamedShareView[] }) {
   const router=useRouter(),pending=useRef(false);
   const [status,setStatus]=useState<string>(model.query.status);
   const filterForm=useRef<HTMLFormElement>(null);
@@ -36,6 +36,14 @@ export function SavedSharesView({ workspaceId,model,filterError,discussionsUnrea
   return <main className="kh-page pb-6">
     <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" description="Keep articles shared with you within reach. Saving a link does not extend its access or add it to your workspace favorites."/>
     <SharesNavigation workspaceId={workspaceId} active="saved" discussionsUnread={discussionsUnread}/>
+    {sharedWithYou.length>0&&<section aria-label="Shared with you" className="mt-4">
+      <h2 className="text-body font-medium text-kh-text">Shared with you</h2>
+      <p className="text-caption text-kh-text-muted">Articles whose sender named you. Nothing to save: they stay here while the link is open.</p>
+      <ul onKeyDown={navigateListRows} className="mt-2 space-y-2">{sharedWithYou.map(item=><li key={item.linkId} className="rounded-md border border-kh-border bg-kh-bg p-3 hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover">
+        <Link prefetch={false} data-list-row className="kh-focus-ring block truncate rounded-md text-body font-medium text-kh-text hover:text-kh-link" href={item.href}>{item.title}</Link>
+        <p className="truncate text-caption text-kh-text-muted">Shared by {item.sharedByName} · <Timestamp value={item.addedAt}/></p>
+      </li>)}</ul>
+    </section>}
     <form ref={filterForm} action={base} method="get" aria-label="Filter saved shares" className="mt-4 flex flex-wrap items-center gap-2">
       <Input type="hidden" name="tab" value="saved"/>
       <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-auto"><label className="sr-only" htmlFor="saved-shares-query">Find saved shares</label><Search size={15} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-kh-text-muted"/><Input id="saved-shares-query" name="q" defaultValue={model.query.q} placeholder="Find title or sharing person…" maxLength={200} className="kh-search-field"/></div>

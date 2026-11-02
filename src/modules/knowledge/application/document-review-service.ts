@@ -11,6 +11,7 @@ import { projectShareCommentNotification, EXCERPT_LIMIT, SHARED_PREFIX, type Sha
 import { orderFollowedDiscussions, summarizeFollowedThread, type FollowedDiscussionView } from "../domain/review-follow";
 import type { DocumentShareLink } from "../domain/document-share-link";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
+import { judgeNamedShares, namedShareTitle } from "./internal/named-share-judgement";
 import { audienceAdmits, documentReachesFolder, linkOpens, openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
 
 function fail(code:string, message:string):never { throw new DomainError(code,message); }
@@ -66,7 +67,7 @@ export class DocumentReviewService {
         ...await this.notificationViews(r, await r.shareCommentEvents.listUnreadByRecipient(caller.identity.id)),
         ...(await this.followViews(r, caller.identity.id)).filter(view => view.readAt === null),
         ...(await this.mentionViews(r, await this.unreadMentions(r, caller.identity.id), caller.identity.id)).filter(view => view.readAt === null),
-        ...await this.sharedViews(r, caller.identity.id, true),
+        ...await this.sharedViews(r, caller, true),
       ]),
     }));
   }
@@ -93,7 +94,7 @@ export class DocumentReviewService {
       // Follows and mentions are not paged: at most FOLLOW_LIMIT each, all on the first page (specs 2026-10-22, 2026-10-29, deviation).
       const follows = before ? [] : await this.followViews(r, caller.identity.id);
       const mentions = before ? [] : await this.mentionViews(r, await r.reviewMentions.listRecentByRecipient(caller.identity.id, FOLLOW_LIMIT), caller.identity.id);
-      const named = before ? [] : await this.sharedViews(r, caller.identity.id, false);
+      const named = before ? [] : await this.sharedViews(r, caller, false);
       return {
         notifications: newestFirst([...await this.notificationViews(r, page), ...follows, ...mentions, ...named]),
         nextCursor: events.length > size && page.length
@@ -373,38 +374,20 @@ export class DocumentReviewService {
     }
     return views;
   }
-  /**
-   * The shares that name the caller (at most FOLLOW_LIMIT, newest first), each judged now: `target` is what the link opens
-   * for this viewer, or null for every refusal (revoked, archived, moved out of reach, not named). A removed recipient has no row.
-   * ponytail: a few reads per share, bounded by FOLLOW_LIMIT; paging once readers are named more.
-   */
-  private async judgedShares(r: KnowledgeRepositories, userId: string) {
-    const judged = [];
-    for (const { link, addedAt, readAt } of await r.shareLinks.listForRecipient(userId, FOLLOW_LIMIT)) {
-      judged.push({ link, addedAt, readAt, target: await this.openSharedTarget(r, link, userId) });
-    }
-    return judged;
-  }
-  /** What a named link opens for this viewer now: its document, or its folder's name. */
-  private async openSharedTarget(r: KnowledgeRepositories, link: DocumentShareLink, userId: string): Promise<{ documentId: string } | { folderName: string } | null> {
-    if (link.target.kind === "DOCUMENT") {
-      const document = await r.documents.findById(link.target.documentId);
-      return document && await openShareLinkTarget(r, link, document, this.clock(), userId) ? { documentId: document.id } : null;
-    }
-    const folder = await r.tree.findById(link.target.folderNodeId);
-    return folder?.nodeType === "FOLDER" && await openShareLinkTarget(r, link, folder, this.clock(), userId) ? { folderName: folder.name ?? "" } : null;
+  /** The caller's named shares, each judged now (see `judgeNamedShares`). A removed recipient has no row. */
+  private judgedShares(r: KnowledgeRepositories, userId: string) {
+    return judgeNamedShares(r, userId, FOLLOW_LIMIT, this.clock());
   }
   /** Named shares as Inbox entries. One that no longer opens names nothing and is never unread; `unreadOnly` leaves out read ones. */
-  private async sharedViews(r: KnowledgeRepositories, userId: string, unreadOnly: boolean): Promise<ShareCommentNotificationView[]> {
+  private async sharedViews(r: KnowledgeRepositories, caller: CallerContext, unreadOnly: boolean): Promise<ShareCommentNotificationView[]> {
     const views: ShareCommentNotificationView[] = [];
-    const personal = await r.workspaces.findPersonalByOwnerUserId(userId);
-    for (const { link, addedAt, readAt, target } of await this.judgedShares(r, userId)) {
+    const personal = await r.workspaces.findPersonalByOwnerUserId(caller.identity.id);
+    for (const { link, addedAt, readAt, target } of await this.judgedShares(r, caller.identity.id)) {
       if (unreadOnly && !(target && readAt === null)) continue;
       const base = { id: `${SHARED_PREFIX}${link.id}`, workspaceId: "", documentId: "", sourceId: "", threadId: "", commentId: "", excerpt: "", createdAt: addedAt, threadStatus: "OPEN" as const, kind: "SHARED_WITH_YOU" as const };
       if (!target) { views.push({ ...base, documentTitle: "", authorName: undefined, readAt: addedAt, linkAvailable: false }); continue; }
-      const title = "documentId" in target ? (await r.revisions.findCurrent(target.documentId))?.title ?? "" : target.folderName;
       views.push({
-        ...base, documentTitle: title, authorName: (await r.users.findById(link.createdBy))?.name, readAt, linkAvailable: true,
+        ...base, documentTitle: await namedShareTitle(r, caller, target), authorName: (await r.users.findById(link.createdBy))?.name, readAt, linkAvailable: true,
         ...(personal ? { href: `/w/${personal.id}/shares/${link.token}` } : {}),
       });
     }

@@ -30,7 +30,8 @@ export default async function SharesPage({ params, searchParams }: { params: Pro
     }
     if(tab==="saved") {
       const model=await s.savedShares.list(caller,workspaceId,input);
-      return <SavedSharesView key={JSON.stringify(model.query)} workspaceId={workspaceId} model={model} discussionsUnread={discussionsUnread}/>;
+      const sharedWithYou=await s.savedShares.listNamedForRecipient(caller,workspaceId);
+      return <SavedSharesView key={JSON.stringify(model.query)} workspaceId={workspaceId} model={model} discussionsUnread={discussionsUnread} sharedWithYou={sharedWithYou}/>;
     }
     const model=await s.shares.listManagement(caller,workspaceId,input);
     const hasDocuments=model.items.length>0||(await s.queries.listDocumentSummaries(caller,workspaceId,{includeArchived:true})).length>0;
