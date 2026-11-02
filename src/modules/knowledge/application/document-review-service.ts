@@ -247,7 +247,7 @@ export class DocumentReviewService {
       if (!link) { reachable.set(linkId, null); continue; }
       reachable.set(linkId, link.target.kind === "DOCUMENT"
         ? (await this.linkValid(r, link, link.target.documentId) ? new Set([link.target.documentId]) : null)
-        : await this.folderLinkDocuments(r, link, [...documentIds]));
+        : await this.folderLinkDocuments(r, link, [...documentIds], userId));
     }
     const found = [];
     for (const follow of follows) {
@@ -351,11 +351,11 @@ export class DocumentReviewService {
    * membership are judged once; only the per-document chain is read in a batch, so a reader who
    * follows many discussions through one folder does not pay for the link once per document.
    */
-  private async folderLinkDocuments(r: KnowledgeRepositories, link: DocumentShareLink, documentIds: readonly string[]): Promise<ReadonlySet<string> | null> {
+  private async folderLinkDocuments(r: KnowledgeRepositories, link: DocumentShareLink, documentIds: readonly string[], viewerId: string | null): Promise<ReadonlySet<string> | null> {
     if (link.target.kind !== "FOLDER" || documentIds.length === 0) return null;
     const folder = await r.tree.findById(link.target.folderNodeId);
     if (!folder || folder.nodeType !== "FOLDER") return null;
-    if (!await openShareLinkTarget(r, link, folder, this.clock())) return null;
+    if (!await openShareLinkTarget(r, link, folder, this.clock(), viewerId)) return null;
     const documents = new Map((await r.documents.findByIds(documentIds)).map(document => [document.id, document]));
     const chains = await r.tree.listChainsByDocumentIds(documentIds, folder.sourceId);
     const reachable = new Set<string>();

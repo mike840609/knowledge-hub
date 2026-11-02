@@ -1,3 +1,4 @@
+import { isUuid } from "@/shared/ids/uuidv7";
 import type { WorkspaceRole } from "@/modules/workspaces/domain/workspace-membership";
 import {
   evaluateShareLinkValidity,
@@ -40,16 +41,37 @@ export function linkOpens(
 }
 
 /**
+ * Whether this viewer is among the link's audience (named-recipient share spec, "Authorization
+ * summary"). A LINK admits any holder of the token, signed in or not; a NAMED link admits only a
+ * signed-in recipient or the link's owner. Ids are compared lower-case. Whether the link opens at
+ * all is `linkOpens`; this is the other half, and a refusal here must look like any other.
+ */
+export async function audienceAdmits(
+  repositories: KnowledgeRepositories,
+  link: DocumentShareLink,
+  viewerId: string | null,
+): Promise<boolean> {
+  if (link.audience === "LINK") return true;
+  // A malformed id would make MariaDB's UUID column raise rather than match nothing.
+  if (viewerId === null || !isUuid(viewerId)) return false;
+  const viewer = viewerId.toLowerCase();
+  return viewer === link.createdBy.toLowerCase() || await repositories.shareLinks.isRecipient(link.id, viewer);
+}
+
+/**
  * The link's judgement with its own reads: its target (a document, or a folder node) resolved to
- * its Source and Workspace, and its creator's direct membership. Returns the target's Workspace id,
- * or null for every refusal — callers must not say which rule refused.
+ * its Source and Workspace, its creator's direct membership, and whether `viewerId` (null when no
+ * one is signed in) is in its audience. Returns the target's Workspace id, or null for every
+ * refusal — callers must not say which rule refused.
  */
 export async function openShareLinkTarget(
   repositories: KnowledgeRepositories,
   link: DocumentShareLink,
   target: { sourceId: string; status: LifecycleStatus },
   now: Date,
+  viewerId: string | null,
 ): Promise<{ workspaceId: string } | null> {
+  if (!await audienceAdmits(repositories, link, viewerId)) return null;
   const source = await repositories.sourcePolicy.findById(target.sourceId);
   if (!source) return null;
   const workspace = await repositories.workspaces.findById(source.workspaceId);

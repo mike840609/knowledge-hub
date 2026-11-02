@@ -259,13 +259,13 @@ describe("DocumentShareService.readShared on a folder link (folder share spec §
 
   it("names the Open destination in one narrow read, falling back to landing for an unreachable ?d=", async () => {
     const f = await sharedFolder();
-    expect(await service().readSharedTarget(f.token)).toEqual({ kind: "FOLDER", documentId: f.welcome.documentId });
-    expect(await service().readSharedTarget(f.token, { documentId: f.codeReview.documentId })).toEqual({ kind: "FOLDER", documentId: f.codeReview.documentId });
+    expect(await service().readSharedTarget(f.token)).toEqual({ kind: "FOLDER", documentId: f.welcome.documentId, audience: "LINK" });
+    expect(await service().readSharedTarget(f.token, { documentId: f.codeReview.documentId })).toEqual({ kind: "FOLDER", documentId: f.codeReview.documentId, audience: "LINK" });
     // Open falls back; the page itself never does (readShared still refuses it above).
-    expect(await service().readSharedTarget(f.token, { documentId: f.outside.documentId })).toEqual({ kind: "FOLDER", documentId: f.welcome.documentId });
+    expect(await service().readSharedTarget(f.token, { documentId: f.outside.documentId })).toEqual({ kind: "FOLDER", documentId: f.welcome.documentId, audience: "LINK" });
     const documentLink = await service().create(f.caller, { documentId: f.welcome.documentId });
     const documentToken = tokenOf(documentLink.path);
-    expect(await service().readSharedTarget(documentToken)).toEqual({ kind: "DOCUMENT", documentId: f.welcome.documentId });
+    expect(await service().readSharedTarget(documentToken)).toEqual({ kind: "DOCUMENT", documentId: f.welcome.documentId, audience: "LINK" });
     await expect(service().readSharedTarget(documentToken, { documentId: f.codeReview.documentId })).rejects.toMatchObject(notFound);
 
     // Open reads the destination, not the document: no revision, Markdown, creator or link catalog.
@@ -285,9 +285,9 @@ describe("DocumentShareService.readShared on a folder link (folder share spec §
     const token = tokenOf((await service().createForFolder(space.caller, { folderNodeId })).path);
     await space.hub.moveTreeNode(space.caller, { nodeId: only.treeNodeId, newParentId: null, newPosition: 0 });
     await expect(service().readShared(token)).resolves.toEqual({
-      kind: "FOLDER", folderName: "Empty", tree: [], document: null, sharedByName: "Empty Folder Owner", expiresAt: expect.any(Date),
+      kind: "FOLDER", folderName: "Empty", tree: [], document: null, sharedByName: "Empty Folder Owner", expiresAt: expect.any(Date), audience: "LINK",
     });
-    await expect(service().readSharedTarget(token)).resolves.toEqual({ kind: "FOLDER", documentId: null });
+    await expect(service().readSharedTarget(token)).resolves.toEqual({ kind: "FOLDER", documentId: null, audience: "LINK" });
   });
 
   it.each([

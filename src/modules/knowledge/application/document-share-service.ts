@@ -10,6 +10,7 @@ import {
   shareLinkPath,
   ShareLinkNotFoundError,
   type DocumentShareLink,
+  type ShareAudience,
   type ShareLinkTarget,
 } from "../domain/document-share-link";
 import { extractDocumentLinks } from "../domain/document-links";
@@ -68,7 +69,7 @@ export type SharedFolderDocument = SharedDocumentView & {
 };
 
 /** Where `/s/:token/open` sends the caller: the named document when reachable, else the landing one. */
-export type SharedTargetView = { kind: "DOCUMENT"; documentId: string } | { kind: "FOLDER"; documentId: string | null };
+export type SharedTargetView = ({ kind: "DOCUMENT"; documentId: string } | { kind: "FOLDER"; documentId: string | null }) & { audience: ShareAudience };
 
 export type SharedFolderView = {
   kind: "FOLDER";
@@ -81,7 +82,7 @@ export type SharedFolderView = {
   expiresAt: Date | null;
 };
 
-export type SharedView = ({ kind: "DOCUMENT" } & SharedDocumentView) | SharedFolderView;
+export type SharedView = (({ kind: "DOCUMENT" } & SharedDocumentView) | SharedFolderView) & { audience: ShareAudience };
 
 export const SHARE_LINK_CREATED_EVENT = "DOCUMENT_SHARE_LINK_CREATED";
 export const SHARE_LINK_REVOKED_EVENT = "DOCUMENT_SHARE_LINK_REVOKED";
@@ -285,8 +286,12 @@ export class DocumentShareService {
    * `documentId` is navigation inside a folder link (folder share spec §3):
    * it is re-judged against the folder on every call, and a document link
    * refuses any.
+   *
+   * `viewerId` is the signed-in reader, or null. It is not a caller and grants
+   * nothing: a LINK ignores it, and a NAMED link opens only when it names a
+   * recipient or the owner (named-recipient share spec).
    */
-  async readShared(token: string, { documentId, recordView = true }: { documentId?: string; recordView?: boolean } = {}): Promise<SharedView> {
+  async readShared(token: string, { documentId, recordView = true, viewerId = null }: { documentId?: string; recordView?: boolean; viewerId?: string | null } = {}): Promise<SharedView> {
     if (!isShareToken(token)) throw new ShareLinkNotFoundError();
     // A malformed id would make MariaDB's UUID column raise rather than match nothing.
     if (documentId !== undefined && !isUuid(documentId)) throw new ShareLinkNotFoundError();
@@ -294,17 +299,17 @@ export class DocumentShareService {
     const { linkId, view } = await this.unitOfWork.run(async (repositories): Promise<{ linkId: string; view: SharedView }> => {
       const link = await repositories.shareLinks.findByToken(token);
       if (!link) throw new ShareLinkNotFoundError();
-      if (link.target.kind === "FOLDER") return { linkId: link.id, view: await readSharedFolder(repositories, link, link.target.folderNodeId, documentId, now) };
+      if (link.target.kind === "FOLDER") return { linkId: link.id, view: await readSharedFolder(repositories, link, link.target.folderNodeId, documentId, now, viewerId) };
       if (documentId !== undefined) throw new ShareLinkNotFoundError();
       const document = await repositories.documents.findById(link.target.documentId);
       if (!document) throw new ShareLinkNotFoundError();
-      await requireOpenLink(repositories, link, document, now);
+      await requireOpenLink(repositories, link, document, now, viewerId);
       const revision = await repositories.revisions.findCurrent(document.id);
       if (!revision) throw new IntegrityViolationError("Document current revision is missing.");
       const creator = await requireCreator(repositories, link);
       return {
         linkId: link.id,
-        view: { kind: "DOCUMENT", revisionId: revision.id, title: revision.title, markdown: revision.markdown, pageIcon: document.pageIcon ?? null, sharedByName: creator.name, updatedAt: revision.createdAt, expiresAt: link.expiresAt },
+        view: { kind: "DOCUMENT", revisionId: revision.id, title: revision.title, markdown: revision.markdown, pageIcon: document.pageIcon ?? null, sharedByName: creator.name, updatedAt: revision.createdAt, expiresAt: link.expiresAt, audience: link.audience },
       };
     });
     if (!recordView) return view;
@@ -322,9 +327,9 @@ export class DocumentShareService {
    * The narrow judgement `/s/:token/open` needs: the link opens, and which document the Hub should
    * show. A document link opens its own document and refuses `?d=`; a folder link opens the named
    * document when it is still reachable, else the landing document (folder share spec §4). It reads
-   * no Markdown, creator or link catalog, and counts no view.
+   * no Markdown, creator or link catalog, and counts no view. `viewerId` is judged as readShared judges it.
    */
-  async readSharedTarget(token: string, { documentId }: { documentId?: string } = {}): Promise<SharedTargetView> {
+  async readSharedTarget(token: string, { documentId, viewerId = null }: { documentId?: string; viewerId?: string | null } = {}): Promise<SharedTargetView> {
     if (!isShareToken(token)) throw new ShareLinkNotFoundError();
     if (documentId !== undefined && !isUuid(documentId)) throw new ShareLinkNotFoundError();
     const now = this.clock();
@@ -335,35 +340,36 @@ export class DocumentShareService {
         if (documentId !== undefined) throw new ShareLinkNotFoundError();
         const document = await repositories.documents.findById(link.target.documentId);
         if (!document) throw new ShareLinkNotFoundError();
-        await requireOpenLink(repositories, link, document, now);
-        return { kind: "DOCUMENT", documentId: document.id };
+        await requireOpenLink(repositories, link, document, now, viewerId);
+        return { kind: "DOCUMENT", documentId: document.id, audience: link.audience };
       }
       const folder = await repositories.tree.findById(link.target.folderNodeId);
       if (!folder || folder.nodeType !== "FOLDER") throw new ShareLinkNotFoundError();
-      await requireOpenLink(repositories, link, folder, now);
+      await requireOpenLink(repositories, link, folder, now, viewerId);
       if (documentId !== undefined) {
         const document = await repositories.documents.findById(documentId);
         if (document && document.currentRevisionId !== null && await reachableChain(repositories, folder, document)) {
-          return { kind: "FOLDER", documentId: document.id };
+          return { kind: "FOLDER", documentId: document.id, audience: link.audience };
         }
       }
       const tree = sharedSubtree(await repositories.tree.listSubtree(folder.sourceId, folder.id), folder.id);
-      return { kind: "FOLDER", documentId: tree.find((node) => node.documentId !== null)?.documentId ?? null };
+      return { kind: "FOLDER", documentId: tree.find((node) => node.documentId !== null)?.documentId ?? null, audience: link.audience };
     });
   }
 }
 
 /**
- * Whether the link opens now (spec §5.2), with its target — a document or a
- * folder node — in the document's place. Returns the target's Workspace.
+ * Whether the link opens now (spec §5.2) for this viewer, with its target — a
+ * document or a folder node — in the document's place. Returns the target's Workspace.
  */
 async function requireOpenLink(
   repositories: KnowledgeRepositories,
   link: DocumentShareLink,
   target: { sourceId: string; status: "ACTIVE" | "ARCHIVED" },
   now: Date,
+  viewerId: string | null,
 ): Promise<{ workspaceId: string }> {
-  const open = await openShareLinkTarget(repositories, link, target, now);
+  const open = await openShareLinkTarget(repositories, link, target, now, viewerId);
   if (!open) throw new ShareLinkNotFoundError();
   return open;
 }
@@ -386,14 +392,15 @@ async function readSharedFolder(
   folderNodeId: string,
   documentId: string | undefined,
   now: Date,
-): Promise<SharedFolderView> {
+  viewerId: string | null,
+): Promise<SharedFolderView & { audience: ShareAudience }> {
   const folder = await repositories.tree.findById(folderNodeId);
   if (!folder || folder.nodeType !== "FOLDER") throw new ShareLinkNotFoundError();
-  const { workspaceId } = await requireOpenLink(repositories, link, folder, now);
+  const { workspaceId } = await requireOpenLink(repositories, link, folder, now, viewerId);
   const sourceNodes = await repositories.tree.listSubtree(folder.sourceId, folder.id);
   const tree = sharedSubtree(sourceNodes, folder.id);
   const creator = await requireCreator(repositories, link);
-  const view = { kind: "FOLDER" as const, folderName: folder.name ?? "", tree, sharedByName: creator.name, expiresAt: link.expiresAt };
+  const view = { kind: "FOLDER" as const, folderName: folder.name ?? "", tree, sharedByName: creator.name, expiresAt: link.expiresAt, audience: link.audience };
   // An unreachable requested id is refused, never replaced by the landing document.
   const targetId = documentId ?? tree.find((node) => node.documentId !== null)?.documentId ?? null;
   if (targetId === null) return { ...view, document: null };

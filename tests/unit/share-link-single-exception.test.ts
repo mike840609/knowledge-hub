@@ -129,6 +129,14 @@ describe("the share link is the single caller-less content path", () => {
       .filter((callable) => methods.has(callable.name) && !requiresCaller(callable.parameters))
       .map((callable) => callable.name);
     expect(callerless).toEqual(["readShared", "readSharedTarget"]);
+    // A NAMED link is judged against the reader's id (named-recipient share spec). That id is an
+    // option, not a caller: it names no CallerContext, so both entries stay caller-less above and
+    // still answer with no one signed in, where a NAMED link refuses as a dead link does.
+    for (const name of ["readShared", "readSharedTarget"]) {
+      const parameters = callables(file).find((callable) => callable.name === name)?.parameters ?? "";
+      expect(parameters, name).toMatch(/\bviewerId\?: string \| null\b/);
+      expect(namesCaller(parameters), name).toBe(false);
+    }
     const target = callables(file).find((callable) => callable.name === "readSharedTarget");
     expect(target?.body).not.toMatch(/\bmarkdown\b|\.revisions\.|\.users\.|loadCatalog|recordView|\.views\./);
   });
@@ -181,7 +189,14 @@ describe("the share link is the single caller-less content path", () => {
   it("the guard tells a required caller from an optional one", () => {
     expect(requiresCaller("caller: CallerContext, token: string")).toBe(true);
     expect(requiresCaller("caller:CallerContext,input:{documentId:string}")).toBe(true);
-    for (const parameters of ["caller: CallerContext | null, token: string", "caller: CallerContext | undefined", "caller?: CallerContext", "token: string", ""]) {
+    for (const parameters of [
+      "caller: CallerContext | null, token: string",
+      "caller: CallerContext | undefined",
+      "caller?: CallerContext",
+      "token: string",
+      "",
+      "token: string, { documentId, viewerId = null }: { documentId?: string; viewerId?: string | null } = {}",
+    ]) {
       expect(requiresCaller(parameters), parameters).toBe(false);
     }
   });
