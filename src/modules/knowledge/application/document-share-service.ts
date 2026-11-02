@@ -6,6 +6,8 @@ import {
   assertShareLinkCreation,
   isActiveShareLink,
   isShareToken,
+  MAX_NAMED_SHARE_RECIPIENTS,
+  normalizeRecipients,
   shareLinkExpiry,
   shareLinkPath,
   ShareLinkNotFoundError,
@@ -14,9 +16,10 @@ import {
   type ShareLinkTarget,
 } from "../domain/document-share-link";
 import { extractDocumentLinks } from "../domain/document-links";
-import { DocumentNotFoundError, IntegrityViolationError, SourceNotFoundError, ValidationError } from "../domain/errors";
+import { DocumentNotFoundError, DomainError, IntegrityViolationError, SourceNotFoundError, ValidationError } from "../domain/errors";
 import { linkLookupKey } from "../domain/link-graph";
 import { buildLinkResolver } from "../domain/link-resolution";
+import { MENTION_LIMIT } from "../domain/review-mention";
 import type { OpenFolderLink } from "../ports/document-share-link-repository";
 import type { ShareTokenIssuer } from "../ports/share-token-issuer";
 import { openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
@@ -35,7 +38,15 @@ export type ShareLinkView = {
   active: boolean;
   totalViews: number;
   lastViewedAt: Date | null;
+  audience: ShareAudience;
+  /** The people a NAMED link names; null for a LINK. */
+  recipientCount: number | null;
 };
+
+export type ShareRecipientView = { userId: string; name: string; nameEn: string | null; empId: string; addedAt: Date };
+export type ShareRecipientCandidate = { id: string; name: string; nameEn: string | null; empId: string };
+
+type ShareCreateInput = { label?: unknown; expiresInDays?: unknown; recipients?: unknown };
 
 export type SharedDocumentView = {
   revisionId: string;
@@ -86,6 +97,8 @@ export type SharedView = (({ kind: "DOCUMENT" } & SharedDocumentView) | SharedFo
 
 export const SHARE_LINK_CREATED_EVENT = "DOCUMENT_SHARE_LINK_CREATED";
 export const SHARE_LINK_REVOKED_EVENT = "DOCUMENT_SHARE_LINK_REVOKED";
+export const SHARE_RECIPIENT_ADDED_EVENT = "DOCUMENT_SHARE_RECIPIENT_ADDED";
+export const SHARE_RECIPIENT_REMOVED_EVENT = "DOCUMENT_SHARE_RECIPIENT_REMOVED";
 
 /**
  * Document share links (share-link spec). `create`, `list` and `revoke` are
@@ -145,7 +158,7 @@ export class DocumentShareService {
     });
   }
 
-  async create(caller: CallerContext, input: { documentId: string; label?: unknown; expiresInDays?: unknown }): Promise<ShareLinkView> {
+  async create(caller: CallerContext, input: { documentId: string } & ShareCreateInput): Promise<ShareLinkView> {
     return this.unitOfWork.run(async (repositories) => {
       await syncCallerIdentity(repositories.users, caller);
       const { document, source, workspace } = await lockOwnedScope(repositories, caller, input.documentId);
@@ -155,7 +168,7 @@ export class DocumentShareService {
     });
   }
 
-  async createForFolder(caller: CallerContext, input: { folderNodeId: string; label?: unknown; expiresInDays?: unknown }): Promise<ShareLinkView> {
+  async createForFolder(caller: CallerContext, input: { folderNodeId: string } & ShareCreateInput): Promise<ShareLinkView> {
     return this.unitOfWork.run(async (repositories) => {
       await syncCallerIdentity(repositories.users, caller);
       const { node, source, workspace } = await lockOwnedFolderScope(repositories, caller, input.folderNodeId);
@@ -175,10 +188,13 @@ export class DocumentShareService {
       source: { status: "ACTIVE" | "ARCHIVED" };
       workspace: Parameters<typeof assertShareLinkCreation>[0]["workspace"] & { id: string };
       activeLinkCount: number;
-      input: { label?: unknown; expiresInDays?: unknown };
+      input: ShareCreateInput;
     },
   ): Promise<ShareLinkView> {
     const now = this.clock();
+    // `recipients` present makes the link NAMED, which stands until revoked and so has no expiry to choose.
+    const named = scope.input.recipients !== undefined;
+    if (named && scope.input.expiresInDays !== undefined) throw new DomainError("INVALID_REQUEST", "A named share has no expiry.");
     const normalized = assertShareLinkCreation({
       callerId: caller.identity.id,
       targetKind: scope.target.kind,
@@ -189,21 +205,24 @@ export class DocumentShareService {
       expiresInDays: scope.input.expiresInDays,
       label: scope.input.label,
     });
+    const recipientIds = named ? normalizeRecipients(scope.input.recipients, { ownerId: caller.identity.id }) : [];
+    await requireExistingUsers(repositories, recipientIds);
     const link: DocumentShareLink = {
       id: uuidv7(),
       target: scope.target,
       token: this.tokens.issue(),
       label: normalized.label,
-      audience: "LINK",
+      audience: named ? "NAMED" : "LINK",
       createdBy: caller.identity.id,
       createdAt: now,
-      expiresAt: shareLinkExpiry(now, normalized.expiresInDays),
+      expiresAt: named ? null : shareLinkExpiry(now, normalized.expiresInDays),
       revokedBy: null,
       revokedAt: null,
     };
     // Guard the issuer: a sequential or derived token would be computable.
     if (!isShareToken(link.token)) throw new IntegrityViolationError("Share token issuer must return a random UUIDv4.");
     await repositories.shareLinks.insert(link);
+    if (named) await repositories.shareLinks.insertRecipients(link.id, recipientIds, caller.identity.id, now);
     await repositories.auditEvents.append({
       id: uuidv7(),
       workspaceId: scope.workspace.id,
@@ -212,21 +231,18 @@ export class DocumentShareService {
       eventType: SHARE_LINK_CREATED_EVENT,
       targetType: "DOCUMENT_SHARE_LINK",
       targetId: link.id,
-      payload: { ...targetPayload(link.target), expiresAt: link.expiresAt?.toISOString() ?? null, label: link.label },
+      payload: { ...targetPayload(link.target), expiresAt: link.expiresAt?.toISOString() ?? null, label: link.label, audience: link.audience, recipientIds },
       correlationId: null,
       createdAt: now,
     });
-    return toView(link, now, undefined);
+    return toView(link, now, undefined, named ? recipientIds.length : null);
   }
 
   async list(caller: CallerContext, documentId: string): Promise<ShareLinkView[]> {
     return this.unitOfWork.run(async (repositories) => {
       await syncCallerIdentity(repositories.users, caller);
       const { document } = await requireOwnedDocument(repositories, caller, documentId);
-      const links = await repositories.shareLinks.listByDocument(document.id);
-      const totals = await repositories.shareLinks.viewTotals(links.map((link) => link.id));
-      const now = this.clock();
-      return links.map((link) => toView(link, now, totals.get(link.id)));
+      return this.toViews(repositories, await repositories.shareLinks.listByDocument(document.id));
     });
   }
 
@@ -241,24 +257,85 @@ export class DocumentShareService {
       const workspace = await repositories.workspaces.findById(source.workspaceId);
       if (!workspace || workspace.personalOwnerUserId !== caller.identity.id) throw new DocumentNotFoundError();
       requireFolder(node);
-      const links = await repositories.shareLinks.listByFolder(node.id);
-      const totals = await repositories.shareLinks.viewTotals(links.map((link) => link.id));
+      return this.toViews(repositories, await repositories.shareLinks.listByFolder(node.id));
+    });
+  }
+
+  private async toViews(repositories: KnowledgeRepositories, links: DocumentShareLink[]): Promise<ShareLinkView[]> {
+    const totals = await repositories.shareLinks.viewTotals(links.map((link) => link.id));
+    const now = this.clock();
+    return Promise.all(links.map(async (link) => toView(link, now, totals.get(link.id), link.audience === "NAMED" ? await repositories.shareLinks.countRecipients(link.id) : null)));
+  }
+
+  /** The people a NAMED link names, newest first. Owner of the link only; a LINK or a revoked link is refused. */
+  async listRecipients(caller: CallerContext, linkId: string): Promise<ShareRecipientView[]> {
+    if (!isUuid(linkId)) throw new ShareLinkNotFoundError();
+    return this.unitOfWork.run(async (repositories) => {
+      await syncCallerIdentity(repositories.users, caller);
+      const link = await repositories.shareLinks.findById(linkId);
+      if (!link || link.createdBy !== caller.identity.id || link.revokedAt !== null) throw new ShareLinkNotFoundError();
+      requireNamed(link);
+      const recipients = await repositories.shareLinks.listRecipients(link.id);
+      const users = new Map((await repositories.users.findByIds(recipients.map((recipient) => recipient.userId))).map((user) => [user.id, user]));
+      return recipients.flatMap((recipient) => {
+        const user = users.get(recipient.userId);
+        return user ? [{ userId: user.id, name: user.name, nameEn: user.nameEn, empId: user.emp_id, addedAt: recipient.addedAt }] : [];
+      });
+    });
+  }
+
+  /** Names more people on a NAMED link. Someone already named is ignored; the total stays within the cap. */
+  async addRecipients(caller: CallerContext, linkId: string, userIds: unknown): Promise<void> {
+    if (!isUuid(linkId)) throw new ShareLinkNotFoundError();
+    await this.unitOfWork.run(async (repositories) => {
+      await syncCallerIdentity(repositories.users, caller);
+      const { link, workspace } = await lockOwnedLink(repositories, caller, linkId);
+      if (link.revokedAt !== null) throw new ShareLinkNotFoundError();
+      requireNamed(link);
+      const ids = normalizeRecipients(userIds, { ownerId: caller.identity.id });
+      // INSERT IGNORE would swallow a missing user as it swallows a duplicate.
+      await requireExistingUsers(repositories, ids);
+      const named = new Set((await repositories.shareLinks.listRecipients(link.id)).map((recipient) => recipient.userId));
+      const added = ids.filter((id) => !named.has(id));
+      if (named.size + added.length > MAX_NAMED_SHARE_RECIPIENTS) throw new DomainError("INVALID_REQUEST", `A link can name at most ${MAX_NAMED_SHARE_RECIPIENTS} recipients.`);
+      if (added.length === 0) return;
       const now = this.clock();
-      return links.map((link) => toView(link, now, totals.get(link.id)));
+      await repositories.shareLinks.insertRecipients(link.id, added, caller.identity.id, now);
+      for (const userId of added) await appendRecipientEvent(repositories, caller, workspace.id, link.id, SHARE_RECIPIENT_ADDED_EVENT, userId, now);
+    });
+  }
+
+  /** Stops naming one person. Someone who is not named is a no-op; their read closes at once. */
+  async removeRecipient(caller: CallerContext, linkId: string, userId: string): Promise<void> {
+    if (!isUuid(linkId)) throw new ShareLinkNotFoundError();
+    await this.unitOfWork.run(async (repositories) => {
+      await syncCallerIdentity(repositories.users, caller);
+      const { link, workspace } = await lockOwnedLink(repositories, caller, linkId);
+      if (link.revokedAt !== null) throw new ShareLinkNotFoundError();
+      requireNamed(link);
+      if (typeof userId !== "string" || !isUuid(userId)) throw new DomainError("INVALID_REQUEST", "Provide a user id.");
+      const id = userId.toLowerCase();
+      if (!(await repositories.shareLinks.removeRecipient(link.id, id))) return;
+      await appendRecipientEvent(repositories, caller, workspace.id, link.id, SHARE_RECIPIENT_REMOVED_EVENT, id, this.clock());
+    });
+  }
+
+  /** Existing users matching the query, for the owner choosing who to name. Never the caller; reads only. */
+  async searchRecipientCandidates(caller: CallerContext, query: string): Promise<{ candidates: ShareRecipientCandidate[] }> {
+    const needle = query.trim().slice(0, 200);
+    if (!needle) return { candidates: [] };
+    return this.unitOfWork.run(async (repositories) => {
+      await syncCallerIdentity(repositories.users, caller);
+      const found = await repositories.users.searchExisting(needle, MENTION_LIMIT + 1);
+      const candidates = found.filter((user) => user.id !== caller.identity.id).slice(0, MENTION_LIMIT);
+      return { candidates: candidates.map((user) => ({ id: user.id, name: user.name, nameEn: user.nameEn, empId: user.emp_id })) };
     });
   }
 
   async revoke(caller: CallerContext, linkId: string): Promise<void> {
     await this.unitOfWork.run(async (repositories) => {
       await syncCallerIdentity(repositories.users, caller);
-      // No path locks a share link after Source/Workspace, so taking the link
-      // first cannot invert the Phase 3 §14.2 order.
-      const link = await repositories.shareLinks.lockById(linkId);
-      if (!link || link.createdBy !== caller.identity.id) throw new ShareLinkNotFoundError();
-      const { workspace } = await lockLinkTargetScope(repositories, caller, link.target).catch((error: unknown) => {
-        if (error instanceof DocumentNotFoundError || error instanceof SourceNotFoundError) throw new ShareLinkNotFoundError();
-        throw error;
-      });
+      const { link, workspace } = await lockOwnedLink(repositories, caller, linkId);
       if (link.revokedAt !== null) return;
       const now = this.clock();
       await repositories.shareLinks.revoke(link.id, caller.identity.id, now);
@@ -356,6 +433,47 @@ export class DocumentShareService {
       return { kind: "FOLDER", documentId: tree.find((node) => node.documentId !== null)?.documentId ?? null, audience: link.audience };
     });
   }
+}
+
+/**
+ * Locks the link, then its target's scope — the order `revoke` has always taken, so a change to a link's
+ * audience serialises with anything else that locks the link row. Owner of the link only.
+ * No path locks a share link after Source/Workspace, so taking the link first cannot invert Phase 3 §14.2.
+ */
+async function lockOwnedLink(repositories: KnowledgeRepositories, caller: CallerContext, linkId: string) {
+  const link = await repositories.shareLinks.lockById(linkId);
+  if (!link || link.createdBy !== caller.identity.id) throw new ShareLinkNotFoundError();
+  const { workspace } = await lockLinkTargetScope(repositories, caller, link.target).catch((error: unknown) => {
+    if (error instanceof DocumentNotFoundError || error instanceof SourceNotFoundError) throw new ShareLinkNotFoundError();
+    throw error;
+  });
+  return { link, workspace };
+}
+
+function requireNamed(link: Pick<DocumentShareLink, "audience">): void {
+  if (link.audience !== "NAMED") throw new DomainError("INVALID_REQUEST", "Only a named share has recipients.");
+}
+
+/** The repository's insert ignores a missing user as it ignores a duplicate, so existence is proven here. */
+async function requireExistingUsers(repositories: KnowledgeRepositories, ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const found = new Set((await repositories.users.findByIds(ids)).map((user) => user.id));
+  if (ids.some((id) => !found.has(id))) throw new DomainError("INVALID_REQUEST", "Every recipient must be an existing user.");
+}
+
+function appendRecipientEvent(repositories: KnowledgeRepositories, caller: CallerContext, workspaceId: string, linkId: string, eventType: string, userId: string, at: Date) {
+  return repositories.auditEvents.append({
+    id: uuidv7(),
+    workspaceId,
+    actorUserId: caller.identity.id,
+    actorKind: "USER",
+    eventType,
+    targetType: "DOCUMENT_SHARE_LINK",
+    targetId: linkId,
+    payload: { userId },
+    correlationId: null,
+    createdAt: at,
+  });
 }
 
 /**
@@ -560,7 +678,7 @@ function targetPayload(target: ShareLinkTarget) {
   return target.kind === "DOCUMENT" ? { documentId: target.documentId } : { folderNodeId: target.folderNodeId };
 }
 
-function toView(link: DocumentShareLink, now: Date, totals: { totalViews: number; lastViewedAt: Date | null } | undefined): ShareLinkView {
+function toView(link: DocumentShareLink, now: Date, totals: { totalViews: number; lastViewedAt: Date | null } | undefined, recipientCount: number | null): ShareLinkView {
   return {
     id: link.id,
     label: link.label,
@@ -571,5 +689,7 @@ function toView(link: DocumentShareLink, now: Date, totals: { totalViews: number
     active: isActiveShareLink(link, now),
     totalViews: totals?.totalViews ?? 0,
     lastViewedAt: totals?.lastViewedAt ?? null,
+    audience: link.audience,
+    recipientCount,
   };
 }
