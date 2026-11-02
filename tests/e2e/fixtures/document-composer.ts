@@ -96,13 +96,30 @@ export function sentBody(request: Awaited<ReturnType<typeof nextSave>>) {
   return JSON.parse(request.postData() ?? "{}") as { title?: string; markdown?: string };
 }
 
-/** Types into a note's body, then into its H1: the editor's last output is the one that renames it. */
+/**
+ * Types into a note's body, then into its H1: the editor's last output is the one that renames it.
+ *
+ * The caret is put at the end of each block through the DOM Selection API. A press of End does not
+ * move a contenteditable's caret in Chromium here, a plain click lands mid-word on a long heading,
+ * and a click at the box's right edge lands mid-text once the heading wraps.
+ */
 export async function editBodyThenHeading(page: Page, surface: Locator) {
-  await surface.locator("p").click();
-  await page.keyboard.press("End");
+  const caretAtEnd = async (block: Locator) => {
+    await block.click();
+    await block.evaluate(element => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      range.collapse(false);
+      const selection = window.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+    });
+    // The editor reads the DOM selection on `selectionchange`, which fires after this task.
+    await page.evaluate(() => new Promise(requestAnimationFrame));
+  };
+  await caretAtEnd(surface.locator("p"));
   await page.keyboard.type(" typed");
-  await surface.getByRole("heading", { level: 1 }).click();
-  await page.keyboard.press("End");
+  await caretAtEnd(surface.getByRole("heading", { level: 1 }));
   await page.keyboard.type(" renamed");
 }
 

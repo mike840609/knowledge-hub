@@ -105,6 +105,16 @@ test("arrow keys move the row in force; Enter inserts the name and sends its id"
   expect(sent).toEqual([{ body: "Hi @陳小明 ", mentions: [MING.id], linkId: undefined }]);
 });
 
+test("a caret moved right after a pick stays where it was moved", async () => {
+  stubFetch();
+  const textarea = render({ token: "tok" });
+  await type(textarea, "Hi @m");
+  key(textarea, "Enter");
+  textarea.setSelectionRange(0, 0);
+  await act(async () => { await new Promise(requestAnimationFrame); });
+  expect(textarea.selectionStart).toBe(0);
+});
+
 test("Tab picks too, and the name goes in at the caret, not at the end", async () => {
   stubFetch();
   const textarea = render({ token: "tok" });
@@ -209,6 +219,11 @@ test("mentionedIds: a pick needs its own whole @name", () => {
   const ming = { id: MING.id, name: MING.name }, two = { id: MING_TWO.id, name: MING_TWO.name }, mei = { id: MEI.id, name: MEI.name };
   // A longer word is not the name.
   expect(mentionedIds("@陳小明明 hi", [ming])).toEqual([]);
+  // The @ must start the mention, not end an email or handle.
+  expect(mentionedIds("x@陳小明", [ming])).toEqual([]);
+  expect(mentionedIds("foo_bar@陳小明", [ming])).toEqual([]);
+  expect(mentionedIds("@@陳小明", [ming])).toEqual([]);
+  expect(mentionedIds("https://x.test/@陳小明", [ming])).toEqual([]);
   // Whitespace, punctuation and the end all close a name.
   expect(mentionedIds("@陳小明", [ming])).toEqual([MING.id]);
   expect(mentionedIds("@陳小明，請看", [ming])).toEqual([MING.id]);

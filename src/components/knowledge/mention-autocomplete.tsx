@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Select } from "@/components/ui/select";
 import { readStored, removeStored, writeStored } from "@/components/shell/use-persisted-state";
+import { mentionStarts } from "@/modules/knowledge/domain/mention-text";
 import { reviewRequest } from "./review-thread-list";
 
 /**
@@ -19,17 +20,24 @@ const DEBOUNCE_MS = 150;
 export const NO_LINK_HINT = "Create a share link first to mention someone";
 const NO_MATCH_HINT = "No one found.";
 
-/** The `@word` being typed just before the caret, when its `@` starts a word. */
+/** The `@word` being typed just before the caret, when its `@` may start a mention (`mentionStarts`). */
 export function mentionTrigger(text: string, caret: number): { start: number; query: string } | null {
-  const match = /(?:^|\s)@([^\s@]*)$/.exec(text.slice(0, caret));
-  return match ? { start: caret - match[1].length - 1, query: match[1] } : null;
+  const before = text.slice(0, Math.max(0, Math.min(caret, text.length)));
+  const at = before.lastIndexOf("@");
+  if (at === -1) return null;
+  if (!mentionStarts(before)(at)) return null;
+  const query = before.slice(at + 1);
+  if ([...query].length > 32 || /\s/.test(query)) return null;
+  return { start: at, query };
 }
 
 /** How many times `@name` stands in the text as a whole name: followed by whitespace, punctuation or the end. */
 function occurrences(body: string, name: string): number {
   const written = `@${name}`;
   let count = 0;
+  const starts = mentionStarts(body);
   for (let at = body.indexOf(written); at !== -1; at = body.indexOf(written, at + 1)) {
+    if (!starts(at)) continue;
     const next = body[at + written.length];
     if (next === undefined || /[\s\p{P}]/u.test(next)) count++;
   }
@@ -152,8 +160,8 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
     setPicks(previous => [...previous.filter(item => item.id !== candidate.id), { id: candidate.id, name: candidate.name }]);
     setCaret(at);
     setFound(undefined);
-    requestAnimationFrame(() => ref.current?.setSelectionRange(at, at));
-    // Synchronously too: a test, or a fast Enter, reads the caret before the next frame.
+    // Now, not on a later frame: a key or arrow pressed before that frame would be undone. React's
+    // render then finds the value already written and leaves the caret alone.
     if (ref.current) { ref.current.value = next; ref.current.setSelectionRange(at, at); }
   }
 
