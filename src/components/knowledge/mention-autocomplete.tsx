@@ -19,10 +19,20 @@ const DEBOUNCE_MS = 150;
 export const NO_LINK_HINT = "Create a share link first to mention someone";
 const NO_MATCH_HINT = "No one found.";
 
-/** The `@word` being typed just before the caret, when its `@` starts a word. */
+/**
+ * The `@word` being typed just before the caret. The `@` opens after anything that is not an
+ * ASCII letter, digit, underscore or another `@` — so a Chinese sentence (`請@王`) and a
+ * parenthesis (`(@Amy`) open it, while an email or a word (`name@example`, `foo_bar@x`) does not.
+ */
 export function mentionTrigger(text: string, caret: number): { start: number; query: string } | null {
-  const match = /(?:^|\s)@([^\s@]*)$/.exec(text.slice(0, caret));
-  return match ? { start: caret - match[1].length - 1, query: match[1] } : null;
+  const before = text.slice(0, Math.max(0, Math.min(caret, text.length)));
+  const at = before.lastIndexOf("@");
+  if (at === -1) return null;
+  const previous = at > 0 ? before[at - 1] : "";
+  if (/[A-Za-z0-9_@]/.test(previous)) return null;
+  const query = before.slice(at + 1);
+  if ([...query].length > 32 || /\s/.test(query)) return null;
+  return { start: at, query };
 }
 
 /** How many times `@name` stands in the text as a whole name: followed by whitespace, punctuation or the end. */
@@ -30,6 +40,9 @@ function occurrences(body: string, name: string): number {
   const written = `@${name}`;
   let count = 0;
   for (let at = body.indexOf(written); at !== -1; at = body.indexOf(written, at + 1)) {
+    // The `@` must start a mention: `x@Amy` is an email, not a mention of Amy.
+    const previous = at > 0 ? body[at - 1] : "";
+    if (/[A-Za-z0-9_@]/.test(previous)) continue;
     const next = body[at + written.length];
     if (next === undefined || /[\s\p{P}]/u.test(next)) count++;
   }

@@ -209,6 +209,10 @@ test("mentionedIds: a pick needs its own whole @name", () => {
   const ming = { id: MING.id, name: MING.name }, two = { id: MING_TWO.id, name: MING_TWO.name }, mei = { id: MEI.id, name: MEI.name };
   // A longer word is not the name.
   expect(mentionedIds("@陳小明明 hi", [ming])).toEqual([]);
+  // The @ must start the mention, not end an email or handle.
+  expect(mentionedIds("x@陳小明", [ming])).toEqual([]);
+  expect(mentionedIds("foo_bar@陳小明", [ming])).toEqual([]);
+  expect(mentionedIds("@@陳小明", [ming])).toEqual([]);
   // Whitespace, punctuation and the end all close a name.
   expect(mentionedIds("@陳小明", [ming])).toEqual([MING.id]);
   expect(mentionedIds("@陳小明，請看", [ming])).toEqual([MING.id]);

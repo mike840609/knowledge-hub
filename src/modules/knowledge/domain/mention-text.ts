@@ -5,8 +5,9 @@ export type MentionedPerson = { name: string; nameEn: string | null; empId: stri
 export type MentionPart = { text: string; people?: MentionedPerson[] };
 
 /**
- * Splits text into plain runs and `@name` occurrences of the given people. A name must end the
- * text or be followed by whitespace or punctuation (the composer's whole-name rule), and the
+ * Splits text into plain runs and `@name` occurrences of the given people. The `@` must not follow
+ * an ASCII letter, digit, `_` or `@`, and the name must end the text or be followed by whitespace
+ * or punctuation (the composer's rules, `mentionTrigger` and `mentionedIds`), and the
  * longest name wins. People sharing a name share every occurrence. Joining the parts gives the text back.
  */
 export function splitMentions(text: string, people: readonly MentionedPerson[]): MentionPart[] {
@@ -16,6 +17,7 @@ export function splitMentions(text: string, people: readonly MentionedPerson[]):
   const parts: MentionPart[] = [];
   let plainFrom = 0;
   for (let at = text.indexOf("@"); at !== -1; at = text.indexOf("@", at + 1)) {
+    if (!startsMention(text[at - 1])) continue;
     const name = names.find(n => text.startsWith(n, at + 1) && endsName(text[at + 1 + n.length]));
     if (name === undefined) continue;
     if (at > plainFrom) parts.push({ text: text.slice(plainFrom, at) });
@@ -27,4 +29,5 @@ export function splitMentions(text: string, people: readonly MentionedPerson[]):
   return parts;
 }
 
+const startsMention = (previous: string | undefined) => previous === undefined || !/[A-Za-z0-9_@]/.test(previous);
 const endsName = (next: string | undefined) => next === undefined || /[\s\p{P}]/u.test(next);

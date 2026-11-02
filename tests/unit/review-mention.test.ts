@@ -86,6 +86,11 @@ describe("splitMentions", () => {
   it("unmentioned @ stays plain", () => {
     expect(splitMentions("mail @Bob", [chen])).toEqual([{ text: "mail @Bob" }]);
   });
+  it("starts where the composer opens a mention", () => {
+    expect(splitMentions("請@陳小明，看一下", [chen]).filter(p => p.people).map(p => p.text)).toEqual(["@陳小明"]);
+    expect(splitMentions("(@Ann)", [ann]).filter(p => p.people).map(p => p.text)).toEqual(["@Ann"]);
+    for (const text of ["x@Ann", "foo_bar@Ann", "1@Ann", "@@Ann"]) expect(splitMentions(text, [ann])).toEqual([{ text }]);
+  });
   it("no people, one part; no text, no parts", () => {
     expect(splitMentions("a @b", [])).toEqual([{ text: "a @b" }]);
     expect(splitMentions("", [chen])).toEqual([]);
