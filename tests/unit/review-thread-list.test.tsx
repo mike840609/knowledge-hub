@@ -230,6 +230,14 @@ function popup() {
   return document.body.querySelector<HTMLElement>("[data-mention-card]");
 }
 
+// Review of #321: the reader splits the runs between links, so each run must know what came before it.
+test("a mention right after a link is judged as the server judges it", () => {
+  const body = "@陳小明 see https://x.test/a\"@陳小明";
+  renderList([thread("t1", [0], "Para zero.", body, [ming])], { writesEnabled: false });
+  expect(mentionButtons()).toHaveLength(1);
+  expect(mentionButtons()[0].closest("p")?.textContent).toBe(body);
+});
+
 test("a mentioned name is a button named for the person, set in the link colour", () => {
   renderList([thread("t1", [0], "Para zero.", "@陳小明 please check", [ming])], { writesEnabled: false });
   const found = mentionButtons();

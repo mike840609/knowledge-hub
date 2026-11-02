@@ -92,6 +92,17 @@ describe("splitMentions", () => {
     for (const text of ["x@Ann", "foo_bar@Ann", "1@Ann", "@@Ann", "https://x.test/@Ann"]) expect(splitMentions(text, [ann])).toEqual([{ text }]);
     expect(splitMentions("https://x.test/ @Ann", [ann]).filter(p => p.people).map(p => p.text)).toEqual(["@Ann"]);
   });
+  it("judges a run against the text before it", () => {
+    expect(splitMentions('"@Ann', [ann], "see https://x.test/a")).toEqual([{ text: '"@Ann' }]);
+    expect(splitMentions('"@Ann', [ann], "see ").filter(p => p.people).map(p => p.text)).toEqual(["@Ann"]);
+  });
+  // Review of #321: a regex over the text before every `@` took about 1.2 s on one such comment.
+  it("stays fast on a long comment full of @", () => {
+    const bodies = ["a".repeat(2000) + " @".repeat(500), "(@Ann".repeat(600), "http://" + "(@".repeat(1496)];
+    const started = performance.now();
+    for (const body of bodies) splitMentions(body, [ann]);
+    expect(performance.now() - started).toBeLessThan(100);
+  });
   it("no people, one part; no text, no parts", () => {
     expect(splitMentions("a @b", [])).toEqual([{ text: "a @b" }]);
     expect(splitMentions("", [chen])).toEqual([]);
