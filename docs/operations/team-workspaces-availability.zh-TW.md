@@ -16,7 +16,7 @@
 
 請照以下順序執行；第 5、6 步最容易漏掉：
 
-1. 先備份資料庫，再部署含 publication 功能的版本。migration 皆為 additive。
+1. 先備份資料庫，再部署含 publication 功能的版本。migration 皆為 additive。MariaDB 的 DDL 不是交易式的：若 migration 030 中途停止，ledger 會記為 `FAILED`，重跑會拒絕繼續。請還原備份（或手動修復 schema，且只清除該筆 ledger row，絕不編輯 checksum），再重新 migrate。
 2. 設定 `KM_TEAM_WORKSPACES_ENABLED=true` 並重啟。
 3. 以同一個資料庫與環境執行一次 catch-up（下一節）。
 4. 讀取 summary 行。`failed=<n>` 會 exit 1：先檢查失敗原因、修正後重跑；指令可安全重複執行。
@@ -40,9 +40,18 @@ make db-catch-up-publications
 - 自願離開、因權限被 freeze、以及已 unpublish 或被 admin 封存的 publication 都會保留，catch-up 不會自動恢復。
 - 輸出為 `applied=<n> pending=<n> skipped=<n> failed=<n>`。有任何 contribution 失敗時 exit 1，否則 exit 0，且可安全重跑。
 
+## 讓 Team 副本保持最新
+
+個人儲存後，Team 副本由回應之後的 drain 更新。遇到鎖等待或死結時，同一次 drain 會重試一次；其他失敗會讓事件保持未消費。除此之外沒有任何機制重試：副本會落後到該 contributor 下一次儲存，或下一次 catch-up 為止。Folder Sync 來源只在有人同步時才儲存，所以「落後」可能持續數天。
+
+- 以週期性排程執行 `make db-catch-up-publications`（需 `KM_TEAM_WORKSPACES_ENABLED=true`），例如每小時一次。它是冪等的，會處理待消費事件，並從目前狀態 reconcile 每個 contribution。
+- 以非零結束碼（`failed=<n>`）告警，不要以 `pending` 告警：`pending` 的 contributor 依設計要等自己的下一次儲存。
+- 自動儲存的草稿在 Team 也是草稿：下一次複製會取代它，不會累積成永久的團隊歷史。checkpoint 與手動儲存才會成為永久的團隊修訂。讀者仍會在創作者的自動儲存被 drain 之後立刻看到草稿，只是它不會被保留；因此團隊只會保留 drain 執行當下是最新版的 checkpoint，而不是原稿每一個具名或視窗 checkpoint。
+- 已知成本：每次 drain 都會在 publication 鎖內重新讀取該 contributor 發佈範圍內所有原稿（含全部 Markdown 內文），因此在很大的 Folder Sync 資料夾裡存一次自動儲存就會重讀整個資料夾。未變動的團隊副本不會再被重讀或重寫。只 reconcile 有變動的文件是後續工作。
+
 ## Publication 事件保留
 
-每一次個人 revision、移動與 lifecycle 寫入都會記錄一筆 `publication_events`，即使 `KM_TEAM_WORKSPACES_ENABLED` 關閉也一樣。這些事件是非同步消費的，因此若維運不清除，event 與 delivery 兩張表會持續成長。
+每一次個人 revision、移動與 lifecycle 寫入都會記錄一筆 `publication_events`，即使 `KM_TEAM_WORKSPACES_ENABLED` 關閉也一樣。這些事件是非同步消費的，因此若維運不清除，event 與 delivery 兩張表會持續成長。第一次啟用旗標之前就請先排程下面的清除工作，讓長期保持關閉的部署也不會讓資料表無限成長。
 
 ```bash
 make db-purge-publication-events PURGE_MODE=flag-on

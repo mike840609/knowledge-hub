@@ -166,7 +166,7 @@ export class DocumentReviewService {
     return this.uow.run(async r => {
       const access = this.requestAccess(r, caller);
       const allowedTeams = await this.readableTeamWorkspaceIds(r, caller, access);
-      const rows = await r.shareCommentEvents.listUnreadCountsByRecipient(caller.identity.id);
+      const rows = await r.shareCommentEvents.listUnreadCountsByRecipient(caller.identity.id, allowedTeams);
       // A team row counts only while the caller still holds document.read; personal rows always do.
       let owner = 0;
       for (const row of rows) {
@@ -263,6 +263,10 @@ export class DocumentReviewService {
     await this.uow.run(async r => {
       await this.documentScope(r, caller, documentId, false);
       await r.shareCommentEvents.markThreadRead(caller.identity.id, documentId, threadId, this.clock());
+      // Opening a team discussion also reads the caller's mentions in it, only for a thread of the document just judged.
+      if (isUuid(threadId) && (await r.reviewThreads.findById(threadId))?.documentId === documentId) {
+        await r.reviewMentions.markThreadRead(caller.identity.id, threadId, this.clock());
+      }
     });
   }
   /** A signed-in reader on a live link follows, or stops following, one of its discussions. Adds no words, so writes need not be enabled. */

@@ -94,7 +94,16 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
    * a folder row has no document of its own. Either way the newest unread thread is picked, so the
    * Shares badge opens its discussion.
    */
-  async listUnreadCountsByRecipient(recipientUserId: string): Promise<ShareDocumentUnreadCount[]> {
+  async listUnreadCountsByRecipient(
+    recipientUserId: string,
+    allowedTeamWorkspaceIds?: readonly string[],
+  ): Promise<ShareDocumentUnreadCount[]> {
+    // Same pre-filter as listUnreadByRecipient: revoked Teams never reach the per-row access judgement.
+    const teamFilter = allowedTeamWorkspaceIds === undefined
+      ? ""
+      : allowedTeamWorkspaceIds.length === 0
+        ? "AND e.recipient_user_id IS NULL"
+        : `AND (e.recipient_user_id IS NULL OR e.workspace_id IN (${allowedTeamWorkspaceIds.map(() => "?").join(",")}))`;
     const rows = await this.connection.query<DbRow[]>(
       `SELECT unread.document_id, unread.folder_link_id, unread.thread_id, unread.unread_count,
               unread.workspace_id, unread.recipient_user_id
@@ -112,9 +121,10 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
            AND e.read_at IS NULL
            AND t.visibility = 'VISIBLE'
            AND c.deleted_at IS NULL AND c.visibility = 'VISIBLE'
+           ${teamFilter}
        ) unread
        WHERE unread.row_num = 1`,
-      [recipientUserId, recipientUserId],
+      [recipientUserId, recipientUserId, ...(allowedTeamWorkspaceIds ?? [])],
     );
     return rows.map(row => ({
       documentId: String(row.document_id),

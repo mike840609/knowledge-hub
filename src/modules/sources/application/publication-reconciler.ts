@@ -279,7 +279,7 @@ async function applyReconciliation(
   originals: readonly EligibleOriginal[],
 ): Promise<ReconcileReport> {
   const report = emptyReport();
-  const documents = await repositories.publications.listDocuments(publication.id);
+  const documents = projection.documents;
   let bindings = await repositories.publications.listBindings(contribution.id);
   const contributions = await repositories.publications.listContributions(publication.id);
   const movedDocumentIds = new Set<string>();
@@ -581,7 +581,8 @@ async function applyReconciliation(
       });
       movedDocumentIds.add(document.teamDocumentId);
     }
-    const refreshed = await projection.refresh(document.teamDocumentId, entry.original.documentId);
+    const refreshed = await projection.refresh(
+      document.teamDocumentId, entry.original.documentId, entry.original.revision);
     if (refreshed.changed) report.updated += 1;
   }
 

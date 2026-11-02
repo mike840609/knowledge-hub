@@ -23,7 +23,8 @@ export interface ShareCommentEventRepository {
   ): Promise<ShareCommentEvent[]>;
   /** Unread rows delivered to the caller as a team recipient, for access-judged bulk marking. */
   listUnreadTeamByRecipient(recipientUserId: string): Promise<ShareCommentEvent[]>;
-  listUnreadCountsByRecipient(recipientUserId: string): Promise<ShareDocumentUnreadCount[]>;
+  /** `allowedTeamWorkspaceIds` pre-filters revoked Teams exactly as `listUnreadByRecipient` does; omitted means unscoped. */
+  listUnreadCountsByRecipient(recipientUserId: string, allowedTeamWorkspaceIds?: readonly string[]): Promise<ShareDocumentUnreadCount[]>;
   listRecentByRecipient(recipientUserId: string, before: { createdAt: Date; id: string } | undefined, limit: number): Promise<ShareCommentEvent[]>;
   markEventRead(recipientUserId: string, eventId: string, at: Date): Promise<void>;
   /** Personal owner rows only: team rows are marked by the service once their access is judged. */

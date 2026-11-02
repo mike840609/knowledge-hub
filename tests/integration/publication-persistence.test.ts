@@ -860,3 +860,19 @@ describe("nullable link fields", () => {
     ).rejects.toMatchObject({ code: "INVALID_REQUEST" });
   });
 });
+
+describe("publication binding claim key", () => {
+  it("never drifts from its publication's workspace and status", async () => {
+    // active_team_workspace_id repeats the workspace only as a unique-claim key:
+    // set while the publication source is ACTIVE, NULL once archived.
+    const [drifted] = await fixture.pool.query<{ total: unknown }[]>(
+      `SELECT COUNT(*) AS total
+       FROM publication_bindings b
+       JOIN publication_contributors c ON c.id = b.contribution_id
+       JOIN publications p ON p.id = c.publication_id
+       JOIN knowledge_sources s ON s.id = p.source_id
+       WHERE NOT (b.active_team_workspace_id <=> CASE WHEN s.status = 'ACTIVE' THEN s.workspace_id ELSE NULL END)`,
+    );
+    expect(Number(drifted.total)).toBe(0);
+  });
+});

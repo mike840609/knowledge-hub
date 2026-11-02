@@ -14,7 +14,7 @@ Set `KM_TEAM_WORKSPACES_ENABLED=true` in the server environment and restart. Onl
 
 Run the rollout in this order; steps 5 and 6 are the part that is easy to forget:
 
-1. Take a database backup, then deploy the build that contains publications. The migrations are additive.
+1. Take a database backup, then deploy the build that contains publications. The migrations are additive. DDL is not transactional in MariaDB: if migration 030 stops part-way, the ledger row is `FAILED` and a rerun refuses to continue. Restore the backup (or repair the schema by hand and clear only that ledger row; never edit checksums), then migrate again.
 2. Set `KM_TEAM_WORKSPACES_ENABLED=true` and restart.
 3. Run the catch-up once, from the same database and environment (next section).
 4. Read its summary line. `failed=<n>` exits 1: inspect the failure, fix it, and rerun; the command is idempotent.
@@ -38,9 +38,18 @@ make db-catch-up-publications
 - Voluntary leave, rights-based freezes, and unpublished or admin-archived publications are preserved and never revived by catch-up.
 - The output is `applied=<n> pending=<n> skipped=<n> failed=<n>`. It exits 1 if any contribution failed and 0 otherwise, and it is safe to rerun.
 
+## Keeping Team copies fresh
+
+A personal save updates its Team copies in a drain that runs after the response. A lock wait or deadlock is retried once in the same drain; any other failure leaves the event unconsumed. Nothing else retries it: the copy stays behind until that contributor's next save, or until a catch-up runs. Folder Sync sources save only when someone syncs, so "behind" can last days.
+
+- Schedule `make db-catch-up-publications` (with `KM_TEAM_WORKSPACES_ENABLED=true`) on a recurring cron, for example hourly. It is idempotent, and it drains pending events and reconciles every contribution from current state.
+- Alert on a non-zero exit (`failed=<n>`), not on `pending`: `pending` contributors wait for their own next save by design.
+- An autosave draft is mirrored as a draft: the next copy replaces it instead of adding permanent team history. Checkpoint and manual saves become permanent team revisions. Readers still see a draft as soon as the creator's autosave drains; it is just never kept. The team therefore holds only the checkpoints that were current when a drain ran, not every named or windowed checkpoint of the original.
+- Known cost: each drain re-reads every original of the contributor's publication (all Markdown bodies) under the publication lock, so one autosave in a very large Folder Sync folder reloads the whole folder. Unchanged team copies are no longer re-read or rewritten. Reconciling only the changed document is a follow-up.
+
 ## Publication event retention
 
-Every personal revision, move and lifecycle write records a `publication_events` row, including while `KM_TEAM_WORKSPACES_ENABLED` is off. Those rows are consumed asynchronously, so the event and delivery tables grow unless an operator trims them.
+Every personal revision, move and lifecycle write records a `publication_events` row, including while `KM_TEAM_WORKSPACES_ENABLED` is off. Schedule the purge below before enabling the flag for the first time, so a deployment that stays off does not grow the table without bound. Those rows are consumed asynchronously, so the event and delivery tables grow unless an operator trims them.
 
 ```bash
 make db-purge-publication-events PURGE_MODE=flag-on

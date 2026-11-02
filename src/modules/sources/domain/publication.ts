@@ -49,6 +49,8 @@ export type PublicationDocument = {
   currentOriginalDocumentId: string;
   sourcePath: string | null;
   status: "ACTIVE" | "ARCHIVED";
+  /** Hash of the team copy's current revision; lets a no-op refresh skip reading it. */
+  currentContentHash?: string | null;
 };
 
 /** contributor's original document → team document, remembered per contribution. */

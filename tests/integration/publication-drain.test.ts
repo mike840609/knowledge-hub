@@ -17,6 +17,7 @@ import type { PublicationNotice } from "@/modules/sources/domain/publication";
 import type { SourceRepositories, SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
 import { schedulePublicationDrain, withPostCommitDrain } from "@/server/publication-post-commit";
 import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
+import { WorkspaceBusyError } from "@/shared/domain/errors";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { createPublicationFixture, type PublicationFixture } from "../fixtures/publications";
 
@@ -40,6 +41,10 @@ type SyncedDocument = Awaited<ReturnType<PublicationFixture["createSyncedOrigina
 type FailureOptions = {
   /** Throws once when this publication is read by a reconcile. */
   failPublicationOnce?: string;
+  /** What `failPublicationOnce` throws; defaults to a plain Error. */
+  failError?: Error;
+  /** How many times `failPublicationOnce` throws before it lets reconcile through; default 1. */
+  failCount?: number;
   /** Throws once instead of completing a delivery, rolling the transaction back. */
   failCompleteOnce?: boolean;
   /** Inserts one extra event inside a delivery transaction. */
@@ -52,6 +57,7 @@ type FailureOptions = {
  */
 function failingUow(base: SourceUnitOfWork, options: FailureOptions): SourceUnitOfWork {
   let tripped = false;
+  let publicationFailures = 0;
   return {
     async run<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
       return base.run(async (repositories) => {
@@ -60,12 +66,13 @@ function failingUow(base: SourceUnitOfWork, options: FailureOptions): SourceUnit
             if (
               property === "findById"
               && options.failPublicationOnce !== undefined
-              && !tripped
+              && publicationFailures < (options.failCount ?? 1)
             ) {
               return async (id: string) => {
                 if (id === options.failPublicationOnce) {
                   tripped = true;
-                  throw new Error("injected publication failure");
+                  publicationFailures += 1;
+                  throw options.failError ?? new Error("injected publication failure");
                 }
                 return target.findById(id);
               };
@@ -1368,5 +1375,209 @@ describe("publication notices in import preview and result", () => {
     const entry = await fixture.uow.run((repositories) =>
       repositories.entries.findBySourcePath(fixture.annFolderSourceId, `${root}/a.md`));
     expect(entry?.documentId).toBeTruthy();
+  });
+});
+
+describe("publication drain cost and recovery", () => {
+  async function publishedHubDocument(label: string) {
+    const hub = new HubKnowledgeCommandServiceImpl(fixture.uow);
+    const folder = await hub.createFolder(fixture.mike, {
+      sourceId: fixture.mikeHubSourceId, parentId: null, name: `${label}-${uuidv7()}`,
+    });
+    const original = await hub.createDocument(fixture.mike, {
+      sourceId: fixture.mikeHubSourceId,
+      parentId: folder.treeNodeId,
+      title: label,
+      markdown: `# ${label}\n\nv0\n`,
+      metadata: {},
+    });
+    const publication = await publishFolder(
+      fixture.mike, fixture.teamWorkspaceId, `${label} ${uuidv7()}`, folder.treeNodeId);
+    await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+    const [teamDocument] = await publicationDocuments(publication.publication.id);
+    return { hub, original, publication, teamDocument };
+  }
+
+  it("retries a lock wait once in-process instead of waiting for the next save", async () => {
+    const { hub, original, publication, teamDocument } = await publishedHubDocument("Busy retry");
+    await hub.createRevision(fixture.mike, {
+      documentId: original.documentId,
+      expectedCurrentRevisionId: original.revisionId,
+      title: "Busy retry",
+      markdown: "# Busy retry\n\nv1\n",
+      metadata: {},
+    });
+
+    const summary = await drainPublicationEvents(
+      failingUow(fixture.uow, {
+        failPublicationOnce: publication.publication.id,
+        failError: new WorkspaceBusyError(),
+      }),
+      { judge: { kind: "CALLER", caller: fixture.mike } },
+    );
+
+    expect(summary).toMatchObject({ applied: 1, failed: 0 });
+    expect((await fixture.uow.run((repositories) =>
+      repositories.revisions.findCurrent(teamDocument.teamDocumentId)))?.markdown).toContain("v1");
+  });
+
+  it("gives up after one retry and leaves the event unconsumed for the next run", async () => {
+    const { hub, original, publication, teamDocument } = await publishedHubDocument("Busy twice");
+    await hub.createRevision(fixture.mike, {
+      documentId: original.documentId,
+      expectedCurrentRevisionId: original.revisionId,
+      title: "Busy twice",
+      markdown: "# Busy twice\n\nv1\n",
+      metadata: {},
+    });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const failed = await drainPublicationEvents(
+      failingUow(fixture.uow, {
+        failPublicationOnce: publication.publication.id,
+        failError: new WorkspaceBusyError(),
+        failCount: 2,
+      }),
+      { judge: { kind: "CALLER", caller: fixture.mike } },
+    );
+    error.mockRestore();
+    expect(failed).toMatchObject({ applied: 0, failed: 1 });
+    expect((await eventRows(original.documentId)).some((event) => event.consumed_at === null)).toBe(true);
+
+    const recovered = await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+    expect(recovered).toMatchObject({ applied: 1, failed: 0 });
+    expect((await fixture.uow.run((repositories) =>
+      repositories.revisions.findCurrent(teamDocument.teamDocumentId)))?.markdown).toContain("v1");
+  });
+
+  it("does not retry a failure that is not a lock wait", async () => {
+    const { hub, original, publication } = await publishedHubDocument("No retry");
+    await hub.createRevision(fixture.mike, {
+      documentId: original.documentId,
+      expectedCurrentRevisionId: original.revisionId,
+      title: "No retry",
+      markdown: "# No retry\n\nv1\n",
+      metadata: {},
+    });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const summary = await drainPublicationEvents(
+      failingUow(fixture.uow, { failPublicationOnce: publication.publication.id }),
+      { judge: { kind: "CALLER", caller: fixture.mike } },
+    );
+    error.mockRestore();
+    expect(summary).toMatchObject({ applied: 0, failed: 1 });
+  });
+
+  it("keeps autosave drafts from piling up as permanent team revisions", async () => {
+    const { hub, original, teamDocument } = await publishedHubDocument("Autosave");
+    let expected = original.revisionId;
+    for (let index = 1; index <= 5; index += 1) {
+      const saved = await hub.createRevision(fixture.mike, {
+        documentId: original.documentId,
+        expectedCurrentRevisionId: expected,
+        title: "Autosave",
+        markdown: `# Autosave\n\ndraft ${index}\n`,
+        metadata: {},
+        saveMode: "AUTOSAVE",
+      });
+      expected = saved.revisionId;
+      await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+    }
+
+    const current = await fixture.uow.run((repositories) =>
+      repositories.revisions.findCurrent(teamDocument.teamDocumentId));
+    expect(current?.markdown).toContain("draft 5");
+    expect(current?.history?.state).toBe("WORKING");
+    // The initial copy plus the one live draft; the four earlier drafts were replaced.
+    expect(await revisionCount(teamDocument.teamDocumentId)).toBeLessThanOrEqual(2);
+  });
+
+  it("keeps a checkpoint save as a permanent team revision and drops the draft before it", async () => {
+    const { hub, original, teamDocument } = await publishedHubDocument("Checkpoint");
+    const draft = await hub.createRevision(fixture.mike, {
+      documentId: original.documentId,
+      expectedCurrentRevisionId: original.revisionId,
+      title: "Checkpoint",
+      markdown: "# Checkpoint\n\ndraft\n",
+      metadata: {},
+      saveMode: "AUTOSAVE",
+    });
+    await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+    await hub.createRevision(fixture.mike, {
+      documentId: original.documentId,
+      expectedCurrentRevisionId: draft.revisionId,
+      title: "Checkpoint",
+      markdown: "# Checkpoint\n\nfinal\n",
+      metadata: {},
+      saveMode: "CHECKPOINT",
+    });
+    await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+
+    const states = await fixture.pool.query<{ history_state: string; markdown: string }[]>(
+      "SELECT history_state, markdown FROM knowledge_revisions WHERE document_id = ? ORDER BY revision_no",
+      [teamDocument.teamDocumentId],
+    );
+    expect(states.at(-1)).toMatchObject({ history_state: "CHECKPOINT" });
+    expect(states.at(-1)?.markdown).toContain("final");
+    expect(states.some((row) => row.markdown.includes("draft"))).toBe(false);
+  });
+
+  it("lists a publication's documents once per reconcile and reads no revision for an unchanged copy", async () => {
+    const path = `cost-${uuidv7()}`;
+    const { folderNodeId, documents } = await folderWithDocuments(fixture.mike, path, [
+      { name: "a.md", text: "# A\n\na\n" },
+      { name: "b.md", text: "# B\n\nb\n" },
+      { name: "c.md", text: "# C\n\nc\n" },
+    ]);
+    await publishFolder(fixture.mike, fixture.teamWorkspaceId, `Cost ${path}`, folderNodeId);
+    await drainPublicationEvents(fixture.uow, { judge: { kind: "CALLER", caller: fixture.mike } });
+
+    // A repeated event for an unchanged original reconciles to a no-op.
+    await fixture.uow.run((repositories) => repositories.publicationEvents.record({
+      documentId: documents["a.md"].documentId,
+      treeNodeId: null,
+      sourceId: null,
+      kind: "REVISION",
+      revisionId: documents["a.md"].revisionId,
+      at: new Date(),
+    }));
+
+    let listings = 0;
+    let currentReads = 0;
+    const counting: SourceUnitOfWork = {
+      async run<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
+        return fixture.uow.run(async (repositories) => {
+          const publications = new Proxy(repositories.publications, {
+            get(target, property, receiver) {
+              if (property === "listDocuments") {
+                return async (id: string) => { listings += 1; return target.listDocuments(id); };
+              }
+              return Reflect.get(target, property, receiver);
+            },
+          });
+          const revisions = new Proxy(repositories.revisions, {
+            get(target, property, receiver) {
+              if (property === "findCurrent") {
+                return async (id: string) => { currentReads += 1; return target.findCurrent(id); };
+              }
+              return Reflect.get(target, property, receiver);
+            },
+          });
+          return work(new Proxy(repositories, {
+            get(target, property, receiver) {
+              if (property === "publications") return publications;
+              if (property === "revisions") return revisions;
+              return Reflect.get(target, property, receiver);
+            },
+          }));
+        });
+      },
+      runWithCreatorQuotaLock: (creatorId, timeoutSeconds, work) =>
+        fixture.uow.runWithCreatorQuotaLock(creatorId, timeoutSeconds, work),
+    };
+    const summary = await drainPublicationEvents(counting, { judge: { kind: "CALLER", caller: fixture.mike } });
+
+    expect(summary.applied).toBeGreaterThanOrEqual(1);
+    expect(listings).toBe(1);
+    expect(currentReads).toBe(0);
   });
 });

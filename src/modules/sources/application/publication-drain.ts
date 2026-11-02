@@ -1,3 +1,4 @@
+import { WorkspaceBusyError } from "@/shared/domain/errors";
 import type { RightsJudge } from "../domain/publication";
 import type { SourceUnitOfWork } from "../ports/unit-of-work";
 import { reconcileContribution, type ReconcileState } from "./publication-reconciler";
@@ -84,41 +85,49 @@ async function deliverContribution(
   retryDelayMs: number,
 ): Promise<ReconcileState | "FAILED"> {
   const nextAttemptAt = new Date(now.getTime() + retryDelayMs);
-  try {
-    return await uow.run(async (repositories) => {
-      const reconciled = await reconcileContribution(repositories, {
-        publicationId: batch.publicationId,
-        contributionId: batch.contributionId,
-        judge,
-        now,
-      });
-      const outcome = reconciled.state === "APPLIED"
-        ? "APPLIED"
-        : reconciled.state === "SKIPPED"
-          ? "SKIPPED"
-          : null;
-      if (outcome !== null) {
-        for (const row of batch.rows) {
-          await repositories.publications.completeDelivery(
-            row.eventId,
-            row.contributionId,
-            outcome,
-          );
-        }
-      } else if (judge.kind === "NO_CALLER") {
-        // A worker cannot judge group-derived rights and must not clear a
-        // freeze, so keep these rows out of its next bounded head window. The
-        // contributor's own caller-scoped drain ignores this backoff.
-        for (const row of batch.rows) {
-          await repositories.publications.deferDelivery(
-            row.eventId,
-            row.contributionId,
-            nextAttemptAt,
-          );
-        }
-      }
-      return reconciled.state;
+  const attempt = () => uow.run(async (repositories) => {
+    const reconciled = await reconcileContribution(repositories, {
+      publicationId: batch.publicationId,
+      contributionId: batch.contributionId,
+      judge,
+      now,
     });
+    const outcome = reconciled.state === "APPLIED"
+      ? "APPLIED"
+      : reconciled.state === "SKIPPED"
+        ? "SKIPPED"
+        : null;
+    if (outcome !== null) {
+      for (const row of batch.rows) {
+        await repositories.publications.completeDelivery(
+          row.eventId,
+          row.contributionId,
+          outcome,
+        );
+      }
+    } else if (judge.kind === "NO_CALLER") {
+      // A worker cannot judge group-derived rights and must not clear a
+      // freeze, so keep these rows out of its next bounded head window. The
+      // contributor's own caller-scoped drain ignores this backoff.
+      for (const row of batch.rows) {
+        await repositories.publications.deferDelivery(
+          row.eventId,
+          row.contributionId,
+          nextAttemptAt,
+        );
+      }
+    }
+    return reconciled.state;
+  });
+  try {
+    try {
+      return await attempt();
+    } catch (error) {
+      // A lock wait or deadlock rolled everything back; one immediate retry
+      // usually succeeds, and nothing else would re-trigger a caller's drain.
+      if (!(error instanceof WorkspaceBusyError)) throw error;
+      return await attempt();
+    }
   } catch (error) {
     console.error(
       "Publication drain failed for one contribution.",

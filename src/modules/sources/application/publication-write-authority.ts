@@ -16,6 +16,7 @@ import { fingerprintRevisionContent } from "@/modules/knowledge/domain/content";
 import { isRevisionContentUnchanged as unchangedRevision } from "@/modules/knowledge/domain/revision";
 import { normalizeFolderName, orderSiblingsByPosition } from "@/modules/knowledge/domain/tree-rules";
 import { placeNodeAtIndex, renumberSiblingPositions } from "@/modules/knowledge/application/internal/tree-transaction";
+import type { KnowledgeRevision } from "@/modules/knowledge/domain/revision";
 import type { TreeViewNode } from "@/modules/knowledge/ports/tree-repository";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import type {
@@ -28,13 +29,20 @@ import type { SourceRepositories } from "../ports/unit-of-work";
 
 /** The publication-side writers every later task uses. Their authority is opaque and binder-made. */
 export interface PublicationProjection {
+  /**
+   * The publication's documents, read once at bind. The projection keeps this
+   * array current for `copy`, and the reconciler mutates the same objects, so
+   * no writer re-lists the publication per document.
+   */
+  readonly documents: PublicationDocument[];
   copy(input: {
     originalDocumentId: string;
     parentId: string | null;
     nodeName: string;
     sourcePath: string | null;
   }): Promise<{ documentId: string; treeNodeId: string }>;
-  refresh(teamDocumentId: string, originalDocumentId: string): Promise<{ changed: boolean }>;
+  /** `original` is the caller's already-read current revision; omit it to read it here. */
+  refresh(teamDocumentId: string, originalDocumentId: string, original?: KnowledgeRevision): Promise<{ changed: boolean }>;
   place(input: { teamDocumentId: string; parentId: string | null; nodeName: string }): Promise<void>;
   setDocumentStatus(teamDocumentId: string, status: "ACTIVE" | "ARCHIVED"): Promise<void>;
   ensureFolder(parentId: string | null, name: string): Promise<string>;
@@ -138,7 +146,7 @@ function requireFolderName(name: string): string {
  * of work is opened; the owning orchestration commits once.
  *
  * Projection cost is bounded independently of the publication size: one
- * tx-local tree read per bind, maintained in memory by `copy`, `ensureFolder`,
+ * tx-local tree read and one document list per bind, maintained in memory by `copy`, `ensureFolder`,
  * `place`, `setDocumentStatus` and `pruneEmptyFolders`. No projection command
  * re-reads the whole source.
  */
@@ -195,6 +203,11 @@ export async function bindPublicationProjection(
    * and folder segment — quadratic in the number of documents.
    */
   const treeView: TreeViewNode[] = await repositories.tree.listBySource(authority.sourceId);
+  // `currentContentHash` is a cache of the team copy's current revision. In this
+  // transaction only `createRevisionCopy` writes team revisions; any new writer
+  // here must update it, or `refresh` will skip a real change.
+  const documents = await repositories.publications.listDocuments(publication.id);
+  const documentById = new Map(documents.map((document) => [document.teamDocumentId, document]));
 
   function requireSameSource(node: { sourceId: string } | null): void {
     if (!node || node.sourceId !== authority.sourceId) throw new DocumentNotFoundError();
@@ -247,6 +260,7 @@ export async function bindPublicationProjection(
     const { normalized, contentHash } = fingerprintRevisionContent(content);
     const revisionId = uuidv7();
     const revisionNo = await repositories.revisions.nextRevisionNumber(teamDocumentId);
+    const now = new Date();
     await repositories.revisions.insert({
       id: revisionId,
       documentId: teamDocumentId,
@@ -254,7 +268,12 @@ export async function bindPublicationProjection(
       ...normalized,
       contentHash,
       createdBy: actorId,
-      createdAt: new Date(),
+      createdAt: now,
+      // An autosave draft stays a draft in the team: it is replaced by the next
+      // copy instead of piling up as permanent history.
+      ...(originalRevision.history?.state === "WORKING"
+        ? { history: { state: "WORKING" as const, activityId: revisionId, windowStartedAt: now, name: null, reason: "AUTOSAVE" } }
+        : {}),
     });
     await repositories.documents.setCurrentRevision(teamDocumentId, revisionId, actorId);
     await repositories.links.replaceForDocument({
@@ -262,8 +281,9 @@ export async function bindPublicationProjection(
       revisionId,
       links: extractDocumentLinks(normalized.markdown),
     });
+    await repositories.revisions.pruneWorking(teamDocumentId);
     await repositories.documents.assertComplete(teamDocumentId);
-    return revisionId;
+    return contentHash;
   }
 
   function creatorContributionOf(document: PublicationDocument): Contribution {
@@ -273,8 +293,7 @@ export async function bindPublicationProjection(
   }
 
   async function teamDocumentOf(teamDocumentId: string): Promise<PublicationDocument> {
-    const documents = await repositories.publications.listDocuments(authority.publication.id);
-    const document = documents.find((candidate) => candidate.teamDocumentId === teamDocumentId);
+    const document = documentById.get(teamDocumentId);
     if (!document) throw new NotFoundError("This document is not part of the publication.");
     return document;
   }
@@ -289,6 +308,8 @@ export async function bindPublicationProjection(
   }
 
   return {
+    documents,
+
     async copy(input) {
       await requireOriginalInContribution(input.originalDocumentId);
       if (!input.nodeName.trim()) throw new ValidationError("A copied document needs a non-empty name.");
@@ -313,7 +334,7 @@ export async function bindPublicationProjection(
         createdAt: now,
         updatedAt: now,
       });
-      await createRevisionCopy(documentId, original, authority.actorId);
+      const contentHash = await createRevisionCopy(documentId, original, authority.actorId);
       await repositories.tree.insert({
         id: treeNodeId,
         sourceId: authority.sourceId,
@@ -360,10 +381,23 @@ export async function bindPublicationProjection(
         originalDocumentId: input.originalDocumentId,
         teamDocumentId: documentId,
       });
+      // Registered last: a lost claim attempt rolls the savepoint back, and a
+      // document that never committed must not stay in the view.
+      const created: PublicationDocument = {
+        teamDocumentId: documentId,
+        publicationId: authority.publication.id,
+        creatorContributionId: authority.contribution.id,
+        currentOriginalDocumentId: input.originalDocumentId,
+        sourcePath: input.sourcePath,
+        status: "ACTIVE",
+        currentContentHash: contentHash,
+      };
+      documents.push(created);
+      documentById.set(documentId, created);
       return { documentId, treeNodeId };
     },
 
-    async refresh(teamDocumentId, originalDocumentId) {
+    async refresh(teamDocumentId, originalDocumentId, knownOriginal) {
       const teamDocument = await teamDocumentOf(teamDocumentId);
       if (teamDocument.currentOriginalDocumentId !== originalDocumentId) {
         throw new NotFoundError("This team document is not fed by that original.");
@@ -376,7 +410,11 @@ export async function bindPublicationProjection(
       requireSameSource(stored);
 
       const creator = creatorContributionOf(teamDocument);
-      const original = await currentRevision(originalDocumentId);
+      const original = knownOriginal ?? await currentRevision(originalDocumentId);
+      // Same canonical content hashes alike, so a no-op refresh reads nothing more.
+      if (teamDocument.currentContentHash != null && teamDocument.currentContentHash === original.contentHash) {
+        return { changed: false };
+      }
       const teamCurrent = await currentRevision(teamDocumentId);
       if (unchangedRevision(teamCurrent, {
         title: original.title,
@@ -385,7 +423,7 @@ export async function bindPublicationProjection(
       })) {
         return { changed: false };
       }
-      await createRevisionCopy(teamDocumentId, original, creator.userId);
+      teamDocument.currentContentHash = await createRevisionCopy(teamDocumentId, original, creator.userId);
       return { changed: true };
     },
 

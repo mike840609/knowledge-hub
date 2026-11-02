@@ -57,6 +57,9 @@ function mapDocument(row: DbRow): PublicationDocument {
     currentOriginalDocumentId: String(row.current_original_document_id),
     sourcePath: row.source_path === null ? null : String(row.source_path),
     status: String(row.status) as PublicationDocument["status"],
+    currentContentHash: row.current_content_hash === null || row.current_content_hash === undefined
+      ? null
+      : String(row.current_content_hash),
   };
 }
 
@@ -204,8 +207,9 @@ export class MariaDbPublicationRepository implements PublicationRepository {
 
   async listDocuments(publicationId: string): Promise<PublicationDocument[]> {
     const rows = await this.connection.query<DbRow[]>(
-      `SELECT pd.*, d.status
+      `SELECT pd.*, d.status, r.content_hash AS current_content_hash
        FROM publication_documents pd JOIN knowledge_documents d ON d.id = pd.team_document_id
+       LEFT JOIN knowledge_revisions r ON r.id = d.current_revision_id
        WHERE pd.publication_id = ? ORDER BY pd.team_document_id`,
       [publicationId],
     );

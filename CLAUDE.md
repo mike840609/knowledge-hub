@@ -81,6 +81,10 @@ pass.
 - **Scope is derived, never stored twice.** A `KnowledgeSource` belongs to
   exactly one workspace and a document to exactly one source. Documents do not
   carry `workspace_id`; scope comes from `Document → Source → Workspace`.
+  The one deliberate copy is `publication_bindings.active_team_workspace_id`:
+  a unique-claim key (one team document per original per team), set while the
+  publication source is ACTIVE and NULL once archived. It never answers a scope
+  question, and `tests/integration/publication-persistence.test.ts` fails on drift.
 - **Knowing an ID is not authorization.** Possessing a `workspace_id`,
   `source_id` or `document_id` grants nothing. URL parameters are navigation
   inputs, never authorization proof, and the application service must

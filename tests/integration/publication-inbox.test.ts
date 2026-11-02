@@ -171,6 +171,27 @@ describe("team discussion in the Inbox", () => {
     expect(await service.countUnreadForOwner(mentioned.caller)).toEqual({ count: 1 });
   });
 
+  it("reads a team member's mention when they open its discussion, and only for that document's thread", async () => {
+    const creator = await addMember(fixture.teamWorkspaceId, "OpenThreadCreator", "EDITOR");
+    const mentioned = await addMember(fixture.teamWorkspaceId, "OpenThreadMentioned", "EDITOR");
+    const doc = await publishedDocument({ creator: creator.caller });
+    const other = await publishedDocument({ creator: creator.caller });
+    const thread = await service.createForOwner(creator.caller, {
+      documentId: doc.documentId, expectedRevisionId: doc.revisionId, anchor: doc.anchor,
+      body: "Look @OpenThreadMentioned", idempotencyKey: randomUUID(), mentions: [mentioned.identity.id],
+    });
+    const commentId = await commentIdOf(thread.id);
+    expect(await service.countUnreadForOwner(mentioned.caller)).toEqual({ count: 1 });
+
+    // A thread id paired with another document's id clears nothing.
+    await service.markThreadRead(mentioned.caller, other.documentId, thread.id);
+    expect((await mentionRowsOf(commentId))[0].read_at).toBeNull();
+
+    await service.markThreadRead(mentioned.caller, doc.documentId, thread.id);
+    expect((await mentionRowsOf(commentId))[0].read_at).not.toBeNull();
+    expect(await service.countUnreadForOwner(mentioned.caller)).toEqual({ count: 0 });
+  });
+
   it("keeps a direct member's historical entry, names nothing without access, and shows it again on return", async () => {
     const creator = await addMember(fixture.teamWorkspaceId, "DirectCreator", "EDITOR");
     const commenter = await addMember(fixture.teamWorkspaceId, "DirectCommenter", "EDITOR");
@@ -440,6 +461,15 @@ describe("team discussion in the Inbox", () => {
     ));
     expect(filtered.map((event) => event.id)).toContain(goodId);
     expect(filtered.every((event) => event.workspaceId === fixture.teamWorkspaceId)).toBe(true);
+
+    // The badge's grouped counts get the same pre-filter, so a revoked backlog is never judged row by row.
+    const scoped = await fixture.uow.run((r) => r.shareCommentEvents.listUnreadCountsByRecipient(
+      creator.identity.id, [fixture.teamWorkspaceId],
+    ));
+    expect(scoped.map((row) => row.documentId)).toContain(good.documentId);
+    expect(scoped.every((row) => row.workspaceId === fixture.teamWorkspaceId)).toBe(true);
+    const unscoped = await fixture.uow.run((r) => r.shareCommentEvents.listUnreadCountsByRecipient(creator.identity.id));
+    expect(unscoped.some((row) => row.workspaceId === fixture.groupTeamWorkspaceId)).toBe(true);
 
     const unread = await service.listUnreadForOwner(creator.caller);
     expect(entryFrom(unread, goodId)?.excerpt).toBe("Readable event beyond the page");
