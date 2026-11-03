@@ -69,6 +69,15 @@ test.describe("named-recipient share, end to end", () => {
     // The owner creates it through the dialog.
     await page.goto(`${owner}/w/${ownerWorkspace}/knowledge/${doc.sourceId}/${doc.documentId}`);
     const dialog = await chooseSpecificPeople(page);
+    // The suggestions float over the form: the Create button stays put beneath them.
+    const create = dialog.getByRole("button", { name: "Create link" });
+    const before = (await create.boundingBox())!;
+    await dialog.getByRole("combobox", { name: "People who can open it" }).fill("Phase3");
+    const suggestions = dialog.getByRole("listbox", { name: "People matching your search" });
+    await expect(suggestions.getByRole("option").first()).toBeVisible();
+    expect((await create.boundingBox())!.y).toBe(before.y);
+    expect((await suggestions.boundingBox())!.y + (await suggestions.boundingBox())!.height).toBeGreaterThan(before.y);
+    await dialog.getByRole("combobox", { name: "People who can open it" }).fill("");
     await pickRecipient(dialog, "P3-102", "Phase3 nonCreator");
     await pickRecipient(dialog, "P3-105", "Phase3 viewer");
     await dialog.getByLabel(/Label/).fill("named flow");

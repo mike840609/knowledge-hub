@@ -52,9 +52,10 @@ export function RecipientPicker({
 
   const taken = new Set([...value.map((person) => person.id), ...exclude]);
   const answered = query !== "" && found?.query === query;
-  const people = answered ? found.people.filter((person) => !taken.has(person.id)) : [];
+  // The last answer stays up while the next one is on its way, so the list does not blink at each keystroke.
+  const people = query !== "" && found ? found.people.filter((person) => !taken.has(person.id)) : [];
   const hint = query === "" || dismissed ? undefined : failure ?? (answered && people.length === 0 ? "No one found." : undefined);
-  const listed = people.length > 0 && !dismissed;
+  const listed = people.length > 0 && !dismissed && failure === undefined;
   const row = Math.min(active, people.length - 1);
   const optionId = (index: number) => `${listId}-option-${index}`;
 
@@ -102,41 +103,44 @@ export function RecipientPicker({
           ))}
         </ul>
       ) : null}
-      <Input
-        id={id}
-        role="combobox"
-        aria-label={label}
-        aria-autocomplete="list"
-        aria-expanded={listed}
-        aria-controls={listed ? listId : undefined}
-        aria-activedescendant={listed ? optionId(row) : undefined}
-        autoComplete="off"
-        placeholder="Name or employee ID"
-        value={text}
-        disabled={disabled}
-        onChange={(event) => { setText(event.target.value); setDismissed(false); setFailure(undefined); }}
-        onKeyDown={onKeyDown}
-      />
-      {listed ? (
-        <ul id={listId} role="listbox" aria-label="People matching your search" className="max-h-[12rem] overflow-y-auto rounded-md border border-kh-border bg-kh-bg p-1 shadow-popover">
-          {people.map((person, index) => (
-            <li
-              key={person.id}
-              id={optionId(index)}
-              role="option"
-              aria-selected={index === row}
-              className={`cursor-default truncate rounded-md px-2 py-1 text-body-sm ${index === row ? "bg-kh-bg-selected text-kh-selected-text" : ""}`}
-              onMouseDown={(event) => event.preventDefault()}
-              onMouseEnter={() => setActive(index)}
-              onClick={() => choose(person)}
-            >
-              {optionText(person)}
-            </li>
-          ))}
-        </ul>
-      ) : hint ? (
-        <p className="px-2 text-body-sm text-kh-text-muted">{hint}</p>
-      ) : null}
+      {/* The list and its hint float over what follows instead of pushing it down. */}
+      <div className="relative">
+        <Input
+          id={id}
+          role="combobox"
+          aria-label={label}
+          aria-autocomplete="list"
+          aria-expanded={listed}
+          aria-controls={listed ? listId : undefined}
+          aria-activedescendant={listed ? optionId(row) : undefined}
+          autoComplete="off"
+          placeholder="Name or employee ID"
+          value={text}
+          disabled={disabled}
+          onChange={(event) => { setText(event.target.value); setDismissed(false); setFailure(undefined); }}
+          onKeyDown={onKeyDown}
+        />
+        {listed ? (
+          <ul id={listId} role="listbox" aria-label="People matching your search" className="absolute inset-x-0 top-full z-30 mt-1 max-h-[12rem] overflow-y-auto rounded-md border border-kh-border bg-kh-bg p-1 shadow-popover">
+            {people.map((person, index) => (
+              <li
+                key={person.id}
+                id={optionId(index)}
+                role="option"
+                aria-selected={index === row}
+                className={`cursor-default truncate rounded-md px-2 py-1 text-body-sm ${index === row ? "bg-kh-bg-selected text-kh-selected-text" : ""}`}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => setActive(index)}
+                onClick={() => choose(person)}
+              >
+                {optionText(person)}
+              </li>
+            ))}
+          </ul>
+        ) : hint ? (
+          <p className="absolute inset-x-0 top-full z-30 mt-1 rounded-md border border-kh-border bg-kh-bg px-2 py-1 text-body-sm text-kh-text-muted shadow-popover">{hint}</p>
+        ) : null}
+      </div>
     </div>
   );
 }

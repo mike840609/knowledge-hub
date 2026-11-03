@@ -180,3 +180,19 @@ test("disabled disables the field and every chip's remove button", () => {
   expect(input.disabled).toBe(true);
   expect(host.querySelector<HTMLButtonElement>('button[aria-label="Remove 陳小明"]')!.disabled).toBe(true);
 });
+
+test("while the next search is on its way the last list stays up, and a failed one takes it down", async () => {
+  stubFetch();
+  const input = render();
+  await type(input, "陳");
+  expect(options()).toHaveLength(2);
+  // A keystroke starts a new debounce; until its answer arrives the list does not blink away.
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+  act(() => { setter.call(input, "陳小"); input.dispatchEvent(new Event("input", { bubbles: true })); });
+  expect(options()).toHaveLength(2);
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: { code: "X", message: "Directory is down." } }), { status: 503, headers: { "content-type": "application/json" } })));
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 250)); });
+  expect(options()).toHaveLength(0);
+  expect(input.getAttribute("aria-expanded")).toBe("false");
+  expect(host.textContent).toContain("Directory is down.");
+});
