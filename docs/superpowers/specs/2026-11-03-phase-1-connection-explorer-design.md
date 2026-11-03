@@ -1,12 +1,12 @@
 # Phase 1 — Connection Explorer (Evidence-first Direct Links)
 
-- **Status:** DRAFT — For review only; not approved for implementation
+- **Status:** DESIGN APPROVED by user on 2026-11-03 — implementation plan in preparation; implementation itself is not approved
 - **Date:** 2026-11-03
 - **Product direction:** Knowledge Understanding Through Connections
 - **Route:** `/w/:workspaceId/graph` (existing route, proposed display name **Connections**)
 - **Type:** New product-direction Phase 1, **not** historical Phase 1 Core Tree
 - **Dependency:** Existing knowledge link index, graph, source read authorization, current revisions
-- **Approvals:** None yet. No implementation is authorized by this document.
+- **Approvals:** User approved design on 2026-11-03. No implementation is authorized by this document.
 
 ## 1. Intent and problem
 
@@ -286,4 +286,4 @@ No product-code changes, migrations, deployment changes or implementation PR are
 - `src/modules/knowledge/ports/document-link-repository.ts` — valid edges and current Markdown reads.
 - `src/components/knowledge/graph-canvas.tsx`, `graph-explorer.tsx`, `graph-list.tsx` — interaction surfaces.
 
-**Approval gate:** Document is for **design review only**. Once the user approves this spec, run Superpowers writing-plans. Do not implement until the design is approved.
+**Approval gate:** Design approved on 2026-11-03. Superpowers writing-plans follows; implementation requires separate plan review and execution-method approval.
