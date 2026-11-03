@@ -22,9 +22,13 @@ test("the personal issues board lists, filters and pages the reports", async ({ 
   const pool = createDatabasePool(databaseConfig("e2e"));
 
   try {
-    // 1. The personal rail carries Issues, and it opens the board.
+    // 1. The board is not a rail row; it is reached from "Report a problem".
     await page.goto("/");
-    const issues = page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Issues", exact: true });
+    await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Issues", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: /^Account:/ }).click();
+    await page.getByRole("menuitem", { name: "Report a problem", exact: true }).click();
+    const reportDialog = page.getByRole("dialog", { name: "Report a problem", exact: true });
+    const issues = reportDialog.getByRole("link", { name: "View all reported issues", exact: true });
     await expect(issues).toHaveAttribute("href", `/w/${workspaceId}/issues`);
     await issues.click();
     await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/issues$`));

@@ -1,5 +1,6 @@
 "use client";
 import { Dialog } from "@base-ui-components/react/dialog";
+import Link from "next/link";
 import type { RefObject } from "react";
 import {useId, useState} from "react";
 import {Button} from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { FEEDBACK_CATEGORIES, type FeedbackCategory } from "@/modules/personal/d
 import { Label } from "@/components/ui/label";
 import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
 import { DialogCloseButton } from "@/components/ui/dialog-close";
-export function FeedbackReport({ empId, open, onOpenChange, returnFocus }: { empId: string; open: boolean; onOpenChange: (open: boolean) => void; returnFocus?: RefObject<HTMLElement | null> }){
+export function FeedbackReport({ empId, issuesHref, open, onOpenChange, returnFocus }: { empId: string; issuesHref?: string; open: boolean; onOpenChange: (open: boolean) => void; returnFocus?: RefObject<HTMLElement | null> }){
   const id = useId();
   const [category,setCategory]=useState<FeedbackCategory>("Sync");const [description,setDescription]=useState("");const [saved,setSaved]=useState(false);
   const [sending,setSending]=useState(false);const [error,setError]=useState("");
@@ -29,7 +30,7 @@ export function FeedbackReport({ empId, open, onOpenChange, returnFocus }: { emp
     <Dialog.Backdrop className={dialogBackdropClasses()} />
     <Dialog.Popup finalFocus={returnFocus} className={dialogPopupClasses("max-h-[90dvh] w-[min(30rem,92vw)] overflow-y-auto text-kh-text")}>
     <Dialog.Title className="text-title font-semibold">Report a problem</Dialog.Title><div className="mt-3 space-y-3">
-    <Dialog.Description className="text-body-sm text-kh-text-muted">Your report is sent to the maintainers with your employee ID and the page you are on. Document content is not included.</Dialog.Description>
+    <Dialog.Description className="text-body-sm text-kh-text-muted">Your report appears on the shared Issues board with your name, employee ID and the page you are on. Document content is not included.</Dialog.Description>
     {/* Shown so the reporter sees what is attached; the server still takes it from the signed-in caller, never from this field.
         Out of the tab order: nothing to do there, and the dialog's first focus belongs to Category. */}
     <div className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-3 gap-y-3">
@@ -38,7 +39,7 @@ export function FeedbackReport({ empId, open, onOpenChange, returnFocus }: { emp
       <SelectMenu id={`${id}-category`} className="flex" value={category} onValueChange={value=>{setCategory(value);edited();}} options={FEEDBACK_CATEGORIES.map(value=>({value,label:value}))} />
     </div>
     <Label htmlFor={`${id}-description`}>What happened?</Label><Textarea id={`${id}-description`} maxLength={5000} value={description} onChange={e=>{setDescription(e.target.value);edited();}} placeholder="Steps to reproduce, what you expected, and any error message" />
-    <div className="flex flex-wrap justify-end gap-2"><Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button><Button variant="secondary" disabled={!description.trim()||sending} onClick={()=>void send()}>{sending?"Sending…":"Send report"}</Button></div>
+    <div className="flex flex-wrap items-center justify-end gap-2">{issuesHref?<Link href={issuesHref} onClick={()=>onOpenChange(false)} className="kh-focus-ring mr-auto rounded-md text-body-sm text-kh-link hover:underline">View all reported issues</Link>:null}<Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button><Button variant="secondary" disabled={!description.trim()||sending} onClick={()=>void send()}>{sending?"Sending…":"Send report"}</Button></div>
     {error?<p role="alert" className="text-body-sm text-kh-text">{error}</p>:null}
     {saved?<p role="status" className="text-caption text-kh-text-muted">Report sent. Thank you.</p>:null}
   </div><DialogCloseButton /></Dialog.Popup></Dialog.Portal></Dialog.Root>;

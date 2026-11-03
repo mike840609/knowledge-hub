@@ -28,7 +28,7 @@ import { useDensity, type Density } from "./use-density";
  * not belong in Settings either — that surface is workspace governance, and
  * the theme is a personal preference held in this browser.
  */
-export function UserMenu({ identityName, identityEmpId, workspaceId, compact = false, trigger = "account" }: { identityName: string; identityEmpId: string; workspaceId?: string; compact?: boolean; trigger?: "account" | "preferences" }) {
+export function UserMenu({ identityName, identityEmpId, workspaceId, issuesHref, compact = false, trigger = "account" }: { identityName: string; identityEmpId: string; workspaceId?: string; issuesHref?: string; compact?: boolean; trigger?: "account" | "preferences" }) {
   const [reportOpen, setReportOpen] = useState(false);
   const accountRef = useRef<HTMLButtonElement>(null);
   const { theme, setTheme } = useTheme();
@@ -102,7 +102,7 @@ export function UserMenu({ identityName, identityEmpId, workspaceId, compact = f
         <MenuItem onClick={() => setReportOpen(true)}><span className="flex items-center gap-2"><MessageSquareWarning className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />Report a problem</span></MenuItem>
       </MenuContent>
     </MenuRoot>
-    <FeedbackReport empId={identityEmpId} open={reportOpen} onOpenChange={setReportOpen} returnFocus={accountRef} />
+    <FeedbackReport empId={identityEmpId} issuesHref={issuesHref} open={reportOpen} onOpenChange={setReportOpen} returnFocus={accountRef} />
     </>
   );
 }

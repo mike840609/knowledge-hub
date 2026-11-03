@@ -65,9 +65,11 @@ person may change, outside the application.
 
 Route: `/w/[workspaceId]/issues` (personal workspace only).
 
-- **Navigation:** a new **Issues** row in the primary rail, for personal
-  workspaces only, using the `MessageSquareWarning` glyph the report dialog
-  already uses. It sits with the other personal rows.
+- **Access:** the board is low-frequency, so it is **not** a navigation row.
+  It is reached from "Report a problem": the dialog carries a `View all
+  reported issues` link to the reader's personal-workspace Issues page, which
+  is where the board lives even when the dialog is opened from a Team
+  workspace. The route stays personal-workspace only.
 - **Header:** page title `Issues`; one muted line saying these are the problems
   colleagues reported through "Report a problem", newest first.
 - **Each row**, in this order:
@@ -210,8 +212,8 @@ index because the table is small and bounded by the write rate limit.
 - Anonymous reporting, report editing, deletion or retention policy.
 - Comments, voting, "me too", notifications, duplicate linking or merging.
 - Search across descriptions; counts or analytics on the board.
-- A link from the report dialog to the board (discoverability comes from the
-  personal rail).
+- A navigation (rail) entry for the board; discoverability is the report
+  dialog's link.
 
 ## Anti-goals
 
