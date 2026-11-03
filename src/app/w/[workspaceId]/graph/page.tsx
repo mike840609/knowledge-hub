@@ -1,5 +1,6 @@
 import { GraphExplorer, type GraphFilters } from "@/components/knowledge/graph-explorer";
 import { graphViewFrom } from "@/components/knowledge/graph-model";
+import { graphFocusContextHref } from "@/server/document-inspector-data";
 import { createHrefForNode } from "@/lib/create-from-link";
 import { PageHeader } from "@/components/shell/page-header";
 import { StatusMessage } from "@/components/ui/status-message";
@@ -65,9 +66,12 @@ export default async function WorkspaceGraphPage({
           truncated={graph.truncated}
           staleDocuments={graph.index.stale}
           // The focus's own neighbourhood, whatever the filters show (neighbourhood spec §5.1).
-          agentContextHref={filters.focusId && shell.workspace.type === "PERSONAL" && shell.access.actions.canSearch === true
-            ? `/w/${workspaceId}/agent-context?around=${filters.focusId}&depth=1`
-            : null}
+          agentContextHref={graphFocusContextHref({
+            workspaceId,
+            focusId: filters.focusId,
+            eligible: shell.workspace.type === "PERSONAL" && shell.access.actions.canSearch === true,
+            nodes: data.nodes,
+          })}
         />
       </div>
     </div>

@@ -16,7 +16,18 @@ export function neighbourhoodContextHref(input: {
   nodes: readonly { id: string; kind: "DOCUMENT" | "UNRESOLVED" }[] | null;
 }): string | null {
   if (!input.eligible || !input.nodes?.some((node) => node.kind === "DOCUMENT" && node.id !== input.documentId)) return null;
-  return `/w/${input.workspaceId}/agent-context?around=${input.documentId}&depth=${input.depth}`;
+  return `/w/${input.workspaceId}/agent-context?around=${encodeURIComponent(input.documentId)}&depth=${input.depth}`;
+}
+
+/** The graph page's entry: the focused node's own neighbourhood (whatever the filters show), only when that node is a document. */
+export function graphFocusContextHref(input: {
+  workspaceId: string;
+  focusId: string | null;
+  eligible: boolean;
+  nodes: readonly { id: string; kind: "DOCUMENT" | "UNRESOLVED" }[];
+}): string | null {
+  if (!input.eligible || !input.nodes.some((node) => node.id === input.focusId && node.kind === "DOCUMENT")) return null;
+  return `/w/${input.workspaceId}/agent-context?around=${encodeURIComponent(input.focusId!)}&depth=1`;
 }
 
 /**

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { DocumentLinksPanel } from "@/components/knowledge/document-links-panel";
-import { documentInspectorData, neighbourhoodContextHref } from "@/server/document-inspector-data";
+import { documentInspectorData, graphFocusContextHref, neighbourhoodContextHref } from "@/server/document-inspector-data";
 import type { DocumentLinkView } from "@/modules/knowledge/application/knowledge-link-service";
 import type { GraphNode } from "@/modules/knowledge/domain/link-graph";
 
@@ -47,5 +47,17 @@ describe("the Links tab entry", () => {
     const data = inspector({ 1: "/d", 2: "/d?graph=2" }, false);
     expect(data.localGraph?.agentContextHref).toBeNull();
     expect(renderToStaticMarkup(<DocumentLinksPanel view={linkView} localGraph={data.localGraph} focusId="self" />)).not.toContain("Copy for Agent");
+  });
+});
+
+describe("the graph page entry", () => {
+  const nodes = [node("doc"), node("unresolved:WIKI:a&b", "UNRESOLVED")];
+  it("is offered for a focused document, at depth 1", () => {
+    expect(graphFocusContextHref({ workspaceId: "ws", focusId: "doc", eligible: true, nodes })).toBe("/w/ws/agent-context?around=doc&depth=1");
+  });
+  it("is not offered for a focused broken link, without a focus, or when unavailable", () => {
+    expect(graphFocusContextHref({ workspaceId: "ws", focusId: "unresolved:WIKI:a&b", eligible: true, nodes })).toBeNull();
+    expect(graphFocusContextHref({ workspaceId: "ws", focusId: null, eligible: true, nodes })).toBeNull();
+    expect(graphFocusContextHref({ workspaceId: "ws", focusId: "doc", eligible: false, nodes })).toBeNull();
   });
 });
