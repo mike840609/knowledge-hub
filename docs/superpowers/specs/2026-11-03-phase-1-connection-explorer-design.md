@@ -1,6 +1,7 @@
 # Phase 1 — Connection Explorer (Evidence-first Direct Links)
 
-- **Status:** DESIGN APPROVED by user on 2026-11-03 — implementation plan in preparation; implementation itself is not approved
+- **Status:** DESIGN APPROVED by user on 2026-11-03 — implementation plan `docs/superpowers/plans/2026-11-03-phase-1-connection-explorer.md` written and reviewed; implementation itself is not approved
+- **Supersedes (in part):** `2026-09-29-personal-workspace-knowledge-graph-design.md` — main-Graph node click (“click to read”, §10.4 “Click uses client navigation”, walkthrough “click A opens it”) now selects; `focus` changes are client history rather than server recomputation. Filters, the Inspector local graph and everything else there still hold.
 - **Date:** 2026-11-03
 - **Product direction:** Knowledge Understanding Through Connections
 - **Route:** `/w/:workspaceId/graph` (existing route, proposed display name **Connections**)
@@ -101,7 +102,7 @@ These are already present; do not recreate them:
 - A pair selection is **ephemeral in v1**, not another URL parameter. Returning to a focused graph restores node selection, not necessarily the specific evidence occurrence.
 - Node clicks update URL focus without causing server-side graph relayout; preserve client zoom/pan. Browser back/forward and refresh must synchronize the selected node. An implementation may use Next-compatible client history for focus-only changes; whichever technique is chosen must also keep the existing Copy for Agent link in sync with focus.
 - **Main Connections Graph** has a select-node interaction; the same shared `GraphCanvas` in the **Document Inspector** continues to open documents as before. Make mode/handler distinction explicit, not implicit in touch/hover.
-- Main Graph node should be keyboard-operable with accessible “Explore connections for [title]” semantics; Enter and Space select. Modified-click/new-tab behavior must have a meaningful URL destination. The panel contains an unambiguous Open Document link.
+- Main Graph node should be keyboard-operable with accessible “Explore connections for [title]” semantics; Enter and Space select. Modified-click/new-tab opens the graph focused on that node (`/w/:workspaceId/graph?focus=<documentId>`). The panel contains an unambiguous Open Document link.
 - **Graph List** must offer an equally accessible Select / Explore Connections action **and** Open Document, with selected row state preserved when toggling views.
 - Graph hover transient emphasis must not override persistent selected emphasis. Selection must not re-run server force layout. Panel open/close must not steal keyboard focus; close restores sensible focus.
 - Selecting a row must distinguish **direction** (A→B versus B→A), even if both reference each other. Same pair repeated references belong under one row with count and individual occurrences.
@@ -118,7 +119,7 @@ These are already present; do not recreate them:
 
 ## 7. Connection summary and evidence data
 
-### 7.1 Summary contract (illustrative)
+### 7.1 Summary contract (illustrative; the plan's *Shared types* is the single definition)
 
 ```ts
 type ConnectionSummary = {
@@ -127,9 +128,12 @@ type ConnectionSummary = {
   sourceName: string;
   incoming: ConnectionPair[];
   outgoing: ConnectionPair[];
-  incomingTotal: number;
+  incomingTotal: number;   // directed pairs, not occurrences
   outgoingTotal: number;
   truncated: { incoming: boolean; outgoing: boolean };
+  unresolved: Array<{ kind: "WIKI" | "PATH"; writtenTarget: string; count: number }>;
+  unresolvedTotal: number;
+  linksPossiblyCapped: boolean; // focus document hit the 2000-links extractor cap
   graphIndexStale: boolean;
 };
 
@@ -140,9 +144,8 @@ type ConnectionPair = {
   toTitle: string;
   count: number;
   ambiguous: boolean;
-  /** Whether this pair is in the currently displayed graph; may be false due to filters/caps. */
-  inVisibleGraph: boolean;
 };
+// `inVisibleGraph` is derived by the client from the graph it is drawing; the server does not know the user's filters.
 ```
 
 - One selected node triggers **one lazy authorized summary read**. Do not attach complete Markdown to `WorkspaceGraphView`.
@@ -160,26 +163,30 @@ type ConnectionEvidenceResult =
       occurrences: Array<{
         ordinal: number; line: number;
         kind: "WIKI" | "PATH"; writtenTarget: string;
+        contextKind: "PARAGRAPH" | "REFERENCE_ONLY" | "LIMITED_LINE" | "UNAVAILABLE";
         paragraphText: string | null;
         truncated: boolean;
       }>;
       nextCursor: string | null;
       ambiguous: boolean;
+      linksPossiblyCapped: boolean;
     }
-  | { status: "CHANGED"; message: string }; // same private-safe response for stale/nonexistent pairs
+  | { status: "CHANGED" }; // both documents readable, but the current revision no longer has this link (or the cursor's revision is old)
 ```
+
+A caller who cannot read either document (nonexistent, archived, another Workspace, not a member) gets the same neutral not-found as any other unreadable document — indistinguishable across those cases, and never `CHANGED`, which would confirm the pair's documents exist.
 
 - Evidence is loaded **only after a user selects a directed pair**. Use a dedicated read-only query, not the entire Workspace Graph plus all Markdown excerpts.
 - Validate authenticated caller, Workspace, source document, target document, active Source/document policies and read access **before** returning titles/Markdown. The link index never grants access. Do not expose evidence on anonymous or share-link routes.
 - Read current source revision and catalog in one authorized read unit; extract current Markdown links with the existing extractor, resolve with the **existing resolver**, and retain occurrences resolving to the requested target. Verify that the pair still exists before returning excerpts.
-- The existing Link Index is a derived accelerator. If the source revision or link resolution changed since the graph loaded, return CHANGED / “Connection changed — refresh” rather than a fabricated/extraneous paragraph. Do not infer a graph edge if there is no current resolvable reference.
+- The existing Link Index is a derived accelerator. Evidence always reflects the current revision; the pagination cursor pins the revision, so a change between pages, or a current revision that no longer resolves the link, returns CHANGED / “Connection changed — refresh” rather than a fabricated/extraneous paragraph. Do not infer a graph edge if there is no current resolvable reference.
 - Include true `line` and `ordinal`, which distinguish multiple links on the same line. Source revision ties the excerpt to its exact saved source content; links should navigate using the existing reader semantics and may use line/heading deep link only where reliably supported.
 - **No new stored relation table or revision rewrite.** Add a read-only application service method and repository port method only if needed for efficient focused queries. Exact API route naming is a builder call; route handlers go through the composition root.
 
 ### 7.3 Bounded paragraph extraction — proposed concrete default
 
 - Parse **only the selected source revision** with the same Markdown parsing rules; find the AST paragraph or paragraph-like container that encloses the matched link occurrence (list item paragraph and blockquote paragraph are paragraphs). Use occurrence line/ordinal and node positions to disambiguate same-line links.
-- Return visible source-authored context as **plain text** (escaped by React; never raw HTML). Preserve enough text to recognize the reference. No LLM rewriting or speculative summary.
+- Return visible source-authored context as **plain text** (escaped by React; never raw HTML): the raw source slice of the enclosing block, so the written link stays recognizable. Parse the source once per evidence request, not once per occurrence. No LLM rewriting or speculative summary.
 - Cap each excerpt to **8 source lines or 600 Unicode characters**, centered around the reference when necessary. Show a visible ellipsis/truncation label; never silently truncate. For a standalone `[[Title]]`, show it as **Reference only**, not an invented explanation.
 - For a table cell or otherwise unsupported block with no suitable paragraph, fall back to the matched source line with a clear “Limited context” label. If a span cannot be safely located, return `paragraphText: null` and “Evidence unavailable”.
 - No full-heading section rendering, no embedded HTML, no auto-execution of markdown/mermaid/scripts inside the detail.
@@ -217,7 +224,7 @@ These are **proposed read-only routes**, not an API commitment. Return private c
 
 - `focus`, pair IDs, cursor and source filters are **untrusted navigation/query parameters**, not access rights.
 - Enforce caller identity and Workspace membership via application services on **every summary and evidence request**, including filter combinations, stale selection and direct URL calls.
-- Check both source and target are available for that caller under current workspace/source/document policy before returning even the existence of a pair. A now-unavailable target should yield neutral unavailable data, not a disclosive title.
+- Check both source and target are available for that caller under current policy before returning even the existence of a pair. Inside a Workspace that policy is **Workspace membership plus `ACTIVE` document and Source** (`requireVisibleDocument`); there are no per-document ACLs, and this phase must not invent any. A now-unavailable target should yield neutral unavailable data, not a disclosive title.
 - An owned or shared link is **not** authorization to access graph/evidence; never call these endpoints from `/s/:token` share view.
 - Never render document-authored HTML as HTML, including inside excerpts. Escape, bound and use plain-text content; no `dangerouslySetInnerHTML`.
 - Preserve index-write invariants; this phase is **read-only** and must not change revision creation or link indexing.
