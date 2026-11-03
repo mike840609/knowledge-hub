@@ -160,7 +160,7 @@ new API route.
 - **`src/components/knowledge/feedback-issues.tsx`** — the presentational list
   (server component unless a disclosure needs client state). No fetching.
 
-## Schema (migration 028)
+## Schema (migration 030)
 
 ```sql
 ALTER TABLE feedback_reports
@@ -169,7 +169,8 @@ ALTER TABLE feedback_reports
   ADD KEY idx_feedback_status_created (status, created_at, id);
 ```
 
-Existing rows become `OPEN`. `idx_feedback_created (created_at, id)` already
+Existing rows become `OPEN`. (The plan first numbered this 028; concurrent
+work took 028 and 029, so it landed as 030 at integration.) `idx_feedback_created (created_at, id)` already
 serves the unfiltered order and `idx_feedback_user_created (user_id, created_at)`
 the `mine` filter; a combined status+mine query is allowed to scan the status
 index because the table is small and bounded by the write rate limit.

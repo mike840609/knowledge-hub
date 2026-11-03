@@ -46,7 +46,7 @@
 | `src/components/knowledge/feedback-issues.tsx` (create) | Presentational list, status words, disclosure, empty states |
 | `src/app/w/[workspaceId]/issues/page.tsx` (create) | Header, filter form, list, Older link |
 | `src/components/shell/primary-nav.tsx` (modify) | Personal-only Issues row |
-| `src/infrastructure/database/mariadb/migrations/028-feedback-status.ts` (create) | Status column and index |
+| `src/infrastructure/database/mariadb/migrations/030-feedback-status.ts` (create) | Status column and index |
 | `src/infrastructure/database/mariadb/migrations/index.ts` (modify) | Register migration 28 |
 | `docs/superpowers/specs/2026-10-13-feedback-reports-to-database-design.md` (modify) | Amend the append-only and "no screen" sentences |
 
@@ -150,7 +150,7 @@ git commit -m "feat(issues): parse the report list filters and statuses"
 ### Task 2: Migration and the repository's one list query
 
 **Files:**
-- Create: `src/infrastructure/database/mariadb/migrations/028-feedback-status.ts`
+- Create: `src/infrastructure/database/mariadb/migrations/030-feedback-status.ts`
 - Modify: `src/infrastructure/database/mariadb/migrations/index.ts`
 - Modify: `src/modules/personal/ports/feedback-report-store.ts`
 - Modify: `src/infrastructure/database/mariadb/repositories/feedback-reports.ts`
@@ -240,7 +240,7 @@ Expected: FAIL — the migration version 28 is unknown and `listPage` does not e
 
 - [ ] **Step 3: Add the migration and implement `listPage`**
 
-Create `028-feedback-status.ts` with `version: 28, name: "feedback-status"` and the statements from the spec (`ADD COLUMN status ENUM(...) NOT NULL DEFAULT 'OPEN' AFTER page_path`, `ADD KEY idx_feedback_status_created (status, created_at, id)`); register it after `usersAccountMigration`.
+Create `030-feedback-status.ts` with `version: 30, name: "feedback-status"` and the statements from the spec (`ADD COLUMN status ENUM(...) NOT NULL DEFAULT 'OPEN' AFTER page_path`, `ADD KEY idx_feedback_status_created (status, created_at, id)`); register it after `reviewCommentMentionsMigration`.
 
 Add the port types above to `feedback-report-store.ts` and this method to `MariaDbFeedbackReportStore`:
 
@@ -269,7 +269,7 @@ Expected: PASS (3 tests). Then `npm run test:unit` — the existing feedback-ser
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/infrastructure/database/mariadb/migrations/028-feedback-status.ts src/infrastructure/database/mariadb/migrations/index.ts src/modules/personal/ports/feedback-report-store.ts src/infrastructure/database/mariadb/repositories/feedback-reports.ts tests/integration/feedback-issues.test.ts tests/unit/feedback-report-service.test.ts
+git add src/infrastructure/database/mariadb/migrations/030-feedback-status.ts src/infrastructure/database/mariadb/migrations/index.ts src/modules/personal/ports/feedback-report-store.ts src/infrastructure/database/mariadb/repositories/feedback-reports.ts tests/integration/feedback-issues.test.ts tests/unit/feedback-report-service.test.ts
 git commit -m "feat(issues): read reports through one paged status-aware query"
 ```
 
