@@ -4,7 +4,7 @@ import { useWorkspaceAuthorization } from "./use-workspace-authorization";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Tooltip } from "@/components/ui/tooltip";
-import { BarChart3, BookOpenText, Database, Inbox, Network, Settings, Home, Share2, type LucideIcon } from "lucide-react";
+import { BarChart3, BookOpenText, Database, Inbox, MessageSquareWarning, Network, Settings, Home, Share2, type LucideIcon } from "lucide-react";
 import { useInboxUnread } from "./use-inbox-unread";
 
 type NavItem = { name: string; href: string; Icon: LucideIcon; badge?: number; label?: string };
@@ -26,6 +26,7 @@ export function PrimaryNav({
   const items: NavItem[] = [
     ...(personal ? [{ name: "Inbox", href: `/w/${workspaceId}/inbox`, Icon: Inbox, badge: unread, label: inboxLabel }] : []),
     ...(personal ? [{ name: "Home", href: `/w/${workspaceId}/home`, Icon: Home }] : []),
+    ...(personal ? [{ name: "Issues", href: `/w/${workspaceId}/issues`, Icon: MessageSquareWarning }] : []),
     {
       name: "Knowledge",
       href: `/w/${workspaceId}/knowledge`,
