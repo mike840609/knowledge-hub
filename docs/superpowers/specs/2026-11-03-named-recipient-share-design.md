@@ -260,3 +260,24 @@ Where the build differs from the text above, this section is the record.
 6. **Shared views carry `linkId` only on NAMED reads.** It is used to mark the
    recipient's Inbox entry read when the share is opened; LINK reads do not
    carry it.
+7. **The "optional caller" on share reads is a `viewerId: string | null`, not a
+   `CallerContext`.** `readShared` and `readSharedTarget` take the viewer's id
+   (null: no one signed in), threaded from
+   `establishTrustedCaller().caller.identity.id`. `src/server/share-read.ts`
+   (`getSharedForViewer`, `sharedOpenTarget`) is the only web-layer entry that
+   passes one, and it must only ever pass a trusted caller's id: never an id
+   from a URL, body or header, since possessing an id grants nothing.
+8. **A Hub reader URL on another person's Workspace redirects.** The Workspace
+   layout answers 404 for a Workspace outside the caller's navigation, so the
+   owner's address bar `/w/<owner-ws>/shares/<token>` sent to a recipient was a
+   404. The layout now sends exactly that path shape (a UUIDv4 token, nothing
+   after it) to the caller's own `/w/<personal-ws>/shares/<token>` with the
+   whole query (`?d=`, `?thread=`), from the path the middleware passes in
+   `x-hub-path`. The redirect judges nothing; the page judges the share after
+   it, so a reader the link does not name still ends at the dead link's 404.
+   Every other foreign `/w/<id>/…` path stays a 404.
+9. **The unread "shared with you" list reads only unread rows**, and a row
+   judged dead there is marked read (as an unread mention is), so dead rows
+   cannot fill the window and hide an older live share, and are not judged
+   again on every poll. A document archived and later restored therefore
+   loses its share's unread mark.

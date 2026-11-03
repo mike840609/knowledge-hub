@@ -207,7 +207,7 @@
 **Interfaces:**
 - Consumes: Task 2 `getSharedForViewer`, `sharedOpenTarget(token, requested, viewerId)`; Task 5 `markRecipientRead`; existing `SharedReading`, `SharedReviewPanel`, `SharedFolderPage` components.
 - Produces:
-  - `/s/<token>`: unchanged code path; NAMED tokens already 404 because `readShared` refuses without a viewer. The not-found page shows, for every token, the neutral line "如果這是分享給你的，請在 Hub 中開啟" linking to `/s/<token>/open` (`?d=` preserved).
+  - `/s/<token>`: unchanged code path; NAMED tokens already 404 because `readShared` refuses without a viewer. The not-found page shows, for every token, the neutral line "If this was shared with you, open it in the Hub" linking to `/s/<token>/open` (`?d=` preserved).
   - `/s/<token>/open`: first `sharedOpenTarget(token, requested)` caller-less (LINK path unchanged). If null: `establishTrustedCaller()`, retry with `viewerId`; still null → `notFound()`. A NAMED target redirects to `/w/<personalWorkspace.id>/shares/<token>` (`?d=<documentId>` for folders). Deviation to record (Task 9): a dead LINK token now reaches sign-in before its 404 when the caller is not yet signed in.
   - `/w/[workspaceId]/shares/[token]`: `establishTrustedCaller()`; if `workspaceId !== personalWorkspace.id` redirect to the caller's own; `getSharedForViewer` → null → `notFound()`; renders the same reading + review panel as `/s/<token>` (no Save button, no sign-in prompt); marks the recipient row read. `generateMetadata` uses the title only after the viewer check passes.
 
@@ -227,7 +227,7 @@
 - Consumes: Task 3 HTTP endpoints; `ShareLinkView.audience`, `recipientCount`.
 - Produces:
   - `RecipientPicker({ value: Recipient[], onChange(next: Recipient[]), disabled? })` where `Recipient = { id, name, nameEn, empId }`. Debounced search against `/api/share-recipients/candidates?query=` (reuse `DEBOUNCE_MS` from `mention-autocomplete.tsx`), option text `name · empId · nameEn`, chips with remove buttons, keyboard: ↑/↓/Enter/Escape, `role="combobox"`/`listbox` semantics.
-  - Dialog: a mode switch "連結（有期限）" / "指定人員（永久）". NAMED mode hides expiry, requires ≥1 recipient, posts `recipients`. Each NAMED link row shows "No expiry", recipient count, a "Manage people" panel (list, add via picker, remove) and copies `/s/<token>/open`.
+  - Dialog: a mode switch "Link (expires)" / "Specific people (permanent)". NAMED mode hides expiry, requires ≥1 recipient, posts `recipients`. Each NAMED link row shows "No expiry", recipient count, a "Manage people" panel (list, add via picker, remove) and copies `/s/<token>/open`.
   - Management view: NAMED rows show "No expiry" and recipient count.
 
 - [ ] **Step 1: Failing unit tests:** picker — typing calls the endpoint once after debounce, selecting adds a chip, duplicate selection ignored, remove chip, Enter on highlighted option selects; dialog — NAMED mode hides expiry, create disabled with 0 recipients, POST body contains `recipients` ids and no `expiresInDays`, copy button text is the `/open` URL.

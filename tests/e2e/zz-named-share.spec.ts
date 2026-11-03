@@ -51,7 +51,7 @@ async function pickRecipient(scope: Locator, empId: string, name: string) {
 async function openNamedTab(page: Page) {
   await page.locator("main").getByRole("button", { name: "Share link…" }).click();
   const dialog = page.getByRole("dialog", { name: "Share link" });
-  await dialog.getByRole("tab", { name: "指定人員（永久）" }).click();
+  await dialog.getByRole("tab", { name: "Specific people (permanent)" }).click();
   return dialog;
 }
 
@@ -201,12 +201,12 @@ test.describe("named-recipient share routing", () => {
       for (const [visit, opens] of [[path, `/s/${token}/open`], [unknownPath, `${unknownPath}/open`]]) {
         await page.goto(`${anonymous}${visit}`);
         await expect(page.getByRole("heading", { name: "This link is not available" })).toBeVisible(ROUND_TRIP);
-        await expect(page.getByRole("link", { name: "如果這是分享給你的，請在 Hub 中開啟", exact: true })).toHaveAttribute("href", opens);
+        await expect(page.getByRole("link", { name: "If this was shared with you, open it in the Hub", exact: true })).toHaveAttribute("href", opens);
         titles.push(await page.title());
       }
       expect(titles[0]).toBe(titles[1]);
       await page.goto(`${anonymous}${path}?d=0199f300-0000-7000-8000-0000000000aa`);
-      await expect(page.getByRole("link", { name: "如果這是分享給你的，請在 Hub 中開啟", exact: true })).toHaveAttribute("href", `/s/${token}/open?d=0199f300-0000-7000-8000-0000000000aa`);
+      await expect(page.getByRole("link", { name: "If this was shared with you, open it in the Hub", exact: true })).toHaveAttribute("href", `/s/${token}/open?d=0199f300-0000-7000-8000-0000000000aa`);
     } finally {
       await context.close();
     }

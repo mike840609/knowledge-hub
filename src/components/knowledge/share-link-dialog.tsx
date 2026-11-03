@@ -192,8 +192,8 @@ export function ShareLinkDialog({
 
           <TabsRoot value={mode} onValueChange={(next) => setMode(next as Mode)} className="mt-4">
             <TabsList aria-label="Who can open it">
-              <TabsTab value="LINK" disabled={busy}>連結（有期限）</TabsTab>
-              <TabsTab value="NAMED" disabled={busy}>指定人員（永久）</TabsTab>
+              <TabsTab value="LINK" disabled={busy}>Link (expires)</TabsTab>
+              <TabsTab value="NAMED" disabled={busy}>Specific people (permanent)</TabsTab>
             </TabsList>
           </TabsRoot>
 

@@ -24,7 +24,7 @@ beforeEach(() => {
 describe("OpenInHubHint", () => {
   it("links a share page to its open route", () => {
     expect(hintHref()).toBe("/s/abc/open");
-    expect(renderToStaticMarkup(<OpenInHubHint />)).toContain("如果這是分享給你的，請在 Hub 中開啟");
+    expect(renderToStaticMarkup(<OpenInHubHint />)).toContain("If this was shared with you, open it in the Hub");
   });
 
   it("keeps the folder document a page names", () => {

@@ -91,8 +91,8 @@ const posts = () => calls.filter((call) => call.method === "POST" && call.url ==
 
 it("offers the link mode (with expiry) first and the named mode second, by their given names", async () => {
   await open();
-  expect(tab("連結（有期限）").getAttribute("aria-selected")).toBe("true");
-  expect(tab("指定人員（永久）").getAttribute("aria-selected")).toBe("false");
+  expect(tab("Link (expires)").getAttribute("aria-selected")).toBe("true");
+  expect(tab("Specific people (permanent)").getAttribute("aria-selected")).toBe("false");
   expect(document.body.textContent).toContain("Expires after");
   expect(combobox()).toBeNull();
 });
@@ -105,8 +105,8 @@ it("a link-mode create still sends the expiry and no recipients", async () => {
 
 it("named mode hides the expiry, asks for people, and cannot create with none", async () => {
   await open();
-  await act(async () => { tab("指定人員（永久）").click(); });
-  expect(tab("指定人員（永久）").getAttribute("aria-selected")).toBe("true");
+  await act(async () => { tab("Specific people (permanent)").click(); });
+  expect(tab("Specific people (permanent)").getAttribute("aria-selected")).toBe("true");
   expect(document.body.textContent).not.toContain("Expires after");
   expect(combobox()).not.toBeNull();
   expect(createButton().disabled).toBe(true);
@@ -116,7 +116,7 @@ it("named mode hides the expiry, asks for people, and cannot create with none", 
 
 it("a named create posts the chosen ids and no expiry key at all", async () => {
   await open();
-  await act(async () => { tab("指定人員（永久）").click(); });
+  await act(async () => { tab("Specific people (permanent)").click(); });
   await pick("a", "愛麗絲");
   await pick("b", "鮑勃");
   expect(createButton().disabled).toBe(false);
@@ -132,7 +132,7 @@ it("a named create posts the chosen ids and no expiry key at all", async () => {
 
 it("a named link's row says no expiry and how many people, and copies the /open address", async () => {
   await open();
-  await act(async () => { tab("指定人員（永久）").click(); });
+  await act(async () => { tab("Specific people (permanent)").click(); });
   await pick("a", "愛麗絲");
   await submit();
   await flush();

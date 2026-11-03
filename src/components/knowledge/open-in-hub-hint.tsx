@@ -19,7 +19,7 @@ export function OpenInHubHint() {
   const href = `/s/${token}/open${documentId ? `?${new URLSearchParams({ d: documentId })}` : ""}`;
   return (
     <a href={href} className="rounded-md text-body text-kh-link underline underline-offset-4 kh-focus-ring">
-      如果這是分享給你的，請在 Hub 中開啟
+      If this was shared with you, open it in the Hub
     </a>
   );
 }
