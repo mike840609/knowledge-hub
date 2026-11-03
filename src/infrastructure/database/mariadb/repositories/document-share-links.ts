@@ -231,11 +231,19 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
     return asNumber(rows[0]?.recipients ?? 0, "share link recipient count");
   }
 
-  async listForRecipient(userId: string, limit: number): Promise<ReceivedShareLink[]> {
+  listForRecipient(userId: string, limit: number): Promise<ReceivedShareLink[]> {
+    return this.receivedBy(userId, limit, false);
+  }
+
+  listUnreadForRecipient(userId: string, limit: number): Promise<ReceivedShareLink[]> {
+    return this.receivedBy(userId, limit, true);
+  }
+
+  private async receivedBy(userId: string, limit: number, unreadOnly: boolean): Promise<ReceivedShareLink[]> {
     const rows = await this.connection.query<DbRow[]>(
       `SELECT l.*, r.added_at AS recipient_added_at, r.read_at AS recipient_read_at
        FROM document_share_link_recipients r JOIN document_share_links l ON l.id = r.share_link_id
-       WHERE r.user_id = ? ORDER BY r.added_at DESC, l.id DESC LIMIT ?`,
+       WHERE r.user_id = ?${unreadOnly ? " AND r.read_at IS NULL" : ""} ORDER BY r.added_at DESC, l.id DESC LIMIT ?`,
       [userId, limit],
     );
     return rows.map(row => ({ link: mapLink(row), addedAt: asDate(row.recipient_added_at), readAt: asNullableDate(row.recipient_read_at) }));

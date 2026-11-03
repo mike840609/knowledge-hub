@@ -79,6 +79,24 @@ describe("discussions on a NAMED link", () => {
     await expect(f.service.markSeenForLink(f.stranger, { token: f.link.token, threadId: thread.id })).rejects.toMatchObject(notFound);
   });
 
+  it("refuse edit, delete, follow and mark-seen to a stranger and to a removed recipient, as a dead link does", async () => {
+    const f = await fixture();
+    const thread = await f.start();
+    const commentId = thread.comments[0].id;
+    const writes = (caller: typeof f.owner) => [
+      () => f.service.editForLink(caller, { token: f.link.token, threadId: thread.id, commentId, body: "Edited" }),
+      () => f.service.deleteForLink(caller, { token: f.link.token, threadId: thread.id, commentId }),
+      () => f.service.followForLink(caller, { token: f.link.token, threadId: thread.id, following: true }),
+      () => f.service.markSeenForLink(caller, { token: f.link.token, threadId: thread.id }),
+    ];
+    for (const write of writes(f.stranger)) await expect(write()).rejects.toMatchObject(notFound);
+    await f.removeRecipient(f.ids.recipient.id);
+    // Their own comment: only the link's audience stops them.
+    for (const write of writes(f.recipient)) await expect(write()).rejects.toMatchObject(notFound);
+    const kept = await f.service.queryForOwner(f.owner, f.doc.documentId);
+    expect(kept.threads[0].comments.map(c => c.body)).toEqual(["A question"]);
+  });
+
   it("are read by the owner through the link", async () => {
     const f = await fixture();
     const thread = await f.start();

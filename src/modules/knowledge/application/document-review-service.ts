@@ -12,7 +12,7 @@ import { orderFollowedDiscussions, summarizeFollowedThread, type FollowedDiscuss
 import type { DocumentShareLink } from "../domain/document-share-link";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
 import { judgeNamedShares, namedShareTitle } from "./internal/named-share-judgement";
-import { audienceAdmits, documentReachesFolder, linkOpens, openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
+import { audienceAdmits, documentReachesFolder, linkOpensFor, openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
 import { hubSharePath, shareDiscussionHref } from "@/lib/share-paths";
 
 function fail(code:string, message:string):never { throw new DomainError(code,message); }
@@ -447,9 +447,7 @@ export class DocumentReviewService {
    * `viewerId` is whose access is at stake (null: no one signed in); outside a NAMED link's audience it never opens.
    */
   private async opens(r: KnowledgeRepositories, scope: Awaited<ReturnType<DocumentReviewService["scope"]>>, link: DocumentShareLink, targetStatus: "ACTIVE" | "ARCHIVED", viewerId: string | null): Promise<boolean> {
-    if (!await audienceAdmits(r, link, viewerId)) return false;
-    const membership = await r.workspaceMemberships.find(scope.workspace.id, link.createdBy);
-    return linkOpens(link, targetStatus, scope.source, scope.workspace, membership ? membership.role ?? null : undefined, this.clock());
+    return linkOpensFor(r, link, targetStatus, scope.source, scope.workspace, this.clock(), viewerId);
   }
   /** Marks this document's events read. Owner scope first: a non-owner reaches nothing. */
   async markDocumentRead(caller:CallerContext,documentId:string) {

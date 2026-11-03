@@ -42,6 +42,8 @@ export interface DocumentShareLinkRepository {
   countRecipients(linkId: string): Promise<number>;
   /** Links naming this user, newest first, unfiltered: whether each opens now is judged by the caller. */
   listForRecipient(userId: string, limit: number): Promise<ReceivedShareLink[]>;
+  /** As `listForRecipient`, only the rows this user has not read. */
+  listUnreadForRecipient(userId: string, limit: number): Promise<ReceivedShareLink[]>;
   markRecipientRead(linkId: string, userId: string, at: Date): Promise<void>;
   markAllRecipientRead(userId: string, at: Date): Promise<void>;
 }

@@ -12,13 +12,10 @@ import type { KnowledgeRepositories } from "../../ports/unit-of-work";
 type LifecycleStatus = "ACTIVE" | "ARCHIVED";
 
 /**
- * Whether a link still opens now, from the Source and Workspace already loaded. The page read,
- * `/s/:token/open`, review's writes and its followed-discussion list all assemble the conditions
- * here, so a rule added here reaches them together. Saved-share snapshots and the My shares query
- * judge a different input (a stored snapshot; a SQL page) and keep their own copies. A link exists
- * only on a My Space, and the creator-ownership rule below is what keeps it there.
+ * Whether a link still opens now, from the Source and Workspace already loaded, for anyone in its audience.
+ * Private: every caller goes through `linkOpensFor`, which asks the audience first, so none can skip it.
  */
-export function linkOpens(
+function linkOpens(
   link: Pick<DocumentShareLink, "revokedAt" | "expiresAt" | "createdBy">,
   targetStatus: LifecycleStatus,
   source: { status: LifecycleStatus },
@@ -59,6 +56,28 @@ export async function audienceAdmits(
 }
 
 /**
+ * Whether a link opens now for `viewerId` (null when no one is signed in), from the Source and Workspace
+ * already loaded: its audience first, then its own validity with its creator's direct membership read here.
+ * The page read, `/s/:token/open`, review's writes and its followed-discussion list all judge here, so a
+ * rule added here reaches them together. Saved-share snapshots and the My shares query judge a different
+ * input (a stored snapshot; a SQL page) and keep their own copies. A link exists only on a My Space, and the
+ * creator-ownership rule in `evaluateShareLinkValidity` is what keeps it there.
+ */
+export async function linkOpensFor(
+  repositories: KnowledgeRepositories,
+  link: DocumentShareLink,
+  targetStatus: LifecycleStatus,
+  source: { status: LifecycleStatus },
+  workspace: { id: string; lifecycleState?: LifecycleStatus | null; personalOwnerUserId?: string | null },
+  now: Date,
+  viewerId: string | null,
+): Promise<boolean> {
+  if (!await audienceAdmits(repositories, link, viewerId)) return false;
+  const membership = await repositories.workspaceMemberships.find(workspace.id, link.createdBy);
+  return linkOpens(link, targetStatus, source, workspace, membership ? membership.role ?? null : undefined, now);
+}
+
+/**
  * The link's judgement with its own reads: its target (a document, or a folder node) resolved to
  * its Source and Workspace, its creator's direct membership, and whether `viewerId` (null when no
  * one is signed in) is in its audience. Returns the target's Workspace id, or null for every
@@ -76,10 +95,7 @@ export async function openShareLinkTarget(
   if (!source) return null;
   const workspace = await repositories.workspaces.findById(source.workspaceId);
   if (!workspace) return null;
-  const membership = await repositories.workspaceMemberships.find(workspace.id, link.createdBy);
-  return linkOpens(link, target.status, source, workspace, membership ? membership.role ?? null : undefined, now)
-    ? { workspaceId: workspace.id }
-    : null;
+  return await linkOpensFor(repositories, link, target.status, source, workspace, now, viewerId) ? { workspaceId: workspace.id } : null;
 }
 
 /** The document half of reachability that needs no tree read: ACTIVE in the folder's Source. */

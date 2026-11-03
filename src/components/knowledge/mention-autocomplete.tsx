@@ -96,8 +96,6 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   }, [picks, picksKey]);
   const [links, setLinks] = useState<MentionLink[]>();
   const [linkId, setLinkId] = useState<string>();
-  // A request in flight; the links are asked again on each new `@`, since one may have been created, revoked or expired.
-  const linksLoading = useRef(false);
   const token = scope && "token" in scope ? scope.token : undefined;
   const owner = scope && !token && "documentId" in scope ? scope.documentId : undefined;
   const linkDocument = scope && token && "documentId" in scope ? scope.documentId : undefined;
@@ -111,16 +109,15 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   const triggerStart = trigger?.start;
   // Who the text names now: a link naming specific people is offered only when it names them all.
   const mentionKey = owner ? mentionedIds(body, picks).join(",") : "";
-  // The owner mentions through a live link of the document. Its links are read on each new `@`, and again when who is named changes.
+  // The owner mentions through a live link of the document. Its links are read on each new `@` (one may have been created,
+  // revoked or expired), and again when who is named changes; an answer for an earlier `@` or earlier names is dropped.
   useEffect(() => {
-    if ((!open && !mentionKey) || !owner || linksLoading.current) return;
-    linksLoading.current = true;
+    if ((!open && !mentionKey) || !owner) return;
+    let current = true;
     reviewRequest<{ links: MentionLink[] }>(`/api/review-mentions/links?documentId=${encodeURIComponent(owner)}&mentionedUserIds=${encodeURIComponent(mentionKey)}`)
-      .then(result => {
-        setLinks(result.links); setFailure(undefined);
-      })
-      .catch(error => setFailure(error instanceof Error ? error.message : "Could not load share links."))
-      .finally(() => { linksLoading.current = false; });
+      .then(result => { if (current) { setLinks(result.links); setFailure(undefined); } })
+      .catch(error => { if (current) setFailure(error instanceof Error ? error.message : "Could not load share links."); });
+    return () => { current = false; };
   }, [open, owner, triggerStart, mentionKey]);
 
   useEffect(() => {

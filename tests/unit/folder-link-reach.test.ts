@@ -1,44 +1,63 @@
 import { describe, expect, it } from "vitest";
-import { documentReachesFolder, linkOpens } from "@/modules/knowledge/application/internal/folder-link-reach";
+import { documentReachesFolder, linkOpensFor } from "@/modules/knowledge/application/internal/folder-link-reach";
+import type { DocumentShareLink } from "@/modules/knowledge/domain/document-share-link";
+import type { KnowledgeRepositories } from "@/modules/knowledge/ports/unit-of-work";
 import type { WorkspaceRole } from "@/modules/workspaces/domain/workspace-membership";
 
 const NOW = new Date("2026-10-29T09:00:00Z");
-const LINK: { revokedAt: Date | null; expiresAt: Date; createdBy: string } = { revokedAt: null, expiresAt: new Date("2026-11-28T09:00:00Z"), createdBy: "owner" };
+const OWNER = "0199f300-0000-7000-8000-0000000000a1";
+const RECIPIENT = "0199f300-0000-7000-8000-0000000000a2";
+const LINK = { id: "link", audience: "LINK", revokedAt: null, expiresAt: new Date("2026-11-28T09:00:00Z"), createdBy: OWNER } as unknown as DocumentShareLink;
 const SOURCE: { status: "ACTIVE" | "ARCHIVED" } = { status: "ACTIVE" };
-const WORKSPACE = { lifecycleState: "ACTIVE" as "ACTIVE" | "ARCHIVED" | null, personalOwnerUserId: "owner" as string | null };
+const WORKSPACE = { id: "ws", lifecycleState: "ACTIVE" as "ACTIVE" | "ARCHIVED" | null, personalOwnerUserId: OWNER as string | null };
 
 function opens(overrides: {
-  link?: Partial<typeof LINK>;
+  link?: Partial<DocumentShareLink>;
   target?: "ACTIVE" | "ARCHIVED";
   source?: Partial<typeof SOURCE>;
   workspace?: Partial<typeof WORKSPACE>;
   role?: WorkspaceRole | null;
   now?: Date;
+  viewer?: string | null;
 } = {}) {
-  return linkOpens(
-    { ...LINK, ...overrides.link },
+  const role = "role" in overrides ? overrides.role : "VIEWER";
+  const r = {
+    workspaceMemberships: { find: async () => (role === undefined ? null : { role }) },
+    shareLinks: { isRecipient: async (_link: string, user: string) => user === RECIPIENT },
+  } as unknown as KnowledgeRepositories;
+  return linkOpensFor(
+    r,
+    { ...LINK, ...overrides.link } as DocumentShareLink,
     overrides.target ?? "ACTIVE",
     { ...SOURCE, ...overrides.source },
     { ...WORKSPACE, ...overrides.workspace },
-    "role" in overrides ? overrides.role : "VIEWER",
     overrides.now ?? NOW,
+    overrides.viewer === undefined ? null : overrides.viewer,
   );
 }
 
 /** The one judgement every reader and writer shares: page reads, `/open`, writes and the followed list. */
-describe("linkOpens", () => {
-  it("opens a live link that its owner still directly reaches", () => {
-    expect(opens()).toBe(true);
+describe("linkOpensFor", () => {
+  it("opens a live link that its owner still directly reaches", async () => {
+    expect(await opens()).toBe(true);
   });
 
-  it("refuses a revoked or expired link, an archived target, Source or Workspace, a creator who no longer owns it, and no direct membership", () => {
-    expect(opens({ link: { revokedAt: NOW } })).toBe(false);
-    expect(opens({ link: { expiresAt: NOW } })).toBe(false);
-    expect(opens({ target: "ARCHIVED" })).toBe(false);
-    expect(opens({ source: { status: "ARCHIVED" } })).toBe(false);
-    expect(opens({ workspace: { lifecycleState: "ARCHIVED" } })).toBe(false);
-    expect(opens({ workspace: { personalOwnerUserId: "someone-else" } })).toBe(false);
-    expect(opens({ role: undefined })).toBe(false);
+  it("refuses a revoked or expired link, an archived target, Source or Workspace, a creator who no longer owns it, and no direct membership", async () => {
+    expect(await opens({ link: { revokedAt: NOW } })).toBe(false);
+    expect(await opens({ link: { expiresAt: NOW } })).toBe(false);
+    expect(await opens({ target: "ARCHIVED" })).toBe(false);
+    expect(await opens({ source: { status: "ARCHIVED" } })).toBe(false);
+    expect(await opens({ workspace: { lifecycleState: "ARCHIVED" } })).toBe(false);
+    expect(await opens({ workspace: { personalOwnerUserId: "someone-else" } })).toBe(false);
+    expect(await opens({ role: undefined })).toBe(false);
+  });
+
+  it("asks a NAMED link's audience first: only a recipient or the owner, never no one signed in", async () => {
+    const named = { audience: "NAMED" } as Partial<DocumentShareLink>;
+    expect(await opens({ link: named, viewer: RECIPIENT })).toBe(true);
+    expect(await opens({ link: named, viewer: OWNER })).toBe(true);
+    expect(await opens({ link: named, viewer: "0199f300-0000-7000-8000-0000000000a3" })).toBe(false);
+    expect(await opens({ link: named, viewer: null })).toBe(false);
   });
 });
 

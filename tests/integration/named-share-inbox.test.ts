@@ -141,3 +141,33 @@ describe("a folder shared with a named recipient", () => {
     expect(await badge(f)).toBe(0);
   });
 });
+
+describe("the unread named shares", () => {
+  it("still count an unread live share older than a full window of newer read ones", async () => {
+    const f = await setup();
+    const older = await f.shares.create(f.caller, { documentId: f.documentId, recipients: [f.alice.id] });
+    const uow = unitOfWork();
+    await uow.run(async (r) => {
+      for (let index = 0; index < 100; index += 1) {
+        const at = new Date(Date.now() + 1000 + index);
+        const link = { id: uuidv7(), target: { kind: "DOCUMENT" as const, documentId: f.documentId }, token: crypto.randomUUID(), label: null, audience: "NAMED" as const, createdBy: f.owner.id, createdAt: at, expiresAt: null, revokedBy: null, revokedAt: null };
+        await r.shareLinks.insert(link);
+        await r.shareLinks.insertRecipients(link.id, [f.alice.id], f.owner.id, at);
+        await r.shareLinks.markRecipientRead(link.id, f.alice.id, at);
+      }
+    });
+    expect(await badge(f)).toBe(1);
+    expect(await shared(f)).toEqual([expect.objectContaining({ id: `shared:${older.id}`, readAt: null, linkAvailable: true })]);
+  });
+
+  it("mark a revoked unread share read on the first poll, so it is never judged again", async () => {
+    const f = await setup();
+    const view = await f.shares.create(f.caller, { documentId: f.documentId, recipients: [f.alice.id] });
+    await f.shares.revoke(f.caller, view.id);
+    const readAt = async () => (await pool.query("SELECT read_at FROM document_share_link_recipients WHERE share_link_id = ? AND user_id = ?", [view.id, f.alice.id]))[0].read_at;
+    expect(await readAt()).toBeNull();
+    expect(await badge(f)).toBe(0);
+    expect(await readAt()).not.toBeNull();
+    expect(await badge(f)).toBe(0);
+  });
+});
