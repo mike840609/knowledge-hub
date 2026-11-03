@@ -52,6 +52,12 @@ export function NamedShareRecipients({ linkId, onCount }: { linkId: string; onCo
     }
   };
 
+  // A decision settles Inbox entries (the owner's request, the others' notices): the badge counts again, as the Inbox's own decision makes it.
+  const decide = (proposalId: string, decision: "approve" | "decline") => change(async () => {
+    await governanceRequest(`/api/share-links/${linkId}/proposals/${proposalId}/${decision}`, "POST");
+    window.dispatchEvent(new Event("kh:notification-changed"));
+  });
+
   return (
     <div className="space-y-3 border-t border-kh-border pt-3">
       {proposals.length > 0 ? (
@@ -67,10 +73,10 @@ export function NamedShareRecipients({ linkId, onCount }: { linkId: string; onCo
                   </span>
                   <span className="block truncate text-caption text-kh-text-muted">proposed by {proposal.proposedByName ?? "someone"}</span>
                 </span>
-                <Button variant="secondary" size="sm" type="button" disabled={busy} aria-label={`Approve adding ${proposal.name}`} onClick={() => void change(() => governanceRequest(`/api/share-links/${linkId}/proposals/${proposal.id}/approve`, "POST"))}>
+                <Button variant="secondary" size="sm" type="button" disabled={busy} aria-label={`Approve adding ${proposal.name}`} onClick={() => void decide(proposal.id, "approve")}>
                   Approve
                 </Button>
-                <Button variant="ghost" size="sm" type="button" disabled={busy} aria-label={`Decline adding ${proposal.name}`} onClick={() => void change(() => governanceRequest(`/api/share-links/${linkId}/proposals/${proposal.id}/decline`, "POST"))}>
+                <Button variant="ghost" size="sm" type="button" disabled={busy} aria-label={`Decline adding ${proposal.name}`} onClick={() => void decide(proposal.id, "decline")}>
                   Decline
                 </Button>
               </li>

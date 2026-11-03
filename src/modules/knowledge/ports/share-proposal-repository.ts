@@ -15,8 +15,9 @@ export interface ShareProposalRepository {
   decide(id: string, status: "APPROVED" | "DECLINED", by: string, at: Date): Promise<boolean>;
   /** APPROVED for the row of (link, user) whatever its status, if any: the owner adding them outranks a decline. An APPROVED row is left as it was. */
   approveFor(linkId: string, userId: string, by: string, at: Date): Promise<void>;
-  /** Proposals on links this user created, newest first. */
+  /** Proposals on links this user created, PENDING first, then newest: a pending one is never pushed out of `limit`. */
   listForOwner(ownerUserId: string, limit: number): Promise<ShareProposal[]>;
+  /** Proposals of this user, ordered as `listForOwner`. */
   listForProposed(userId: string, limit: number): Promise<ShareProposal[]>;
   /** Decided rows only, newest first. */
   listForProposer(userId: string, limit: number): Promise<ShareProposal[]>;

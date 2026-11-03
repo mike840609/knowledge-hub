@@ -22,13 +22,13 @@ function json(value: unknown) {
 }
 
 type Link = { id: string; label: string | null; active: boolean; audience?: "LINK" | "NAMED"; targetKind?: "DOCUMENT" | "FOLDER" };
-type Candidate = { id: string; name: string; nameEn: string | null; empId: string; needsApproval?: boolean };
-function stubFetch({ candidates = [MING, MEI] as Candidate[], links = [] as Link[] | (() => Link[]) } = {}) {
+type Candidate = { id: string; name: string; nameEn: string | null; empId: string; needsApproval?: boolean; addsRecipient?: boolean };
+function stubFetch({ candidates = [MING, MEI] as Candidate[], links = [] as Link[] | (() => Link[]), targetKind = undefined as "DOCUMENT" | "FOLDER" | undefined } = {}) {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     requests.push(url);
     // The server answers only the links that open now.
     if (url.includes("/review-mentions/links")) return json({ links: (typeof links === "function" ? links() : links).filter(link => link.active).map(({ id, label, audience = "LINK", targetKind = "DOCUMENT" }) => ({ id, label, audience, targetKind })) });
-    if (url.startsWith("/api/review-mentions/candidates")) return json({ candidates });
+    if (url.startsWith("/api/review-mentions/candidates")) return json({ candidates, ...(targetKind ? { targetKind } : {}) });
     throw new Error(`unexpected ${url}`);
   }));
 }
@@ -338,6 +338,24 @@ test("a candidate not on a NAMED link says it needs the owner's approval; others
   const note = [...options()[1].querySelectorAll("span")].find(span => span.textContent === "Needs owner approval")!;
   expect(note.className).toContain("text-caption");
   expect(note.className).toContain("text-kh-text-muted");
+});
+
+test("the owner reading through a NAMED link sees which candidates a mention adds to it", async () => {
+  stubFetch({ candidates: [{ ...MING, addsRecipient: false }, { ...MEI, addsRecipient: true }], targetKind: "DOCUMENT" });
+  const textarea = render({ token: "tok" });
+  await type(textarea, "@m");
+  expect(options()[0].textContent).not.toContain("Adds them");
+  const note = [...options()[1].querySelectorAll("span")].find(span => span.textContent === "Adds them to this link")!;
+  expect(note).toBeDefined();
+  expect(note.className).toContain("text-caption");
+  expect(note.className).toContain("text-kh-text-muted");
+});
+
+test("on a folder link the note says the whole folder is opened", async () => {
+  stubFetch({ candidates: [{ ...MEI, addsRecipient: true }], targetKind: "FOLDER" });
+  const textarea = render({ token: "tok", documentId: "doc-1" });
+  await type(textarea, "@m");
+  expect(options()[0].textContent).toContain("Adds them to this link (whole folder)");
 });
 
 test("owner with one live link: no choice, its id is sent", async () => {

@@ -69,10 +69,12 @@ export class MariaDbShareProposalRepository implements ShareProposalRepository {
     );
   }
 
+  // PENDING first, then newest (here and for the proposed person): a pending proposal still needs someone, so decided
+  // ones never push it out of the window.
   async listForOwner(ownerUserId: string, limit: number): Promise<ShareProposal[]> {
     const rows = await this.connection.query<DbRow[]>(
       `SELECT p.* FROM document_share_link_proposals p JOIN document_share_links l ON l.id = p.share_link_id
-       WHERE l.created_by = ? ORDER BY p.created_at DESC, p.id DESC LIMIT ?`,
+       WHERE l.created_by = ? ORDER BY p.status = 'PENDING' DESC, p.created_at DESC, p.id DESC LIMIT ?`,
       [ownerUserId, limit],
     );
     return rows.map(mapProposal);
@@ -80,7 +82,7 @@ export class MariaDbShareProposalRepository implements ShareProposalRepository {
 
   async listForProposed(userId: string, limit: number): Promise<ShareProposal[]> {
     const rows = await this.connection.query<DbRow[]>(
-      "SELECT * FROM document_share_link_proposals WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ?",
+      `SELECT * FROM document_share_link_proposals WHERE user_id = ? ORDER BY status = 'PENDING' DESC, created_at DESC, id DESC LIMIT ?`,
       [userId, limit],
     );
     return rows.map(mapProposal);
@@ -99,14 +101,14 @@ export class MariaDbShareProposalRepository implements ShareProposalRepository {
     await this.connection.query(`UPDATE document_share_link_proposals SET ${column} = ? WHERE id = ? AND ${column} IS NULL`, [at, id]);
   }
 
+  /** One UPDATE per party, each on its own index (links.created_by, user_id, proposed_by), rather than one OR across them. */
   async markAllRead(userId: string, at: Date): Promise<void> {
     await this.connection.query(
       `UPDATE document_share_link_proposals p JOIN document_share_links l ON l.id = p.share_link_id
-       SET p.owner_read_at = IF(l.created_by = ? AND p.owner_read_at IS NULL, ?, p.owner_read_at),
-           p.proposed_read_at = IF(p.user_id = ? AND p.proposed_read_at IS NULL, ?, p.proposed_read_at),
-           p.proposer_read_at = IF(p.proposed_by = ? AND p.proposer_read_at IS NULL, ?, p.proposer_read_at)
-       WHERE l.created_by = ? OR p.user_id = ? OR p.proposed_by = ?`,
-      [userId, at, userId, at, userId, at, userId, userId, userId],
+       SET p.owner_read_at = ? WHERE l.created_by = ? AND p.owner_read_at IS NULL`,
+      [at, userId],
     );
+    await this.connection.query("UPDATE document_share_link_proposals SET proposed_read_at = ? WHERE user_id = ? AND proposed_read_at IS NULL", [at, userId]);
+    await this.connection.query("UPDATE document_share_link_proposals SET proposer_read_at = ? WHERE proposed_by = ? AND proposer_read_at IS NULL", [at, userId]);
   }
 }

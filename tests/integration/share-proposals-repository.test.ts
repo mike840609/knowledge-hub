@@ -176,6 +176,20 @@ describe("share proposals repository", () => {
     expect(await run(s => s.listForProposed(f.carol, 1))).toHaveLength(1);
   });
 
+  it("lists PENDING first for the owner and the proposed person, so a pending one is never pushed out of the window", async () => {
+    const f = await fixture();
+    const pendingForCarol = await f.propose(await f.namedLink(), f.carol, f.writer, 1);
+    const declinedForCarol = await f.propose(await f.namedLink(), f.carol, f.writer, 2);
+    const approvedForDave = await f.propose(await f.namedLink(), f.dave, f.writer, 3);
+    const pendingForDave = await f.propose(await f.namedLink(), f.dave, f.writer, 4);
+    await run(s => s.decide(declinedForCarol.id, "DECLINED", f.owner, at(5)));
+    await run(s => s.decide(approvedForDave.id, "APPROVED", f.owner, at(6)));
+    expect((await run(s => s.listForOwner(f.owner, 10))).map(p => p.id)).toEqual([pendingForDave.id, pendingForCarol.id, approvedForDave.id, declinedForCarol.id]);
+    expect((await run(s => s.listForOwner(f.owner, 2))).map(p => p.id)).toEqual([pendingForDave.id, pendingForCarol.id]);
+    expect((await run(s => s.listForProposed(f.carol, 1))).map(p => p.id)).toEqual([pendingForCarol.id]);
+    expect((await run(s => s.listForProposed(f.carol, 10))).map(p => p.id)).toEqual([pendingForCarol.id, declinedForCarol.id]);
+  });
+
   it("lists for the proposer decided rows only", async () => {
     const f = await fixture();
     const link = await f.namedLink();

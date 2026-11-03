@@ -277,6 +277,30 @@ describe("mention candidates on a NAMED link", () => {
     expect(viaView.every(c => c.needsApproval === false)).toBe(true);
   });
 
+  it("tell the owner reading through the NAMED link which people a mention adds to it", async () => {
+    const f = await setup();
+    const result = await review().searchMentionCandidates(f.ownerCaller, { query: f.tag, token: f.token });
+    const adds = new Map(result.candidates.map(c => [c.id, c.addsRecipient]));
+    expect(adds.get(f.carol.id)).toBe(true);
+    expect(adds.get(f.alice.id)).toBe(false);
+    expect(adds.get(f.bob.id)).toBe(false);
+    expect(result).toMatchObject({ targetKind: "DOCUMENT" });
+  });
+
+  it("add no one for a recipient, an anyone-with-the-link share, or the owner's Workspace view", async () => {
+    const f = await setup();
+    const asRecipient = await review().searchMentionCandidates(f.aliceCaller, { query: f.tag, token: f.token });
+    expect(asRecipient.candidates.length).toBeGreaterThan(1);
+    expect(asRecipient.candidates.every(c => c.addsRecipient === false)).toBe(true);
+    const bearer = await shares().create(f.ownerCaller, { documentId: f.doc.documentId });
+    const viaBearer = await review().searchMentionCandidates(f.ownerCaller, { query: f.tag, token: bearer.path.slice(3) });
+    expect(viaBearer.candidates.map(c => c.id)).toContain(f.carol.id);
+    expect(viaBearer.candidates.every(c => c.addsRecipient === false)).toBe(true);
+    const viaView = await review().searchMentionCandidates(f.ownerCaller, { query: f.tag, documentId: f.doc.documentId });
+    expect(viaView.candidates.every(c => c.addsRecipient === false)).toBe(true);
+    expect(viaView).not.toHaveProperty("targetKind");
+  });
+
   it("are still refused to a stranger, as a dead link is", async () => {
     const f = await setup();
     await expect(review().searchMentionCandidates(callerFromIdentity(f.carol), { query: f.tag, token: f.token })).rejects.toMatchObject(notFound);

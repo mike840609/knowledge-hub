@@ -142,6 +142,27 @@ describe("the Inbox", () => {
     expect(buttons("Approve")[0].disabled).toBe(false);
   });
 
+  it("a refused decision reads the list again, so a request decided elsewhere loses its buttons, and the message stays", async () => {
+    notifications = [entry()];
+    let reads = 0;
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit = {}) => {
+      if (url.startsWith("/api/share-links/")) {
+        // Decided meanwhile, from Manage or another tab.
+        notifications = [entry({ proposalStatus: "DECLINED", readAt: new Date(0) })];
+        return json({ error: { code: "NOT_FOUND", message: "That proposal is gone." } }, 404);
+      }
+      if (init.method !== "POST") reads++;
+      return json({ notifications, nextCursor: null });
+    });
+    await mount();
+    expect(reads).toBe(1);
+    await act(async () => { buttons("Approve")[0].click(); });
+    await act(async () => {});
+    expect(reads).toBe(2);
+    expect(buttons("Approve")).toHaveLength(0);
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe("That proposal is gone.");
+  });
+
   it("offers no decision on a decided or dead request, nor to anyone else", async () => {
     notifications = [entry({ id: "a", proposalStatus: "DECLINED" }), dead({ id: "b", readAt: null }), pending({ id: "c" }), decided("APPROVED", { id: "d" })];
     await mount();
@@ -217,6 +238,32 @@ describe("the Manage panel", () => {
     await act(async () => { buttons("Decline")[0].click(); });
     await act(async () => {});
     expect(posts).toEqual([`/api/share-links/link-1/proposals/${PROPOSAL}/decline`]);
+  });
+
+  it("a decision tells the Inbox badge to count again; a refused one does not", async () => {
+    const changed = vi.fn();
+    window.addEventListener("kh:notification-changed", changed);
+    try {
+      await mount();
+      await act(async () => { buttons("Approve")[0].click(); });
+      await act(async () => {});
+      expect(changed).toHaveBeenCalledTimes(1);
+      listed = proposals();
+      await act(async () => root.render(<NamedShareRecipients linkId="link-1" onCount={() => {}} key="again" />));
+      await act(async () => {});
+      await act(async () => { buttons("Decline")[0].click(); });
+      await act(async () => {});
+      expect(changed).toHaveBeenCalledTimes(2);
+      listed = proposals();
+      vi.stubGlobal("fetch", async (url: string, init: RequestInit = {}) => init.method === "POST"
+        ? json({ error: { code: "NOT_FOUND", message: "Gone." } }, 404)
+        : url.endsWith("/recipients") ? json({ recipients: [] }) : json({ proposals: listed }));
+      await act(async () => root.render(<NamedShareRecipients linkId="link-1" onCount={() => {}} key="third" />));
+      await act(async () => {});
+      await act(async () => { buttons("Approve")[0].click(); });
+      await act(async () => {});
+      expect(changed).toHaveBeenCalledTimes(2);
+    } finally { window.removeEventListener("kh:notification-changed", changed); }
   });
 
   it("a proposer whose name is gone is shown as someone", async () => {

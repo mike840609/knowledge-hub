@@ -13,10 +13,14 @@ import { reviewRequest } from "./review-thread-list";
 /** A link reader's scope is its token (and, on a folder link's page, the document read); the owner's is the document alone. */
 export type MentionScope = { token: string; documentId?: string } | { documentId: string };
 export type MentionPick = { id: string; name: string };
-/** `needsApproval`: not on the NAMED link the mention goes through; naming them proposes them to its owner. */
-type Candidate = { id: string; name: string; nameEn: string | null; empId: string; needsApproval?: boolean };
+/**
+ * Not on the NAMED link the mention goes through: naming them proposes them to its owner (`needsApproval`), or, when the
+ * owner writes, adds them to it (`addsRecipient`).
+ */
+type Candidate = { id: string; name: string; nameEn: string | null; empId: string; needsApproval?: boolean; addsRecipient?: boolean };
+type TargetKind = "DOCUMENT" | "FOLDER";
 /** A NAMED link handed over by its owner adds the people it does not name yet. */
-type MentionLink = { id: string; label: string | null; audience?: "LINK" | "NAMED"; targetKind?: "DOCUMENT" | "FOLDER" };
+type MentionLink = { id: string; label: string | null; audience?: "LINK" | "NAMED"; targetKind?: TargetKind };
 
 export const DEBOUNCE_MS = 150;
 export const NO_LINK_HINT = "Create a share link first to mention someone";
@@ -89,7 +93,7 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const [caret, setCaret] = useState(0);
   const [dismissed, setDismissed] = useState<number>();
-  const [found, setFound] = useState<{ query: string; candidates: Candidate[] }>();
+  const [found, setFound] = useState<{ query: string; candidates: Candidate[]; targetKind?: TargetKind }>();
   const [failure, setFailure] = useState<string>();
   const [active, setActive] = useState(0);
   const [picks, setPicks] = useState<MentionPick[]>(() => restoredPicks(picksKey, body));
@@ -126,8 +130,8 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
     let current = true;
     const timer = window.setTimeout(() => {
       const door = owner ? `documentId=${encodeURIComponent(owner)}` : `token=${encodeURIComponent(token!)}${linkDocument ? `&documentId=${encodeURIComponent(linkDocument)}` : ""}`;
-      reviewRequest<{ candidates: Candidate[] }>(`/api/review-mentions/candidates?query=${encodeURIComponent(query)}&${door}`)
-        .then(result => { if (current) { setFound({ query, candidates: result.candidates }); setActive(0); setFailure(undefined); } })
+      reviewRequest<{ candidates: Candidate[]; targetKind?: TargetKind }>(`/api/review-mentions/candidates?query=${encodeURIComponent(query)}&${door}`)
+        .then(result => { if (current) { setFound({ query, candidates: result.candidates, targetKind: result.targetKind }); setActive(0); setFailure(undefined); } })
         .catch(error => { if (current) setFailure(error instanceof Error ? error.message : "Could not find people."); });
     }, DEBOUNCE_MS);
     return () => { current = false; window.clearTimeout(timer); };
@@ -145,6 +149,7 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   const answeredEmpty = searchable && found?.query === query && found.candidates.length === 0;
   const hint = !open ? undefined : noLink ? NO_LINK_HINT : failure ?? (answeredEmpty ? NO_MATCH_HINT : undefined);
   const listed = candidates.length > 0;
+  const addsNote = `Adds them to this link${found?.targetKind === "FOLDER" ? " (whole folder)" : ""}`;
   const optionId = (index: number) => `${listId}-option-${index}`;
 
   function track() { if (ref.current) setCaret(ref.current.selectionStart ?? 0); }
@@ -202,6 +207,7 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
           <span className="block truncate text-body-sm">{candidate.name}</span>
           <span className="block truncate text-caption text-kh-text-muted">{candidate.nameEn ? `${candidate.nameEn} · ${candidate.empId}` : candidate.empId}</span>
           {candidate.needsApproval && <span className="block text-caption text-kh-text-muted">Needs owner approval</span>}
+          {candidate.addsRecipient && <span className="block text-caption text-kh-text-muted">{addsNote}</span>}
         </li>)}</ul>
       : <p className="px-2 py-1 text-body-sm text-kh-text-muted">{hint}</p>}
   </div>;

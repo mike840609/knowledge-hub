@@ -116,6 +116,8 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
       window.dispatchEvent(new Event("kh:notification-changed"));
     } catch (cause) {
       setError(governanceFailure(cause).message);
+      // Refused most likely because it was decided elsewhere: show the list as it is now, beside the message.
+      await load().catch(() => {});
     } finally { setBusy(false); }
   };
 

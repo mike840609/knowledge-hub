@@ -242,6 +242,8 @@ describe("a proposal whose link no longer opens", () => {
       expect(await unreadProposals(caller)).toEqual([]);
       const [entry] = await proposalActivity(caller);
       expect(entry).toMatchObject({ proposalId, linkAvailable: false, documentTitle: "", authorName: undefined, readAt: expect.any(Date) });
+      expect(entry.kind).toBe(caller === f.ownerCaller ? "PROPOSAL_REQUEST" : "PROPOSAL_PENDING");
+      expect(entry).not.toHaveProperty("proposalStatus");
       expect(entry).not.toHaveProperty("personName");
       expect(entry).not.toHaveProperty("shareLinkId");
       expect(entry).not.toHaveProperty("targetKind");
@@ -268,6 +270,7 @@ describe("a proposal whose link no longer opens", () => {
     expect(await unreadProposals(f.aliceCaller)).toEqual([]);
     const [entry] = await proposalActivity(f.aliceCaller);
     expect(entry).toMatchObject({ kind: "PROPOSAL_DECIDED", linkAvailable: false, documentTitle: "", readAt: expect.any(Date) });
+    expect(entry).not.toHaveProperty("proposalStatus");
     expect(entry).not.toHaveProperty("personName");
     await expectBadgeMatchesList(f);
   });

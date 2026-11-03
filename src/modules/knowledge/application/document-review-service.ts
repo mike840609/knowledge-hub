@@ -187,8 +187,13 @@ export class DocumentReviewService {
       const recipientIds = new Set(named.map(u => u.id));
       const others = (await r.users.searchExisting(query, MENTION_LIMIT + skip.size)).filter(u => !recipientIds.has(u.id));
       const found = [...named, ...others].filter(u => !skip.has(u.id)).slice(0, MENTION_LIMIT);
-      const proposes = s.link?.audience === "NAMED" && s.workspace.personalOwnerUserId !== caller.identity.id;
-      return { candidates: found.map(u => ({ id: u.id, name: u.name, nameEn: u.nameEn, empId: u.emp_id, needsApproval: proposes && !recipientIds.has(u.id) })) };
+      // A recipient's mention of a non-recipient proposes them; the owner's adds them to the link (mention proposals spec, "Write path").
+      const isOwner = s.workspace.personalOwnerUserId === caller.identity.id;
+      const proposes = s.link?.audience === "NAMED" && !isOwner;
+      const adds = s.link?.audience === "NAMED" && isOwner;
+      const candidates = found.map(u => ({ id: u.id, name: u.name, nameEn: u.nameEn, empId: u.emp_id, needsApproval: proposes && !recipientIds.has(u.id), addsRecipient: adds && !recipientIds.has(u.id) }));
+      // Through a link, what it opens: an owner's mention adding someone to a folder link opens them the whole folder.
+      return s.link ? { candidates, targetKind: s.link.target.kind } : { candidates };
     });
   }
   /**
@@ -489,11 +494,12 @@ export class DocumentReviewService {
       const kind = party === "OWNER" ? "PROPOSAL_REQUEST" as const : proposal.status === "PENDING" ? "PROPOSAL_PENDING" as const : "PROPOSAL_DECIDED" as const;
       const base = {
         id: `${PROPOSAL_PREFIX}${party}:${proposal.id}`, workspaceId: "", documentId: "", sourceId: "", threadId: "", commentId: "", excerpt: "",
-        createdAt, readAt, threadStatus: "OPEN" as const, kind, proposalId: proposal.id, proposalStatus: proposal.status,
+        createdAt, readAt, threadStatus: "OPEN" as const, kind, proposalId: proposal.id,
       };
+      // A dead entry names nothing, its status included (spec, "Inbox"); its kind still says which party's it is.
       if (!target || !link) { views.push({ ...base, documentTitle: "", authorName: undefined, linkAvailable: false }); continue; }
       views.push({
-        ...base, documentTitle: await namedShareTitle(r, caller, target), targetKind: link.target.kind, linkAvailable: true,
+        ...base, proposalStatus: proposal.status, documentTitle: await namedShareTitle(r, caller, target), targetKind: link.target.kind, linkAvailable: true,
         authorName: kind === "PROPOSAL_DECIDED" ? undefined : await nameOf(proposal.proposedBy),
         ...(party === "PROPOSED" ? {} : { personName: await nameOf(proposal.userId) }),
         ...(party === "OWNER" ? { shareLinkId: link.id } : {}),
