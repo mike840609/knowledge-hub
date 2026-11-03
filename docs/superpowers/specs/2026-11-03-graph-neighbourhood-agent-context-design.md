@@ -1,6 +1,6 @@
 # Copy a document's link neighbourhood for an agent — design
 
-Status: proposed, 2026-11-03. Extends Copy for Agent
+Status: implemented, 2026-11-03 (amended after review the same day: §5.2 status line, §5.3 spelling, header and cap fallback, §5.1 label). Extends Copy for Agent
 (`2026-10-04-mvp-discovery-agent-design.md`) and reads the link graph of
 `2026-09-29-personal-workspace-knowledge-graph-design.md`. Amends the
 2026-10-04 spec's bundle format and response (§5.3 adds a `## Links`
@@ -74,6 +74,9 @@ the links among the selected documents.
   document's neighbourhood, the same one the inspector draws, not a slice of
   the filtered drawing. *(Builder-check call.)*
 - Both are plain `<Link prefetch={false}>` navigations; no client fetch.
+  Both read "Copy for Agent" with the accessible name "Copy for Agent with
+  nearby documents", so they are told apart from the per-document action,
+  which goes elsewhere. The name starts with the visible text.
 
 ### 5.2 Preselection (agent-context page)
 
@@ -90,10 +93,13 @@ the links among the selected documents.
   order (focus first, then by distance, then by its existing node
   ordering), filtered to documents the page already offers (ACTIVE in an
   ACTIVE source), capped at `CONTEXT_MAX_DOCUMENTS` (20). `UNRESOLVED` nodes
-  are dropped.
+  are dropped. The neighbourhood may hold only the document itself (the graph
+  page offers the entry without one).
 - `AgentContextBuilder` takes `initialDocumentIds: string[]` instead of
   `initialDocumentId`. When preselected from a neighbourhood it shows one
-  status line: "Selected N of M nearby documents." M = eligible documents
+  line: "Started with N of M nearby documents." It names where the
+  selection began, so it stays true after the reader changes it, and it is
+  omitted when N ≤ 1 (only the document itself). M = eligible documents
   in the local graph, which `buildLocalGraph` has already capped at
   `LOCAL_GRAPH_NODE_LIMIT` (60, unresolved included); M therefore means "in
   the drawn neighbourhood", not the true count. Omit "of M" when M = N. Preselected
@@ -107,10 +113,10 @@ the links among the selected documents.
   `links.loadValidEdges`, `resolveEdges` — the same calls `getLocalGraph`
   makes), and keeps edges whose `from` is a selected id and whose `to` is
   either a selected id or an unresolved target (`unresolved:<key>`). Edges to
-  existing unselected documents are dropped, as are self-links. The
-  unresolved target's display title is the one `buildWorkspaceGraph` gives
-  its `UNRESOLVED` node; the internal `unresolved:<key>` id is never
-  written.
+  existing unselected documents are dropped, as are self-links. An
+  unresolved target is named as the linking document wrote it (its first
+  spelling of that key), not as whichever document the graph met first; the
+  internal `unresolved:<key>` id is never written.
 - Formatting lives in `AgentContextFormatter`: after the header and before
   the first document,
 
@@ -130,6 +136,15 @@ the links among the selected documents.
   `from`, then selected targets in selection order, then missing targets by
   title. Titles are the current revision titles. The section
   is omitted when there are no such edges. Its bytes count toward 256 KiB.
+- The bundle header names the section ("A Links section, when present,
+  lists `Link:` records …").
+- When the selection fits under 256 KiB without its map but not with it, the
+  bundle is built again without the map and says so in its place:
+  `## Links` / "The link map was omitted: with it, the selected content would
+  exceed 256 KiB." (`linkCount` 0). A selection that could be copied before
+  this feature stays copyable; content is still never truncated, and a
+  selection too large on its own still fails as before. *(Review call,
+  replacing the plan's fail-at-the-cap choice for the map.)*
 - The response gains `linkCount`; the preview's stats line adds
   "· N links".
 - The map is derived at build time and decides nothing. A stale link index

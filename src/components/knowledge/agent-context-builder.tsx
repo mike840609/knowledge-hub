@@ -58,7 +58,7 @@ export function AgentContextBuilder({ workspaceId, documents, initialDocumentIds
   if (!documents.length) return <EmptyState icon={FileText} illustration={<Illustration kind="context" />} title={canAddDocuments ? "Add documents to prepare AI context" : "No documents available for AI context"} description={!accessConfirmed ? "Checking workspace access…" : canAddDocuments ? "Turn selected documents into Markdown for your AI agent." : readOnlyGuidance} action={canAddDocuments ? <WorkspaceContentActions workspaceId={workspaceId} /> : undefined} />;
   return <div className="space-y-4">
     <p className="text-body text-kh-text-secondary">Select documents to include their saved content and all visible discussions, both open and resolved. Review the Markdown before copying to your agent.</p>
-    {nearby ? <p role="status" className="text-body-sm text-kh-text-secondary">{nearby.total > nearby.selected ? `Selected ${nearby.selected} of ${nearby.total} nearby documents.` : `Selected ${nearby.selected} nearby documents.`}</p> : null}
+    {nearby && nearby.selected > 1 ? <p className="text-body-sm text-kh-text-secondary">{nearby.total > nearby.selected ? `Started with ${nearby.selected} of ${nearby.total} nearby documents.` : `Started with ${nearby.selected} nearby documents.`}</p> : null}
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
     <section aria-label="Available documents" className="min-w-0 space-y-3">
     <Label htmlFor="context-search">Find documents<Input id="context-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Title, source or path" className="mt-1" /></Label>

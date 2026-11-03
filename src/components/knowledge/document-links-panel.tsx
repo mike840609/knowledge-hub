@@ -68,7 +68,7 @@ function LocalGraph({ graph, focusId }: { graph: LocalGraphData; focusId: string
           Open in graph
         </Link>
         {graph.agentContextHref ? (
-          <Link href={graph.agentContextHref} prefetch={false} className="inline-block rounded-md px-1 text-caption text-kh-link underline underline-offset-2 kh-focus-ring">
+          <Link href={graph.agentContextHref} prefetch={false} aria-label="Copy for Agent with nearby documents" className="inline-block rounded-md px-1 text-caption text-kh-link underline underline-offset-2 kh-focus-ring">
             Copy for Agent
           </Link>
         ) : null}

@@ -165,7 +165,7 @@ export function GraphExplorer({
             {total.documents} {total.documents === 1 ? "document" : "documents"} · {total.edges} {total.edges === 1 ? "link" : "links"}
           </p>
         <div className="flex shrink-0 items-center gap-2">
-          {agentContextHref ? <Link href={agentContextHref} prefetch={false} className={buttonClasses({ variant: "ghost", size: "sm" })}>Copy for Agent</Link> : null}
+          {agentContextHref ? <Link href={agentContextHref} prefetch={false} aria-label="Copy for Agent with nearby documents" className={buttonClasses({ variant: "ghost", size: "sm" })}>Copy for Agent</Link> : null}
           {query ? <Button variant="ghost" size="sm" onClick={() => setQuery("")}>Clear find</Button> : null}
           {shown.sourceId || !shown.orphans || shown.unresolved ? <Button variant="ghost" size="sm" onClick={() => change({sourceId:null,orphans:true,unresolved:false,focusId:null})}>Reset</Button> : null}
         </div>

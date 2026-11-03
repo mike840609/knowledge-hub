@@ -41,9 +41,9 @@ test.describe("Copy for Agent from a document's neighbourhood", () => {
 
     await page.goto(`${docA.url}?graph=2`);
     await openLinksTab(page);
-    await page.locator('[data-links-section="graph"]').getByRole("link", { name: "Copy for Agent" }).click();
+    await page.locator('[data-links-section="graph"]').getByRole("link", { name: "Copy for Agent with nearby documents" }).click();
     await expect(page).toHaveURL(new RegExp(`around=${docA.documentId}&depth=2`), ROUND_TRIP);
-    await expect(page.getByText("Selected 3 nearby documents.")).toBeVisible();
+    await expect(page.getByText("Started with 3 nearby documents.")).toBeVisible();
     for (const title of [a, b, c]) await expect(box(page, title)).toBeChecked();
     await expect(box(page, d)).not.toBeChecked();
 
@@ -85,13 +85,12 @@ test.describe("Copy for Agent from a document's neighbourhood", () => {
   test("the graph page offers it for a focused document whatever its filters", async ({ page }) => {
     await page.setViewportSize({ width: 1500, height: 900 });
     const stamp = Date.now();
-    const target = await createMySpaceDocument(page, `Focus T ${stamp}`, "Target.");
+    await createMySpaceDocument(page, `Focus T ${stamp}`, "Target.");
     const focus = await createMySpaceDocument(page, `Focus F ${stamp}`, `To [[Focus T ${stamp}]].`);
     await page.goto(`/w/${focus.workspaceId}/graph?focus=${focus.documentId}&unresolved=1`);
-    const entry = page.getByRole("link", { name: "Copy for Agent" });
+    const entry = page.getByRole("link", { name: "Copy for Agent with nearby documents" });
     await expect(entry).toHaveAttribute("href", `/w/${focus.workspaceId}/agent-context?around=${focus.documentId}&depth=1`);
     await page.goto(`/w/${focus.workspaceId}/graph`);
     await expect(page.getByRole("link", { name: "Copy for Agent" })).toHaveCount(0);
-    expect(target.documentId).not.toBe(focus.documentId);
   });
 });

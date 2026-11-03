@@ -34,8 +34,10 @@ it("preselects the neighbourhood and says how much of it", async () => {
   try {
     await act(async () => root.render(<AgentContextBuilder workspaceId="ws" documents={documents} initialDocumentIds={["a", "b"]} nearby={{ selected: 2, total: 5 }} />));
     expect([...host.querySelectorAll<HTMLInputElement>("input[type=checkbox]")].map(box => box.checked)).toEqual([true, true, false]);
-    expect(host.textContent).toContain("Selected 2 of 5 nearby documents.");
+    expect(host.textContent).toContain("Started with 2 of 5 nearby documents.");
     await act(async () => root.render(<AgentContextBuilder workspaceId="ws" documents={documents} initialDocumentIds={["a", "b"]} nearby={{ selected: 2, total: 2 }} />));
-    expect(host.textContent).toContain("Selected 2 nearby documents.");
+    expect(host.textContent).toContain("Started with 2 nearby documents.");
+    await act(async () => root.render(<AgentContextBuilder key="alone" workspaceId="ws" documents={documents} initialDocumentIds={["a"]} nearby={{ selected: 1, total: 1 }} />));
+    expect(host.textContent).not.toContain("nearby document");
   } finally { await act(async () => root.unmount()); host.remove(); }
 });

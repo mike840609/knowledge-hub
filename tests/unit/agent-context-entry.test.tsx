@@ -39,6 +39,7 @@ describe("the Links tab entry", () => {
     expect(data.localGraph?.agentContextHref).toBe("/w/ws/agent-context?around=self&depth=1");
     const html = renderToStaticMarkup(<DocumentLinksPanel view={linkView} localGraph={data.localGraph} focusId="self" />);
     expect(html).toContain('href="/w/ws/agent-context?around=self&amp;depth=1"');
+    expect(html).toContain('aria-label="Copy for Agent with nearby documents"');
     expect(html).toContain(">Copy for Agent<");
     expect(html).toContain(">Open in graph<");
   });

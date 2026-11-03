@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { AgentContextService } from "@/modules/knowledge/application/agent-context-service";
 import { AgentContextFormatter, linkMapFor, type AgentContextLink } from "@/modules/knowledge/domain/agent-context";
-import type { GraphNode, LinkGraph } from "@/modules/knowledge/domain/link-graph";
+import { linkLookupKey, type GraphNode, type LinkGraph, type ResolvedEdge } from "@/modules/knowledge/domain/link-graph";
 import type { KnowledgeRepositories } from "@/modules/knowledge/ports/unit-of-work";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 
@@ -38,6 +38,13 @@ describe("linkMapFor", () => {
     expect(linkMapFor(graph, [A, B]).map(link => link.to)).toEqual(["B", "Mid", "Zed"]);
   });
 
+  it("names a missing target as the linking document wrote it", () => {
+    const id = `unresolved:${linkLookupKey("WIKI", "Project Plan")}`;
+    const graph: LinkGraph = { nodes: [doc(A, "A"), doc(B, "B"), missing(id.slice(11), "Project Plan")], edges: [{ from: B, to: id, count: 1 }, { from: A, to: id, count: 1 }] };
+    const written = (from: string, target: string): ResolvedEdge => ({ from, link: { kind: "WIKI", target, fragment: null, alias: null }, resolution: { status: "UNRESOLVED" } } as unknown as ResolvedEdge);
+    expect(linkMapFor(graph, [A, B], [written(B, "Project Plan"), written(A, "project  plan")]).map(link => [link.fromId, link.to])).toEqual([[A, "project  plan"], [B, "Project Plan"]]);
+  });
+
   it("keeps ids when titles collide", () => {
     const graph: LinkGraph = { nodes: [doc(A, "Same"), doc(B, "Same")], edges: [{ from: A, to: B, count: 1 }, { from: B, to: A, count: 1 }] };
     expect(linkMapFor(graph, [A, B]).map(link => [link.fromId, link.toId])).toEqual([[A, B], [B, A]]);
@@ -71,6 +78,10 @@ describe("AgentContextFormatter links", () => {
     expect(out.bytes).toBe(new TextEncoder().encode(out.markdown).length);
   });
 
+  it("names the Links section in the header", () => {
+    expect(new AgentContextFormatter(A).finish().markdown).toContain("A Links section, when present, lists `Link:` records");
+  });
+
   it("counts Links toward the byte cap", () => {
     const body = "x".repeat(256 * 1024 - 2000);
     const alone = new AgentContextFormatter(A);
@@ -83,7 +94,43 @@ describe("AgentContextFormatter links", () => {
   });
 });
 
+const caller = callerFromIdentity({ id: A, emp_id: "1", name: "Mike", org_code: "A" });
+function serviceRepos(markdown: string, targets: string[]) {
+  const read = vi.fn(async () => {});
+  return {
+    users: { upsertIdentity: vi.fn(), findById: vi.fn() },
+    workspaceAccess: { requireWorkspaceRead: read, requireMembership: read },
+    workspaces: { findById: vi.fn(async () => ({ workspaceType: "PERSONAL", personalOwnerUserId: A, lifecycleState: "ACTIVE" })) },
+    documents: { findById: vi.fn(async () => ({ id: A, sourceId: A, status: "ACTIVE" })) },
+    sourcePolicy: { findById: vi.fn(async () => ({ id: A, workspaceId: A, status: "ACTIVE", name: "Wiki" })) },
+    tree: { listBySource: vi.fn(async () => [{ id: A, sourceId: A, documentId: A, nodeType: "DOCUMENT", parentId: null, status: "ACTIVE" }]) },
+    revisions: { findCurrent: vi.fn(async () => ({ id: A, revisionNo: 1, title: "A", markdown, createdAt: new Date() })) },
+    linkedEntries: { findByDocumentId: vi.fn(async () => null) },
+    reviewThreads: { listByDocument: vi.fn(async () => []) },
+    reviewComments: { listByThreads: vi.fn(async () => []) },
+    links: {
+      loadCatalog: vi.fn(async () => [{ documentId: A, sourceId: A, title: "A", sourcePath: null, createdAt: new Date() }]),
+      loadValidEdges: vi.fn(async () => [{ documentId: A, links: targets.map(target => ({ kind: "WIKI", target, fragment: null, alias: null })) }]),
+    },
+  } as unknown as KnowledgeRepositories;
+}
+
 describe("AgentContextService links", () => {
+  it("still copies a document that fits alone, saying the map was omitted", async () => {
+    const r = serviceRepos("x".repeat(256 * 1024 - 2000), Array.from({ length: 40 }, (_, i) => `Missing ${i}`));
+    const result = await new AgentContextService({ run: work => work(r) }).build(caller, A, [A]);
+    expect(result.documentCount).toBe(1);
+    expect(result.linkCount).toBe(0);
+    expect(result.markdown).toContain("The link map was omitted: with it, the selected content would exceed 256 KiB.");
+    expect(result.markdown).not.toContain("Link: ");
+    expect(result.bytes).toBeLessThanOrEqual(256 * 1024);
+  });
+
+  it("still fails loudly when the content alone exceeds the cap", async () => {
+    const r = serviceRepos("x".repeat(256 * 1024), ["Missing"]);
+    await expect(new AgentContextService({ run: work => work(r) }).build(caller, A, [A])).rejects.toThrow(/exceeds 256 KiB/);
+  });
+
   it("emits the map for a single document with only broken links", async () => {
     const caller = callerFromIdentity({ id: A, emp_id: "1", name: "Mike", org_code: "A" });
     const read = vi.fn(async () => {});
