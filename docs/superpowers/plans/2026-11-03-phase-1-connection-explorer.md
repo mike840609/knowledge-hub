@@ -102,7 +102,7 @@ The five most likely user-facing failure modes are each pinned by tests later in
 **Interfaces:**
 - `KnowledgeLinkService.getConnectionSummary(caller: CallerContext, workspaceId: string, focusId: string): Promise<ConnectionSummary>`.
 - `ConnectionSummary`: `{focusDocumentId,focusTitle,sourceName,incoming:ConnectionPair[],outgoing:ConnectionPair[],incomingTotal,outgoingTotal,truncated:{incoming:boolean,outgoing:boolean},graphIndexStale:boolean}`.
-- `ConnectionPair`: `{fromDocumentId,toDocumentId,fromTitle,toTitle,count,ambiguous,inVisibleGraph:boolean}`. The `inVisibleGraph` bit is calculated in the **UI** from the current filtered `GraphViewData`, or accepted only as a derived projection parameter; it must not pretend the service knows user Graph filters.
+- `ConnectionPair`: `{fromDocumentId,toDocumentId,fromTitle,toTitle,count,ambiguous}`. The **UI** derives `inVisibleGraph` from its filtered `GraphViewData`; the service must not pretend it knows user Graph filters.
 
 - [ ] **Step 1: Write failing unit tests** using `resolveEdges`-style catalog/links fixtures: A→B repeated 3 times appears once with count 3; B→A is a different incoming pair; link to missing target is excluded from resolved pairs; no self-link; cross-source within same workspace allowed; ambiguous resolution is marked.
 - [ ] **Step 2: Run** `npx vitest run --config vitest.config.ts tests/unit/connection-summary.test.ts`. Expected: FAIL.
@@ -140,7 +140,7 @@ The five most likely user-facing failure modes are each pinned by tests later in
 
 **Interfaces:**
 - `extractDocumentLinksWithOffsets(markdown: string): Array<ExtractedLink & {startOffset:number}>` from `document-links.ts`. Must share the existing parser, sorting, escaped-link handling, link cap and ordinals; no persisted schema change.
-- `getConnectionParagraphExcerpt(markdown: string, startOffset: number, limits?: {maxLines:8,maxCodePoints:600}): {text:string|null;truncated:boolean;kind:"PARAGRAPH"|"LIMITED_LINE"|"UNAVAILABLE"}`.
+- `getConnectionParagraphExcerpt(markdown: string, startOffset: number, limits?: {maxLines?:number;maxCodePoints?:number}): {text:string|null;truncated:boolean;kind:"PARAGRAPH"|"LIMITED_LINE"|"UNAVAILABLE"}`.
 
 - [ ] **Step 1: Write failing unit tests**: two links on one line map to distinct ordinals/offsets; inline `[[Wiki|alias]]`, relative `.md`, list item, blockquote, multiline paragraph, Chinese paragraphs, table fallback, escaped link and code fence non-links; 9th line/601st Unicode code point truncates visibly and **keeps reference context**.
 - [ ] **Step 2: Run** `npx vitest run --config vitest.config.ts tests/unit/connection-excerpt.test.ts tests/unit/document-links-extract.test.ts`. Expected: new tests FAIL, existing extraction PASS.
