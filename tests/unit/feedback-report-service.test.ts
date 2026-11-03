@@ -12,6 +12,7 @@ class MemoryStore implements FeedbackReportStore {
     this.reports.push(report);
     return `report-${this.reports.length}`;
   }
+  async listPage() { return []; }
 }
 
 describe("parseFeedbackReport", () => {
