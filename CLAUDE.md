@@ -128,16 +128,26 @@ pass.
   (`docs/superpowers/specs/2026-10-23-followed-discussions-tab-design.md`).
   A **mention** hands a link's reference to one named, signed-in Hub user's Inbox:
   the writer passes on the link they already hold or own, recorded instead of
-  pasted. It reads only through `/s/:token` like any holder, is judged per
+  pasted. It reads only where that link is read, like any holder (`/s/:token`;
+  a NAMED link's Hub reader, `/w/<ws>/shares/:token`), is judged per
   request against the link's validity, never extends its lifetime, and grants no
   Workspace membership, search, tree, history, MCP, Markdown edits or revision
   writes. Its candidate search (`/api/review-mentions/candidates`) answers
   signed-in callers only, never anonymously; it asks for a live token or
   document ownership, but that is not a narrower gate on the directory, since
-  every signed-in user owns documents (accepted 2026-10-29). A mention through
+  every signed-in user owns documents (accepted 2026-10-29). The named-share recipient
+  picker (`/api/share-recipients/candidates`) has the same signed-in-only directory exposure
+  (`docs/superpowers/specs/2026-11-03-named-recipient-share-design.md`). A mention through
   a folder link hands over that link, which opens the whole folder; it is judged
   per document, and an owner may name the links that open the document now (its own or a folder's above it)
   (`docs/superpowers/specs/2026-10-29-review-mentions-design.md`, "Folder share links").
+  A share link has an **audience**. `LINK` opens for anyone holding it; `NAMED`
+  opens only for a signed-in recipient its owner listed, or for the owner. A NAMED
+  link never expires, is never read caller-less (`/s/:token` answers it as a dead
+  link does), and is read in the Hub at `/w/<ws>/shares/:token`, reached through
+  `/s/:token/open`. It grants nothing beyond what a link grants, and a mention
+  through it reaches only its recipients
+  (`docs/superpowers/specs/2026-11-03-named-recipient-share-design.md`).
   Review access never grants Workspace membership, search, tree, history,
   MCP, Markdown edits or revision writes. Review responses include only
   validated current-revision selected-text fragments; hidden bodies and
@@ -147,8 +157,10 @@ pass.
   visible comment mentions, that person's `name`, `name_en` and `emp_id`
   (`docs/superpowers/specs/2026-10-30-review-mention-highlight-design.md`). A third,
   `readSharedTarget`, answers without one but serves no content: it judges the
-  link for `/s/:token/open` and names only the document id to open, before
-  sign-in is asked for (so a dead link is a plain 404). Every other entry,
+  link for `/s/:token/open` and names only the document id to open. That route
+  establishes the caller first (a NAMED link needs one), so even a dead LINK
+  token reaches sign-in before its 404
+  (`docs/superpowers/specs/2026-11-03-named-recipient-share-design.md`, deviation 2). Every other entry,
   and every write, requires one; `tests/unit/share-link-single-exception.test.ts`
   enforces it.
 - **`org_code` does not decide access.** It answers which company org a user

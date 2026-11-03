@@ -290,7 +290,7 @@ describe("mentions in the Inbox", () => {
     expect(await unread(f)).toEqual([{
       id: `mention:${commentId}`, kind: "MENTION", workspaceId: "", documentId: "", sourceId: "", documentTitle: "Review",
       threadId, commentId, authorName: "Bob", excerpt: "Alice, please check this passage", createdAt: at(10), readAt: null,
-      threadStatus: "OPEN", token: f.token, linkAvailable: true,
+      threadStatus: "OPEN", token: f.token, linkAvailable: true, href: `/s/${f.token}?thread=${threadId}`,
     }]);
     expect(await count(f)).toBe(1);
     expect(mentionsOf(await f.service.listUnreadForOwner(callers(f).carol))).toEqual([]);

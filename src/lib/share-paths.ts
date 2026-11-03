@@ -16,7 +16,44 @@ export function sharedDocumentParam(value: string | string[] | undefined): strin
   return typeof value === "string" && DOCUMENT_ID.test(value) ? value : null;
 }
 
-/** A document of a shared folder, read through the folder's link. */
-export function sharedFolderHref(token: string, documentId: string): string {
-  return `/s/${encodeURIComponent(token)}?d=${documentId}`;
+/** The anonymous page a share link opens. */
+export function sharedPagePath(token: string): string {
+  return `/s/${encodeURIComponent(token)}`;
+}
+
+/** The Hub's own reader of a share, in the caller's personal Workspace shell (named-recipient share spec). */
+export function hubSharePath(workspaceId: string, token: string): string {
+  return `/w/${workspaceId}/shares/${encodeURIComponent(token)}`;
+}
+
+/** The page request's path and query, which the middleware passes on because Next gives a layout neither. */
+export const REQUEST_PATH_HEADER = "x-hub-path";
+
+const FOREIGN_HUB_SHARE = /^\/w\/[^/?#]+\/shares\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})(\?.*)?$/;
+
+/**
+ * Where a Hub reader URL on a Workspace outside the caller's reach goes instead: the same share and query in the
+ * caller's own personal Workspace (a recipient sent the owner's address bar). Any other path is `null`, and stays a
+ * 404. Judges nothing about the share; the page does that after the redirect, so a reader it does not admit still
+ * ends at the dead link's 404.
+ */
+export function foreignHubShareRedirect(requestPath: string | null, personalWorkspaceId: string): string | null {
+  const match = requestPath === null ? null : FOREIGN_HUB_SHARE.exec(requestPath);
+  return match ? `${hubSharePath(personalWorkspaceId, match[1])}${match[2] ?? ""}` : null;
+}
+
+/**
+ * Where a discussion read through a share opens, at `?thread=` (and a folder link's document, `?d=`). A LINK
+ * share's is its anonymous page, written as it always was; a NAMED share's is the Hub reader in the reader's
+ * own personal Workspace, since `/s/<token>` answers it as a dead link. No such Workspace: nowhere (`null`).
+ * Built by the server, so the client never chooses which path a share is read on.
+ */
+export function shareDiscussionHref(link: { audience: "LINK" | "NAMED"; token: string }, readerWorkspaceId: string | null, threadId: string, documentId?: string): string | null {
+  const page = link.audience === "NAMED" ? readerWorkspaceId && hubSharePath(readerWorkspaceId, link.token) : `/s/${link.token}`;
+  return page ? `${page}?${documentId ? `d=${documentId}&` : ""}thread=${threadId}` : null;
+}
+
+/** A document of a shared folder, read through the folder's link on `pagePath`: the anonymous page, or the Hub's reader. */
+export function sharedFolderHref(token: string, documentId: string, pagePath = sharedPagePath(token)): string {
+  return `${pagePath}?d=${documentId}`;
 }

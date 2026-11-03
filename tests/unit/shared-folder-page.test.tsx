@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SharedFolderView, SharedView } from "@/modules/knowledge/application/document-share-service";
+import type { SharedDocumentView, SharedFolderView } from "@/modules/knowledge/application/document-share-service";
 import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
 
 /** The page a folder link opens (folder share spec §4, §5). */
@@ -55,7 +55,8 @@ const setup = {
 };
 
 const render = async (d?: string | string[], token = "tok") => renderToStaticMarkup(await SharedPage({ params: Promise.resolve({ token }), searchParams: Promise.resolve(d === undefined ? {} : { d }) }));
-const shared = (view: SharedView | null) => fixture.getShared.mockResolvedValue(view);
+/** `/s/:token` reads only a LINK: a NAMED link never opens there without a viewer. */
+const shared = (view: SharedFolderView | ({ kind: "DOCUMENT" } & SharedDocumentView) | null) => fixture.getShared.mockResolvedValue(view && { ...view, audience: "LINK" });
 
 beforeEach(() => { fixture.getShared.mockReset(); vi.stubEnv("KM_PUBLIC_ORIGIN", ""); });
 afterEach(() => vi.unstubAllEnvs());

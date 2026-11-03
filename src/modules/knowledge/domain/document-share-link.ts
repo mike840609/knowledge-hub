@@ -1,3 +1,4 @@
+import { isUuid } from "@/shared/ids/uuidv7";
 import { ROLE_WORKSPACE_CAPABILITIES } from "@/modules/workspaces/domain/workspace-capability";
 import { WorkspaceArchivedError } from "@/modules/workspaces/domain/errors";
 import type { WorkspaceRole } from "@/modules/workspaces/domain/workspace-membership";
@@ -24,6 +25,10 @@ export type ShareLinkExpiryDays = (typeof SHARE_LINK_EXPIRY_DAYS)[number];
 export const DEFAULT_SHARE_LINK_EXPIRY_DAYS: ShareLinkExpiryDays = 30;
 export const MAX_ACTIVE_SHARE_LINKS_PER_DOCUMENT = 10;
 export const MAX_SHARE_LINK_LABEL_LENGTH = 200;
+export const MAX_NAMED_SHARE_RECIPIENTS = 50;
+
+/** LINK: any holder of the token, expiring. NAMED: only listed recipients, no expiry. */
+export type ShareAudience = "LINK" | "NAMED";
 
 /** What a link opens: one document, or a My Space folder's live subtree. */
 export type ShareLinkTarget =
@@ -36,9 +41,11 @@ export type DocumentShareLink = {
   /** Random UUIDv4, never derived from any entity ID (spec §8). */
   token: string;
   label: string | null;
+  audience: ShareAudience;
   createdBy: string;
   createdAt: Date;
-  expiresAt: Date;
+  /** Null only for a NAMED link, which stands until revoked. */
+  expiresAt: Date | null;
   revokedBy: string | null;
   revokedAt: Date | null;
 };
@@ -80,7 +87,7 @@ export class ShareLinkNotFoundError extends NotFoundError {
 }
 
 export function isActiveShareLink(link: Pick<DocumentShareLink, "revokedAt" | "expiresAt">, now: Date): boolean {
-  return link.revokedAt === null && link.expiresAt.getTime() > now.getTime();
+  return link.revokedAt === null && (link.expiresAt === null || link.expiresAt.getTime() > now.getTime());
 }
 
 type LifecycleStatus = "ACTIVE" | "ARCHIVED";
@@ -129,7 +136,7 @@ export function evaluateShareLinkValidity(
   input: ShareLinkValidityInput,
 ): { valid: true } | { valid: false; reason: ShareLinkInvalidReason } {
   if (input.link.revokedAt !== null) return { valid: false, reason: "REVOKED" };
-  if (input.link.expiresAt.getTime() <= input.now.getTime()) return { valid: false, reason: "EXPIRED" };
+  if (input.link.expiresAt !== null && input.link.expiresAt.getTime() <= input.now.getTime()) return { valid: false, reason: "EXPIRED" };
   if (input.documentStatus !== "ACTIVE") return { valid: false, reason: "DOCUMENT_ARCHIVED" };
   if (input.sourceStatus !== "ACTIVE") return { valid: false, reason: "SOURCE_ARCHIVED" };
   if (input.workspaceLifecycle !== "ACTIVE") return { valid: false, reason: "WORKSPACE_ARCHIVED" };
@@ -208,6 +215,21 @@ function normalizeLabel(value: unknown): string | null {
   const trimmed = value.trim();
   if (trimmed.length > MAX_SHARE_LINK_LABEL_LENGTH) throw new InvalidShareLinkLabelError();
   return trimmed.length === 0 ? null : trimmed;
+}
+
+/** Lower-cased, de-duplicated recipient ids; the owner already holds the document and is never a recipient. */
+export function normalizeRecipients(raw: unknown, ctx: { ownerId: string }): string[] {
+  if (!Array.isArray(raw)) throw new DomainError("INVALID_REQUEST", "Recipients must be a list of user ids.");
+  const ids = new Set<string>();
+  for (const value of raw) {
+    if (typeof value !== "string" || !isUuid(value)) throw new DomainError("INVALID_REQUEST", "Every recipient must be a user id.");
+    const id = value.toLowerCase();
+    if (id === ctx.ownerId.toLowerCase()) throw new DomainError("INVALID_REQUEST", "You cannot name yourself as a recipient.");
+    ids.add(id);
+  }
+  if (ids.size === 0) throw new DomainError("INVALID_REQUEST", "Name at least one recipient.");
+  if (ids.size > MAX_NAMED_SHARE_RECIPIENTS) throw new DomainError("INVALID_REQUEST", `A link can name at most ${MAX_NAMED_SHARE_RECIPIENTS} recipients.`);
+  return [...ids];
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;

@@ -38,6 +38,23 @@ function parenthesised(source: string, open: number): string {
   return source.slice(open + 1);
 }
 
+/** The comma-separated arguments of a call, split only at depth zero. */
+function topLevelArguments(text: string): string[] {
+  const found: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    if ("([{".includes(text[index])) depth += 1;
+    if (")]}".includes(text[index])) depth -= 1;
+    if (text[index] === "," && depth === 0) {
+      found.push(text.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  const last = text.slice(start).trim();
+  return last ? [...found, last] : found;
+}
+
 type Callable = { file: string; name: string; parameters: string; body: string };
 
 /** Public class methods (two-space indent) and exported functions, async or not. */
@@ -104,7 +121,7 @@ describe("the share link is the single caller-less content path", () => {
     const passing = files.filter((file) => /\blinks=/.test(readFileSync(file, "utf8")));
     expect(passing).toEqual([path.join("src", "app", "s", "[token]", "shared-folder-page.tsx")]);
     const folderPage = readFileSync(passing[0], "utf8");
-    expect(folderPage.match(/\blinks=\{[^}]*\}/g)).toEqual(["links={sharedFolderLinks(token, document.links)}"]);
+    expect(folderPage.match(/\blinks=\{[^}]*\}/g)).toEqual(["links={sharedFolderLinks(token, document.links, pagePath)}"]);
     // And the reading column reads whatever it is not given as text, never as a link that is missing.
     const reading = readFileSync(path.join("src", "components", "knowledge", "shared-reading.tsx"), "utf8");
     expect(reading).toMatch(/<MarkdownRenderer\s+markdown=\{document\.markdown\}\s+links=\{links\}\s+unresolvedAsText\b/);
@@ -129,8 +146,42 @@ describe("the share link is the single caller-less content path", () => {
       .filter((callable) => methods.has(callable.name) && !requiresCaller(callable.parameters))
       .map((callable) => callable.name);
     expect(callerless).toEqual(["readShared", "readSharedTarget"]);
+    // A NAMED link is judged against the reader's id (named-recipient share spec). That id is an
+    // option, not a caller: it names no CallerContext, so both entries stay caller-less above and
+    // still answer with no one signed in, where a NAMED link refuses as a dead link does.
+    for (const name of ["readShared", "readSharedTarget"]) {
+      const parameters = callables(file).find((callable) => callable.name === name)?.parameters ?? "";
+      expect(parameters, name).toMatch(/\bviewerId\?: string \| null\b/);
+      expect(namesCaller(parameters), name).toBe(false);
+    }
     const target = callables(file).find((callable) => callable.name === "readSharedTarget");
     expect(target?.body).not.toMatch(/\bmarkdown\b|\.revisions\.|\.users\.|loadCatalog|recordView|\.views\./);
+  });
+
+  it("a NAMED link is judged only against the signed-in caller's own id", () => {
+    // Named-recipient share spec, deviation 7: the viewer id decides whose audience a NAMED link is
+    // judged against, so it may only be `caller.identity.id` from `establishTrustedCaller()`.
+    const viewerIndex: Record<string, number> = { getSharedForViewer: 1, sharedOpenTarget: 2 };
+    const uses = ["src/server", "src/app", "src/components"].flatMap(filesUnder).flatMap((file) => {
+      const source = readFileSync(file, "utf8");
+      return [...source.matchAll(/(?<![\w.])(getSharedForViewer|sharedOpenTarget)\s*\(/g)]
+        .filter((match) => !/(?:function|const)\s+$/.test(source.slice(0, match.index)))
+        .map((match) => ({ file, source, name: match[1], args: topLevelArguments(parenthesised(source, (match.index ?? 0) + match[0].length - 1)) }));
+    });
+    expect(uses.length).toBeGreaterThanOrEqual(3);
+    for (const { file, source, name, args } of uses) {
+      const viewer = args[viewerIndex[name]];
+      const where = `${file} ${name}`;
+      if (viewer === undefined || viewer === "undefined") continue;
+      expect(viewer, where).toMatch(/^\w+\.identity\.id$/);
+      const owner = viewer.split(".")[0];
+      expect(source, where).toMatch(new RegExp(`const\\s*\\{[^}]*\\b${owner}\\b[^}]*\\}\\s*=\\s*await\\s+[^;]*\\bestablishTrustedCaller\\(\\)`));
+    }
+  });
+
+  it("the viewer guard rejects an id taken from the request", () => {
+    expect(topLevelArguments("token, searchParams.viewer, documentId")[1]).not.toMatch(/^\w+\.identity\.id$/);
+    expect(topLevelArguments("token, fn(a, b), c")).toEqual(["token", "fn(a, b)", "c"]);
   });
 
   it("review routes use services and never expose revision, tree or search repositories", () => {
@@ -181,7 +232,14 @@ describe("the share link is the single caller-less content path", () => {
   it("the guard tells a required caller from an optional one", () => {
     expect(requiresCaller("caller: CallerContext, token: string")).toBe(true);
     expect(requiresCaller("caller:CallerContext,input:{documentId:string}")).toBe(true);
-    for (const parameters of ["caller: CallerContext | null, token: string", "caller: CallerContext | undefined", "caller?: CallerContext", "token: string", ""]) {
+    for (const parameters of [
+      "caller: CallerContext | null, token: string",
+      "caller: CallerContext | undefined",
+      "caller?: CallerContext",
+      "token: string",
+      "",
+      "token: string, { documentId, viewerId = null }: { documentId?: string; viewerId?: string | null } = {}",
+    ]) {
       expect(requiresCaller(parameters), parameters).toBe(false);
     }
   });

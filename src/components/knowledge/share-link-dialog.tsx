@@ -17,6 +17,9 @@ import {
 import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
 import { DialogCloseButton } from "@/components/ui/dialog-close";
 import { Label } from "@/components/ui/label";
+import { NamedShareRecipients } from "./named-share-recipients";
+import { peopleCount } from "./people-count";
+import { RecipientPicker, type Recipient } from "./recipient-picker";
 import { ShareLinksSkeleton } from "./knowledge-skeletons";
 import { announceShareLinksChanged } from "./shared-folders";
 
@@ -25,12 +28,25 @@ type ShareLink = {
   label: string | null;
   path: string;
   createdAt: string;
-  expiresAt: string;
+  expiresAt: string | null;
   revokedAt: string | null;
   active: boolean;
   totalViews: number;
   lastViewedAt: string | null;
+  audience: "LINK" | "NAMED";
+  recipientCount: number | null;
 };
+
+type Mode = "LINK" | "NAMED";
+
+/** Link first: it is the default, needs nothing filled in, and works for people outside the Hub. */
+const MODES: readonly { value: Mode; label: string; hint: string }[] = [
+  { value: "LINK", label: "Anyone with the link", hint: "Expires · no sign-in" },
+  { value: "NAMED", label: "Specific people", hint: "Permanent · sign-in required" },
+];
+
+/** What a holder is given: a named share opens through the sign-in-aware route. */
+const sharePath = (link: ShareLink) => (link.audience === "NAMED" ? `${link.path}/open` : link.path);
 
 const EXPIRY_OPTIONS = [
   { days: 1, label: "1 day" },
@@ -93,6 +109,9 @@ export function ShareLinkDialog({
   const [links, setLinks] = useState<ShareLink[] | null>(null);
   const [label, setLabel] = useState("");
   const [expiresInDays, setExpiresInDays] = useState<number>(DEFAULT_EXPIRY_DAYS);
+  const [mode, setMode] = useState<Mode>("LINK");
+  const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [managing, setManaging] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<GovernanceFailure | null>(null);
   const [confirmingRevoke, setConfirmingRevoke] = useState<string | null>(null);
@@ -133,6 +152,9 @@ export function ShareLinkDialog({
     setReviewCapability({ read: false, write: false });
     setLabel("");
     setExpiresInDays(DEFAULT_EXPIRY_DAYS);
+    setMode("LINK");
+    setRecipients([]);
+    setManaging(null);
     setError(null);
     setConfirmingRevoke(null);
     setCopied(null);
@@ -143,13 +165,18 @@ export function ShareLinkDialog({
   // Copying runs on the reader's own click, never after a network wait: a
   // clipboard write that has outlived its click is refused by some browsers.
   const copy = async (link: ShareLink) => {
-    if (await writeLinkToClipboard(link.path)) {
+    if (await writeLinkToClipboard(sharePath(link))) {
       setCopied(link.id);
     } else {
       setError({ code: "COPY_FAILED", message: "The browser blocked the clipboard. Select the link above and copy it instead." });
     }
   };
 
+  const onRecipientCount = useCallback((linkId: string, count: number) => {
+    setLinks((existing) => existing?.map((link) => (link.id === linkId ? { ...link, recipientCount: count } : link)) ?? existing);
+  }, []);
+
+  const named = mode === "NAMED";
   const active = links?.filter((link) => link.active) ?? [];
   const inactive = links?.filter((link) => !link.active) ?? [];
 
@@ -160,28 +187,47 @@ export function ShareLinkDialog({
         <Dialog.Popup className={dialogPopupClasses("max-h-[85vh] w-[min(36rem,92vw)] overflow-y-auto")}>
           <Dialog.Title className="text-title font-semibold">{isFolder ? (folderName ? `Share folder ${folderName}` : "Share folder") : "Share link"}</Dialog.Title>
           <Dialog.Description className="mt-1 text-body text-kh-text-muted">
-            {isFolder
+            {named
+              ? `Only the people you pick can open this ${isFolder ? "folder" : "document"}, and only after signing in. It never expires. Remove a person, or revoke the link, to end their access.`
+              : isFolder
               ? "Anyone with this link can read every document in this folder and its subfolders without signing in, including any you add later. They will see every change you make from now on, but they cannot edit anything or see anything else in My Space. Share only what you are happy to see forwarded."
               : "Anyone with this link can read this document without signing in. They will see every change you make from now on, but they cannot edit it or see anything else in My Space. Share only what you are happy to see forwarded."}
-            {reviewCapability.read && <> Anyone with a valid link can read existing comments.{reviewCapability.write ? " Signing in is required to add comments and replies." : " Adding comments is currently disabled."}</>}
+            {!named && reviewCapability.read && <> Anyone with a valid link can read existing comments.{reviewCapability.write ? " Signing in is required to add comments and replies." : " Adding comments is currently disabled."}</>}
           </Dialog.Description>
 
+          {/* One choice of audience, so a native radio group (design language: a choice is a radio, a tab swaps a view). The checked option carries a border and weight, not only a tint. */}
+          <fieldset className="mt-4 flex gap-1 rounded-md border border-kh-border p-1" disabled={busy}>
+            <legend className="sr-only">Who can open it</legend>
+            {MODES.map((option) => (
+              <label
+                key={option.value}
+                className="relative flex flex-1 cursor-pointer flex-col rounded-sm border border-transparent px-3 py-2 text-body hover:bg-kh-bg-hover has-[:checked]:border-kh-primary has-[:checked]:bg-kh-bg-selected has-[:checked]:font-medium has-[:checked]:text-kh-selected-text has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-kh-focus has-[:disabled]:cursor-default has-[:disabled]:text-kh-text-muted has-[:disabled]:hover:bg-transparent"
+              >
+                <input type="radio" name="share-audience" value={option.value} className="sr-only" checked={mode === option.value} onChange={() => setMode(option.value)} />
+                <span>{option.label}</span>
+                <span className="text-caption font-normal text-kh-text-muted">{option.hint}</span>
+              </label>
+            ))}
+          </fieldset>
+
           <form
-            className="mt-5 flex flex-wrap items-end gap-3"
+            className="mt-4 flex flex-wrap items-end gap-3"
             onSubmit={async (event) => {
               event.preventDefault();
               const id = key;
-              if (!target || busy) return;
+              if (!target || busy || (named && recipients.length === 0)) return;
               setBusy(true);
               setError(null);
               try {
+                // A named share never expires: the server refuses an `expiresInDays` beside `recipients`, even null.
                 const { link } = await governanceRequest<{ link: ShareLink }>(linksUrl(target), "POST", {
                   label: label.trim() === "" ? undefined : label,
-                  expiresInDays,
+                  ...(named ? { recipients: recipients.map((person) => person.id) } : { expiresInDays }),
                 });
                 announceShareLinksChanged();
                 if (current.current !== id) return;
                 setLabel("");
+                setRecipients([]);
                 setLinks((existing) => [link, ...(existing ?? [])]);
                 setCreated(link.id);
               } catch (failure) {
@@ -195,17 +241,24 @@ export function ShareLinkDialog({
               Label <span className="text-kh-text-muted">(optional)</span>
               <Input className="mt-1" value={label} maxLength={200} disabled={busy} placeholder="For the backend team" onChange={(event) => setLabel(event.target.value)} />
             </Label>
-            <Label>
-              Expires after
-              <SelectMenu
-                className="mt-1 flex w-full"
-                value={expiresInDays}
-                disabled={busy}
-                onValueChange={setExpiresInDays}
-                options={EXPIRY_OPTIONS.map((option) => ({ value: option.days, label: option.label }))}
-              />
-            </Label>
-            <Button type="submit" disabled={busy || !target}>{busy ? "Creating…" : "Create link"}</Button>
+            {named ? (
+              <div className="basis-full">
+                <Label htmlFor="share-recipients" className="mb-1">People who can open it</Label>
+                <RecipientPicker id="share-recipients" label="People who can open it" value={recipients} onChange={setRecipients} disabled={busy} />
+              </div>
+            ) : (
+              <Label>
+                Expires after
+                <SelectMenu
+                  className="mt-1 flex w-full"
+                  value={expiresInDays}
+                  disabled={busy}
+                  onValueChange={setExpiresInDays}
+                  options={EXPIRY_OPTIONS.map((option) => ({ value: option.days, label: option.label }))}
+                />
+              </Label>
+            )}
+            <Button type="submit" disabled={busy || !target || (named && recipients.length === 0)}>{busy ? "Creating…" : "Create link"}</Button>
           </form>
           <div className="mt-3"><GovernanceError error={error} /></div>
 
@@ -237,9 +290,13 @@ export function ShareLinkDialog({
                           {created === link.id ? <span className="ml-2 text-caption text-kh-text-muted">Created</span> : null}
                         </p>
                         <p className="text-caption text-kh-text-muted">
-                          Expires <Timestamp value={link.expiresAt} variant="date" /> · {link.totalViews} {link.totalViews === 1 ? "view" : "views"}
+                          {link.expiresAt ? <>Expires <Timestamp value={link.expiresAt} variant="date" /></> : "No expiry"}
+                          {link.audience === "NAMED" && link.recipientCount !== null ? <> · {peopleCount(link.recipientCount)}</> : null} · {link.totalViews} {link.totalViews === 1 ? "view" : "views"}
                         </p>
                       </div>
+                      {link.audience === "NAMED" ? (
+                        <Button variant="ghost" size="sm" type="button" aria-expanded={managing === link.id} onClick={() => setManaging((open) => (open === link.id ? null : link.id))}>Manage people</Button>
+                      ) : null}
                       <Button variant={created === link.id ? "primary" : "secondary"} size="sm" type="button" onClick={() => void copy(link)}>
                         {copied === link.id ? "Copied" : "Copy link"}
                       </Button>
@@ -256,6 +313,8 @@ export function ShareLinkDialog({
                                 await governanceRequest<null>(`/api/share-links/${link.id}/revoke`, "POST");
                                 announceShareLinksChanged();
                                 setConfirmingRevoke(null);
+                                // A revoked link moves to the inactive list, where its people are not managed.
+                                setManaging((open) => (open === link.id ? null : open));
                                 if (revoking) await load(revoking);
                                 toast({ message: `Link revoked. Anyone holding it can no longer open the ${isFolder ? "folder" : "document"}.` });
                               } catch (failure) {
@@ -277,9 +336,10 @@ export function ShareLinkDialog({
                       size="sm"
                       readOnly
                       aria-label={`Link for ${link.label ?? "untitled link"}`}
-                      value={`${origin}${link.path}`}
+                      value={`${origin}${sharePath(link)}`}
                       onFocus={(event) => event.currentTarget.select()}
                     />
+                    {managing === link.id ? <NamedShareRecipients linkId={link.id} onCount={onRecipientCount} /> : null}
                   </li>
                 ))}
               </ul>

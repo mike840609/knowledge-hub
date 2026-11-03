@@ -62,7 +62,7 @@ describe("DocumentShareService.createForFolder (folder share links §8)", () => 
     const now = new Date("2026-10-29T08:00:00.000Z");
     const link = await service(() => now).createForFolder(caller, { folderNodeId });
     expect(link.path).toMatch(/^\/s\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-    expect(link.expiresAt.toISOString()).toBe("2026-11-28T08:00:00.000Z");
+    expect(link.expiresAt?.toISOString()).toBe("2026-11-28T08:00:00.000Z");
     expect(link.active).toBe(true);
     expect(await linkRows(folderNodeId)).toBe(1);
   });

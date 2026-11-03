@@ -1453,6 +1453,10 @@ checked state are the browser's; a custom listbox would have had to rebuild all
 three. Where a place cannot be chosen (where the item already is) the radio is
 disabled and the row says "Current". Tests click the label, as a reader does:
 a forced click on the hidden input lands wherever the pixel is.
+The same recipe draws any single choice shown side by side (a segmented control),
+as the share dialog's audience is: a fieldset with a visually hidden legend, and
+the checked option marked by border and weight as well as tint, never by tint alone.
+A tab swaps a view; a choice that only changes the fields below it is a radio.
 
 **A mutation that navigates to its result refreshes on arrival.** The push
 fetches the destination page fresh, but a layout the two routes share is kept

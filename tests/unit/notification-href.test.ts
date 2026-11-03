@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { notificationHref, notificationLine, sharedDiscussionHref } from "@/components/knowledge/notification-href";
+import { notificationHref, notificationLine } from "@/components/knowledge/notification-href";
+import { shareDiscussionHref } from "@/lib/share-paths";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
 
 const view = (overrides: Partial<ShareCommentNotificationView> = {}): ShareCommentNotificationView => ({
@@ -13,16 +14,15 @@ describe("where an Inbox entry leads, and what it says", () => {
     expect(notificationHref(view({ kind: "OWNER" }))).toBe("/w/w/knowledge/s/d?thread=t");
     expect(notificationLine(view())).toBe("Ann: Looks good");
   });
-  it("a followed discussion opens the shared page it was followed through", () => {
-    const follow = view({ kind: "FOLLOW", token: "tok", linkAvailable: true, replyCount: 1, workspaceId: "", documentId: "", sourceId: "" });
-    expect(notificationHref(follow)).toBe("/s/tok?thread=t");
-    expect(notificationLine(follow)).toBe("Ann: Looks good");
-  });
-  it("a discussion followed through a folder link opens that link's page at its document", () => {
-    const follow = view({ kind: "FOLLOW", token: "tok", linkAvailable: true, replyCount: 1, workspaceId: "", documentId: "0192f3a4-0000-7000-8000-000000000002", sourceId: "" });
-    expect(notificationHref(follow)).toBe("/s/tok?d=0192f3a4-0000-7000-8000-000000000002&thread=t");
-    expect(sharedDiscussionHref("tok", "t")).toBe("/s/tok?thread=t");
-    expect(sharedDiscussionHref("tok", "t", "0192f3a4-0000-7000-8000-000000000002")).toBe("/s/tok?d=0192f3a4-0000-7000-8000-000000000002&thread=t");
+  it("a followed or mentioning discussion opens where the server says, never a path the client builds", () => {
+    for (const kind of ["FOLLOW", "MENTION"] as const) {
+      const linked = view({ kind, token: "tok", linkAvailable: true, workspaceId: "", documentId: "", sourceId: "", href: "/s/tok?thread=t" });
+      expect(notificationHref(linked)).toBe("/s/tok?thread=t");
+      expect(notificationHref({ ...linked, href: "/w/ws/shares/tok?thread=t" })).toBe("/w/ws/shares/tok?thread=t");
+      // A token alone is no destination: the server decides whether it is read on /s/ or in the Hub.
+      expect(notificationHref({ ...linked, href: undefined })).toBeNull();
+    }
+    expect(notificationLine(view({ kind: "FOLLOW", token: "tok", linkAvailable: true, replyCount: 1, href: "/s/tok?thread=t" }))).toBe("Ann: Looks good");
   });
   it("several new replies say how many", () => {
     expect(notificationLine(view({ kind: "FOLLOW", token: "tok", linkAvailable: true, replyCount: 3 }))).toBe("3 new replies · Ann: Looks good");
@@ -34,5 +34,21 @@ describe("where an Inbox entry leads, and what it says", () => {
   });
   it("an author without a name is someone", () => {
     expect(notificationLine(view({ authorName: undefined }))).toBe("Someone: Looks good");
+  });
+});
+
+describe("where a discussion read through a share opens (shareDiscussionHref)", () => {
+  const d = "0192f3a4-0000-7000-8000-000000000002";
+  it("a LINK share opens its anonymous page exactly as before", () => {
+    expect(shareDiscussionHref({ audience: "LINK", token: "tok" }, "ws", "t")).toBe("/s/tok?thread=t");
+    expect(shareDiscussionHref({ audience: "LINK", token: "tok" }, "ws", "t", d)).toBe(`/s/tok?d=${d}&thread=t`);
+    expect(shareDiscussionHref({ audience: "LINK", token: "tok" }, null, "t")).toBe("/s/tok?thread=t");
+  });
+  it("a NAMED share opens the Hub reader in the reader's own Workspace, at the discussion", () => {
+    expect(shareDiscussionHref({ audience: "NAMED", token: "tok" }, "ws", "t")).toBe("/w/ws/shares/tok?thread=t");
+    expect(shareDiscussionHref({ audience: "NAMED", token: "tok" }, "ws", "t", d)).toBe(`/w/ws/shares/tok?d=${d}&thread=t`);
+  });
+  it("a NAMED share has nowhere to open for a reader without a personal Workspace", () => {
+    expect(shareDiscussionHref({ audience: "NAMED", token: "tok" }, null, "t")).toBeNull();
   });
 });

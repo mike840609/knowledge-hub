@@ -31,7 +31,7 @@ export class MariaDbSavedShareRepository implements SavedShareRepository {
     const row=rows[0];if(!row)return null;
     const target:SavedShareSnapshot["link"]["target"]=row.folder_node_id===null?{kind:"DOCUMENT",documentId:String(row.document_id)}:{kind:"FOLDER",folderNodeId:String(row.folder_node_id)};
     return {
-      link:{id:String(row.id),target,token:String(row.token),label:row.label===null?null:String(row.label),createdBy:String(row.created_by),createdAt:asDate(row.created_at),expiresAt:asDate(row.expires_at),revokedBy:row.revoked_by===null?null:String(row.revoked_by),revokedAt:asNullableDate(row.revoked_at)},
+      link:{id:String(row.id),target,token:String(row.token),label:row.label===null?null:String(row.label),audience:String(row.audience) as SavedShareSnapshot["link"]["audience"],createdBy:String(row.created_by),createdAt:asDate(row.created_at),expiresAt:asNullableDate(row.expires_at),revokedBy:row.revoked_by===null?null:String(row.revoked_by),revokedAt:asNullableDate(row.revoked_at)},
       validity:{documentStatus:String(row.document_status) as SavedShareSnapshot["validity"]["documentStatus"],sourceStatus:String(row.source_status) as SavedShareSnapshot["validity"]["sourceStatus"],workspaceOwnerUserId:row.workspace_owner===null?null:String(row.workspace_owner),workspaceLifecycle:row.workspace_lifecycle===null?null:String(row.workspace_lifecycle) as SavedShareSnapshot["validity"]["workspaceLifecycle"],creatorDirectRole:row.creator_membership===null?undefined:row.creator_role===null?null:String(row.creator_role) as SavedShareSnapshot["validity"]["creatorDirectRole"]},
       title:row.title===null?null:String(row.title),sharedByName:row.creator_name===null?null:String(row.creator_name),
     };
@@ -71,7 +71,7 @@ export class MariaDbSavedShareRepository implements SavedShareRepository {
           CASE WHEN live.available=1 THEN 'available' WHEN b.saved_expires_at<=? THEN 'expired' ELSE 'unavailable' END AS state
         FROM saved_document_shares b JOIN (
           SELECT l.*,COALESCE(r.title,f.name) AS title,r.created_at AS revision_at,u.name AS creator_name,
-            (l.revoked_at IS NULL AND l.expires_at>? AND COALESCE(d.status,f.status)='ACTIVE' AND s.status='ACTIVE'
+            (l.revoked_at IS NULL AND (l.expires_at IS NULL OR l.expires_at>?) AND COALESCE(d.status,f.status)='ACTIVE' AND s.status='ACTIVE'
              AND w.lifecycle_state='ACTIVE' AND w.personal_owner_user_id=l.created_by AND m.user_id IS NOT NULL
              AND (m.role IS NULL OR m.role IN (${READ_ROLES})) AND (r.id IS NOT NULL OR f.id IS NOT NULL) AND u.id IS NOT NULL) AS available
           FROM document_share_links l LEFT JOIN knowledge_documents d ON d.id=l.document_id
@@ -85,6 +85,6 @@ export class MariaDbSavedShareRepository implements SavedShareRepository {
       AND (?='all' OR (?='available' AND safe.state='available') OR (?='unavailable' AND safe.state<>'available'))
       ORDER BY safe.saved_at DESC,safe.id DESC LIMIT ? OFFSET ?`,
       [now,now,userId,query.q,toLikePattern(query.q),toLikePattern(query.q),toLikePattern(query.q),toLikePattern(query.q),query.status,query.status,query.status,limit,offset]);
-    return rows.map(row => ({ id:String(row.id),kind:String(row.kind) as SavedShareView["kind"],title:String(row.title),sharedByName:String(row.creator_name),savedAt:asDate(row.saved_at),expiresAt:asDate(row.expires_at),updatedAt:asNullableDate(row.revision_at),status:String(row.state) as SavedShareView["status"],path:row.token ? shareLinkPath(String(row.token)) : null }));
+    return rows.map(row => ({ id:String(row.id),kind:String(row.kind) as SavedShareView["kind"],title:String(row.title),sharedByName:String(row.creator_name),savedAt:asDate(row.saved_at),expiresAt:asNullableDate(row.expires_at),updatedAt:asNullableDate(row.revision_at),status:String(row.state) as SavedShareView["status"],path:row.token ? shareLinkPath(String(row.token)) : null }));
   }
 }

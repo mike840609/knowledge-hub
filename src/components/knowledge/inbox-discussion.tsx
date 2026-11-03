@@ -69,8 +69,8 @@ function OwnerDocument({ entry }: { entry: Entry }) {
 }
 
 /**
- * A followed discussion alone: the page it is on is reached only through `/s/:token`, which this view
- * neither frames nor reads, so the passage is its quote and the page is Open document.
+ * A followed discussion alone: the page it is on (`/s/:token`, or a NAMED share's Hub reader) is the entry's
+ * server-built `href`, which this view neither frames nor reads, so the passage is its quote and the page is Open document.
  */
 function FollowedDiscussion({ entry }: { entry: Entry }) {
   const token = entry.linkAvailable ? entry.token : undefined;

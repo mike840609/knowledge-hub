@@ -3,6 +3,9 @@ import type { DocumentShareLink } from "../domain/document-share-link";
 
 export type ShareLinkViewTotals = { totalViews: number; lastViewedAt: Date | null };
 
+export type NamedRecipient = { userId: string; addedAt: Date };
+export type ReceivedShareLink = { link: DocumentShareLink; addedAt: Date; readAt: Date | null };
+
 export type OpenFolderLink = { folderNodeId: string; name: string };
 
 export interface DocumentShareLinkRepository {
@@ -29,4 +32,18 @@ export interface DocumentShareLinkRepository {
   viewTotals(linkIds: readonly string[]): Promise<Map<string, ShareLinkViewTotals>>;
   /** One row per link per UTC day; carries nothing about the viewer (spec §7.2). */
   recordView(linkId: string, at: Date): Promise<void>;
+  /** Ids are already normalised; naming a user twice is a no-op. */
+  insertRecipients(linkId: string, userIds: readonly string[], addedBy: string, at: Date): Promise<void>;
+  /** True when a recipient row was removed. */
+  removeRecipient(linkId: string, userId: string): Promise<boolean>;
+  isRecipient(linkId: string, userId: string): Promise<boolean>;
+  /** Newest first. */
+  listRecipients(linkId: string): Promise<NamedRecipient[]>;
+  countRecipients(linkId: string): Promise<number>;
+  /** Links naming this user, newest first, unfiltered: whether each opens now is judged by the caller. */
+  listForRecipient(userId: string, limit: number): Promise<ReceivedShareLink[]>;
+  /** As `listForRecipient`, only the rows this user has not read. */
+  listUnreadForRecipient(userId: string, limit: number): Promise<ReceivedShareLink[]>;
+  markRecipientRead(linkId: string, userId: string, at: Date): Promise<void>;
+  markAllRecipientRead(userId: string, at: Date): Promise<void>;
 }

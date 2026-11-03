@@ -9,8 +9,8 @@ import type { RenderedLinks } from "./rendered-links";
 import { SharedOutline } from "./shared-outline";
 
 /** Who shared it, when it last changed (a document's page), and when the link stops opening. */
-export function SharedByline({ sharedByName, updatedAt, expiresAt }: { sharedByName: string; updatedAt?: Date; expiresAt: Date }) {
-  const soon = expiresSoon(expiresAt, new Date());
+export function SharedByline({ sharedByName, updatedAt, expiresAt }: { sharedByName: string; updatedAt?: Date; expiresAt: Date | null }) {
+  const soon = expiresAt ? expiresSoon(expiresAt, new Date()) : null;
   // The dots between these are the stylesheet's (`.kh-byline`), so a line never ends on one. A div: the prose spaces every `p`.
   return (
     <div className="kh-byline mt-1.5 text-caption text-kh-text-muted">
@@ -18,7 +18,7 @@ export function SharedByline({ sharedByName, updatedAt, expiresAt }: { sharedByN
         <span>{`Shared by ${sharedByName}`}</span>
         {updatedAt ? <span>Updated <Timestamp value={updatedAt} /></span> : null}
         {/* Quiet until it matters: close to the end it is said in the warning colour, with how soon. */}
-        <span className={soon ? "font-medium text-kh-warning" : undefined}>Link expires <Timestamp value={expiresAt} variant="date" />{soon ? ` (${soon})` : ""}</span>
+        <span className={soon ? "font-medium text-kh-warning" : undefined}>{expiresAt ? <>Link expires <Timestamp value={expiresAt} variant="date" />{soon ? ` (${soon})` : ""}</> : "No expiry"}</span>
       </span>
     </div>
   );

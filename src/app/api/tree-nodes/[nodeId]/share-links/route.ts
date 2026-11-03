@@ -10,8 +10,8 @@ export async function POST(request: Request, context: FolderShareLinksRouteConte
     const { nodeId } = await context.params;
     const body: unknown = await request.json().catch(() => null);
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new DomainError("INVALID_REQUEST", "Provide a JSON object.");
-    const { label, expiresInDays } = body as Record<string, unknown>;
-    return { link: await services.shares.createForFolder(caller, { folderNodeId: nodeId, label, expiresInDays }) };
+    const { label, expiresInDays, recipients } = body as Record<string, unknown>;
+    return { link: await services.shares.createForFolder(caller, { folderNodeId: nodeId, label, expiresInDays, recipients }) };
   }, 201);
 }
 

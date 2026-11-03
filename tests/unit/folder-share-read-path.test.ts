@@ -19,6 +19,7 @@ const link: DocumentShareLink = {
   target: { kind: "FOLDER", folderNodeId: folderId },
   token,
   label: null,
+  audience: "LINK",
   createdBy: fixtureIdentity.id,
   createdAt: new Date("2026-10-28T00:00:00Z"),
   expiresAt: new Date("2026-11-28T00:00:00Z"),

@@ -7,6 +7,6 @@ import type { RenderedLinks } from "./rendered-links";
  * at the folder page's `?d=` (folder share spec §5). No `documentId`, so no hover preview (it calls
  * a signed-in API), and no other-documents count (it counts documents outside the folder).
  */
-export function sharedFolderLinks(token: string, links: readonly SharedResolvedLink[]): RenderedLinks {
-  return Object.fromEntries(links.map((link) => [link.lookupKey, { status: "RESOLVED" as const, basePath: sharedFolderHref(token, link.documentId), title: link.title, ambiguousWith: 0 }]));
+export function sharedFolderLinks(token: string, links: readonly SharedResolvedLink[], pagePath?: string): RenderedLinks {
+  return Object.fromEntries(links.map((link) => [link.lookupKey, { status: "RESOLVED" as const, basePath: sharedFolderHref(token, link.documentId, pagePath), title: link.title, ambiguousWith: 0 }]));
 }
