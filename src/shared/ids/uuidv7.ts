@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
 
+export { isUuid } from "./uuid";
+
 let lastTimestamp = -1;
 let lastRandom: Uint8Array | undefined;
 
@@ -32,8 +34,4 @@ export function uuidv7(now = Date.now()): string {
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
   const hex = bytes.toString("hex");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-
-export function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }

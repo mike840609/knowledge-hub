@@ -1,5 +1,6 @@
 import { SavedShareService } from "@/modules/knowledge/application/saved-share-service";
 import { FeedbackReportService } from "@/modules/personal/application/feedback-report-service";
+import { FeedbackReportQueryService } from "@/modules/personal/application/feedback-report-query-service";
 import { MariaDbFeedbackReportStore } from "@/infrastructure/database/mariadb/repositories/feedback-reports";
 import { cache } from "react";
 import { DocumentReviewService } from "@/modules/knowledge/application/document-review-service";
@@ -84,7 +85,9 @@ export function buildApplicationServices(databasePool: Pool, options: {
   const personal = new PersonalService(new MariaDbPersonalStore(databasePool), queries, unitOfWork);
   const reviews = new DocumentReviewService(unitOfWork, undefined, reviewWritesEnabled);
   const savedShares = new SavedShareService(unitOfWork);
-  const feedbackReports = new FeedbackReportService(new MariaDbFeedbackReportStore(databasePool));
+  const feedbackReportStore = new MariaDbFeedbackReportStore(databasePool);
+  const feedbackReports = new FeedbackReportService(feedbackReportStore);
+  const feedbackIssues = new FeedbackReportQueryService(feedbackReportStore);
   const shares = new DocumentShareService(unitOfWork, new RandomShareTokenIssuer());
   const sources = new SourceApplicationService(unitOfWork);
   const workspaceAdmin = new WorkspaceAdminService(unitOfWork);
@@ -147,7 +150,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   return {
     personalProfile: new PersonalProfileService(unitOfWork),
     agentContext: new AgentContextService(unitOfWork),
-    importScope: new GetImportScopeService(unitOfWork), sourceHealth:new GetSourceHealthService(unitOfWork), folderUpdates:new ListFolderUpdatesService(unitOfWork), syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, personal, personalPreferences, feedbackReports, workspaceAdmin, teams, governance, reviewReadAvailable: true, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, savedShares, reviews, sources, workspaces, search, imports };
+    importScope: new GetImportScopeService(unitOfWork), sourceHealth:new GetSourceHealthService(unitOfWork), folderUpdates:new ListFolderUpdatesService(unitOfWork), syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, personal, personalPreferences, feedbackReports, feedbackIssues, workspaceAdmin, teams, governance, reviewReadAvailable: true, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, savedShares, reviews, sources, workspaces, search, imports };
 }
 
 export function applicationServices() {

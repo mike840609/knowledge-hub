@@ -6,7 +6,7 @@ import type { Migration } from "./types";
  * `*_read_at` columns are each party's own Inbox read state.
  */
 export const shareLinkProposalsMigration: Migration = {
-  version: 31,
+  version: 32,
   name: "share-link-proposals",
   statements: [
     `CREATE TABLE document_share_link_proposals (

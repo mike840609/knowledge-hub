@@ -62,12 +62,15 @@ CREATE TABLE feedback_reports (
 )
 ```
 
-Reports are append-only: no update or delete path exists.
+The application has no update or delete path for reports; only `status` may be
+changed, and that happens outside the application — see
+`docs/superpowers/specs/2026-11-03-feedback-issues-board-design.md`.
 
 ## Not in this change
 
-A screen for reading reports. Maintainers query the table directly
-(`SELECT … FROM feedback_reports ORDER BY created_at DESC`); a triage view, its
-access capability and notifications are a later change with their own spec.
+A screen for reading reports now exists:
+`docs/superpowers/specs/2026-11-03-feedback-issues-board-design.md`. A triage
+view with a status write path, its access capability and notifications are a
+later change with their own spec.
 The Markdown export (`src/lib/feedback-report.ts`) is removed with the
 download.

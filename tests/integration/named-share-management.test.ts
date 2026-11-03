@@ -221,7 +221,7 @@ describe("recipient candidates", () => {
     const me = callerFromIdentity(await newUser(`${marker} Me`));
     const peer = await newUser(`${marker} Peer`);
     const found = await f.shares.searchRecipientCandidates(me, marker);
-    expect(found.candidates).toEqual([{ id: peer.id, name: peer.name, nameEn: null, empId: peer.emp_id }]);
+    expect(found.candidates).toEqual([{ id: peer.id, name: peer.name, nameEn: null, empId: peer.emp_id, orgCode: peer.org_code }]);
     expect(found.candidates.map((c) => c.id)).not.toContain(me.identity.id);
     expect(await f.shares.searchRecipientCandidates(me, "   ")).toEqual({ candidates: [] });
     expect(await f.shares.searchRecipientCandidates(me, "")).toEqual({ candidates: [] });
