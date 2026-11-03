@@ -1,5 +1,6 @@
 import { formatAgentDiscussion, jsonRecord, type AgentContextDiscussion } from "./agent-context-discussion";
 import { ValidationError } from "./errors";
+import type { LinkGraph } from "./link-graph";
 export const CONTEXT_MAX_DOCUMENTS = 20;
 export const CONTEXT_MAX_BYTES = 256 * 1024;
 export type AgentContextDocument = { documentId: string; sourceId: string; sourceName: string; sourcePath: string | null; revisionId: string; revisionNo: number; title: string; markdown: string; updatedAt: Date };
@@ -9,6 +10,28 @@ export function validateContextSelection(raw: unknown): string[] {
   if (new Set(ids).size !== ids.length) throw new ValidationError("Select each document only once.");
   return ids;
 }
+/** One link the bundle's map lists: between selected documents, or to a title that names no document. */
+export type AgentContextLink = { from: string; fromId: string; to: string; toId: string | null; missing?: true; count: number };
+/** The links the selected documents write to each other or to missing targets; never to an existing unselected document. */
+export function linkMapFor(graph: LinkGraph, selectedIds: readonly string[]): AgentContextLink[] {
+  const rank = new Map(selectedIds.map((id, index) => [id, index]));
+  const nodes = new Map(graph.nodes.map(node => [node.id, node]));
+  const links = graph.edges.flatMap(edge => {
+    const from = nodes.get(edge.from), to = nodes.get(edge.to);
+    if (!from || !to || edge.from === edge.to || !rank.has(edge.from)) return [];
+    if (to.kind === "UNRESOLVED") return [{ link: { from: from.title, fromId: from.id, to: to.title, toId: null, missing: true as const, count: edge.count }, key: to.id }];
+    return rank.has(to.id) ? [{ link: { from: from.title, fromId: from.id, to: to.title, toId: to.id, count: edge.count }, key: to.id }] : [];
+  });
+  const order = (a: (typeof links)[number], b: (typeof links)[number]) => {
+    const byFrom = rank.get(a.link.fromId)! - rank.get(b.link.fromId)!;
+    if (byFrom !== 0) return byFrom;
+    const aMissing = a.link.toId === null, bMissing = b.link.toId === null;
+    if (aMissing !== bMissing) return aMissing ? 1 : -1;
+    if (!aMissing) return rank.get(a.link.toId!)! - rank.get(b.link.toId!)!;
+    return a.link.to < b.link.to ? -1 : a.link.to > b.link.to ? 1 : a.key < b.key ? -1 : 1;
+  };
+  return links.sort(order).map(entry => entry.link);
+}
 /** Incremental assembly keeps encoding and size checks linear in exported bytes. */
 export class AgentContextFormatter {
   private readonly chunks: string[] = [];
@@ -17,6 +40,7 @@ export class AgentContextFormatter {
   private documentCount = 0;
   private threadCount = 0;
   private commentCount = 0;
+  private linkCount = 0;
   private documentHasDiscussions = false;
 
   constructor(private readonly workspaceId: string, private readonly origin = "") {
@@ -28,6 +52,14 @@ export class AgentContextFormatter {
     if (this.bytes + bytes > CONTEXT_MAX_BYTES) throw new ValidationError("Selected content exceeds 256 KiB. Select fewer documents; no content was truncated.");
     this.bytes += bytes;
     this.chunks.push(chunk);
+  }
+
+  /** Call before the first document: the map opens the bundle. */
+  addLinks(links: readonly AgentContextLink[]) {
+    if (!links.length) return;
+    this.append("\n## Links\n\nLinks written in the selected documents' current saved revisions, to other selected documents or to titles that name no document (missing: true).\n\n");
+    for (const link of links) this.append(`Link: ${jsonRecord(link)}\n`);
+    this.linkCount += links.length;
   }
 
   addDocument(doc: AgentContextDocument) {
@@ -46,6 +78,6 @@ export class AgentContextFormatter {
   }
 
   finish() {
-    return { markdown: this.chunks.join(""), bytes: this.bytes, documentCount: this.documentCount, threadCount: this.threadCount, commentCount: this.commentCount };
+    return { markdown: this.chunks.join(""), bytes: this.bytes, documentCount: this.documentCount, threadCount: this.threadCount, commentCount: this.commentCount, linkCount: this.linkCount };
   }
 }

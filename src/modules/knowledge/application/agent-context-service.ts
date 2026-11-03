@@ -2,7 +2,8 @@ import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import type { KnowledgeUnitOfWork } from "../ports/unit-of-work";
 import { DocumentNotFoundError, IntegrityViolationError } from "../domain/errors";
 import { DomainError } from "@/shared/domain/errors";
-import { AgentContextFormatter, validateContextSelection } from "../domain/agent-context";
+import { AgentContextFormatter, linkMapFor, validateContextSelection } from "../domain/agent-context";
+import { buildWorkspaceGraph, resolveEdges } from "../domain/link-graph";
 import { requireVisibleDocument } from "./internal/require-visible-document";
 import { assertActiveDocumentPlacement } from "./tree-validation";
 import { byCreation, projectAgentDiscussion } from "../domain/agent-context-discussion";
@@ -19,6 +20,10 @@ export class AgentContextService {
       if (!workspace || workspace.workspaceType !== "PERSONAL" || workspace.personalOwnerUserId !== caller.identity.id || workspace.lifecycleState !== "ACTIVE") throw new DomainError("WORKSPACE_NOT_FOUND", "Workspace unavailable.");
       const formatter = new AgentContextFormatter(workspaceId, origin);
       const authors = new Map<string, string>();
+      const catalog = await r.links.loadCatalog(workspaceId);
+      const graph = buildWorkspaceGraph(catalog, resolveEdges(catalog, await r.links.loadValidEdges(workspaceId)), { includeUnresolved: true, includeOrphans: true, limit: Number.MAX_SAFE_INTEGER });
+      // Only returned once every selected id passes the checks below, so the map discloses nothing a failed build would not.
+      formatter.addLinks(linkMapFor(graph, ids));
       for (const id of ids) {
         const { document, policy } = await requireVisibleDocument(r, caller, id, false);
         if (policy.workspaceId !== workspaceId) throw new DocumentNotFoundError();
