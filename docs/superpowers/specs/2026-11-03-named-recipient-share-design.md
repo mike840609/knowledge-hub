@@ -194,6 +194,10 @@ the company deployment as they are assumed to be here.
   with mention-style autocomplete over all signed-in Hub users (`users` rows),
   showing name · emp_id · name_en. At least one recipient to create. No expiry
   control.
+- The two modes are one choice of audience, a segmented radio group
+  ("Anyone with the link" · "Expires · no sign-in", then "Specific people" ·
+  "Permanent · sign-in required"), the link first and chosen by default: it
+  needs nothing filled in and works for readers without a Hub account.
 - After creation the owner can add and remove recipients, and revoke the whole
   share. Adding notifies the added person; removing notifies nobody.
 - The owner cannot add themselves.

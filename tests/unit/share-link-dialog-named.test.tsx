@@ -211,3 +211,22 @@ it("a revoked named link offers no Manage people, and revoking closes the people
   expect(document.body.textContent).not.toContain("No one yet — only you can open it.");
   expect(document.body.textContent).toContain("Expired or revoked (1)");
 });
+
+it("the audience is one native radio group, locked while a link is being created", async () => {
+  await open();
+  const group = document.querySelector("fieldset")!;
+  expect(group.querySelector("legend")?.textContent).toBe("Who can open it");
+  const radios = [...group.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
+  expect(radios.map((radio) => [radio.name, radio.value])).toEqual([["share-audience", "LINK"], ["share-audience", "NAMED"]]);
+  const original = globalThis.fetch;
+  let release!: () => void;
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === "POST") await new Promise<void>((resolve) => { release = resolve; });
+    return original(url, init);
+  }));
+  await submit();
+  expect(group.disabled).toBe(true);
+  await act(async () => { release(); });
+  await flush();
+  expect(group.disabled).toBe(false);
+});

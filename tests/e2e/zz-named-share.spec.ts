@@ -48,10 +48,11 @@ async function pickRecipient(scope: Locator, empId: string, name: string) {
   await expect(scope.getByRole("list", { name: "Selected people" }).getByText(name, { exact: true })).toBeVisible();
 }
 
-async function openNamedTab(page: Page) {
+async function chooseSpecificPeople(page: Page) {
   await page.locator("main").getByRole("button", { name: "Share link…" }).click();
   const dialog = page.getByRole("dialog", { name: "Share link" });
-  await dialog.getByText("Specific people", { exact: true }).click();
+  await dialog.locator("label", { hasText: "Specific people" }).click();
+  await expect(dialog.getByRole("radio", { name: /Specific people/ })).toBeChecked();
   return dialog;
 }
 
@@ -67,7 +68,7 @@ test.describe("named-recipient share, end to end", () => {
 
     // The owner creates it through the dialog.
     await page.goto(`${owner}/w/${ownerWorkspace}/knowledge/${doc.sourceId}/${doc.documentId}`);
-    const dialog = await openNamedTab(page);
+    const dialog = await chooseSpecificPeople(page);
     await pickRecipient(dialog, "P3-102", "Phase3 nonCreator");
     await pickRecipient(dialog, "P3-105", "Phase3 viewer");
     await dialog.getByLabel(/Label/).fill("named flow");
@@ -166,7 +167,7 @@ test.describe("named-recipient share, end to end", () => {
     await personalWorkspace(request, phase3Origin(A));
     const doc = await apiDocument(request, owner, ownerWorkspace, `Escape ${Date.now()}`, "Body.");
     await page.goto(`${owner}/w/${ownerWorkspace}/knowledge/${doc.sourceId}/${doc.documentId}`);
-    const dialog = await openNamedTab(page);
+    const dialog = await chooseSpecificPeople(page);
     await dialog.getByRole("combobox", { name: "People who can open it" }).fill("P3-102");
     const list = dialog.getByRole("listbox", { name: "People matching your search" });
     await expect(list).toBeVisible(ROUND_TRIP);

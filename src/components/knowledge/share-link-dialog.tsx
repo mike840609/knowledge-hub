@@ -195,17 +195,17 @@ export function ShareLinkDialog({
             {!named && reviewCapability.read && <> Anyone with a valid link can read existing comments.{reviewCapability.write ? " Signing in is required to add comments and replies." : " Adding comments is currently disabled."}</>}
           </Dialog.Description>
 
-          {/* One choice of audience, so a native radio group (design language: a choice is a radio, a tab swaps a view). */}
+          {/* One choice of audience, so a native radio group (design language: a choice is a radio, a tab swaps a view). The checked option carries a border and weight, not only a tint. */}
           <fieldset className="mt-4 flex gap-1 rounded-md border border-kh-border p-1" disabled={busy}>
             <legend className="sr-only">Who can open it</legend>
             {MODES.map((option) => (
               <label
                 key={option.value}
-                className="relative flex flex-1 cursor-pointer flex-col rounded-sm px-3 py-2 text-body hover:bg-kh-bg-hover has-[:checked]:bg-kh-bg-selected has-[:checked]:text-kh-selected-text has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-kh-focus has-[:disabled]:cursor-default"
+                className="relative flex flex-1 cursor-pointer flex-col rounded-sm border border-transparent px-3 py-2 text-body hover:bg-kh-bg-hover has-[:checked]:border-kh-primary has-[:checked]:bg-kh-bg-selected has-[:checked]:font-medium has-[:checked]:text-kh-selected-text has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-kh-focus has-[:disabled]:cursor-default has-[:disabled]:text-kh-text-muted has-[:disabled]:hover:bg-transparent"
               >
                 <input type="radio" name="share-audience" value={option.value} className="sr-only" checked={mode === option.value} onChange={() => setMode(option.value)} />
-                <span className="font-medium">{option.label}</span>
-                <span className="text-caption text-kh-text-muted">{option.hint}</span>
+                <span>{option.label}</span>
+                <span className="text-caption font-normal text-kh-text-muted">{option.hint}</span>
               </label>
             ))}
           </fieldset>

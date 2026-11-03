@@ -170,7 +170,7 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
         "Unread counts require recorded changes on the current synced revision. Missing legacy history is explained rather than invented.",
       ]}]),
       section("sharing-export","Share, export and workspace scope",[
-        "Before sharing, confirm the content is suitable for link holders. They can read without signing in and see later article changes.",
+        "Before sharing, confirm the content is suitable for link holders. Anyone holding a link can read without signing in; a link to specific people opens only for them, after signing in. Either sees later article changes.",
         "Manage expiry and revocation in Share link. Open Shares for My shares, Saved shares, or Discussions to follow the discussions you take part in.",
         "Sign in to comment, reply or choose Save where enabled. Saving retains a link, not an article copy.",
         "Home's more-actions menu → Export Markdown ZIP includes saved and archived notes, excluding drafts, revision history and attachments. It is not a full backup.",
