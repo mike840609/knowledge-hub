@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { governanceFailure, governanceRequest } from "@/components/workspaces/governance-error";
 import { DEBOUNCE_MS } from "./mention-autocomplete";
 
-export type Recipient = { id: string; name: string; nameEn: string | null; empId: string };
+export type Recipient = { id: string; name: string; nameEn: string | null; empId: string; orgCode: string };
 
 const optionText = (person: Recipient) => [person.name, person.empId, person.nameEn].filter(Boolean).join(" · ");
 
@@ -158,12 +158,14 @@ export function RecipientPicker({
                 id={optionId(index)}
                 role="option"
                 aria-selected={listed && index === row}
-                className={`cursor-default truncate rounded-md px-2 py-1 text-body-sm ${listed && index === row ? "bg-kh-bg-selected text-kh-selected-text" : listed ? "" : "text-kh-text-muted"}`}
+                className={`flex cursor-default items-baseline gap-2 rounded-md px-2 py-1 text-body-sm ${listed && index === row ? "bg-kh-bg-selected text-kh-selected-text" : listed ? "" : "text-kh-text-muted"}`}
                 onMouseDown={(event) => event.preventDefault()}
                 onMouseEnter={() => setActive(index)}
                 onClick={() => { if (listed) choose(person); }}
               >
-                {optionText(person)}
+                <span className="min-w-0 flex-1 truncate">{optionText(person)}</span>
+                {/* The org tells two people of one name apart. */}
+                <span className="shrink-0 text-caption text-kh-text-muted">{person.orgCode}</span>
               </li>
             ))}
           </ul>

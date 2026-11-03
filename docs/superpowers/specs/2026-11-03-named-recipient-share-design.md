@@ -192,8 +192,10 @@ the company deployment as they are assumed to be here.
 
 - The share dialog gains a second mode, "Specific people": a recipient picker
   with mention-style autocomplete over all signed-in Hub users (`users` rows),
-  showing name · emp_id · name_en. At least one recipient to create. No expiry
-  control.
+  showing name · emp_id · name_en, with the person's `org_code` beside it to
+  tell namesakes apart (the candidate search therefore also answers `org_code`
+  to signed-in callers; it decides no access). At least one recipient to
+  create. No expiry control.
 - The two modes are one choice of audience, a segmented radio group
   ("Anyone with the link" · "Expires · no sign-in", then "Specific people" ·
   "Permanent · sign-in required"), the link first and chosen by default: it
