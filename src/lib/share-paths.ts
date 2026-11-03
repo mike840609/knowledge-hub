@@ -26,6 +26,22 @@ export function hubSharePath(workspaceId: string, token: string): string {
   return `/w/${workspaceId}/shares/${encodeURIComponent(token)}`;
 }
 
+/** The page request's path and query, which the middleware passes on because Next gives a layout neither. */
+export const REQUEST_PATH_HEADER = "x-hub-path";
+
+const FOREIGN_HUB_SHARE = /^\/w\/[^/?#]+\/shares\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})(\?.*)?$/;
+
+/**
+ * Where a Hub reader URL on a Workspace outside the caller's reach goes instead: the same share and query in the
+ * caller's own personal Workspace (a recipient sent the owner's address bar). Any other path is `null`, and stays a
+ * 404. Judges nothing about the share; the page does that after the redirect, so a reader it does not admit still
+ * ends at the dead link's 404.
+ */
+export function foreignHubShareRedirect(requestPath: string | null, personalWorkspaceId: string): string | null {
+  const match = requestPath === null ? null : FOREIGN_HUB_SHARE.exec(requestPath);
+  return match ? `${hubSharePath(personalWorkspaceId, match[1])}${match[2] ?? ""}` : null;
+}
+
 /**
  * Where a discussion read through a share opens, at `?thread=` (and a folder link's document, `?d=`). A LINK
  * share's is its anonymous page, written as it always was; a NAMED share's is the Hub reader in the reader's

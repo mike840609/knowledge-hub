@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { NextAuthRequest } from "next-auth";
 import { contentSecurityPolicy, NONCE_HEADER } from "@/lib/content-security-policy";
 import { googleGate } from "@/lib/auth-paths";
+import { REQUEST_PATH_HEADER } from "@/lib/share-paths";
 import { isSitePasswordExempt, verifySitePassword } from "@/lib/site-password";
 
 type GoogleAuthMiddleware = (
@@ -34,6 +35,8 @@ async function applyLegacyPolicy(request: NextRequest): Promise<NextResponse> {
   const policy = contentSecurityPolicy({ nonce, pathname, development: process.env.NODE_ENV === "development" });
   const headers = new Headers(request.headers);
   headers.set(NONCE_HEADER, nonce);
+  // Set here, never taken from the client; it decides only where the caller's own share reader is (`foreignHubShareRedirect`).
+  headers.set(REQUEST_PATH_HEADER, `${pathname}${request.nextUrl.search}`);
   headers.set("Content-Security-Policy", policy);
   const response = NextResponse.next({ request: { headers } });
   response.headers.set("Content-Security-Policy", policy);

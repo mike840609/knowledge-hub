@@ -11,7 +11,7 @@ import { SharedFolderPage } from "@/app/s/[token]/shared-folder-page";
 
 export const dynamic = "force-dynamic";
 
-type HubSharePageProps = { params: Promise<{ workspaceId: string; token: string }>; searchParams?: Promise<{ d?: string | string[] }> };
+type HubSharePageProps = { params: Promise<{ workspaceId: string; token: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> };
 
 type HubShareRead = { token: string; ownPath: string | null; pagePath: string; shared: SharedView | null };
 
@@ -23,11 +23,14 @@ type HubShareRead = { token: string; ownPath: string | null; pagePath: string; s
  */
 async function readPage({ params, searchParams }: HubSharePageProps): Promise<HubShareRead> {
   const { workspaceId, token } = await params;
-  const documentId = sharedDocumentParam((await searchParams)?.d);
+  const query = (await searchParams) ?? {};
+  const documentId = sharedDocumentParam(query.d);
   const { caller, personalWorkspace } = await applicationServices().establishTrustedCaller();
   const pagePath = hubSharePath(personalWorkspace.id, token);
   if (workspaceId !== personalWorkspace.id) {
-    return { token, pagePath, ownPath: documentId ? `${pagePath}?d=${documentId}` : pagePath, shared: null };
+    // The whole query goes along: `?d=` and `?thread=` are where the reader was sent.
+    const search = new URLSearchParams(Object.entries(query).flatMap(([key, value]) => [value ?? []].flat().map(item => [key, item]))).toString();
+    return { token, pagePath, ownPath: search ? `${pagePath}?${search}` : pagePath, shared: null };
   }
   const shared = documentId === null ? null : await getSharedForViewer(token, caller.identity.id, documentId);
   return { token, pagePath, ownPath: null, shared };

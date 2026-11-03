@@ -234,6 +234,29 @@ test.describe("named-recipient share routing", () => {
     expect(await hub.text()).not.toContain("Only the named reader reads this.");
   });
 
+  test("a Hub reader URL on another person's Workspace sends the reader to their own, keeping its query", async ({ page, request }) => {
+    const { doc, token, recipientOrigin, recipientWorkspace } = await namedShare(request);
+    const ownerWorkspace = await personalWorkspace(request, phase3Origin("reviewOwner"));
+    const thread = crypto.randomUUID();
+    const query = `?d=${doc.documentId}&thread=${thread}`;
+    const copied = await request.get(`${recipientOrigin}/w/${ownerWorkspace}/shares/${token}${query}`, { maxRedirects: 0 });
+    expect(copied.status()).toBe(307);
+    expect(copied.headers().location).toBe(`/w/${recipientWorkspace}/shares/${token}${query}`);
+    await page.goto(`${recipientOrigin}/w/${ownerWorkspace}/shares/${token}`);
+    await expect(page).toHaveURL(`${recipientOrigin}/w/${recipientWorkspace}/shares/${token}`, ROUND_TRIP);
+    await expect(page.getByText("Only the named reader reads this.", { exact: true })).toBeVisible(ROUND_TRIP);
+
+    // The redirect judges nothing: a stranger lands on the page's 404, and other foreign paths stay 404.
+    const stranger = phase3Origin("viewer");
+    const strangerWorkspace = await personalWorkspace(request, stranger);
+    const sent = await request.get(`${stranger}/w/${ownerWorkspace}/shares/${token}`, { maxRedirects: 0 });
+    expect(sent.headers().location).toBe(`/w/${strangerWorkspace}/shares/${token}`);
+    expect((await request.get(`${stranger}/w/${ownerWorkspace}/shares/${token}`)).status()).toBe(404);
+    for (const foreign of [`/w/${ownerWorkspace}/inbox`, `/w/${ownerWorkspace}/shares/not-a-token`, `/w/${ownerWorkspace}/shares/${token}/x`]) {
+      expect((await request.get(`${recipientOrigin}${foreign}`, { maxRedirects: 0 })).status(), foreign).toBe(404);
+    }
+  });
+
   test("a LINK share still opens anonymously on /s/<token>", async ({ request, playwright }) => {
     const doc = await createReviewDocument(request, "Anyone with the link reads this.");
     const reader = await playwright.request.newContext({ baseURL: phase3UnconfiguredOrigin() });
