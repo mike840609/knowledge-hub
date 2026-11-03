@@ -44,7 +44,7 @@ test("the issues panel lists, filters and loads more reports without leaving the
     const startUrl = page.url();
     const panel = await openIssues();
     await expect(panel.getByRole("tab", { name: "Report", exact: true })).toBeVisible();
-    await expect(panel.getByText("No reports yet.", { exact: true })).toBeVisible();
+    await expect(panel.getByLabel("Status")).toBeVisible();
     await expect(page).toHaveURL(startUrl);
     await close(panel);
 
