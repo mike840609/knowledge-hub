@@ -12,7 +12,7 @@ export const SHARE_RECIPIENT_ADDED_EVENT = "DOCUMENT_SHARE_RECIPIENT_ADDED";
  * Manage and an approved proposal are the same write (mention proposals spec, "Owner decision API").
  * People already named are skipped; the total stays within the cap. Each person added is audited, any
  * proposal for them is approved (a declined one too), and they follow every discussion a mention through this
- * link names them in, unless they stopped following it. Ids must be normalised and known to exist. Runs inside the caller's transaction, which
+ * link names them in and the link reaches now (not hidden, on a document it still opens), unless they stopped following it. Ids must be normalised and known to exist. Runs inside the caller's transaction, which
  * must hold the link's lock. Returns the people actually added.
  */
 export async function addNamedRecipients(
@@ -62,6 +62,8 @@ async function followMentionedThreads(r: KnowledgeRepositories, link: DocumentSh
   if (commentIds.length === 0) return;
   const threadIds = [...new Set((await r.reviewComments.findByIds(commentIds)).map((comment) => comment.threadId))];
   for (const thread of await r.reviewThreads.findByIds(threadIds)) {
+    // Only a discussion the person can now reach through this link: not a hidden one, nor one on a document it no longer opens.
+    if (thread.visibility === "HIDDEN" || !await linkOpensOnDocument(r, link.id, thread.documentId, userId, at)) continue;
     const follow = { threadId: thread.id, userId, shareLinkId: link.id, at };
     if (await r.reviewFollows.followIfAbsent(follow)) continue;
     const row = await r.reviewFollows.lockFollow(thread.id, userId);

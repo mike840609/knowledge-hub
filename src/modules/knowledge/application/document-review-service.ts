@@ -27,6 +27,7 @@ type MentionRequest = { ids: string[]; linkId: string | null; hashed: Record<str
 /** What a checked mention writes once its comment is in: the link handed over, and on a NAMED link the people the owner adds or a recipient proposes. */
 type MentionPlan = { link: DocumentShareLink; add: string[]; propose: string[] };
 /** A followed discussion on a folder link names its document, which that link's page needs (`?d=`); a document link's needs none. */
+const ownsLink = (link: DocumentShareLink, caller: CallerContext) => link.createdBy.toLowerCase() === caller.identity.id.toLowerCase();
 const folderDocument = (link: DocumentShareLink, documentId: string) => link.target.kind === "FOLDER" ? { documentId } : {};
 const PROPOSAL_PARTIES: readonly string[] = ["OWNER", "PROPOSED", "PROPOSER"] satisfies ProposalParty[];
 /** One party's view of one proposal, judged now: `target` is null when the link no longer opens for that party. */
@@ -686,7 +687,7 @@ export class DocumentReviewService {
   /** The owner's own discussion, on a passage of their own document. No link is involved, so none is recorded. */
   async createForOwner(caller:CallerContext,input:CreateOwnerReviewThreadInput) {
     const request=this.creation(input);
-    return this.uow.run(async r => { await this.lockHandedLink(r,input); const s=await this.ownerScope(r,caller,input.documentId); return this.create(r,caller,s,null,request,input,async()=>(await this.views(r,s.document.id,true,caller.identity.id))); });
+    return this.uow.run(async r => { await this.lockHandedLink(r,caller,input); const s=await this.ownerScope(r,caller,input.documentId); return this.create(r,caller,s,null,request,input,async()=>(await this.views(r,s.document.id,true,caller.identity.id))); });
   }
   private creation(input:Pick<CreateReviewThreadInput,"expectedRevisionId"|"anchor"|"body"|"idempotencyKey">) {
     const body=validateReviewBody(input.body),key=validateReviewIdempotencyKey(input.idempotencyKey);
@@ -714,13 +715,16 @@ export class DocumentReviewService {
     return (await views()).find(t=>t.id===thread.id)!;
   }
   async replyForLink(caller:CallerContext,input:ReplyReviewInput) { return this.uow.run(async r=> {const s=await this.linkScope(r,input.token,true,input.documentId,caller.identity.id); return this.reply(r,caller,s,s.link.id,input);}); }
-  async replyForOwner(caller:CallerContext,input:ReplyOwnerReviewInput) {return this.uow.run(async r=>{await this.lockHandedLink(r,input);const s=await this.ownerScope(r,caller,input.documentId);return this.reply(r,caller,s,null,input);});}
+  async replyForOwner(caller:CallerContext,input:ReplyOwnerReviewInput) {return this.uow.run(async r=>{await this.lockHandedLink(r,caller,input);const s=await this.ownerScope(r,caller,input.documentId);return this.reply(r,caller,s,null,input);});}
   /**
    * An owner write handing over a link locks it before the Source and Workspace, in the order every link write
    * takes them, so it cannot deadlock against a recipient writing through that link. `mentionLink` judges it.
+   * Only the caller's own link is locked: anyone else's is read, never locked, and refused as before.
    */
-  private async lockHandedLink(r:KnowledgeRepositories,input:{mentionLinkId?:unknown}) {
-    if(typeof input.mentionLinkId==="string" && isUuid(input.mentionLinkId)) await r.shareLinks.lockById(input.mentionLinkId.toLowerCase());
+  private async lockHandedLink(r:KnowledgeRepositories,caller:CallerContext,input:{mentionLinkId?:unknown}) {
+    if(typeof input.mentionLinkId!=="string" || !isUuid(input.mentionLinkId)) return;
+    const id=input.mentionLinkId.toLowerCase(),link=(await r.shareLinks.findByIds([id]))[0];
+    if(link && ownsLink(link,caller)) await r.shareLinks.lockById(id);
   }
   private comment(threadId:string,userId:string,body:string,key:string,requestHash:string):ReviewComment {return {id:uuidv7(),threadId,authorUserId:userId,body,idempotencyKey:key,requestHash,createdAt:this.clock(),editedAt:null,deletedAt:null,visibility:"VISIBLE",hiddenBy:null,hiddenAt:null,hiddenReason:null};}
   /** A comment written through a link is news to the owner, unless the owner wrote it (share-comment-notify spec). */
@@ -753,8 +757,8 @@ export class DocumentReviewService {
   private async mentionLink(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>&{link?:DocumentShareLink},originShareLinkId:string|null,mentions:MentionRequest):Promise<MentionPlan|null> {
     if(!mentions.ids.length) return null;
     if((await r.users.findByIds(mentions.ids)).length!==mentions.ids.length) fail("INVALID_REQUEST","Mention only people who have signed in here.");
-    // A link write's own link is locked by its scope; an owner's handed link by `lockHandedLink`, re-read here.
-    const link=originShareLinkId!==null?s.link:mentions.linkId!==null && isUuid(mentions.linkId)?await r.shareLinks.lockById(mentions.linkId):null;
+    // A link write's own link is locked by its scope; an owner's own handed link by `lockHandedLink`, re-read here.
+    const link=originShareLinkId!==null?s.link:await this.handedLink(r,caller,mentions.linkId);
     if(!link || (originShareLinkId===null && !await this.linkValid(r,link,s.document.id,caller.identity.id))) fail("INVALID_REQUEST","Mention someone through a live share link of this document.");
     const plan:MentionPlan={link,add:[],propose:[]};
     if(link.audience!=="NAMED") return plan;
@@ -768,8 +772,15 @@ export class DocumentReviewService {
     // A person with a row of any status is not proposed again: a decline is final for proposals.
     const proposed=new Set((await r.shareProposals.listByLink(link.id)).map(proposal=>proposal.userId));
     const propose=outsiders.filter(id=>!proposed.has(id));
-    if(named.size+await r.shareProposals.countPending(link.id)+propose.length>MAX_NAMED_SHARE_RECIPIENTS) full();
+    // Only a new proposal is counted: Manage adds may already have taken recipients and pending past the limit.
+    if(propose.length && named.size+await r.shareProposals.countPending(link.id)+propose.length>MAX_NAMED_SHARE_RECIPIENTS) full();
     return {...plan,propose};
+  }
+  /** The link an owner write hands over: re-read under the lock `lockHandedLink` took when it is the caller's, else read unlocked. */
+  private async handedLink(r:KnowledgeRepositories,caller:CallerContext,linkId:string|null) {
+    if(linkId===null || !isUuid(linkId)) return undefined;
+    const link=(await r.shareLinks.findByIds([linkId]))[0];
+    return link && ownsLink(link,caller)?(await r.shareLinks.lockById(linkId)) ?? undefined:link;
   }
   /**
    * The people a comment names get a mention carrying the link (spec 2026-10-29 § Writing a mention). On a NAMED

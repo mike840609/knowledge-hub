@@ -191,6 +191,99 @@ describe("a recipient mentioning someone the NAMED link does not name", () => {
     expect((await proposals(f.link.id)).map(p => [p.userId, p.status])).toEqual(expect.arrayContaining([[pending.id, "PENDING"], [declined.id, "DECLINED"]]));
     expect((await proposals(f.link.id)).map(p => p.userId)).not.toContain(more.id);
   });
+
+  it("counts the limit only when it proposes someone: past it, a mention of a recipient still writes", async () => {
+    const f = await setup();
+    // Review round 3, finding 1: 49 recipients + 1 pending, then Manage adds one, so 50 recipients + 1 pending.
+    const fillers = await Promise.all(Array.from({ length: MAX_NAMED_SHARE_RECIPIENTS - 3 }, (_, i) => newUser(`Filler ${i}`, f.tag)));
+    await shares().addRecipients(f.ownerCaller, f.link.id, fillers.map(u => u.id));
+    expect(await recipients(f.link.id)).toHaveLength(MAX_NAMED_SHARE_RECIPIENTS - 1);
+    const thread = await f.start(f.aliceCaller, [f.carol.id]);
+    const last = await newUser("Last", f.tag);
+    await shares().addRecipients(f.ownerCaller, f.link.id, [last.id]);
+    expect(await recipients(f.link.id)).toHaveLength(MAX_NAMED_SHARE_RECIPIENTS);
+    expect((await proposals(f.link.id)).map(p => p.status)).toEqual(["PENDING"]);
+    const reply = await f.reply(f.aliceCaller, thread.id, [f.bob.id]);
+    expect(await mentions(f.doc.documentId)).toContainEqual({ userId: f.bob.id, shareLinkId: f.link.id, commentId: reply.id });
+    await f.start(f.aliceCaller, [last.id, f.carol.id]);
+    const outsider = await newUser("Outsider", f.tag);
+    await expect(f.reply(f.aliceCaller, thread.id, [outsider.id])).rejects.toMatchObject(full);
+    expect((await proposals(f.link.id)).map(p => p.userId)).toEqual([f.carol.id]);
+  });
+});
+
+describe("a person added to a NAMED link after a mention named them", () => {
+  it("does not follow a discussion the owner hid", async () => {
+    const f = await setup();
+    // Review round 3, finding 2.
+    const hidden = await f.start(f.aliceCaller, [f.carol.id]);
+    const visible = await f.start(callerFromIdentity(f.bob), [f.carol.id]);
+    await review().setVisibility(f.ownerCaller, { documentId: f.doc.documentId, threadId: hidden.id, visibility: "HIDDEN" });
+    const [{ id }] = await shares().listProposals(f.ownerCaller, f.link.id);
+    await shares().approveProposal(f.ownerCaller, f.link.id, id);
+    expect(await follows(f.carol.id)).toEqual([{ threadId: visible.id, shareLinkId: f.link.id }]);
+  });
+
+  it("does not follow a discussion on a document moved out of the folder link", async () => {
+    const f = await setup();
+    const hub = new HubKnowledgeCommandServiceImpl(uow());
+    const sourceId = await ensureDefaultHubSource(uow(), f.ownerCaller, f.workspaceId);
+    const { treeNodeId: folderNodeId } = await hub.createFolder(f.ownerCaller, { sourceId, parentId: null, name: "Shared" });
+    const inside = await hub.createDocument(f.ownerCaller, { sourceId, parentId: folderNodeId, title: "Inside", markdown: MARKDOWN, metadata: {} });
+    const stays = await hub.createDocument(f.ownerCaller, { sourceId, parentId: folderNodeId, title: "Stays", markdown: MARKDOWN, metadata: {} });
+    const folderLink = await shares().createForFolder(f.ownerCaller, { folderNodeId, label: "Folder", recipients: [f.alice.id] });
+    const token = folderLink.path.slice(3);
+    const block = projectReviewBlocks(MARKDOWN)[0];
+    const anchor: ReviewAnchor = { schemaVersion: 1, blockPath: block.path, blockKind: block.kind, startUtf16: 2, endUtf16: 16, exact: "secret passage", prefix: "A ", suffix: " here." };
+    const start = (documentId: string, revisionId: string) => review().createForLink(f.aliceCaller, { token, documentId, expectedRevisionId: revisionId, anchor, body: "A question", idempotencyKey: randomUUID(), mentions: [f.carol.id] });
+    await start(inside.documentId, inside.revisionId);
+    const kept = await start(stays.documentId, stays.revisionId);
+    await hub.moveTreeNode(f.ownerCaller, { nodeId: inside.treeNodeId, newParentId: null, newPosition: 0 });
+    await shares().addRecipients(f.ownerCaller, folderLink.id, [f.carol.id]);
+    expect(await follows(f.carol.id)).toEqual([{ threadId: kept.id, shareLinkId: folderLink.id }]);
+  });
+});
+
+describe("an owner write handing over a link it does not own", () => {
+  const passage = (): ReviewAnchor => {
+    const block = projectReviewBlocks(MARKDOWN)[0];
+    return { schemaVersion: 1, blockPath: block.path, blockKind: block.kind, startUtf16: 2, endUtf16: 16, exact: "secret passage", prefix: "A ", suffix: " here." };
+  };
+  /** Runs `write` while another transaction holds the link's row lock; a write that waits on it fails here. */
+  async function whileLinkLocked(linkId: string, write: () => Promise<unknown>) {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await conn.query("SELECT id FROM document_share_links WHERE id=? FOR UPDATE", [linkId]);
+      const waited = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("waited on the link's lock")), 3000));
+      return await Promise.race([write().then(() => "resolved", (error: unknown) => error), waited]);
+    } finally {
+      await conn.rollback();
+      conn.release();
+    }
+  }
+
+  it("from a stranger answers as before, without taking the link's lock", async () => {
+    // Review round 3, finding 3.
+    const f = await setup();
+    const stranger = callerFromIdentity(f.carol);
+    const write = () => review().createForOwner(stranger, {
+      documentId: f.doc.documentId, expectedRevisionId: f.doc.revisionId, anchor: passage(),
+      body: "Look", idempotencyKey: randomUUID(), mentions: [f.bob.id], mentionLinkId: f.link.id,
+    });
+    expect(await whileLinkLocked(f.link.id, write)).toMatchObject(notFound);
+    const reply = () => review().replyForOwner(stranger, { documentId: f.doc.documentId, threadId: uuidv7(), body: "x", idempotencyKey: randomUUID(), mentions: [f.bob.id], mentionLinkId: f.link.id });
+    expect(await whileLinkLocked(f.link.id, reply)).toMatchObject(notFound);
+  });
+
+  it("from the document's owner naming another owner's link is refused as before, without taking its lock", async () => {
+    const f = await setup();
+    const other = await setup();
+    const refused = { code: "INVALID_REQUEST", message: "Mention someone through a live share link of this document." };
+    expect(await whileLinkLocked(other.link.id, () => f.ownerStart([f.carol.id], other.link.id))).toMatchObject(refused);
+    expect(await threadCount(f.doc.documentId)).toBe(0);
+    expect(await recipients(other.link.id)).toEqual([other.alice.id, other.bob.id].sort());
+  });
 });
 
 describe("the owner mentioning someone the NAMED link does not name", () => {

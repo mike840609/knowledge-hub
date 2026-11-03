@@ -89,8 +89,11 @@ through a NAMED link **by a caller who is not the Workspace owner**:
    comment: insert the mentions for everyone, and a `PENDING` proposal for each
    other person who is not already a recipient (checked in the transaction) and has
    no row yet for this link.
-4. Refused when the link is full: if recipients + pending proposals would exceed
-   `MAX_NAMED_SHARE_RECIPIENTS` (50), fail with a clear message.
+4. Refused when the link is full: if the write proposes someone and recipients +
+   pending proposals + those proposed would exceed `MAX_NAMED_SHARE_RECIPIENTS` (50),
+   fail with a clear message. A write that proposes nobody is never refused for the
+   limit: Manage adds and owner mentions count recipients only, so recipients + pending
+   may already pass 50, and a recipient's mention of another recipient must still write.
 
 **Owner writes** (the Workspace owner, whether through the NAMED link's Hub reader or
 from the Workspace view handing over a NAMED link with `mentionLinkId`): every mentioned
@@ -106,8 +109,8 @@ mentioned people are already on the link: the picker does not hold the link's li
 
 `mentionOnWrite` must **not** create a follow for a non-admitted user
 (`followForMention` judges the link for them; confirm it refuses, and test it).
-**On approval**, the person follows, through this link, every thread where a stored
-mention through this link names them (Claude's call: the same follow every other
+**On approval**, the person follows, through this link, every visible thread the link
+still opens where a stored mention through this link names them (Claude's call: the same follow every other
 mention gives, so they get replies). That is part of the approve transaction.
 
 ## Mention candidates
@@ -179,7 +182,9 @@ for a document link (Claude's call: the owner must see the real width of the gra
   person then sees no declined notice, and the proposer is told the person was added.
 - Being added (from Manage or by approval) follows each discussion a stored mention
   through the link names the person in, but never follows again one they stopped
-  following: an old mention is not a new one.
+  following: an old mention is not a new one. Only a discussion the link reaches now
+  is followed: not a hidden one, nor one on a document the link no longer opens (a
+  document moved out of a folder link).
 - An approved person's earlier mention through the link may already be read: while it was dead
   the Inbox poll judged it so and marked it read. It stays read; the unread `SHARED_WITH_YOU`
   entry the approval writes carries the news. This is the named-recipient spec's re-add rule
