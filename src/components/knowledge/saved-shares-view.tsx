@@ -39,7 +39,7 @@ export function SavedSharesView({ workspaceId,model,filterError,discussionsUnrea
     {/* Named shares sit above the whole list, so a search, a status or a later page shows only saved shares. */}
     {sharedWithYou.length>0&&!model.query.q&&model.query.status==="all"&&model.query.page===1&&<section aria-label="Shared with you" className="mt-4">
       <h2 className="text-body font-medium text-kh-text">Shared with you</h2>
-      <p className="text-caption text-kh-text-muted">Articles whose sender named you. Nothing to save: they stay here while the link is open.</p>
+      <p className="text-caption text-kh-text-muted">Documents and folders shared with you by name. Nothing to save: they stay here while the link is open.</p>
       <ul onKeyDown={navigateListRows} className="mt-2 space-y-2">{sharedWithYou.map(item=><li key={item.linkId} className="rounded-md border border-kh-border bg-kh-bg p-3 hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover">
         <Link prefetch={false} data-list-row className="kh-focus-ring block truncate rounded-md text-body font-medium text-kh-text hover:text-kh-link" href={item.href}>{item.title}</Link>
         <p className="truncate text-caption text-kh-text-muted">{item.sharedByName&&<>Shared by {item.sharedByName} · </>}<Timestamp value={item.addedAt}/></p>

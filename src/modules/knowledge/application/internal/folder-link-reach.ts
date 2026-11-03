@@ -73,6 +73,18 @@ export async function linkOpensFor(
   viewerId: string | null,
 ): Promise<boolean> {
   if (!await audienceAdmits(repositories, link, viewerId)) return false;
+  return linkOpensAfterAudience(repositories, link, targetStatus, source, workspace, now);
+}
+
+/** `linkOpensFor` once the audience is already admitted: validity with the creator's direct membership read. */
+async function linkOpensAfterAudience(
+  repositories: KnowledgeRepositories,
+  link: DocumentShareLink,
+  targetStatus: LifecycleStatus,
+  source: { status: LifecycleStatus },
+  workspace: { id: string; lifecycleState?: LifecycleStatus | null; personalOwnerUserId?: string | null },
+  now: Date,
+): Promise<boolean> {
   const membership = await repositories.workspaceMemberships.find(workspace.id, link.createdBy);
   return linkOpens(link, targetStatus, source, workspace, membership ? membership.role ?? null : undefined, now);
 }
@@ -95,7 +107,7 @@ export async function openShareLinkTarget(
   if (!source) return null;
   const workspace = await repositories.workspaces.findById(source.workspaceId);
   if (!workspace) return null;
-  return await linkOpensFor(repositories, link, target.status, source, workspace, now, viewerId) ? { workspaceId: workspace.id } : null;
+  return await linkOpensAfterAudience(repositories, link, target.status, source, workspace, now) ? { workspaceId: workspace.id } : null;
 }
 
 /** The document half of reachability that needs no tree read: ACTIVE in the folder's Source. */

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { documentReachesFolder, linkOpensFor } from "@/modules/knowledge/application/internal/folder-link-reach";
+import { describe, expect, it, vi } from "vitest";
+import { documentReachesFolder, linkOpensFor, openShareLinkTarget } from "@/modules/knowledge/application/internal/folder-link-reach";
 import type { DocumentShareLink } from "@/modules/knowledge/domain/document-share-link";
 import type { KnowledgeRepositories } from "@/modules/knowledge/ports/unit-of-work";
 import type { WorkspaceRole } from "@/modules/workspaces/domain/workspace-membership";
@@ -58,6 +58,25 @@ describe("linkOpensFor", () => {
     expect(await opens({ link: named, viewer: OWNER })).toBe(true);
     expect(await opens({ link: named, viewer: "0199f300-0000-7000-8000-0000000000a3" })).toBe(false);
     expect(await opens({ link: named, viewer: null })).toBe(false);
+  });
+});
+
+describe("openShareLinkTarget", () => {
+  it("asks a NAMED link's recipient list once, and opens as linkOpensFor does", async () => {
+    const isRecipient = vi.fn(async (_link: string, user: string) => user === RECIPIENT);
+    const r = {
+      shareLinks: { isRecipient },
+      sourcePolicy: { findById: async () => ({ ...SOURCE, workspaceId: "ws" }) },
+      workspaces: { findById: async () => WORKSPACE },
+      workspaceMemberships: { find: async () => ({ role: "VIEWER" }) },
+    } as unknown as KnowledgeRepositories;
+    const named = { ...LINK, audience: "NAMED" } as DocumentShareLink;
+    const target = { sourceId: "src", status: "ACTIVE" as const };
+    expect(await openShareLinkTarget(r, named, target, NOW, RECIPIENT)).toEqual({ workspaceId: "ws" });
+    expect(isRecipient).toHaveBeenCalledTimes(1);
+    isRecipient.mockClear();
+    expect(await openShareLinkTarget(r, named, target, NOW, "0199f300-0000-7000-8000-0000000000a3")).toBeNull();
+    expect(isRecipient).toHaveBeenCalledTimes(1);
   });
 });
 

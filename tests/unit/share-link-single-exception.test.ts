@@ -38,6 +38,23 @@ function parenthesised(source: string, open: number): string {
   return source.slice(open + 1);
 }
 
+/** The comma-separated arguments of a call, split only at depth zero. */
+function topLevelArguments(text: string): string[] {
+  const found: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    if ("([{".includes(text[index])) depth += 1;
+    if (")]}".includes(text[index])) depth -= 1;
+    if (text[index] === "," && depth === 0) {
+      found.push(text.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  const last = text.slice(start).trim();
+  return last ? [...found, last] : found;
+}
+
 type Callable = { file: string; name: string; parameters: string; body: string };
 
 /** Public class methods (two-space indent) and exported functions, async or not. */
@@ -139,6 +156,32 @@ describe("the share link is the single caller-less content path", () => {
     }
     const target = callables(file).find((callable) => callable.name === "readSharedTarget");
     expect(target?.body).not.toMatch(/\bmarkdown\b|\.revisions\.|\.users\.|loadCatalog|recordView|\.views\./);
+  });
+
+  it("a NAMED link is judged only against the signed-in caller's own id", () => {
+    // Named-recipient share spec, deviation 7: the viewer id decides whose audience a NAMED link is
+    // judged against, so it may only be `caller.identity.id` from `establishTrustedCaller()`.
+    const viewerIndex: Record<string, number> = { getSharedForViewer: 1, sharedOpenTarget: 2 };
+    const uses = ["src/server", "src/app", "src/components"].flatMap(filesUnder).flatMap((file) => {
+      const source = readFileSync(file, "utf8");
+      return [...source.matchAll(/(?<![\w.])(getSharedForViewer|sharedOpenTarget)\s*\(/g)]
+        .filter((match) => !/(?:function|const)\s+$/.test(source.slice(0, match.index)))
+        .map((match) => ({ file, source, name: match[1], args: topLevelArguments(parenthesised(source, (match.index ?? 0) + match[0].length - 1)) }));
+    });
+    expect(uses.length).toBeGreaterThanOrEqual(3);
+    for (const { file, source, name, args } of uses) {
+      const viewer = args[viewerIndex[name]];
+      const where = `${file} ${name}`;
+      if (viewer === undefined || viewer === "undefined") continue;
+      expect(viewer, where).toMatch(/^\w+\.identity\.id$/);
+      const owner = viewer.split(".")[0];
+      expect(source, where).toMatch(new RegExp(`const\\s*\\{[^}]*\\b${owner}\\b[^}]*\\}\\s*=\\s*await\\s+[^;]*\\bestablishTrustedCaller\\(\\)`));
+    }
+  });
+
+  it("the viewer guard rejects an id taken from the request", () => {
+    expect(topLevelArguments("token, searchParams.viewer, documentId")[1]).not.toMatch(/^\w+\.identity\.id$/);
+    expect(topLevelArguments("token, fn(a, b), c")).toEqual(["token", "fn(a, b)", "c"]);
   });
 
   it("review routes use services and never expose revision, tree or search repositories", () => {
