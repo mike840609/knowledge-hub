@@ -6,8 +6,8 @@ import { RecipientPicker, type Recipient } from "@/components/knowledge/recipien
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const MING: Recipient = { id: "11111111-1111-4111-8111-111111111111", name: "陳小明", nameEn: "Ming Chen", empId: "E1234" };
-const MEI: Recipient = { id: "22222222-2222-4222-8222-222222222222", name: "林美", nameEn: null, empId: "E5678" };
+const MING: Recipient = { id: "11111111-1111-4111-8111-111111111111", name: "陳小明", nameEn: "Ming Chen", empId: "E1234", orgCode: "HRSD" };
+const MEI: Recipient = { id: "22222222-2222-4222-8222-222222222222", name: "林美", nameEn: null, empId: "E5678", orgCode: "FIN" };
 
 let host: HTMLDivElement;
 let root: Root | null = null;
@@ -58,14 +58,14 @@ function key(input: HTMLInputElement, name: string, init: KeyboardEventInit = {}
 const options = () => Array.from(host.querySelectorAll<HTMLElement>('[role="option"]'));
 const chips = () => Array.from(host.querySelectorAll<HTMLElement>('ul[aria-label="Selected people"] li'));
 
-test("typing asks the endpoint once, after the debounce, and lists each person as name · empId · nameEn", async () => {
+test("typing asks the endpoint once, after the debounce, and lists each person as name · empId · nameEn beside their org", async () => {
   stubFetch();
   const input = render();
   act(() => { for (const value of ["陳", "陳小", "陳小明"]) { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); } });
   expect(requests).toEqual([]);
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 250)); });
   expect(requests).toEqual(["/api/share-recipients/candidates?query=%E9%99%B3%E5%B0%8F%E6%98%8E"]);
-  expect(options().map((option) => option.textContent)).toEqual(["陳小明 · E1234 · Ming Chen", "林美 · E5678"]);
+  expect(options().map((option) => Array.from(option.children, (part) => part.textContent))).toEqual([["陳小明 · E1234 · Ming Chen", "HRSD"], ["林美 · E5678", "FIN"]]);
 });
 
 test("the field is a combobox that owns a labelled listbox and points at the row in force", async () => {
@@ -100,7 +100,7 @@ test("a person already chosen is not offered again, so no duplicate chip can be 
   await type(input, "m");
   act(() => { options()[0].click(); });
   await type(input, "m");
-  expect(options().map((option) => option.textContent)).toEqual(["林美 · E5678"]);
+  expect(options().map((option) => option.firstElementChild?.textContent)).toEqual(["林美 · E5678"]);
   expect(changes).toEqual([[MING]]);
 });
 
@@ -108,7 +108,7 @@ test("people named by `exclude` are never offered", async () => {
   stubFetch();
   const input = render({ exclude: [MING.id] });
   await type(input, "m");
-  expect(options().map((option) => option.textContent)).toEqual(["林美 · E5678"]);
+  expect(options().map((option) => option.firstElementChild?.textContent)).toEqual(["林美 · E5678"]);
 });
 
 test("each chip has a button that removes its person", async () => {

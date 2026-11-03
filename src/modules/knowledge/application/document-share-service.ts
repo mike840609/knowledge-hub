@@ -44,7 +44,7 @@ export type ShareLinkView = {
 };
 
 export type ShareRecipientView = { userId: string; name: string; nameEn: string | null; empId: string; addedAt: Date };
-export type ShareRecipientCandidate = { id: string; name: string; nameEn: string | null; empId: string };
+export type ShareRecipientCandidate = { id: string; name: string; nameEn: string | null; empId: string; orgCode: string };
 
 type ShareCreateInput = { label?: unknown; expiresInDays?: unknown; recipients?: unknown };
 
@@ -332,7 +332,7 @@ export class DocumentShareService {
       await syncCallerIdentity(repositories.users, caller);
       const found = await repositories.users.searchExisting(needle, MENTION_LIMIT + 1);
       const candidates = found.filter((user) => user.id !== caller.identity.id).slice(0, MENTION_LIMIT);
-      return { candidates: candidates.map((user) => ({ id: user.id, name: user.name, nameEn: user.nameEn, empId: user.emp_id })) };
+      return { candidates: candidates.map((user) => ({ id: user.id, name: user.name, nameEn: user.nameEn, empId: user.emp_id, orgCode: user.org_code })) };
     });
   }
 
