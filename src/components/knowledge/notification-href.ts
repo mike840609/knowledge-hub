@@ -39,9 +39,9 @@ function proposalLine(entry: Entry): string {
   const target = proposalTarget(entry);
   if (entry.kind === "PROPOSAL_REQUEST") return `${entry.authorName ?? "Someone"} wants to add ${entry.personName ?? "someone"} to ${target}`;
   if (entry.kind === "PROPOSAL_PENDING") return `${entry.authorName ?? "Someone"} mentioned you in ${target} — someone proposed sharing a document with you. Waiting for the owner.`;
-  // The proposer's notice names the person; the proposed person's own does not, it is about them.
-  if (!entry.personName) return `The owner declined sharing ${target} with you.`;
-  return entry.proposalStatus === "APPROVED" ? `The owner added ${entry.personName} to ${target}.` : `The owner declined adding ${entry.personName} to ${target}.`;
+  if (entry.proposalStatus === "APPROVED") return `The owner added ${entry.personName ?? "someone"} to ${target}.`;
+  // Declined: the proposer's notice names the person; the proposed person's own does not, it is about them.
+  return entry.personName ? `The owner declined adding ${entry.personName} to ${target}.` : `The owner declined sharing ${target} with you.`;
 }
 
 /** An entry whose link no longer opens for this caller: it names nothing. */

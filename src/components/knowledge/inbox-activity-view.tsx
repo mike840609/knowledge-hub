@@ -112,8 +112,6 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
     setError(null);
     try {
       await governanceRequest(`/api/share-links/${entry.shareLinkId}/proposals/${entry.proposalId}/${decision}`, "POST");
-      // Deciding it is reading it (spec: unread until decided or opened); the server leaves the owner's own row as it was.
-      if (entry.readAt === null) await reviewRequest("/api/review-notifications/activity", { action: "mark-read", eventId: entry.id });
       await load();
       window.dispatchEvent(new Event("kh:notification-changed"));
     } catch (cause) {

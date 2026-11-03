@@ -24,12 +24,12 @@ export function NamedShareRecipients({ linkId, onCount }: { linkId: string; onCo
   const url = `/api/share-links/${linkId}/recipients`;
 
   const load = useCallback(async () => {
-    const [{ recipients }, pending] = await Promise.all([
+    const [{ recipients }, proposed] = await Promise.all([
       governanceRequest<{ recipients: Named[] }>(url),
       governanceRequest<{ proposals: Proposal[] }>(`/api/share-links/${linkId}/proposals`),
     ]);
     setPeople(recipients);
-    setProposals(pending.proposals);
+    setProposals(proposed.proposals);
     onCount(linkId, recipients.length);
   }, [url, linkId, onCount]);
 

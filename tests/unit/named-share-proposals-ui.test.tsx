@@ -114,8 +114,7 @@ describe("the Inbox", () => {
     await act(async () => { buttons("Approve")[0].click(); });
     await act(async () => { release(); await hold; });
     await act(async () => {});
-    // Deciding is reading: the owner's entry is marked read after the decision.
-    expect(posts).toEqual([`/api/share-links/link-1/proposals/${PROPOSAL}/approve`, `mark-read proposal:OWNER:${PROPOSAL}`]);
+    expect(posts).toEqual([`/api/share-links/link-1/proposals/${PROPOSAL}/approve`]);
     // The refreshed entry is decided: its status, no buttons.
     await act(async () => { host.querySelector<HTMLElement>('[role="tab"]:nth-child(2)')!.click(); });
     expect(host.textContent).toContain("Approved");
@@ -127,7 +126,7 @@ describe("the Inbox", () => {
     await mount();
     await act(async () => { buttons("Decline")[0].click(); });
     await act(async () => {});
-    expect(posts).toEqual([`/api/share-links/link-1/proposals/${PROPOSAL}/decline`, `mark-read proposal:OWNER:${PROPOSAL}`]);
+    expect(posts).toEqual([`/api/share-links/link-1/proposals/${PROPOSAL}/decline`]);
   });
 
   it("a refused decision shows the server's message and keeps both buttons", async () => {
@@ -168,7 +167,7 @@ describe("the Inbox", () => {
 });
 
 describe("the Manage panel", () => {
-  const proposals = () => [{ id: PROPOSAL, userId: "u-lee", name: "李小龍", nameEn: "Lee", empId: "E42", orgCode: "ORG-7", proposedByName: "Dana", createdAt: new Date(0).toISOString() }];
+  const proposals = () => [{ id: PROPOSAL, userId: "u-lee", name: "李小龍", nameEn: "Lee", empId: "E42", orgCode: "ORG-7", proposedByName: "Dana" as string | null, createdAt: new Date(0).toISOString() }];
   let listed: ReturnType<typeof proposals>;
   beforeEach(() => {
     listed = proposals();
@@ -210,6 +209,25 @@ describe("the Manage panel", () => {
     await act(async () => { buttons("Decline")[0].click(); });
     await act(async () => {});
     expect(posts).toEqual([`/api/share-links/link-1/proposals/${PROPOSAL}/decline`]);
+  });
+
+  it("a proposer whose name is gone is shown as someone", async () => {
+    listed = [{ ...proposals()[0], proposedByName: null }];
+    await mount();
+    expect(host.querySelector('ul[aria-label="Pending approval"] li')!.textContent).toContain("proposed by someone");
+  });
+
+  it("a refused decision shows the server's message and keeps the person pending", async () => {
+    const original = globalThis.fetch;
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit = {}) => init.method === "POST"
+      ? json({ error: { code: "SHARE_RECIPIENT_LIMIT", message: "This link already names 50 people." } }, 409)
+      : original(url, init));
+    await mount();
+    await act(async () => { buttons("Approve")[0].click(); });
+    await act(async () => {});
+    expect(host.textContent).toContain("This link already names 50 people.");
+    expect(host.querySelector('ul[aria-label="Pending approval"]')).not.toBeNull();
+    expect(buttons("Approve")[0].disabled).toBe(false);
   });
 
   it("shows no pending section when nobody is proposed", async () => {
