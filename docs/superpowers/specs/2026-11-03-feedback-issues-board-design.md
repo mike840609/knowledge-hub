@@ -95,12 +95,16 @@ Route: `/w/[workspaceId]/issues` (personal workspace only).
   row's ISO `created_at`) and `beforeId` (its id). An "Older issues" link opens
   the next page; it replaces the current rows rather than accumulating them,
   and the browser's Back returns to the newer page. There is no "Load more"
-  client fetch and no new API. A malformed or stale cursor falls back to the
-  first page.
+  client fetch and no new API. A malformed cursor falls back to the first page.
+  A valid cursor older than the oldest report is a different case: it shows an
+  empty page with a "Newest issues" link back to the first page, keeping the
+  applied filters. It is never a 404 and never a silent jump to page 1.
 - **Empty and filtered-empty states** are one muted sentence in the list's
   place — no second heading, because the page header already carries the title:
-  nothing reported yet, versus nothing matching these filters (with the filters
-  still visible so they can be cleared).
+  nothing reported yet; nothing matching these filters (with the filters still
+  visible so they can be cleared); or, on a page reached by a valid cursor that
+  is past the end, "No reports on this page." with a "Newest issues" link back
+  to the first page that preserves the filters.
 
 ## Read path and layering
 

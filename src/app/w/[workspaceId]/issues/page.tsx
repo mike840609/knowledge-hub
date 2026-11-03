@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { firstSearchParam } from "@/lib/search-params";
 import { FEEDBACK_CATEGORIES, FEEDBACK_STATUSES } from "@/modules/personal/domain/feedback-report";
 import { getFeedbackIssues } from "@/server/feedback-issues-read";
 
@@ -19,21 +20,27 @@ export default async function IssuesPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { workspaceId } = await params;
-  const model = await getFeedbackIssues(workspaceId, await searchParams);
+  const q = await searchParams;
+  const model = await getFeedbackIssues(workspaceId, q);
   if (!model) notFound();
 
   const { filters, page } = model;
   const filtered = Boolean(filters.status || filters.category || filters.mineOnly);
   // The older page keeps the applied filters; the filter form itself never carries the cursor,
   // because choosing a filter starts again at the newest report.
-  const older = new URLSearchParams();
-  if (filters.status) older.set("status", filters.status);
-  if (filters.category) older.set("category", filters.category);
-  if (filters.mineOnly) older.set("mine", "true");
+  const applied = new URLSearchParams();
+  if (filters.status) applied.set("status", filters.status);
+  if (filters.category) applied.set("category", filters.category);
+  if (filters.mineOnly) applied.set("mine", "true");
+  const older = new URLSearchParams(applied);
   if (page.nextCursor) {
     older.set("beforeAt", page.nextCursor.createdAt);
     older.set("beforeId", page.nextCursor.id);
   }
+  // A valid cursor past the last report is a real page, not a typo: it gets its own
+  // empty state and a link back to the newest page with the same filters.
+  const paged = Boolean(firstSearchParam(q.beforeAt) && firstSearchParam(q.beforeId));
+  const newestHref = applied.toString() ? `/w/${workspaceId}/issues?${applied}` : `/w/${workspaceId}/issues`;
 
   return (
     <main className="kh-page flex flex-col gap-5 pb-6">
@@ -41,7 +48,7 @@ export default async function IssuesPage({
         location="My Space"
         locationHref={`/w/${workspaceId}`}
         title="Issues"
-        description="Every report anyone has sent from this Workspace, newest first."
+        description="Problems colleagues have reported through Report a problem, newest first."
       />
       <form
         key={`${filters.status ?? ""}|${filters.category ?? ""}|${filters.mineOnly ? "1" : ""}`}
@@ -80,7 +87,7 @@ export default async function IssuesPage({
           <Button type="submit" variant="secondary">Filter</Button>
         </noscript>
       </form>
-      <FeedbackIssues page={page} filtered={filtered} />
+      <FeedbackIssues page={page} filtered={filtered} paged={paged} newestHref={newestHref} />
       {page.nextCursor ? (
         <Link className="kh-focus-ring w-fit rounded-md text-body-sm text-kh-link" href={`/w/${workspaceId}/issues?${older}`}>
           Older issues

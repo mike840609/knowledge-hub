@@ -10,9 +10,14 @@ function view(overrides: Partial<FeedbackIssueView> = {}): FeedbackIssueView {
     status: "OPEN", createdAt: "2026-11-03T00:00:00.000Z", isMine: true, ...overrides,
   };
 }
-function render(items: FeedbackIssueView[], filtered = false): string {
+function render(
+  items: FeedbackIssueView[],
+  { filtered = false, paged, newestHref }: { filtered?: boolean; paged?: boolean; newestHref?: string } = {},
+): string {
   const page: FeedbackIssuePage = { items, nextCursor: null };
-  return renderToStaticMarkup(<FeedbackIssues page={page} filtered={filtered} />);
+  return renderToStaticMarkup(
+    <FeedbackIssues page={page} filtered={filtered} paged={paged} newestHref={newestHref} />,
+  );
 }
 
 describe("FeedbackIssues", () => {
@@ -33,6 +38,29 @@ describe("FeedbackIssues", () => {
     expect(render([view()])).not.toContain("<details");
   });
 
+  it("keeps only the uncovered tail inside the disclosure, so the opening is not repeated", () => {
+    const opening = "x".repeat(280);
+    const marker = "TAIL-MARKER-9F3";
+    const html = render([view({ description: `${"x".repeat(400)}${marker}` })]);
+    // The preview carries the opening once; the disclosure carries only what is left.
+    expect(html.split(opening)).toHaveLength(2);
+    expect(html.split(marker)).toHaveLength(2);
+    expect(html.slice(html.indexOf("<details"))).toContain(marker);
+    expect(html).toContain(">Show the full report</summary>");
+  });
+
+  it("previews by code point, so a long emoji run never splits a character", () => {
+    const html = render([view({ description: "😀".repeat(300) })]);
+    expect(html).not.toContain("\uFFFD");
+    expect(html.match(/😀/g)).toHaveLength(300);
+    expect(html.split("😀".repeat(280))).toHaveLength(2);
+  });
+
+  it("lets a long unbroken path and description wrap inside their column", () => {
+    const html = render([view({ pagePath: `/w/x/${"a".repeat(1024)}` })]);
+    expect(html.match(/break-words/g)).toHaveLength(2);
+  });
+
   it("renders a hostile reporter name as text", () => {
     const html = render([view({ userName: "<script>alert(1)</script>", empId: "<b>X</b>" })]);
     expect(html).toContain("&lt;script&gt;");
@@ -41,7 +69,21 @@ describe("FeedbackIssues", () => {
   });
 
   it("says when there is nothing to show, filtered or not", () => {
-    expect(render([], false)).toContain("No reports yet");
-    expect(render([], true)).toContain("No reports match these filters");
+    expect(render([])).toContain("No reports yet");
+    expect(render([], { filtered: true })).toContain("No reports match these filters");
+  });
+
+  it("gives a page past the last report its own sentence and a filtered way back", () => {
+    const html = render([], {
+      paged: true,
+      filtered: true,
+      newestHref: "/w/w1/issues?status=RESOLVED&mine=true",
+    });
+    expect(html).toContain("No reports on this page.");
+    expect(html).toContain("Newest issues");
+    expect(html).toContain("/w/w1/issues?status=RESOLVED");
+    expect(html).toContain("mine=true");
+    expect(html).not.toContain("No reports yet");
+    expect(html).not.toContain("No reports match these filters");
   });
 });

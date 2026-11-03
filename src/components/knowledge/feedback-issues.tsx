@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Status, type StatusKind } from "@/components/ui/status";
 import { Timestamp } from "@/components/ui/timestamp";
@@ -23,7 +24,11 @@ const DESCRIPTION_PREVIEW_LENGTH = 280;
 
 function IssueRow({ item }: { item: FeedbackIssueView }) {
   const status = FEEDBACK_ISSUE_STATUS_PRESENTATION[item.status];
-  const long = item.description.length > DESCRIPTION_PREVIEW_LENGTH;
+  // Counted in code points, so the preview never ends on half an emoji.
+  const characters = Array.from(item.description);
+  const long = characters.length > DESCRIPTION_PREVIEW_LENGTH;
+  const preview = characters.slice(0, DESCRIPTION_PREVIEW_LENGTH).join("");
+  const remainder = characters.slice(DESCRIPTION_PREVIEW_LENGTH).join("");
   return (
     <li className="border-b border-kh-border px-3 py-3 last:border-b-0">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -39,25 +44,47 @@ function IssueRow({ item }: { item: FeedbackIssueView }) {
           <Timestamp value={item.createdAt} />
         </span>
       </div>
-      <p className="font-mono text-caption text-kh-text-muted">{item.pagePath}</p>
-      <p className="whitespace-pre-wrap text-body-sm text-kh-text-secondary">
-        {long ? `${item.description.slice(0, DESCRIPTION_PREVIEW_LENGTH)}…` : item.description}
+      <p className="break-words font-mono text-caption text-kh-text-muted">{item.pagePath}</p>
+      <p className="whitespace-pre-wrap break-words text-body-sm text-kh-text-secondary">
+        {long ? `${preview}…` : item.description}
       </p>
       {long ? (
         <details className="text-body-sm">
           <summary className="kh-focus-ring w-fit cursor-pointer rounded-md text-kh-text-muted">Show the full report</summary>
-          <p className="whitespace-pre-wrap text-kh-text-secondary">{item.description}</p>
+          {/* The rest only: preview and disclosure body read as one report, not two. */}
+          <p className="whitespace-pre-wrap break-words text-kh-text-secondary">{remainder}</p>
         </details>
       ) : null}
     </li>
   );
 }
 
-export function FeedbackIssues({ page, filtered }: { page: FeedbackIssuePage; filtered: boolean }) {
+export function FeedbackIssues({
+  page,
+  filtered,
+  paged = false,
+  newestHref,
+}: {
+  page: FeedbackIssuePage;
+  filtered: boolean;
+  paged?: boolean;
+  newestHref?: string;
+}) {
   if (!page.items.length) {
     return (
       <p className="text-body text-kh-text-muted">
-        {filtered ? "No reports match these filters." : "No reports yet."}
+        {paged ? (
+          <>
+            No reports on this page.{" "}
+            <Link className="kh-focus-ring rounded-md text-kh-link" href={newestHref ?? "/"}>
+              Newest issues
+            </Link>
+          </>
+        ) : filtered ? (
+          "No reports match these filters."
+        ) : (
+          "No reports yet."
+        )}
       </p>
     );
   }
