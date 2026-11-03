@@ -307,13 +307,17 @@ export class DocumentShareService {
     });
   }
 
-  /** The people proposed for a NAMED link and still PENDING, oldest first. Owner of the link only; a revoked link is refused. */
+  /**
+   * The people proposed for a NAMED link and still PENDING, oldest first. Owner of the link only; a revoked link is
+   * refused. A link that no longer opens (archived target) lists nobody, since none of them could be decided.
+   */
   async listProposals(caller: CallerContext, linkId: string): Promise<ShareProposalView[]> {
     if (!isUuid(linkId)) throw new ShareLinkNotFoundError();
     return this.unitOfWork.run(async (repositories) => {
       await syncCallerIdentity(repositories.users, caller);
       const link = await repositories.shareLinks.findById(linkId);
       if (!link || link.createdBy !== caller.identity.id || link.revokedAt !== null) throw new ShareLinkNotFoundError();
+      if (!await linkOpensForOwner(repositories, link, this.clock(), caller.identity.id)) return [];
       const proposals = await repositories.shareProposals.listByLink(link.id, "PENDING");
       const users = new Map((await repositories.users.findByIds([...new Set(proposals.flatMap((p) => [p.userId, p.proposedBy]))])).map((user) => [user.id, user]));
       return proposals.flatMap((proposal) => {
@@ -525,13 +529,17 @@ async function requireExistingUsers(repositories: KnowledgeRepositories, ids: re
   if (ids.some((id) => !found.has(id))) throw new DomainError("INVALID_REQUEST", "Every recipient must be an existing user.");
 }
 
-/** The link opens now for its owner, judged as a reader's link is: revoked, archived or out of reach answers not-found. */
-async function requireLiveLink(repositories: KnowledgeRepositories, link: DocumentShareLink, now: Date, ownerId: string): Promise<void> {
+/** Whether the link opens now for its owner, judged as a reader's link is: revoked, archived or out of reach does not. */
+async function linkOpensForOwner(repositories: KnowledgeRepositories, link: DocumentShareLink, now: Date, ownerId: string): Promise<boolean> {
   const target = link.target.kind === "DOCUMENT"
     ? await repositories.documents.findById(link.target.documentId)
     : await repositories.tree.findById(link.target.folderNodeId);
-  if (!target) throw new ShareLinkNotFoundError();
-  await requireOpenLink(repositories, link, target, now, ownerId);
+  return !!target && !!await openShareLinkTarget(repositories, link, target, now, ownerId);
+}
+
+/** `linkOpensForOwner`, answering a link that does not open as not-found. */
+async function requireLiveLink(repositories: KnowledgeRepositories, link: DocumentShareLink, now: Date, ownerId: string): Promise<void> {
+  if (!await linkOpensForOwner(repositories, link, now, ownerId)) throw new ShareLinkNotFoundError();
 }
 
 /**

@@ -62,9 +62,9 @@ export class MariaDbShareProposalRepository implements ShareProposalRepository {
     return affectedRows(result) === 1;
   }
 
-  async approvePending(linkId: string, userId: string, by: string, at: Date): Promise<void> {
+  async approveFor(linkId: string, userId: string, by: string, at: Date): Promise<void> {
     await this.connection.query(
-      `UPDATE document_share_link_proposals SET status = 'APPROVED', decided_by = ?, decided_at = ?, ${DECISION_UNREAD} WHERE share_link_id = ? AND user_id = ? AND status = 'PENDING'`,
+      `UPDATE document_share_link_proposals SET status = 'APPROVED', decided_by = ?, decided_at = ?, ${DECISION_UNREAD} WHERE share_link_id = ? AND user_id = ? AND status <> 'APPROVED'`,
       [by, at, linkId, userId],
     );
   }

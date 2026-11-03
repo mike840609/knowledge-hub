@@ -238,8 +238,8 @@ describe("the owner mentioning someone the NAMED link does not name", () => {
     const bearer = await shares().create(f.ownerCaller, { documentId: f.doc.documentId });
     const { links } = await review().mentionLinksForOwner(f.ownerCaller, { documentId: f.doc.documentId });
     expect(links).toEqual(expect.arrayContaining([
-      { id: f.link.id, label: "Named", audience: "NAMED" },
-      { id: bearer.id, label: null, audience: "LINK" },
+      { id: f.link.id, label: "Named", audience: "NAMED", targetKind: "DOCUMENT" },
+      { id: bearer.id, label: null, audience: "LINK", targetKind: "DOCUMENT" },
     ]));
     expect(links).toHaveLength(2);
   });

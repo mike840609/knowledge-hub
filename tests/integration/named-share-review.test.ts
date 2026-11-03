@@ -133,7 +133,7 @@ describe("mentions through a NAMED link", () => {
 
   it("are handed over by the owner to anyone, adding the people the link does not name", async () => {
     const f = await fixture();
-    expect((await f.service.mentionLinksForOwner(f.owner, { documentId: f.doc.documentId })).links).toEqual([{ id: f.link.id, label: null, audience: "NAMED" }]);
+    expect((await f.service.mentionLinksForOwner(f.owner, { documentId: f.doc.documentId })).links).toEqual([{ id: f.link.id, label: null, audience: "NAMED", targetKind: "DOCUMENT" }]);
     const write = (mentions: string[]) => f.service.createForOwner(f.owner, {
       documentId: f.doc.documentId, expectedRevisionId: f.doc.revisionId, anchor: f.anchor, body: "Look", idempotencyKey: randomUUID(), mentions, mentionLinkId: f.link.id,
     });

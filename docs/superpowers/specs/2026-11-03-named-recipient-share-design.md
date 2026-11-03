@@ -158,7 +158,7 @@ the company deployment as they are assumed to be here.
 
 - Writes already require a trusted caller; they now also pass the NAMED check.
   Query reads (`/api/share-review/*` query) pass the optional caller.
-- **Mention candidates** for a NAMED link: only its recipients and the owner.
+- Superseded by 2026-11-03-named-share-mention-proposals-design.md: **Mention candidates** for a NAMED link: only its recipients and the owner.
   The server enforces this in `/api/review-mentions/candidates`; the composer
   just shows what comes back.
 - Superseded by 2026-11-03-named-share-mention-proposals-design.md: **Writing a mention of a non-recipient through a NAMED link is refused**
@@ -255,7 +255,7 @@ Where the build differs from the text above, this section is the record.
 3. **"Shared with you" on the Shares page is its own section**, above the saved
    shares, not rows merged into that list. Its entries are not saved shares and
    offer no Save or Remove.
-4. **Mentioning a non-recipient through a NAMED link is refused at write time**
+4. Superseded by 2026-11-03-named-share-mention-proposals-design.md: **Mentioning a non-recipient through a NAMED link is refused at write time**
    (`MENTION_NOT_RECIPIENT`). The owner's mention-link offers
    (`mentionLinksForOwner`) omit NAMED links when no mentioned ids are given,
    since such a link cannot be judged without them.

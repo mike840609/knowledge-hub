@@ -99,8 +99,10 @@ through the existing add path (audit `SHARE_RECIPIENT_ADDED`, `SHARED_WITH_YOU` 
 limit of 50; over the limit the write is refused). Their mention is then live and
 follows as any mention does. A pending proposal for that person becomes `APPROVED`.
 `mentionLinksForOwner` therefore lists every live link of the document, NAMED ones
-whatever the mentioned people, and the owner's link picker says that choosing a NAMED
-link adds the people not yet on it.
+whatever the mentioned people, each with its `audience` and `targetKind`, and the owner's
+link picker says that choosing a NAMED link adds the people not yet on it, and for a
+folder link that it opens the whole folder. The label does not depend on whether the
+mentioned people are already on the link: the picker does not hold the link's list.
 
 `mentionOnWrite` must **not** create a follow for a non-admitted user
 (`followForMention` judges the link for them; confirm it refuses, and test it).
@@ -115,27 +117,42 @@ Now it answers recipients first, then other Hub users (`searchExisting`), up to
 `MENTION_LIMIT`; each candidate carries `needsApproval: boolean`. The composer shows
 non-recipients with a muted "needs owner approval" note. Still signed-in only.
 
+Accepted (2026-11-03 final review): the note is shown for every non-recipient, including
+people who will never be proposed — someone whose proposal on this link was declined, or
+who was approved and later removed (the one row per `(link, person)` already exists, so
+the mention stores a dead mention and proposes nothing). Telling them apart would need a
+proposal lookup per candidate; the note is advice, not a promise.
+
 ## Inbox
 
-New entry kinds in `listActivityForOwner` / `listUnreadForOwner` / the badge count:
+New entry kinds in `listActivityForOwner` / `listUnreadForOwner` / the badge count.
+Each proposal entry carries `proposalId`, `proposalStatus` (`PENDING` / `APPROVED` /
+`DECLINED`) and `targetKind` (`DOCUMENT` / `FOLDER`, what the link opens; see "Folder
+NAMED links"):
 
 - **`PROPOSAL_REQUEST`** (owner): "<proposer> proposed adding <person> to 《title》",
-  with Approve / Decline. Unread until decided or opened.
+  with Approve / Decline. Unread until decided or opened. The owner's entry alone also
+  carries `shareLinkId`, the link Approve / Decline posts to; no other party's does.
 - **`PROPOSAL_PENDING`** (proposed person): "<proposer> mentioned you in 《title》 —
   someone proposed sharing a document with you. Waiting for the owner."
   No href, no excerpt.
-- **`PROPOSAL_DECLINED`** (proposed person, and the proposer): "The owner declined
-  sharing 《title》 with <person>" / "…with you".
-- **`PROPOSAL_APPROVED`** (proposer only; Claude's call): "The owner added <person>
-  to 《title》". The proposed person gets the existing `SHARED_WITH_YOU` entry plus
-  their now-live mention instead.
+- **`PROPOSAL_DECIDED`** with `proposalStatus: "DECLINED"` (proposed person, and the
+  proposer): "The owner declined sharing 《title》 with <person>" / "…with you".
+- **`PROPOSAL_DECIDED`** with `proposalStatus: "APPROVED"` (proposer only; Claude's
+  call): "The owner added <person> to 《title》". The proposed person gets the existing
+  `SHARED_WITH_YOU` entry plus their now-live mention instead.
+
+(Deviation, recorded 2026-11-03: an earlier draft named two kinds, `PROPOSAL_DECLINED`
+and `PROPOSAL_APPROVED`. They are one kind, `PROPOSAL_DECIDED`, told apart by
+`proposalStatus`: the same information with one kind fewer.)
 
 While a proposal is `PENDING` or `DECLINED`, the proposed person's dead mention for it
 is **not** listed separately (one entry per proposal, not a blank row beside it).
 
 Every entry is judged per request against the link: if the link is revoked, or the
 document is archived, the entry names nothing (as a dead link's entries do today) and
-the owner's Approve / Decline answers as a dead link does.
+the owner's Approve / Decline answers as a dead link does. A dead entry shows no status
+label either; it reads only "This link is no longer available."
 
 ## Folder NAMED links
 
@@ -148,7 +165,12 @@ for a document link (Claude's call: the owner must see the real width of the gra
 
 - The proposal is independent of its comment and its proposer: hiding the comment,
   removing the thread, or removing the proposer as a recipient leaves it pending.
-- Adding the person directly from Manage marks a pending proposal `APPROVED`.
+- Adding the person directly from Manage marks their proposal `APPROVED` whatever its
+  status: a `DECLINED` one too, since the owner has now decided otherwise. The proposed
+  person then sees no declined notice, and the proposer is told the person was added.
+- Being added (from Manage or by approval) follows each discussion a stored mention
+  through the link names the person in, but never follows again one they stopped
+  following: an old mention is not a new one.
 - Approve at the recipient limit fails with the limit message and leaves it `PENDING`.
 - Only `PENDING` proposals count toward the write-time limit.
 - While a proposal is `PENDING` or `DECLINED`, the proposed person's dead mentions
@@ -162,7 +184,7 @@ not-found. Idempotent on an already-decided proposal in the same direction.
 Approve: insert the recipient through the existing add path (audit event
 `SHARE_RECIPIENT_ADDED`, recipient limit), then mark `APPROVED`. Decline: mark
 `DECLINED`, audit `SHARE_PROPOSAL_DECLINED`. Adding the person directly from Manage
-while a proposal is pending also marks it `APPROVED`.
+while a proposal is pending (or after it was declined) also marks it `APPROVED`.
 
 ## Manage panel
 
@@ -181,10 +203,16 @@ and Approve / Decline. Same API as the Inbox.
 - Integration: recipient mentions a non-recipient → comment stored, mention stored,
   one pending proposal; the proposed user cannot read `/w/<ws>/shares/:token`, review
   queries, or the thread; no follow created.
-- Same person mentioned twice while pending → one proposal. After decline → new one.
+- Same person mentioned twice while pending → one proposal. After decline → no new one
+  (a decline is final for proposals); the mention is stored dead.
 - Approve → recipient row + `SHARED_WITH_YOU` + mention now live; proposer notified.
 - Decline → both notified; comment text appears in neither entry.
-- Revoked link → pending entries name nothing; approve answers not-found.
+- Revoked link → pending entries name nothing; approve answers not-found. Archived
+  document → approve / decline answer not-found and Manage lists no pending proposals.
+- Decline, then add from Manage → `APPROVED`; no declined notice for the person; the
+  proposer is told they were added.
+- Stop following, be removed, be added again (from Manage or by approval) → still not
+  following.
 - Non-owner (including the proposer) cannot approve/decline.
 - Link full → write refused.
 - Owner write mentioning a non-recipient through a NAMED link (Hub reader, and Workspace

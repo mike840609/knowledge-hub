@@ -216,9 +216,9 @@ export class DocumentReviewService {
       const folderIds = chain.slice(1).filter(node => node.nodeType === "FOLDER").map(node => node.id);
       const candidates = [...await r.shareLinks.listByDocument(s.document.id)];
       for (const folderId of folderIds) candidates.push(...await r.shareLinks.listByFolder(folderId));
-      const links: Array<{ id: string; label: string | null; audience: DocumentShareLink["audience"] }> = [];
+      const links: Array<{ id: string; label: string | null; audience: DocumentShareLink["audience"]; targetKind: DocumentShareLink["target"]["kind"] }> = [];
       for (const link of candidates) {
-        if (await this.linkValid(r, link, s.document.id, caller.identity.id)) links.push({ id: link.id, label: link.label, audience: link.audience });
+        if (await this.linkValid(r, link, s.document.id, caller.identity.id)) links.push({ id: link.id, label: link.label, audience: link.audience, targetKind: link.target.kind });
       }
       return { links };
     });

@@ -13,8 +13,8 @@ export interface ShareProposalRepository {
   countPending(linkId: string): Promise<number>;
   /** Only from PENDING; true when it changed. */
   decide(id: string, status: "APPROVED" | "DECLINED", by: string, at: Date): Promise<boolean>;
-  /** APPROVED for the PENDING row of (link, user), if any. */
-  approvePending(linkId: string, userId: string, by: string, at: Date): Promise<void>;
+  /** APPROVED for the row of (link, user) whatever its status, if any: the owner adding them outranks a decline. An APPROVED row is left as it was. */
+  approveFor(linkId: string, userId: string, by: string, at: Date): Promise<void>;
   /** Proposals on links this user created, newest first. */
   listForOwner(ownerUserId: string, limit: number): Promise<ShareProposal[]>;
   listForProposed(userId: string, limit: number): Promise<ShareProposal[]>;

@@ -21,13 +21,13 @@ function json(value: unknown) {
   return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
 }
 
-type Link = { id: string; label: string | null; active: boolean; audience?: "LINK" | "NAMED" };
+type Link = { id: string; label: string | null; active: boolean; audience?: "LINK" | "NAMED"; targetKind?: "DOCUMENT" | "FOLDER" };
 type Candidate = { id: string; name: string; nameEn: string | null; empId: string; needsApproval?: boolean };
 function stubFetch({ candidates = [MING, MEI] as Candidate[], links = [] as Link[] | (() => Link[]) } = {}) {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     requests.push(url);
     // The server answers only the links that open now.
-    if (url.includes("/review-mentions/links")) return json({ links: (typeof links === "function" ? links() : links).filter(link => link.active).map(({ id, label, audience = "LINK" }) => ({ id, label, audience })) });
+    if (url.includes("/review-mentions/links")) return json({ links: (typeof links === "function" ? links() : links).filter(link => link.active).map(({ id, label, audience = "LINK", targetKind = "DOCUMENT" }) => ({ id, label, audience, targetKind })) });
     if (url.startsWith("/api/review-mentions/candidates")) return json({ candidates });
     throw new Error(`unexpected ${url}`);
   }));
@@ -305,6 +305,15 @@ test("a NAMED link in the owner's choice says it adds people not yet on it", asy
   key(textarea, "Enter");
   const select = host.querySelector("select")!;
   expect(Array.from(select.options).map(option => option.textContent)).toEqual(["Team", "Reviewers · Adds people not yet on it"]);
+});
+
+test("a NAMED folder link says it adds people to the whole folder", async () => {
+  stubFetch({ links: [{ id: "link-a", label: "Team", active: true }, { id: "link-f", label: "Plans", active: true, audience: "NAMED", targetKind: "FOLDER" }] });
+  const textarea = render({ documentId: "doc-1" });
+  await type(textarea, "@ming");
+  key(textarea, "Enter");
+  const select = host.querySelector("select")!;
+  expect(Array.from(select.options).map(option => option.textContent)).toEqual(["Team", "Plans · Adds people not yet on it (whole folder)"]);
 });
 
 test("the owner's only link, when NAMED, still says it adds people not yet on it", async () => {

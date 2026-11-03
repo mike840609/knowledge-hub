@@ -176,7 +176,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
               <span className="mt-1 flex flex-wrap items-center gap-2 text-caption text-kh-text-muted">
                 <Timestamp value={String(item.createdAt)} variant="relative" />
                 {item.readAt === null ? <span className="font-medium text-kh-text">Unread</span> : <span>Read</span>}
-                <span>{notificationLabel(item)}</span>
+                {notificationLabel(item) && <span>{notificationLabel(item)}</span>}
               </span>
             </>;
             const current = selected?.id === item.id;

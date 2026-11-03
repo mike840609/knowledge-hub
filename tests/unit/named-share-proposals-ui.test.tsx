@@ -56,6 +56,7 @@ describe("what a proposal entry says", () => {
     for (const kind of ["PROPOSAL_REQUEST", "PROPOSAL_PENDING", "PROPOSAL_DECIDED"] as const) {
       expect(notificationLine(dead({ kind }))).toBe("This link is no longer available.");
       expect(notificationTitle(dead({ kind }))).toBe("A shared document");
+      expect(notificationLabel(dead({ kind, proposalStatus: "PENDING" }))).toBeNull();
     }
   });
 });
@@ -147,6 +148,13 @@ describe("the Inbox", () => {
     expect(buttons("Approve")).toHaveLength(0);
     expect(buttons("Decline")).toHaveLength(0);
     expect(host.textContent).toContain("Declined");
+  });
+
+  it("a dead entry shows no status beside its dead-link line", async () => {
+    notifications = [dead({ kind: "PROPOSAL_PENDING", proposalStatus: "PENDING", readAt: null })];
+    await mount();
+    expect(host.textContent).toContain("This link is no longer available.");
+    expect(host.textContent).not.toContain("Waiting for owner");
   });
 
   it("pending and declined rows are text only: no link, and clicking them opens no pane", async () => {

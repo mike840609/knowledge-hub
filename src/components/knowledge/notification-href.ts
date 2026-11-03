@@ -15,9 +15,10 @@ export const canDecideProposal = (entry: Pick<ShareCommentNotificationView, "kin
 /** FOLLOW, MENTION and SHARED_WITH_YOU entries open through a link; only OWNER entries open the owner's document. */
 export const isLinkEntry = (kind?: string) => kind === "FOLLOW" || kind === "MENTION" || isSharedEntry(kind);
 
-/** The entry's last label: what kind it is, or the state of its discussion. */
-export const notificationLabel = (entry: Pick<ShareCommentNotificationView, "kind" | "threadStatus" | "proposalStatus">) =>
-  entry.kind === "PROPOSAL_REQUEST" ? (entry.proposalStatus === "APPROVED" ? "Approved" : entry.proposalStatus === "DECLINED" ? "Declined" : "Wants to add someone")
+/** The entry's last label: what kind it is, or the state of its discussion. A dead proposal entry has no status to show. */
+export const notificationLabel = (entry: Pick<ShareCommentNotificationView, "kind" | "threadStatus" | "proposalStatus" | "linkAvailable">): string | null =>
+  isProposalEntry(entry.kind) && !entry.linkAvailable ? null
+  : entry.kind === "PROPOSAL_REQUEST" ? (entry.proposalStatus === "APPROVED" ? "Approved" : entry.proposalStatus === "DECLINED" ? "Declined" : "Wants to add someone")
   : entry.kind === "PROPOSAL_PENDING" ? "Waiting for owner"
   : entry.kind === "PROPOSAL_DECIDED" ? (entry.proposalStatus === "APPROVED" ? "Owner approved" : "Owner declined")
   : entry.kind === "FOLLOW" ? "Discussion you follow" : entry.kind === "MENTION" ? "Mentioned you" : entry.kind === "SHARED_WITH_YOU" ? "Shared with you" : entry.threadStatus === "OPEN" ? "Open discussion" : "Resolved";

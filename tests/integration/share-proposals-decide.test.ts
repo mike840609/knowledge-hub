@@ -185,6 +185,8 @@ describe("who may decide, and on what", () => {
     await new HubKnowledgeCommandServiceImpl(uow()).archiveDocument(f.caller, f.documentId);
     await expect(shares().approveProposal(f.caller, f.link.id, proposalId)).rejects.toMatchObject(notFound);
     await expect(shares().declineProposal(f.caller, f.link.id, proposalId)).rejects.toMatchObject(notFound);
+    // Manage offers nothing it could not decide: the pending list is empty, as the link opens for no one.
+    expect(await shares().listProposals(f.caller, f.link.id)).toEqual([]);
     expect(await f.proposal(proposalId)).toMatchObject({ status: "PENDING" });
   });
 
@@ -228,5 +230,68 @@ describe("adding from Manage", () => {
     expect(await f.proposal(proposalId)).toMatchObject({ status: "APPROVED", decidedBy: f.owner.id });
     expect(await follows(f.carol.id)).toEqual([{ threadId: first.threadId, shareLinkId: f.link.id, following: true }]);
     expect(await shares().listProposals(f.caller, f.link.id)).toEqual([]);
+  });
+
+  it("marks a declined proposal for the added person APPROVED, as the owner decided after all", async () => {
+    const f = await setup();
+    const { proposalId } = await pendingCarol(f);
+    await shares().declineProposal(f.caller, f.link.id, proposalId);
+    const declinedAt = (await f.proposal(proposalId))!.decidedAt!;
+    await new Promise(resolve => setTimeout(resolve, 5));
+    await shares().addRecipients(f.caller, f.link.id, [f.carol.id]);
+    const after = await f.proposal(proposalId);
+    expect(after).toMatchObject({ status: "APPROVED", decidedBy: f.owner.id, proposedReadAt: null, proposerReadAt: null });
+    expect(after!.decidedAt!.getTime()).toBeGreaterThan(declinedAt.getTime());
+  });
+});
+
+describe("adding someone who stopped following", () => {
+  /** Carol, added from Manage, follows the thread a mention through the link names her in, then stops following it. */
+  async function stoppedFollowing(f: Fixture) {
+    const first = await f.thread();
+    await f.mention(first.commentId, f.carol.id);
+    await shares().addRecipients(f.caller, f.link.id, [f.carol.id]);
+    expect(await follows(f.carol.id)).toEqual([{ threadId: first.threadId, shareLinkId: f.link.id, following: true }]);
+    await new DocumentReviewService(uow(), () => new Date(), () => true).unfollowOwn(callerFromIdentity(f.carol), first.threadId);
+    await shares().removeRecipient(f.caller, f.link.id, f.carol.id);
+    return first;
+  }
+
+  it("does not follow again from Manage", async () => {
+    const f = await setup();
+    const first = await stoppedFollowing(f);
+    await shares().addRecipients(f.caller, f.link.id, [f.carol.id]);
+    expect(await follows(f.carol.id)).toEqual([{ threadId: first.threadId, shareLinkId: f.link.id, following: false }]);
+  });
+
+  it("does not follow again on an approved proposal, yet follows a discussion she never followed", async () => {
+    const f = await setup();
+    const first = await stoppedFollowing(f);
+    const second = await f.thread();
+    await f.mention(second.commentId, f.carol.id);
+    const proposalId = await f.propose(f.carol.id, second.commentId);
+    await shares().approveProposal(f.caller, f.link.id, proposalId);
+    expect(await follows(f.carol.id)).toEqual([
+      { threadId: first.threadId, shareLinkId: f.link.id, following: false },
+      { threadId: second.threadId, shareLinkId: f.link.id, following: true },
+    ].sort((a, b) => a.threadId.localeCompare(b.threadId)));
+  });
+
+  it("moves a live follow whose link no longer opens to this link, and leaves one whose link still opens", async () => {
+    const f = await setup();
+    const { first, proposalId } = await pendingCarol(f);
+    const second = await f.thread();
+    await f.mention(second.commentId, f.carol.id);
+    const [dying, living] = [await shares().create(f.caller, { documentId: f.documentId }), await shares().create(f.caller, { documentId: f.documentId })];
+    await uow().run(async r => {
+      await r.reviewFollows.follow({ threadId: first.threadId, userId: f.carol.id, shareLinkId: dying.id, at: new Date() });
+      await r.reviewFollows.follow({ threadId: second.threadId, userId: f.carol.id, shareLinkId: living.id, at: new Date() });
+    });
+    await shares().revoke(f.caller, dying.id);
+    await shares().approveProposal(f.caller, f.link.id, proposalId);
+    expect(await follows(f.carol.id)).toEqual([
+      { threadId: first.threadId, shareLinkId: f.link.id, following: true },
+      { threadId: second.threadId, shareLinkId: living.id, following: true },
+    ].sort((a, b) => a.threadId.localeCompare(b.threadId)));
   });
 });

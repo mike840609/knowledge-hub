@@ -3,7 +3,6 @@ import { DomainError } from "@/shared/domain/errors";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { MAX_NAMED_SHARE_RECIPIENTS, type DocumentShareLink } from "../domain/document-share-link";
 import type { KnowledgeRepositories } from "../ports/unit-of-work";
-import { followForMention } from "./follow-for-mention";
 import { openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
 
 export const SHARE_RECIPIENT_ADDED_EVENT = "DOCUMENT_SHARE_RECIPIENT_ADDED";
@@ -12,8 +11,8 @@ export const SHARE_RECIPIENT_ADDED_EVENT = "DOCUMENT_SHARE_RECIPIENT_ADDED";
  * Names more people on a NAMED link — the only place recipient rows are inserted, so an owner's add from
  * Manage and an approved proposal are the same write (mention proposals spec, "Owner decision API").
  * People already named are skipped; the total stays within the cap. Each person added is audited, any
- * pending proposal for them is approved, and they follow every discussion a mention through this link
- * names them in. Ids must be normalised and known to exist. Runs inside the caller's transaction, which
+ * proposal for them is approved (a declined one too), and they follow every discussion a mention through this
+ * link names them in, unless they stopped following it. Ids must be normalised and known to exist. Runs inside the caller's transaction, which
  * must hold the link's lock. Returns the people actually added.
  */
 export async function addNamedRecipients(
@@ -31,7 +30,7 @@ export async function addNamedRecipients(
   await r.shareLinks.insertRecipients(link.id, added, caller.identity.id, at);
   for (const userId of added) {
     await appendRecipientEvent(r, caller, workspaceId, link.id, SHARE_RECIPIENT_ADDED_EVENT, userId, at);
-    await r.shareProposals.approvePending(link.id, userId, caller.identity.id, at);
+    await r.shareProposals.approveFor(link.id, userId, caller.identity.id, at);
     await followMentionedThreads(r, link, userId, at);
   }
   return added;
@@ -53,18 +52,21 @@ export function appendRecipientEvent(r: KnowledgeRepositories, caller: CallerCon
 }
 
 /**
- * The follow every mention gives (`DocumentReviewService.mentionOnWrite`), for each discussion where a stored
- * mention through this link names the person. Their recipient row is already written, so the link admits them.
+ * The follow a mention gives, for each discussion where a stored mention through this link names the person. Their
+ * recipient row is already written, so the link admits them. Unlike a new mention (`followForMention`), an old one
+ * never follows again a discussion the person stopped following: being added is not being mentioned anew. A live
+ * follow moves to this link only when its own link no longer opens.
  */
 async function followMentionedThreads(r: KnowledgeRepositories, link: DocumentShareLink, userId: string, at: Date): Promise<void> {
   const commentIds = [...new Set((await r.reviewMentions.listByLinkAndUser(link.id, userId)).map((mention) => mention.commentId))];
   if (commentIds.length === 0) return;
   const threadIds = [...new Set((await r.reviewComments.findByIds(commentIds)).map((comment) => comment.threadId))];
   for (const thread of await r.reviewThreads.findByIds(threadIds)) {
-    await followForMention(r.reviewFollows, {
-      threadId: thread.id, userId, shareLinkId: link.id, at,
-      currentLinkValid: (linkId) => linkOpensOnDocument(r, linkId, thread.documentId, userId, at),
-    });
+    const follow = { threadId: thread.id, userId, shareLinkId: link.id, at };
+    if (await r.reviewFollows.followIfAbsent(follow)) continue;
+    const row = await r.reviewFollows.lockFollow(thread.id, userId);
+    if (!row?.following || await linkOpensOnDocument(r, row.shareLinkId, thread.documentId, userId, at)) continue;
+    await r.reviewFollows.moveToLink(thread.id, userId, link.id, at);
   }
 }
 

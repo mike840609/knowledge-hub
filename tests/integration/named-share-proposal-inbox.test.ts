@@ -168,6 +168,22 @@ describe("a declined proposal", () => {
   });
 });
 
+describe("a declined person added from Manage after all", () => {
+  it("is told nothing of the decline; the proposer is told they were added", async () => {
+    const f = await setup();
+    const { proposalId } = await f.propose();
+    await shares().declineProposal(f.ownerCaller, f.link.id, proposalId);
+    await shares().addRecipients(f.ownerCaller, f.link.id, [f.carol.id]);
+    expect(await proposalActivity(f.carolCaller)).toEqual([]);
+    expect((await activity(f.carolCaller)).filter(view => view.kind === "SHARED_WITH_YOU")).toEqual([expect.objectContaining({ linkAvailable: true })]);
+    expect(await unreadProposals(f.aliceCaller)).toEqual([expect.objectContaining({
+      id: `proposal:PROPOSER:${proposalId}`, kind: "PROPOSAL_DECIDED", proposalStatus: "APPROVED", personName: "Carol Outsider", readAt: null,
+    })]);
+    expect(await proposalActivity(f.ownerCaller)).toEqual([expect.objectContaining({ proposalStatus: "APPROVED" })]);
+    await expectBadgeMatchesList(f);
+  });
+});
+
 describe("reading proposal entries", () => {
   it("marks one party's entry read, only for that party", async () => {
     const f = await setup();

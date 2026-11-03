@@ -121,25 +121,29 @@ describe("share proposals repository", () => {
     expect((await run(s => s.listByLink(link, "APPROVED"))).map(p => p.id)).toEqual([a.id]);
   });
 
-  it("approvePending flips only the PENDING row of that person", async () => {
+  it("approveFor approves that person's row whatever its status, and no one else's", async () => {
     const f = await fixture();
     const link = await f.namedLink();
     const carol = await f.propose(link, f.carol), dave = await f.propose(link, f.dave);
     await run(s => s.decide(dave.id, "DECLINED", f.owner, at(4)));
-    await run(s => s.approvePending(link, f.carol, f.owner, at(5)));
-    await run(s => s.approvePending(link, f.dave, f.owner, at(6)));
-    expect(await run(s => s.findById(carol.id))).toMatchObject({ status: "APPROVED", decidedBy: f.owner, decidedAt: at(5) });
+    await run(s => s.approveFor(link, f.carol, f.owner, at(5)));
     expect(await run(s => s.findById(dave.id))).toMatchObject({ status: "DECLINED", decidedAt: at(4) });
-    await run(s => s.approvePending(link, randomUUID(), f.owner, at(7)));
+    await run(s => s.approveFor(link, f.dave, f.owner, at(6)));
+    expect(await run(s => s.findById(carol.id))).toMatchObject({ status: "APPROVED", decidedBy: f.owner, decidedAt: at(5) });
+    expect(await run(s => s.findById(dave.id))).toMatchObject({ status: "APPROVED", decidedBy: f.owner, decidedAt: at(6) });
+    // An approval stands as it was: re-adding someone removed is not a new decision.
+    await run(s => s.approveFor(link, f.carol, f.owner, at(8)));
+    expect(await run(s => s.findById(carol.id))).toMatchObject({ status: "APPROVED", decidedAt: at(5) });
+    await run(s => s.approveFor(link, randomUUID(), f.owner, at(7)));
   });
 
-  it("makes a decision unread for the proposed person and the proposer, whatever they had read (decide and approvePending)", async () => {
+  it("makes a decision unread for the proposed person and the proposer, whatever they had read (decide and approveFor)", async () => {
     const f = await fixture();
     const link = await f.namedLink();
     const declined = await f.propose(link, f.carol), approved = await f.propose(link, f.dave);
     for (const user of [f.owner, f.carol, f.dave, f.writer]) await run(s => s.markAllRead(user, at(3)));
     await run(s => s.decide(declined.id, "DECLINED", f.owner, at(5)));
-    await run(s => s.approvePending(link, f.dave, f.owner, at(6)));
+    await run(s => s.approveFor(link, f.dave, f.owner, at(6)));
     for (const { id } of [declined, approved]) {
       expect(await run(s => s.findById(id))).toMatchObject({ ownerReadAt: at(3), proposedReadAt: null, proposerReadAt: null });
     }
