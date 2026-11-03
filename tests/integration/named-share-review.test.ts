@@ -19,8 +19,9 @@ import { uuidv7 } from "@/shared/ids/uuidv7";
 
 /**
  * Named-recipient share spec, "Discussions and mentions": through a NAMED link only a signed-in
- * recipient or the owner discusses, follows, is mentioned or is offered as a candidate; every
- * refusal a non-recipient sees is the dead link's ShareLinkNotFoundError.
+ * recipient or the owner discusses or follows; every refusal a non-recipient sees is the dead link's
+ * ShareLinkNotFoundError. A mention of a non-recipient is a proposal that grants nothing
+ * (named-share-mention-proposals.test.ts covers it in full).
  */
 let pool: Pool;
 beforeAll(() => { pool = createDatabasePool(databaseConfig("test")); });
@@ -28,7 +29,6 @@ afterAll(async () => { await pool.end(); });
 
 const MARKDOWN = "A secret passage here.";
 const notFound = { code: "SHARE_LINK_NOT_FOUND" };
-const notRecipient = { code: "MENTION_NOT_RECIPIENT" };
 
 async function fixture() {
   const uow = new MariaDbUnitOfWork(pool);
@@ -113,39 +113,34 @@ describe("mentions through a NAMED link", () => {
       .toEqual([expect.objectContaining({ threadId: thread.id, token: f.link.token, linkAvailable: true, href: `/w/${f.colleagueWorkspace.id}/shares/${f.link.token}?thread=${thread.id}` })]);
   });
 
-  it("refuse a mention of a non-recipient on a thread or a reply, storing nothing", async () => {
+  it("store a recipient's mention of a non-recipient on a thread or a reply as dead, opening nothing to them", async () => {
     const f = await fixture();
-    await expect(f.start(f.recipient, [f.ids.stranger.id])).rejects.toMatchObject(notRecipient);
-    await expect(f.start(f.recipient, [f.ids.colleague.id, f.ids.stranger.id])).rejects.toMatchObject(notRecipient);
+    await f.start(f.recipient, [f.ids.stranger.id]);
     const thread = await f.start();
-    await expect(f.reply(f.recipient, thread.id, [f.ids.stranger.id])).rejects.toMatchObject(notRecipient);
-    expect(await f.storedMentions()).toEqual([]);
-    expect((await f.service.queryForLink(f.recipient, f.link.token)).threads.map(t => t.comments.length)).toEqual([1]);
+    await f.reply(f.recipient, thread.id, [f.ids.stranger.id]);
+    expect(await f.storedMentions()).toEqual([f.ids.stranger.id, f.ids.stranger.id]);
+    await expect(f.service.queryForLink(f.stranger, f.link.token)).rejects.toMatchObject(notFound);
+    expect((await f.service.listUnreadForOwner(f.stranger)).notifications.filter(n => n.kind === "MENTION" && n.linkAvailable)).toEqual([]);
   });
 
-  it("offer only recipients as candidates, never a matching stranger", async () => {
+  it("offer recipients first, then matching strangers flagged as needing approval", async () => {
     const f = await fixture();
     const found = await f.service.searchMentionCandidates(f.recipient, { query: f.tag, token: f.link.token });
-    expect(found.candidates.map(c => c.id)).toEqual([f.ids.colleague.id]);
-    expect((await f.service.searchMentionCandidates(f.recipient, { query: f.ids.stranger.emp_id, token: f.link.token })).candidates).toEqual([]);
+    expect(found.candidates.map(c => [c.id, c.needsApproval])).toEqual([[f.ids.colleague.id, false], [f.ids.stranger.id, true]]);
+    expect((await f.service.searchMentionCandidates(f.recipient, { query: f.ids.stranger.emp_id, token: f.link.token })).candidates.map(c => c.id)).toEqual([f.ids.stranger.id]);
     await expect(f.service.searchMentionCandidates(f.stranger, { query: f.tag, token: f.link.token })).rejects.toMatchObject(notFound);
   });
 
-  it("are handed over by the owner only to recipients", async () => {
+  it("are handed over by the owner to anyone, adding the people the link does not name", async () => {
     const f = await fixture();
-    const offered = async (mentionedUserIds?: string[]) => (await f.service.mentionLinksForOwner(f.owner, { documentId: f.doc.documentId, mentionedUserIds })).links.map(l => l.id);
-    expect(await offered([f.ids.recipient.id])).toEqual([f.link.id]);
-    expect(await offered([])).toEqual([f.link.id]);
-    expect(await offered([f.ids.stranger.id])).toEqual([]);
-    expect(await offered([f.ids.recipient.id, f.ids.stranger.id])).toEqual([]);
-    expect(await offered()).toEqual([]);
+    expect((await f.service.mentionLinksForOwner(f.owner, { documentId: f.doc.documentId })).links).toEqual([{ id: f.link.id, label: null, audience: "NAMED" }]);
     const write = (mentions: string[]) => f.service.createForOwner(f.owner, {
       documentId: f.doc.documentId, expectedRevisionId: f.doc.revisionId, anchor: f.anchor, body: "Look", idempotencyKey: randomUUID(), mentions, mentionLinkId: f.link.id,
     });
-    await expect(write([f.ids.stranger.id])).rejects.toMatchObject(notRecipient);
-    expect(await f.storedMentions()).toEqual([]);
     await write([f.ids.recipient.id]);
     expect(await f.storedMentions()).toEqual([f.ids.recipient.id]);
+    await write([f.ids.stranger.id]);
+    expect((await f.service.queryForLink(f.stranger, f.link.token)).threads).toHaveLength(2);
   });
 });
 

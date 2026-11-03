@@ -422,7 +422,7 @@ describe("mention candidates", () => {
     const tag = randomUUID().slice(0, 8);
     await pool.query("UPDATE users SET name_en=? WHERE id=?", [`Alice ${tag}`, f.alice]);
     const { candidates } = await f.service.searchMentionCandidates(f.reader, { query: `  alice ${tag} `, token: f.token });
-    expect(candidates).toEqual([{ id: f.alice, name: "Alice", nameEn: `Alice ${tag}`, empId: await empOf(f.alice) }]);
+    expect(candidates).toEqual([{ id: f.alice, name: "Alice", nameEn: `Alice ${tag}`, empId: await empOf(f.alice), needsApproval: false }]);
   });
 
   it("does not offer the caller or the Workspace owner, who could not be mentioned anyway", async () => {
