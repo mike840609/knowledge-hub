@@ -1,11 +1,7 @@
-import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Status, type StatusKind } from "@/components/ui/status";
 import { Timestamp } from "@/components/ui/timestamp";
-import type {
-  FeedbackIssuePage,
-  FeedbackIssueView,
-} from "@/modules/personal/application/feedback-report-query-service";
+import type { FeedbackIssueView } from "@/modules/personal/application/feedback-report-query-service";
 import type { FeedbackStatus } from "@/modules/personal/domain/feedback-report";
 
 /** How each stored status is said, and the glyph and colour that carry it beside the word. */
@@ -60,37 +56,22 @@ function IssueRow({ item }: { item: FeedbackIssueView }) {
 }
 
 export function FeedbackIssues({
-  page,
+  items,
   filtered,
-  paged = false,
-  newestHref,
 }: {
-  page: FeedbackIssuePage;
+  items: FeedbackIssueView[];
   filtered: boolean;
-  paged?: boolean;
-  newestHref?: string;
 }) {
-  if (!page.items.length) {
+  if (!items.length) {
     return (
       <p className="text-body text-kh-text-muted">
-        {paged ? (
-          <>
-            No reports on this page.{" "}
-            <Link className="kh-focus-ring rounded-md text-kh-link" href={newestHref ?? "/"}>
-              Newest issues
-            </Link>
-          </>
-        ) : filtered ? (
-          "No reports match these filters."
-        ) : (
-          "No reports yet."
-        )}
+        {filtered ? "No reports match these filters." : "No reports yet."}
       </p>
     );
   }
   return (
     <ol aria-label="Reported issues" className="-mx-3">
-      {page.items.map((item) => (
+      {items.map((item) => (
         <IssueRow key={item.id} item={item} />
       ))}
     </ol>

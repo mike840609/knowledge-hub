@@ -10,6 +10,12 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-03-feedback-issues-board-design.md`
 
+> **Superseded in part (2026-11-03):** Tasks 4–6 built the board as a page with
+> a rail row and a server read projection. Review replaced that surface with the
+> dialog's Issues tab and a `GET /api/feedback-reports` list; the design document
+> is the current contract. The status/query/repository work from Tasks 1–3 is
+> unchanged.
+
 ## Global Constraints
 
 - Any trusted caller may read every report; no Workspace capability or role gates the read.

@@ -19,11 +19,11 @@ class FakeStore implements FeedbackReportStore {
 
 describe("FeedbackReportQueryService.list", () => {
   it("asks for one row beyond the page and returns the last shown row as the cursor", async () => {
-    const store = new FakeStore(Array.from({ length: 51 }, (_, i) => record(i + 1)));
+    const store = new FakeStore(Array.from({ length: 21 }, (_, i) => record(i + 1)));
     const page = await new FeedbackReportQueryService(store).list(fixtureCaller(), {});
-    expect(store.calls[0].limit).toBe(51);
-    expect(page.items).toHaveLength(50);
-    expect(page.nextCursor).toEqual({ createdAt: page.items[49].createdAt, id: page.items[49].id });
+    expect(store.calls[0].limit).toBe(21);
+    expect(page.items).toHaveLength(20);
+    expect(page.nextCursor).toEqual({ createdAt: page.items[19].createdAt, id: page.items[19].id });
   });
 
   it("returns no cursor when the page is not full", async () => {

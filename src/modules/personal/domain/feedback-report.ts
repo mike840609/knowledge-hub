@@ -8,7 +8,7 @@ export type FeedbackStatus = (typeof FEEDBACK_STATUSES)[number];
 export const FEEDBACK_DESCRIPTION_MAX = 5000;
 export const FEEDBACK_PAGE_PATH_MAX = 1024;
 export const FEEDBACK_HOURLY_LIMIT = 20;
-export const FEEDBACK_ISSUE_PAGE_SIZE = 50;
+export const FEEDBACK_ISSUE_PAGE_SIZE = 20;
 
 /** What the reporter wrote. Who sent it never comes from here: the service takes that from the trusted caller. */
 export type FeedbackReportInput = { category: FeedbackCategory; description: string; pagePath: string };

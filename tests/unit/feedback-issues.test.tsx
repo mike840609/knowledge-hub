@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { FeedbackIssues } from "@/components/knowledge/feedback-issues";
-import type { FeedbackIssuePage, FeedbackIssueView } from "@/modules/personal/application/feedback-report-query-service";
+import type { FeedbackIssueView } from "@/modules/personal/application/feedback-report-query-service";
 
 function view(overrides: Partial<FeedbackIssueView> = {}): FeedbackIssueView {
   return {
@@ -10,14 +10,8 @@ function view(overrides: Partial<FeedbackIssueView> = {}): FeedbackIssueView {
     status: "OPEN", createdAt: "2026-11-03T00:00:00.000Z", isMine: true, ...overrides,
   };
 }
-function render(
-  items: FeedbackIssueView[],
-  { filtered = false, paged, newestHref }: { filtered?: boolean; paged?: boolean; newestHref?: string } = {},
-): string {
-  const page: FeedbackIssuePage = { items, nextCursor: null };
-  return renderToStaticMarkup(
-    <FeedbackIssues page={page} filtered={filtered} paged={paged} newestHref={newestHref} />,
-  );
+function render(items: FeedbackIssueView[], filtered = false): string {
+  return renderToStaticMarkup(<FeedbackIssues items={items} filtered={filtered} />);
 }
 
 describe("FeedbackIssues", () => {
@@ -70,20 +64,6 @@ describe("FeedbackIssues", () => {
 
   it("says when there is nothing to show, filtered or not", () => {
     expect(render([])).toContain("No reports yet");
-    expect(render([], { filtered: true })).toContain("No reports match these filters");
-  });
-
-  it("gives a page past the last report its own sentence and a filtered way back", () => {
-    const html = render([], {
-      paged: true,
-      filtered: true,
-      newestHref: "/w/w1/issues?status=RESOLVED&mine=true",
-    });
-    expect(html).toContain("No reports on this page.");
-    expect(html).toContain("Newest issues");
-    expect(html).toContain("/w/w1/issues?status=RESOLVED");
-    expect(html).toContain("mine=true");
-    expect(html).not.toContain("No reports yet");
-    expect(html).not.toContain("No reports match these filters");
+    expect(render([], true)).toContain("No reports match these filters");
   });
 });

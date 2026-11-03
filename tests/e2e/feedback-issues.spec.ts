@@ -8,52 +8,71 @@ const READER_NAME = "E2E Knowledge User";
 const READER_EMP_ID = "E2E-0909";
 const OTHER_NAME = "Other Reporter";
 const OTHER_EMP_ID = "E2E-OTHER";
-const PAGE_SIZE = 50;
-const READING_REPORTS = 55;
-/** The oldest seeded Reading reports, which therefore belong to the second page. */
-const OLDER_DESCRIPTIONS = Array.from({ length: READING_REPORTS - PAGE_SIZE }, (_, index) => `Reading issue ${PAGE_SIZE + index}`);
+const PAGE_SIZE = 20;
+const READING_REPORTS = 25;
 
-test("the personal issues board lists, filters and pages the reports", async ({ page, request }) => {
+test("the issues panel lists, filters and loads more reports without leaving the page", async ({ page }) => {
   test.setTimeout(120_000);
-  const nav = await (await request.get("/api/workspaces")).json();
-  const workspaceId = nav.items.find((workspace: { type: string }) => workspace.type === "PERSONAL").id;
+  const pool = createDatabasePool(databaseConfig("e2e"));
   const list = page.getByRole("list", { name: "Reported issues" });
   const rows = list.getByRole("listitem");
-  const pool = createDatabasePool(databaseConfig("e2e"));
 
-  try {
-    // 1. The board is not a rail row; it is reached from "Report a problem".
-    await page.goto("/");
-    await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Issues", exact: true })).toHaveCount(0);
+  async function openDialog() {
     await page.getByRole("button", { name: /^Account:/ }).click();
     await page.getByRole("menuitem", { name: "Report a problem", exact: true }).click();
-    const reportDialog = page.getByRole("dialog", { name: "Report a problem", exact: true });
-    const issues = reportDialog.getByRole("link", { name: "View all reported issues", exact: true });
-    await expect(issues).toHaveAttribute("href", `/w/${workspaceId}/issues`);
-    await issues.click();
-    await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/issues$`));
-    await expect(page.getByRole("heading", { name: "Issues", exact: true })).toBeVisible();
+    const dialog = page.getByRole("dialog", { name: "Report a problem", exact: true });
+    await expect(dialog).toBeVisible();
+    return dialog;
+  }
+  async function openIssues() {
+    const dialog = await openDialog();
+    const loaded = page.waitForResponse((response) => response.url().includes("/api/feedback-reports?") && response.request().method() === "GET");
+    await dialog.getByRole("tab", { name: "Issues", exact: true }).click();
+    await loaded;
+    return dialog;
+  }
+  async function close(dialog: Awaited<ReturnType<typeof openDialog>>) {
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+  }
+
+  try {
+    await page.goto("/");
+
+    // 1. No rail row and no page change: the board lives inside the report dialog and closes with Escape.
+    await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Issues", exact: true })).toHaveCount(0);
+    const startUrl = page.url();
+    const panel = await openIssues();
+    await expect(panel.getByRole("tab", { name: "Report", exact: true })).toBeVisible();
+    await expect(panel.getByText("No reports yet.", { exact: true })).toBeVisible();
+    await expect(page).toHaveURL(startUrl);
+    await close(panel);
 
     // 2. Two reports sent the way a reader sends them, both listed as Open and attributed to the reader.
     async function sendReport(category: "Sync" | "Other", description: string) {
-      await page.getByRole("button", { name: /^Account:/ }).click();
-      await page.getByRole("menuitem", { name: "Report a problem", exact: true }).click();
-      const dialog = page.getByRole("dialog", { name: "Report a problem", exact: true });
-      await expect(dialog).toBeVisible();
+      const dialog = await openDialog();
       await chooseOption(dialog.getByLabel("Category"), category);
       await dialog.getByLabel("What happened?").fill(description);
       const sent = page.waitForResponse((response) => response.url().endsWith("/api/feedback-reports") && response.request().method() === "POST");
       await dialog.getByRole("button", { name: "Send report" }).click();
       expect((await sent).status()).toBe(201);
       await expect(dialog.getByRole("status")).toContainText("Report sent");
-      await dialog.getByRole("button", { name: "Close", exact: true }).click();
-      await expect(dialog).toBeHidden();
+      await close(dialog);
     }
 
     await sendReport("Sync", "Issues board first");
     await sendReport("Other", "Issues board second");
-    await page.reload();
 
+    const reporterId = randomUUID();
+    const seededId = randomUUID();
+    await pool.query("INSERT INTO users (id, emp_id, name, org_code) VALUES (?, 'E2E-OTHER', 'Other Reporter', 'E2E')", [reporterId]);
+    await pool.query(
+      `INSERT INTO feedback_reports (id,user_id,emp_id,user_name,category,description,page_path,created_at)
+       VALUES (?,?,'E2E-OTHER','Other Reporter','Other','Other reporter issue','/w/x/knowledge',UTC_TIMESTAMP(6))`,
+      [seededId, reporterId],
+    );
+
+    const firstPanel = await openIssues();
     const first = rows.filter({ hasText: "Issues board first" });
     const second = rows.filter({ hasText: "Issues board second" });
     for (const [row, category] of [[first, "Sync"], [second, "Other"]] as const) {
@@ -63,85 +82,61 @@ test("the personal issues board lists, filters and pages the reports", async ({ 
       await expect(row.getByText(READER_NAME, { exact: true })).toBeVisible();
       await expect(row.getByText(READER_EMP_ID, { exact: true })).toBeVisible();
     }
+    await expect(rows.filter({ hasText: "Other reporter issue" }).getByText(OTHER_NAME, { exact: true })).toBeVisible();
+    await expect(rows.filter({ hasText: "Other reporter issue" }).getByText(OTHER_EMP_ID, { exact: true })).toBeVisible();
+    await close(firstPanel);
 
-    // 3. A report from another colleague, seeded where a maintainer would have to see it.
-    const reporterId = randomUUID();
-    const seededId = randomUUID();
-    await pool.query("INSERT INTO users (id, emp_id, name, org_code) VALUES (?, 'E2E-OTHER', 'Other Reporter', 'E2E')", [reporterId]);
-    await pool.query(
-      `INSERT INTO feedback_reports (id,user_id,emp_id,user_name,category,description,page_path,created_at)
-       VALUES (?,?,'E2E-OTHER','Other Reporter','Other','Other reporter issue','/w/x/knowledge',UTC_TIMESTAMP(6))`,
-      [seededId, reporterId],
-    );
-    await page.reload();
-    const seeded = rows.filter({ hasText: "Other reporter issue" });
-    await expect(seeded).toHaveCount(1);
-    await expect(seeded.getByText(OTHER_NAME, { exact: true })).toBeVisible();
-    await expect(seeded.getByText(OTHER_EMP_ID, { exact: true })).toBeVisible();
-    await expect(first).toHaveCount(1);
-
-    // 4. A status edited outside the app shows on reload; the filters narrow the list.
+    // 3. A status edited outside the app shows the next time the panel opens; the filters narrow the list.
     await pool.query("UPDATE feedback_reports SET status='RESOLVED' WHERE id=?", [seededId]);
-    await page.reload();
+    let filtered = await openIssues();
+    const seeded = rows.filter({ hasText: "Other reporter issue" });
     await expect(seeded.getByText("Resolved", { exact: true })).toBeVisible();
 
-    await page.goto(`/w/${workspaceId}/issues?status=RESOLVED`);
-    await expect(rows.filter({ hasText: "Other reporter issue" })).toHaveCount(1);
-    await expect(rows.filter({ hasText: "Issues board first" })).toHaveCount(0);
-    await expect(rows.filter({ hasText: "Issues board second" })).toHaveCount(0);
+    await chooseOption(filtered.getByLabel("Status"), "RESOLVED");
+    await expect(rows).toHaveCount(1);
+    await expect(seeded).toHaveCount(1);
+    await expect(first).toHaveCount(0);
 
-    await page.goto(`/w/${workspaceId}/issues?category=Sync`);
-    await expect(rows.filter({ hasText: "Issues board first" })).toBeVisible();
-    await expect(rows.filter({ hasText: "Issues board second" })).toHaveCount(0);
-    await expect(rows.filter({ hasText: "Other reporter issue" })).toHaveCount(0);
-
-    await page.goto(`/w/${workspaceId}/issues?mine=true`);
+    await chooseOption(filtered.getByLabel("Status"), "all");
     await expect(first).toHaveCount(1);
     await expect(second).toHaveCount(1);
-    await expect(list).not.toContainText(OTHER_NAME);
+    await expect(seeded).toHaveCount(1);
+    await filtered.getByLabel("Mine only").check();
+    await expect(first).toHaveCount(1);
+    await expect(second).toHaveCount(1);
+    await expect(seeded).toHaveCount(0);
+    await filtered.getByLabel("Mine only").uncheck();
+    await close(filtered);
 
-    // 5. An unknown status is a typo, not a 404: the page still renders the unfiltered list.
-    await page.goto(`/w/${workspaceId}/issues?status=CLOSED`);
-    await expect(page.getByRole("heading", { name: "Issues", exact: true })).toBeVisible();
-    await expect(list).toContainText("Issues board first");
-    await expect(page.getByLabel("Status")).toHaveValue("");
-
-    // 6. Nothing on the board writes a status: the rows hold no controls at all.
+    // 4. Nothing on the board writes a status: the rows hold no controls at all.
+    filtered = await openIssues();
     await expect(list.locator("a, button, input, select, textarea, [role='button'], [role='menuitem'], [role='combobox']")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /status/i })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: /status/i })).toHaveCount(0);
+    await expect(filtered.getByRole("button", { name: /status/i })).toHaveCount(0);
+    await close(filtered);
 
-    // 7. Page 1 stops at fifty, and Older issues continues into the oldest reports without repeating any.
+    // 5. Load more appends the next page and keeps what is already visible.
     const reading = Array.from({ length: READING_REPORTS }, (_, index) => ({ id: randomUUID(), description: `Reading issue ${index}` }));
     for (const [index, report] of reading.entries()) {
       await pool.query(
-        `INSERT INTO feedback_reports (id,user_id,emp_id,user_name,category,description,page_path,created_at)
-         VALUES (?,?,'E2E-OTHER','Other Reporter','Reading',?,'/w/x/knowledge',DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? SECOND))`,
+        `INSERT INTO feedback_reports (id,user_id,emp_id,user_name,category,description,page_path,status,created_at)
+         VALUES (?,?,'E2E-OTHER','Other Reporter','Reading',?,'/w/x/knowledge','DUPLICATE',DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? SECOND))`,
         [report.id, reporterId, report.description, index],
       );
     }
 
-    await page.goto(`/w/${workspaceId}/issues?category=Reading`);
+    filtered = await openIssues();
+    await chooseOption(filtered.getByLabel("Status"), "DUPLICATE");
     await expect(rows).toHaveCount(PAGE_SIZE);
-    await expect(list.getByText("Reading", { exact: true })).toHaveCount(PAGE_SIZE);
-    const older = page.getByRole("link", { name: "Older issues" });
-    await expect(older).toBeVisible();
-    await expect(older).toHaveAttribute("href", /category=Reading/);
-    await expect(older).toHaveAttribute("href", /beforeAt=/);
-    await expect(older).toHaveAttribute("href", /beforeId=/);
-
     const firstPageTexts = await rows.allInnerTexts();
     expect(new Set(firstPageTexts).size).toBe(firstPageTexts.length);
-    await older.click();
-    await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/issues\\?.*beforeAt=`));
-    const olderCount = await rows.count();
-    expect(olderCount).toBeGreaterThanOrEqual(READING_REPORTS - PAGE_SIZE);
-    await expect(list.getByText("Reading", { exact: true })).toHaveCount(olderCount);
-    const olderTexts = await rows.allInnerTexts();
-    for (const text of olderTexts) expect(firstPageTexts).not.toContain(text);
-    for (const description of OLDER_DESCRIPTIONS) {
-      expect(olderTexts.some((text) => text.includes(description))).toBe(true);
-    }
+
+    await filtered.getByRole("button", { name: "Load more", exact: true }).click();
+    await expect(rows).toHaveCount(READING_REPORTS);
+    const allTexts = await rows.allInnerTexts();
+    expect(new Set(allTexts).size).toBe(allTexts.length);
+    for (const text of firstPageTexts) expect(allTexts).toContain(text);
+    await expect(list.getByText("Duplicate", { exact: true })).toHaveCount(READING_REPORTS);
+    await close(filtered);
   } finally {
     await pool.end();
   }
