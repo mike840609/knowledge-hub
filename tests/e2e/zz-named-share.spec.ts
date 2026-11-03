@@ -1,6 +1,6 @@
 import { expect, test } from "./fixtures/test";
 import { phase3Origin, phase3UnconfiguredOrigin, phase3UserId } from "./fixtures/phase3-identities";
-import { createReviewDocument, openReviewDiscussions } from "./fixtures/document-review";
+import { createReviewDocument, openReviewDiscussions, selectPassage } from "./fixtures/document-review";
 import type { APIRequestContext, Locator, Page } from "@playwright/test";
 
 /**
@@ -57,7 +57,7 @@ async function chooseSpecificPeople(page: Page) {
 }
 
 test.describe("named-recipient share, end to end", () => {
-  test("the owner names two people; one reads and comments, mentions reach only the other, and removal ends it", async ({ page, request }) => {
+  test("the owner names two people; one reads and comments, a mention reaches the other, and removal ends it", async ({ page, request }) => {
     test.setTimeout(90_000);
     const owner = phase3Origin("reviewOwner"), reader = phase3Origin(A);
     const readerWorkspace = await personalWorkspace(request, reader);
@@ -104,15 +104,18 @@ test.describe("named-recipient share, end to end", () => {
     await expect(page).toHaveURL(hubUrl, ROUND_TRIP);
     await expect(page.getByText("passage to review.")).toBeVisible(ROUND_TRIP);
 
-    // A comments; the mention list offers B only (not A, not the owner, not anyone else in the directory).
+    // A comments; the mention list puts the recipient B first, then outsiders who need the owner's approval (never A herself).
     const query = await (await request.post(`${reader}/api/share-review/threads/query`, { headers: { Origin: reader }, data: { token } })).json();
     const created = await request.post(`${reader}/api/share-review/threads`, { headers: { Origin: reader }, data: { token, expectedRevisionId: query.revisionId, anchor: PASSAGE, body: "Reader remark @Phase3 viewer", idempotencyKey: crypto.randomUUID(), mentions: [phase3UserId(B)] } });
     expect(created.status()).toBe(201);
     const threadId = ((await created.json()) as { id: string }).id;
-    const offered = await (await request.get(`${reader}/api/review-mentions/candidates?token=${token}&query=Phase3`)).json();
-    expect(offered.candidates.map((person: { id: string }) => person.id)).toEqual([phase3UserId(B)]);
-    const everyone = await (await request.get(`${reader}/api/review-mentions/candidates?token=${token}&query=P3-`)).json();
-    expect(everyone.candidates.map((person: { id: string }) => person.id)).toEqual([phase3UserId(B)]);
+    type Candidate = { id: string; needsApproval: boolean };
+    for (const text of ["Phase3", "P3-"]) {
+      const offered = (await (await request.get(`${reader}/api/review-mentions/candidates?token=${token}&query=${text}`)).json()).candidates as Candidate[];
+      expect(offered[0]).toMatchObject({ id: phase3UserId(B), needsApproval: false });
+      expect(offered.slice(1).every(person => person.needsApproval)).toBe(true);
+      expect(offered.map(person => person.id)).not.toContain(phase3UserId(A));
+    }
 
     // B's Inbox mention opens the Hub reader at the discussion, never the anonymous /s/ page (a dead link for a NAMED share).
     const mentioned = phase3Origin(B);
@@ -146,6 +149,63 @@ test.describe("named-recipient share, end to end", () => {
     await page.goto(`${owner}/w/${ownerWorkspace}/knowledge/${doc.sourceId}/${doc.documentId}`);
     await openReviewDiscussions(page);
     await expect(page.getByRole("region", { name: "Discussion thread" }).filter({ hasText: "Reader remark @Phase3 viewer" })).toBeVisible(ROUND_TRIP);
+  });
+
+  test("a recipient mentions an outsider: the outsider learns title and proposer only, until the owner approves", async ({ page, request }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const owner = phase3Origin("reviewOwner"), proposer = phase3Origin(A), outsider = phase3Origin(B);
+    const proposerWorkspace = await personalWorkspace(request, proposer);
+    const outsiderWorkspace = await personalWorkspace(request, outsider);
+    const ownerWorkspace = await personalWorkspace(request, owner);
+    const title = `Proposal flow ${Date.now()}`;
+    const doc = await apiDocument(request, owner, ownerWorkspace, title, "A 😀 **bold** passage to review.");
+    const created = await request.post(`${owner}/api/documents/${doc.documentId}/share-links`, { data: { label: "proposals", recipients: [phase3UserId(A)] } });
+    expect(created.ok()).toBe(true);
+    const token = ((await created.json()).link.path as string).slice("/s/".length);
+    const body = "Please weigh in @Phase3 viewer on this";
+
+    // The recipient mentions the outsider from the composer; the row says the owner has to approve.
+    await page.goto(`${proposer}/s/${token}/open`);
+    await expect(page).toHaveURL(`${proposer}/w/${proposerWorkspace}/shares/${token}`, ROUND_TRIP);
+    await openReviewDiscussions(page);
+    await selectPassage(page);
+    await page.getByRole("button", { name: "Comment on selection" }).click();
+    const composer = page.getByRole("textbox", { name: "Add comment" });
+    await composer.click();
+    await composer.pressSequentially("Please weigh in @P3-105");
+    const options = page.getByRole("listbox", { name: "People to mention" }).getByRole("option");
+    await expect(options).toHaveCount(1);
+    await expect(options.first()).toContainText("Phase3 viewer");
+    await expect(options.first()).toContainText("Needs owner approval");
+    await composer.press("Enter");
+    await expect(composer).toHaveValue("Please weigh in @Phase3 viewer ");
+    await composer.pressSequentially("on this");
+    await page.getByRole("button", { name: "Add comment", exact: true }).click();
+    await expect(page.locator("[data-review-thread]").getByText(body, { exact: true })).toBeVisible(ROUND_TRIP);
+
+    // The outsider's Inbox names the proposer and the title and nothing of the comment; the share stays closed.
+    await page.goto(`${outsider}/w/${outsiderWorkspace}/inbox`);
+    const pending = page.getByText(`Phase3 nonCreator mentioned you in 《${title}》 — someone proposed sharing a document with you. Waiting for the owner.`, { exact: true });
+    await expect(pending).toBeVisible(ROUND_TRIP);
+    await expect(page.getByText("Please weigh in")).toHaveCount(0);
+    expect((await request.get(`${outsider}/s/${token}/open`, { maxRedirects: 0 })).status()).toBe(404);
+    expect((await request.get(`${outsider}/w/${outsiderWorkspace}/shares/${token}`, { maxRedirects: 0 })).status()).toBe(404);
+
+    // The owner approves from the Inbox.
+    await page.goto(`${owner}/w/${ownerWorkspace}/inbox`);
+    const request_ = page.getByRole("listitem").filter({ hasText: `Phase3 nonCreator wants to add Phase3 viewer to 《${title}》` });
+    await expect(request_).toBeVisible(ROUND_TRIP);
+    await request_.getByRole("button", { name: "Approve adding Phase3 viewer" }).click();
+    await expect(page.getByRole("listitem").filter({ hasText: `wants to add Phase3 viewer to 《${title}》` }).getByRole("button", { name: "Approve adding Phase3 viewer" })).toHaveCount(0, ROUND_TRIP);
+
+    // The outsider is now a recipient: the share is in their Inbox, opens in the Hub and shows the comment.
+    await page.goto(`${outsider}/w/${outsiderWorkspace}/inbox`);
+    await expect(page.getByText(`Phase3 reviewOwner shared 《${title}》 with you`, { exact: true })).toBeVisible(ROUND_TRIP);
+    await page.goto(`${outsider}/s/${token}/open`);
+    await expect(page).toHaveURL(`${outsider}/w/${outsiderWorkspace}/shares/${token}`, ROUND_TRIP);
+    await openReviewDiscussions(page);
+    await expect(page.locator("[data-review-thread]").getByText(body, { exact: true })).toBeVisible(ROUND_TRIP);
   });
 
   test("a named share on a folder is read in the Hub and its links stay under /w/<ws>/shares/<token>", async ({ page, request }) => {

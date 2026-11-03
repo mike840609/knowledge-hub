@@ -161,12 +161,12 @@ the company deployment as they are assumed to be here.
 - **Mention candidates** for a NAMED link: only its recipients and the owner.
   The server enforces this in `/api/review-mentions/candidates`; the composer
   just shows what comes back.
-- **Writing a mention of a non-recipient through a NAMED link is refused**
+- Superseded by 2026-11-03-named-share-mention-proposals-design.md: **Writing a mention of a non-recipient through a NAMED link is refused**
   server-side (the write path checks each mentioned id against the recipient
   list, owner included as allowed). A stored dead entry would tell the person
   the share exists. (Claude's call.) A mention stored while the person *was* a
   recipient and later removed is judged per request and names nothing.
-- **Owner mentions from the Workspace view:** `mentionLinksForOwner` offers a
+- Superseded by 2026-11-03-named-share-mention-proposals-design.md: **Owner mentions from the Workspace view:** `mentionLinksForOwner` offers a
   NAMED link only when the mentioned person is on its list. Mentioning is never
   a second way to add a recipient. (Claude's call.)
 - **Re-adding a removed recipient** is a fresh add: a new "shared with you"
