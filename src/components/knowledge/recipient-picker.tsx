@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useId, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { governanceFailure, governanceRequest } from "@/components/workspaces/governance-error";
 import { DEBOUNCE_MS } from "./mention-autocomplete";
@@ -9,6 +9,25 @@ import { DEBOUNCE_MS } from "./mention-autocomplete";
 export type Recipient = { id: string; name: string; nameEn: string | null; empId: string };
 
 const optionText = (person: Recipient) => [person.name, person.empId, person.nameEn].filter(Boolean).join(" · ");
+
+/**
+ * Whether the list, hung below its field, would be cut off by a scrolling ancestor (the dialog is one)
+ * or the window, while there is room for it above. A list inside a scroller is clipped by it, and
+ * only grows its scroll height; opening upward keeps every row in view.
+ */
+function opensAbove(list: HTMLElement): boolean {
+  const field = list.parentElement!.getBoundingClientRect();
+  let top = 0;
+  let bottom = window.innerHeight;
+  for (let node = list.parentElement!.parentElement; node; node = node.parentElement) {
+    if (!/auto|scroll|hidden/.test(getComputedStyle(node).overflowY)) continue;
+    const box = node.getBoundingClientRect();
+    top = Math.max(top, box.top);
+    bottom = Math.min(bottom, box.bottom);
+  }
+  const height = list.offsetHeight + 4;
+  return field.bottom + height > bottom && field.top - height >= top;
+}
 
 /**
  * Search signed-in Hub users and collect them as chips. Focus stays in the field and the list is
@@ -37,6 +56,8 @@ export function RecipientPicker({
   const [failure, setFailure] = useState<string>();
   const [active, setActive] = useState(0);
   const [dismissed, setDismissed] = useState(false);
+  const listRef = useRef<HTMLUListElement>(null);
+  const [above, setAbove] = useState(false);
   const query = text.trim();
 
   useEffect(() => {
@@ -45,18 +66,26 @@ export function RecipientPicker({
     const timer = window.setTimeout(() => {
       governanceRequest<{ candidates: Recipient[] }>(`/api/share-recipients/candidates?query=${encodeURIComponent(query)}`)
         .then((result) => { if (current) { setFound({ query, people: result.candidates }); setFailure(undefined); setActive(0); } })
-        .catch((error) => { if (current) setFailure(governanceFailure(error).message); });
+        .catch((error) => { if (current) { setFound(undefined); setFailure(governanceFailure(error).message); } });
     }, DEBOUNCE_MS);
     return () => { current = false; window.clearTimeout(timer); };
   }, [query]);
 
   const taken = new Set([...value.map((person) => person.id), ...exclude]);
   const answered = query !== "" && found?.query === query;
-  const people = answered ? found.people.filter((person) => !taken.has(person.id)) : [];
+  // The last answer stays in view while the next is on its way, so the list does not blink at each
+  // keystroke. Until the new answer arrives it is dimmed and inert: no one is picked from a list that
+  // does not answer what is typed now.
+  const people = query !== "" && found ? found.people.filter((person) => !taken.has(person.id)) : [];
   const hint = query === "" || dismissed ? undefined : failure ?? (answered && people.length === 0 ? "No one found." : undefined);
-  const listed = people.length > 0 && !dismissed;
+  const open = people.length > 0 && !dismissed && failure === undefined;
+  const listed = open && answered;
   const row = Math.min(active, people.length - 1);
   const optionId = (index: number) => `${listId}-option-${index}`;
+
+  useLayoutEffect(() => {
+    setAbove(listRef.current ? opensAbove(listRef.current) : false);
+  }, [open, people.length]);
 
   function choose(person: Recipient) {
     if (taken.has(person.id)) return;
@@ -71,7 +100,7 @@ export function RecipientPicker({
       // The picker sits inside the dialog's form: Enter picks, it never submits.
       event.preventDefault();
       if (listed) choose(people[row]);
-    } else if (event.key === "Escape" && (listed || hint)) {
+    } else if (event.key === "Escape" && (open || hint)) {
       // The list's, not the dialog's.
       event.preventDefault(); event.stopPropagation();
       setDismissed(true);
@@ -102,41 +131,46 @@ export function RecipientPicker({
           ))}
         </ul>
       ) : null}
-      <Input
-        id={id}
-        role="combobox"
-        aria-label={label}
-        aria-autocomplete="list"
-        aria-expanded={listed}
-        aria-controls={listed ? listId : undefined}
-        aria-activedescendant={listed ? optionId(row) : undefined}
-        autoComplete="off"
-        placeholder="Name or employee ID"
-        value={text}
-        disabled={disabled}
-        onChange={(event) => { setText(event.target.value); setDismissed(false); setFailure(undefined); }}
-        onKeyDown={onKeyDown}
-      />
-      {listed ? (
-        <ul id={listId} role="listbox" aria-label="People matching your search" className="max-h-[12rem] overflow-y-auto rounded-md border border-kh-border bg-kh-bg p-1 shadow-popover">
-          {people.map((person, index) => (
-            <li
-              key={person.id}
-              id={optionId(index)}
-              role="option"
-              aria-selected={index === row}
-              className={`cursor-default truncate rounded-md px-2 py-1 text-body-sm ${index === row ? "bg-kh-bg-selected text-kh-selected-text" : ""}`}
-              onMouseDown={(event) => event.preventDefault()}
-              onMouseEnter={() => setActive(index)}
-              onClick={() => choose(person)}
-            >
-              {optionText(person)}
-            </li>
-          ))}
-        </ul>
-      ) : hint ? (
-        <p className="px-2 text-body-sm text-kh-text-muted">{hint}</p>
-      ) : null}
+      {/* The list and its hint float over what follows instead of pushing it down. */}
+      <div className="relative">
+        <Input
+          id={id}
+          role="combobox"
+          aria-label={label}
+          aria-autocomplete="list"
+          aria-expanded={open}
+          aria-controls={open ? listId : undefined}
+          aria-activedescendant={listed ? optionId(row) : undefined}
+          autoComplete="off"
+          placeholder="Name or employee ID"
+          value={text}
+          disabled={disabled}
+          onChange={(event) => { setText(event.target.value); if (event.target.value.trim() === "") setFound(undefined); setDismissed(false); setFailure(undefined); }}
+          onKeyDown={onKeyDown}
+          // Options take the mouse without taking focus, so leaving the field means leaving the list.
+          onBlur={() => setDismissed(true)}
+        />
+        {open ? (
+          <ul ref={listRef} id={listId} role="listbox" aria-label="People matching your search" aria-busy={!answered} className={`absolute inset-x-0 z-30 ${above ? "bottom-full mb-1" : "top-full mt-1"} max-h-[12rem] overflow-y-auto rounded-md border border-kh-border bg-kh-bg p-1 shadow-popover`}>
+            {people.map((person, index) => (
+              <li
+                key={person.id}
+                id={optionId(index)}
+                role="option"
+                aria-selected={listed && index === row}
+                className={`cursor-default truncate rounded-md px-2 py-1 text-body-sm ${listed && index === row ? "bg-kh-bg-selected text-kh-selected-text" : listed ? "" : "text-kh-text-muted"}`}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => setActive(index)}
+                onClick={() => { if (listed) choose(person); }}
+              >
+                {optionText(person)}
+              </li>
+            ))}
+          </ul>
+        ) : hint ? (
+          <p className="absolute inset-x-0 top-full z-30 mt-1 rounded-md border border-kh-border bg-kh-bg px-2 py-1 text-body-sm text-kh-text-muted shadow-popover">{hint}</p>
+        ) : null}
+      </div>
     </div>
   );
 }

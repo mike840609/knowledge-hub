@@ -69,6 +69,22 @@ test.describe("named-recipient share, end to end", () => {
     // The owner creates it through the dialog.
     await page.goto(`${owner}/w/${ownerWorkspace}/knowledge/${doc.sourceId}/${doc.documentId}`);
     const dialog = await chooseSpecificPeople(page);
+    // The suggestions float over the form, so the Create button stays put; and they open whichever way
+    // keeps every row inside the dialog, which would otherwise clip them.
+    // Measured once the links below have loaded, since the centred dialog moves while they do.
+    await expect(dialog.getByText("No active links.")).toBeVisible(ROUND_TRIP);
+    const create = dialog.getByRole("button", { name: "Create link" });
+    const before = (await create.boundingBox())!;
+    await dialog.getByRole("combobox", { name: "People who can open it" }).fill("Phase3");
+    const suggestions = dialog.getByRole("listbox", { name: "People matching your search" });
+    await expect(suggestions.getByRole("option").first()).toBeVisible();
+    const after = (await create.boundingBox())!;
+    const list = (await suggestions.boundingBox())!;
+    expect(after.y).toBeCloseTo(before.y, 0);
+    const box = (await dialog.boundingBox())!;
+    expect(list.y).toBeGreaterThanOrEqual(box.y);
+    expect(list.y + list.height).toBeLessThanOrEqual(box.y + box.height);
+    await dialog.getByRole("combobox", { name: "People who can open it" }).fill("");
     await pickRecipient(dialog, "P3-102", "Phase3 nonCreator");
     await pickRecipient(dialog, "P3-105", "Phase3 viewer");
     await dialog.getByLabel(/Label/).fill("named flow");
