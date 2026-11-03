@@ -117,6 +117,14 @@ Now it answers recipients first, then other Hub users (`searchExisting`), up to
 `MENTION_LIMIT`; each candidate carries `needsApproval: boolean`. The composer shows
 non-recipients with a muted "needs owner approval" note. Still signed-in only.
 
+Each candidate also carries `addsRecipient: boolean` (PR #327 review, 2026-11-03): true when the
+caller is the Workspace owner, the scope is a NAMED link (the Hub reader, `/w/<ws>/shares/:token`)
+and the candidate is not on it; false for anyone else, for a LINK share and for the owner's
+Workspace view (no link in scope; there the link picker says it, see "Write path"). Through a
+link the answer also names `targetKind`, what the link opens. The composer shows such a
+candidate with a muted "Adds them to this link" note, or "Adds them to this link (whole folder)"
+for a folder link, since the owner's mention adds them without approval and the owner must see it.
+
 Accepted (2026-11-03 final review): the note is shown for every non-recipient, including
 people who will never be proposed — someone whose proposal on this link was declined, or
 who was approved and later removed (the one row per `(link, person)` already exists, so
@@ -152,7 +160,8 @@ is **not** listed separately (one entry per proposal, not a blank row beside it)
 Every entry is judged per request against the link: if the link is revoked, or the
 document is archived, the entry names nothing (as a dead link's entries do today) and
 the owner's Approve / Decline answers as a dead link does. A dead entry shows no status
-label either; it reads only "This link is no longer available."
+label either; it reads only "This link is no longer available." It carries no
+`proposalStatus` (its `kind` and `proposalId` stay).
 
 ## Folder NAMED links
 
@@ -171,6 +180,10 @@ for a document link (Claude's call: the owner must see the real width of the gra
 - Being added (from Manage or by approval) follows each discussion a stored mention
   through the link names the person in, but never follows again one they stopped
   following: an old mention is not a new one.
+- An approved person's earlier mention through the link may already be read: while it was dead
+  the Inbox poll judged it so and marked it read. It stays read; the unread `SHARED_WITH_YOU`
+  entry the approval writes carries the news. This is the named-recipient spec's re-add rule
+  ("mention entries already marked read while dead stay read").
 - Approve at the recipient limit fails with the limit message and leaves it `PENDING`.
 - Only `PENDING` proposals count toward the write-time limit.
 - While a proposal is `PENDING` or `DECLINED`, the proposed person's dead mentions

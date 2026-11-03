@@ -148,7 +148,8 @@ pass.
   `/s/:token/open`. It grants nothing beyond what a link grants. A mention
   through it reaches its recipients; a mention of anyone else is a proposal that
   grants nothing and tells that person only the proposer's name and the title,
-  until the owner adds them
+  until the owner adds them; the owner's own mention through it adds the person
+  as a recipient
   (`docs/superpowers/specs/2026-11-03-named-recipient-share-design.md`,
   `docs/superpowers/specs/2026-11-03-named-share-mention-proposals-design.md`).
   Review access never grants Workspace membership, search, tree, history,
