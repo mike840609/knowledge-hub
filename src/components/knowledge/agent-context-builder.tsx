@@ -23,7 +23,7 @@ export function AgentContextBuilder({ workspaceId, documents, initialDocumentId 
     : "Ask a member with edit access to add documents. You can then select saved documents and prepare Markdown for your AI agent.";
   const [selected, setSelected] = useState<string[]>(() => documents.some(d => d.documentId === initialDocumentId) ? [initialDocumentId!] : []);
   const [query, setQuery] = useState("");
-  const [bundle, setBundle] = useState<{ markdown: string; bytes: number; documentCount: number; threadCount: number; commentCount: number } | null>(null);
+  const [bundle, setBundle] = useState<{ markdown: string; bytes: number; documentCount: number; threadCount: number; commentCount: number; linkCount: number } | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
   const controller = useRef<AbortController | null>(null);
   const preview = useRef<HTMLDivElement>(null);
@@ -82,6 +82,6 @@ export function AgentContextBuilder({ workspaceId, documents, initialDocumentId 
     </aside>
     </div>
     {error ? <p role="alert" className="text-body text-kh-danger">{error}</p> : null}
-    {bundle ? <section aria-label="Context preview" className="space-y-2"><p className="text-caption text-kh-text-muted">{bundle.documentCount} documents · {bundle.threadCount} discussions · {bundle.commentCount} comments · {bundle.bytes.toLocaleString()} bytes</p><Label htmlFor="agent-context-preview">Markdown preview</Label><div ref={preview}><Textarea id="agent-context-preview" className="font-mono" value={bundle.markdown} readOnly rows={16} /></div></section> : null}
+    {bundle ? <section aria-label="Context preview" className="space-y-2"><p className="text-caption text-kh-text-muted">{bundle.documentCount} documents · {bundle.threadCount} discussions · {bundle.commentCount} comments · {bundle.linkCount} links · {bundle.bytes.toLocaleString()} bytes</p><Label htmlFor="agent-context-preview">Markdown preview</Label><div ref={preview}><Textarea id="agent-context-preview" className="font-mono" value={bundle.markdown} readOnly rows={16} /></div></section> : null}
   </div>;
 }
