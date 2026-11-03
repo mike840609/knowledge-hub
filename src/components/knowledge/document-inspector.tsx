@@ -71,6 +71,7 @@ export type DocumentInspectorData = {
     depth: 1 | 2;
     openHref: string;
     depthHrefs: { 1: string; 2: string } | null;
+    agentContextHref: string | null;
   } | null;
 };
 

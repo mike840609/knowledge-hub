@@ -118,6 +118,9 @@ export default async function KnowledgeDocumentPage({
       1: `${documentHrefBase}${withParams({ graph: undefined })}`,
       2: `${documentHrefBase}${withParams({ graph: "2" })}`,
     },
+    // Mirrors `document.agent-context` in the action registry.
+    agentContext: shell?.workspace.type === "PERSONAL" && shell.access.actions.canSearch === true &&
+      view.status === "ACTIVE" && explorer?.source.status === "ACTIVE" && !isHistorical,
   });
 
   const viewer = <DocumentViewer view={view} selectedRevision={selectedRevision} links={linkView ? renderedLinksFrom(linkView, inspectorData.createLinks ?? {}) : undefined} />;

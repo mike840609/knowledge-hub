@@ -64,6 +64,10 @@ export default async function WorkspaceGraphPage({
           total={graph.total}
           truncated={graph.truncated}
           staleDocuments={graph.index.stale}
+          // The focus's own neighbourhood, whatever the filters show (neighbourhood spec §5.1).
+          agentContextHref={filters.focusId && shell.workspace.type === "PERSONAL" && shell.access.actions.canSearch === true
+            ? `/w/${workspaceId}/agent-context?around=${filters.focusId}&depth=1`
+            : null}
         />
       </div>
     </div>
