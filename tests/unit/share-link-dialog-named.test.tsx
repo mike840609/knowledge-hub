@@ -75,7 +75,9 @@ async function open() {
 const flush = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
 const byText = <T extends HTMLElement>(selector: string, text: string) => [...document.querySelectorAll<T>(selector)].find((node) => node.textContent?.trim() === text);
 const createButton = () => byText<HTMLButtonElement>("button", "Create link")!;
-const tab = (name: string) => byText<HTMLElement>('[role="tab"]', name)!;
+// The audience choice is a native radio group; a reader clicks its label.
+const mode = (name: string) => [...document.querySelectorAll<HTMLLabelElement>("label")].find((label) => label.querySelector('input[type="radio"]') && label.querySelector("span")?.textContent === name)!;
+const chosen = (name: string) => mode(name).querySelector<HTMLInputElement>("input")!.checked;
 const combobox = () => document.querySelector<HTMLInputElement>('form input[role="combobox"]')!;
 
 async function pick(query: string, name: string) {
@@ -89,10 +91,10 @@ async function pick(query: string, name: string) {
 const submit = () => act(async () => { document.querySelector("form")!.requestSubmit(); });
 const posts = () => calls.filter((call) => call.method === "POST" && call.url === "/api/documents/doc-1/share-links");
 
-it("offers the link mode (with expiry) first and the named mode second, by their given names", async () => {
+it("offers anyone-with-the-link (with expiry) first and chosen, specific people second", async () => {
   await open();
-  expect(tab("Link (expires)").getAttribute("aria-selected")).toBe("true");
-  expect(tab("Specific people (permanent)").getAttribute("aria-selected")).toBe("false");
+  expect(chosen("Anyone with the link")).toBe(true);
+  expect(chosen("Specific people")).toBe(false);
   expect(document.body.textContent).toContain("Expires after");
   expect(combobox()).toBeNull();
 });
@@ -105,8 +107,8 @@ it("a link-mode create still sends the expiry and no recipients", async () => {
 
 it("named mode hides the expiry, asks for people, and cannot create with none", async () => {
   await open();
-  await act(async () => { tab("Specific people (permanent)").click(); });
-  expect(tab("Specific people (permanent)").getAttribute("aria-selected")).toBe("true");
+  await act(async () => { mode("Specific people").click(); });
+  expect(chosen("Specific people")).toBe(true);
   expect(document.body.textContent).not.toContain("Expires after");
   expect(combobox()).not.toBeNull();
   expect(createButton().disabled).toBe(true);
@@ -116,7 +118,7 @@ it("named mode hides the expiry, asks for people, and cannot create with none", 
 
 it("a named create posts the chosen ids and no expiry key at all", async () => {
   await open();
-  await act(async () => { tab("Specific people (permanent)").click(); });
+  await act(async () => { mode("Specific people").click(); });
   await pick("a", "愛麗絲");
   await pick("b", "鮑勃");
   expect(createButton().disabled).toBe(false);
@@ -132,7 +134,7 @@ it("a named create posts the chosen ids and no expiry key at all", async () => {
 
 it("a named link's row says no expiry and how many people, and copies the /open address", async () => {
   await open();
-  await act(async () => { tab("Specific people (permanent)").click(); });
+  await act(async () => { mode("Specific people").click(); });
   await pick("a", "愛麗絲");
   await submit();
   await flush();

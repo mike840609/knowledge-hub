@@ -51,7 +51,7 @@ async function pickRecipient(scope: Locator, empId: string, name: string) {
 async function openNamedTab(page: Page) {
   await page.locator("main").getByRole("button", { name: "Share link…" }).click();
   const dialog = page.getByRole("dialog", { name: "Share link" });
-  await dialog.getByRole("tab", { name: "Specific people (permanent)" }).click();
+  await dialog.getByText("Specific people", { exact: true }).click();
   return dialog;
 }
 

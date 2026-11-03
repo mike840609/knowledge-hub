@@ -106,7 +106,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
     else { setDetails(item.id); setManualCopy({ id: item.id }); setError({ code: "COPY_FAILED", message: "Clipboard unavailable. The link is selected; copy it manually." }); }
   }
   return <main className="kh-page pb-6">
-    <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" description="Manage links to your documents and folders. Anyone holding an active link can read its latest saved content without signing in." />
+    <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" description="Manage links to your documents and folders. An active link opens the latest saved content: for anyone holding it, or, for a link to specific people, only for them after signing in." />
     <SharesNavigation workspaceId={workspaceId} active="mine" discussionsUnread={discussionsUnread} />
     <form ref={filterForm} action={`/w/${workspaceId}/shares`} method="get" className="mt-4 flex flex-wrap items-center gap-2" aria-label="Filter shares">
       <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-auto">

@@ -17,7 +17,6 @@ import {
 import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
 import { DialogCloseButton } from "@/components/ui/dialog-close";
 import { Label } from "@/components/ui/label";
-import { TabsList, TabsRoot, TabsTab } from "@/components/ui/tabs";
 import { NamedShareRecipients } from "./named-share-recipients";
 import { peopleCount } from "./people-count";
 import { RecipientPicker, type Recipient } from "./recipient-picker";
@@ -39,6 +38,12 @@ type ShareLink = {
 };
 
 type Mode = "LINK" | "NAMED";
+
+/** Link first: it is the default, needs nothing filled in, and works for people outside the Hub. */
+const MODES: readonly { value: Mode; label: string; hint: string }[] = [
+  { value: "LINK", label: "Anyone with the link", hint: "Expires · no sign-in" },
+  { value: "NAMED", label: "Specific people", hint: "Permanent · sign-in required" },
+];
 
 /** What a holder is given: a named share opens through the sign-in-aware route. */
 const sharePath = (link: ShareLink) => (link.audience === "NAMED" ? `${link.path}/open` : link.path);
@@ -190,12 +195,20 @@ export function ShareLinkDialog({
             {!named && reviewCapability.read && <> Anyone with a valid link can read existing comments.{reviewCapability.write ? " Signing in is required to add comments and replies." : " Adding comments is currently disabled."}</>}
           </Dialog.Description>
 
-          <TabsRoot value={mode} onValueChange={(next) => setMode(next as Mode)} className="mt-4">
-            <TabsList aria-label="Who can open it">
-              <TabsTab value="LINK" disabled={busy}>Link (expires)</TabsTab>
-              <TabsTab value="NAMED" disabled={busy}>Specific people (permanent)</TabsTab>
-            </TabsList>
-          </TabsRoot>
+          {/* One choice of audience, so a native radio group (design language: a choice is a radio, a tab swaps a view). */}
+          <fieldset className="mt-4 flex gap-1 rounded-md border border-kh-border p-1" disabled={busy}>
+            <legend className="sr-only">Who can open it</legend>
+            {MODES.map((option) => (
+              <label
+                key={option.value}
+                className="relative flex flex-1 cursor-pointer flex-col rounded-sm px-3 py-2 text-body hover:bg-kh-bg-hover has-[:checked]:bg-kh-bg-selected has-[:checked]:text-kh-selected-text has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-kh-focus has-[:disabled]:cursor-default"
+              >
+                <input type="radio" name="share-audience" value={option.value} className="sr-only" checked={mode === option.value} onChange={() => setMode(option.value)} />
+                <span className="font-medium">{option.label}</span>
+                <span className="text-caption text-kh-text-muted">{option.hint}</span>
+              </label>
+            ))}
+          </fieldset>
 
           <form
             className="mt-4 flex flex-wrap items-end gap-3"
