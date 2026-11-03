@@ -28,3 +28,14 @@ it("prepares the selected saved content, offers manual clipboard fallback and in
     await act(async () => checkbox.click()); expect(host.querySelector("textarea")).toBeNull();
   } finally { await act(async () => root.unmount()); host.remove(); }
 });
+it("preselects the neighbourhood and says how much of it", async () => {
+  const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+  const documents = ["a", "b", "c"].map(id => ({ documentId: id, sourceId: "s", title: id.toUpperCase(), sourceName: "Wiki", sourcePath: null }));
+  try {
+    await act(async () => root.render(<AgentContextBuilder workspaceId="ws" documents={documents} initialDocumentIds={["a", "b"]} nearby={{ selected: 2, total: 5 }} />));
+    expect([...host.querySelectorAll<HTMLInputElement>("input[type=checkbox]")].map(box => box.checked)).toEqual([true, true, false]);
+    expect(host.textContent).toContain("Selected 2 of 5 nearby documents.");
+    await act(async () => root.render(<AgentContextBuilder workspaceId="ws" documents={documents} initialDocumentIds={["a", "b"]} nearby={{ selected: 2, total: 2 }} />));
+    expect(host.textContent).toContain("Selected 2 nearby documents.");
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});

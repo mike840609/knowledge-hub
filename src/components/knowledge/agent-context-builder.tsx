@@ -14,14 +14,14 @@ import { useToast } from "@/components/ui/toast";
 import { navigateListRows } from "@/lib/list-row-navigation";
 import { Label } from "@/components/ui/label";
 export type ContextChoice = { documentId: string; sourceId: string; title: string; sourceName: string; sourcePath: string | null };
-export function AgentContextBuilder({ workspaceId, documents, initialDocumentId }: { workspaceId: string; documents: ContextChoice[]; initialDocumentId?: string }) {
+export function AgentContextBuilder({ workspaceId, documents, initialDocumentIds = [], nearby }: { workspaceId: string; documents: ContextChoice[]; initialDocumentIds?: string[]; nearby?: { selected: number; total: number } }) {
   const { access, confirmed } = useWorkspaceAuthorization();
   const accessConfirmed = confirmed && access.workspace.id === workspaceId;
   const canAddDocuments = accessConfirmed && (access.actions.canImport || access.actions.canWrite);
   const readOnlyGuidance = access.workspace.lifecycleState === "ARCHIVED"
     ? "This workspace is archived. Ask a workspace owner to restore it before adding documents. Saved documents can still be used to prepare context."
     : "Ask a member with edit access to add documents. You can then select saved documents and prepare Markdown for your AI agent.";
-  const [selected, setSelected] = useState<string[]>(() => documents.some(d => d.documentId === initialDocumentId) ? [initialDocumentId!] : []);
+  const [selected, setSelected] = useState<string[]>(() => initialDocumentIds.filter(id => documents.some(d => d.documentId === id)));
   const [query, setQuery] = useState("");
   const [bundle, setBundle] = useState<{ markdown: string; bytes: number; documentCount: number; threadCount: number; commentCount: number; linkCount: number } | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
@@ -58,6 +58,7 @@ export function AgentContextBuilder({ workspaceId, documents, initialDocumentId 
   if (!documents.length) return <EmptyState icon={FileText} illustration={<Illustration kind="context" />} title={canAddDocuments ? "Add documents to prepare AI context" : "No documents available for AI context"} description={!accessConfirmed ? "Checking workspace access…" : canAddDocuments ? "Turn selected documents into Markdown for your AI agent." : readOnlyGuidance} action={canAddDocuments ? <WorkspaceContentActions workspaceId={workspaceId} /> : undefined} />;
   return <div className="space-y-4">
     <p className="text-body text-kh-text-secondary">Select documents to include their saved content and all visible discussions, both open and resolved. Review the Markdown before copying to your agent.</p>
+    {nearby ? <p role="status" className="text-body-sm text-kh-text-secondary">{nearby.total > nearby.selected ? `Selected ${nearby.selected} of ${nearby.total} nearby documents.` : `Selected ${nearby.selected} nearby documents.`}</p> : null}
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
     <section aria-label="Available documents" className="min-w-0 space-y-3">
     <Label htmlFor="context-search">Find documents<Input id="context-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Title, source or path" className="mt-1" /></Label>

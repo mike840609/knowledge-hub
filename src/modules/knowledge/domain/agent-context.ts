@@ -1,6 +1,6 @@
 import { formatAgentDiscussion, jsonRecord, type AgentContextDiscussion } from "./agent-context-discussion";
 import { ValidationError } from "./errors";
-import type { LinkGraph } from "./link-graph";
+import type { GraphNode, LinkGraph } from "./link-graph";
 export const CONTEXT_MAX_DOCUMENTS = 20;
 export const CONTEXT_MAX_BYTES = 256 * 1024;
 export type AgentContextDocument = { documentId: string; sourceId: string; sourceName: string; sourcePath: string | null; revisionId: string; revisionNo: number; title: string; markdown: string; updatedAt: Date };
@@ -10,19 +10,28 @@ export function validateContextSelection(raw: unknown): string[] {
   if (new Set(ids).size !== ids.length) throw new ValidationError("Select each document only once.");
   return ids;
 }
+/** A local graph's documents that may be offered, in the graph's order (focus first), capped at the selection limit. */
+export function neighbourhoodSelection(nodes: readonly GraphNode[], eligible: ReadonlySet<string>, limit = CONTEXT_MAX_DOCUMENTS): { ids: string[]; total: number } {
+  const ids = nodes.filter(node => node.kind === "DOCUMENT" && eligible.has(node.id)).map(node => node.id);
+  return { ids: ids.slice(0, limit), total: ids.length };
+}
+export function parseNeighbourhoodDepth(raw: string | undefined): 1 | 2 {
+  return raw === "2" ? 2 : 1;
+}
 /** One link the bundle's map lists: between selected documents, or to a title that names no document. */
 export type AgentContextLink = { from: string; fromId: string; to: string; toId: string | null; missing?: true; count: number };
 /** The links the selected documents write to each other or to missing targets; never to an existing unselected document. */
 export function linkMapFor(graph: LinkGraph, selectedIds: readonly string[]): AgentContextLink[] {
   const rank = new Map(selectedIds.map((id, index) => [id, index]));
   const nodes = new Map(graph.nodes.map(node => [node.id, node]));
-  const links = graph.edges.flatMap(edge => {
+  type Entry = { link: AgentContextLink; key: string };
+  const links = graph.edges.flatMap((edge): Entry[] => {
     const from = nodes.get(edge.from), to = nodes.get(edge.to);
     if (!from || !to || edge.from === edge.to || !rank.has(edge.from)) return [];
-    if (to.kind === "UNRESOLVED") return [{ link: { from: from.title, fromId: from.id, to: to.title, toId: null, missing: true as const, count: edge.count }, key: to.id }];
+    if (to.kind === "UNRESOLVED") return [{ link: { from: from.title, fromId: from.id, to: to.title, toId: null, missing: true, count: edge.count }, key: to.id }];
     return rank.has(to.id) ? [{ link: { from: from.title, fromId: from.id, to: to.title, toId: to.id, count: edge.count }, key: to.id }] : [];
   });
-  const order = (a: (typeof links)[number], b: (typeof links)[number]) => {
+  const order = (a: Entry, b: Entry) => {
     const byFrom = rank.get(a.link.fromId)! - rank.get(b.link.fromId)!;
     if (byFrom !== 0) return byFrom;
     const aMissing = a.link.toId === null, bMissing = b.link.toId === null;
