@@ -5,7 +5,7 @@ import type { NewFeedbackReport } from "@/modules/personal/ports/feedback-report
 const injected = vi.hoisted(() => ({ reports: [] as unknown[] }));
 vi.mock("@/server/composition", () => ({ applicationServices: () => ({
   establishTrustedCaller: async () => ({ caller: callerFromIdentity({ id: "u1", emp_id: "E001", name: "Ada", org_code: "ORG" }) }),
-  feedbackReports: new FeedbackReportService({ appendWithinLimit: async (report: NewFeedbackReport) => { injected.reports.push(report); return "r1"; } }),
+  feedbackReports: new FeedbackReportService({ appendWithinLimit: async (report: NewFeedbackReport) => { injected.reports.push(report); return "r1"; }, listPage: async () => [] }),
 }) }));
 import { POST } from "@/app/api/feedback-reports/route";
 const body = JSON.stringify({ category: "Sync", description: "Preview failed", pagePath: "/w/x/sources" });
