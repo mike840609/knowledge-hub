@@ -13,11 +13,14 @@ import { reviewRequest } from "./review-thread-list";
 /** A link reader's scope is its token (and, on a folder link's page, the document read); the owner's is the document alone. */
 export type MentionScope = { token: string; documentId?: string } | { documentId: string };
 export type MentionPick = { id: string; name: string };
-type Candidate = { id: string; name: string; nameEn: string | null; empId: string };
-type MentionLink = { id: string; label: string | null };
+/** `needsApproval`: not on the NAMED link the mention goes through; naming them proposes them to its owner. */
+type Candidate = { id: string; name: string; nameEn: string | null; empId: string; needsApproval?: boolean };
+/** A NAMED link handed over by its owner adds the people it does not name yet. */
+type MentionLink = { id: string; label: string | null; audience?: "LINK" | "NAMED" };
 
 export const DEBOUNCE_MS = 150;
 export const NO_LINK_HINT = "Create a share link first to mention someone";
+const ADDS_PEOPLE = "Adds people not yet on it";
 const NO_MATCH_HINT = "No one found.";
 
 /** The `@word` being typed just before the caret, when its `@` may start a mention (`mentionStarts`). */
@@ -107,18 +110,16 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   const searchable = open && query.length > 0 && (!owner || (links?.length ?? 0) > 0);
 
   const triggerStart = trigger?.start;
-  // Who the text names now: a link naming specific people is offered only when it names them all.
-  const mentionKey = owner ? mentionedIds(body, picks).join(",") : "";
   // The owner mentions through a live link of the document. Its links are read on each new `@` (one may have been created,
-  // revoked or expired), and again when who is named changes; an answer for an earlier `@` or earlier names is dropped.
+  // revoked or expired); an answer for an earlier `@` is dropped.
   useEffect(() => {
-    if ((!open && !mentionKey) || !owner) return;
+    if (!open || !owner) return;
     let current = true;
-    reviewRequest<{ links: MentionLink[] }>(`/api/review-mentions/links?documentId=${encodeURIComponent(owner)}&mentionedUserIds=${encodeURIComponent(mentionKey)}`)
+    reviewRequest<{ links: MentionLink[] }>(`/api/review-mentions/links?documentId=${encodeURIComponent(owner)}`)
       .then(result => { if (current) { setLinks(result.links); setFailure(undefined); } })
       .catch(error => { if (current) setFailure(error instanceof Error ? error.message : "Could not load share links."); });
     return () => { current = false; };
-  }, [open, owner, triggerStart, mentionKey]);
+  }, [open, owner, triggerStart]);
 
   useEffect(() => {
     if (!searchable) return;
@@ -200,16 +201,19 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
           onMouseDown={event => event.preventDefault()} onMouseEnter={() => setActive(index)} onClick={() => pick(candidate)}>
           <span className="block truncate text-body-sm">{candidate.name}</span>
           <span className="block truncate text-caption text-kh-text-muted">{candidate.nameEn ? `${candidate.nameEn} · ${candidate.empId}` : candidate.empId}</span>
+          {candidate.needsApproval && <span className="block text-caption text-kh-text-muted">Needs owner approval</span>}
         </li>)}</ul>
       : <p className="px-2 py-1 text-body-sm text-kh-text-muted">{hint}</p>}
   </div>;
 
   const mentions = mentionedIds(body, picks);
   const chosenLink = links?.find(link => link.id === linkId) ?? links?.[0];
-  const linkChoice: ReactNode = owner && mentions.length > 0 && links && links.length > 1 && <label className="flex items-center justify-end gap-2 text-caption text-kh-text-muted">
+  const linkName = (link: MentionLink, index: number) => `${link.label || `Link ${index + 1}`}${link.audience === "NAMED" ? ` · ${ADDS_PEOPLE}` : ""}`;
+  // A choice when there are several; a lone NAMED link is no choice, but the owner still sees that it adds people.
+  const linkChoice: ReactNode = owner && mentions.length > 0 && links && (links.length > 1 ? <label className="flex items-center justify-end gap-2 text-caption text-kh-text-muted">
     Share via
-    <Select size="sm" value={chosenLink?.id} onChange={event => setLinkId(event.target.value)}>{links.map((link, index) => <option key={link.id} value={link.id}>{link.label || `Link ${index + 1}`}</option>)}</Select>
-  </label>;
+    <Select size="sm" value={chosenLink?.id} onChange={event => setLinkId(event.target.value)}>{links.map((link, index) => <option key={link.id} value={link.id}>{linkName(link, index)}</option>)}</Select>
+  </label> : links[0]?.audience === "NAMED" && <p className="text-right text-caption text-kh-text-muted">Share via {linkName(links[0], 0)}</p>);
 
   function collect(text: string): { mentions: string[]; mentionLinkId?: string } {
     const ids = mentionedIds(text, picks);

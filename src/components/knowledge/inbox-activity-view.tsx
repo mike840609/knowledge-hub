@@ -7,9 +7,10 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import { Timestamp } from "@/components/ui/timestamp";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/components/ui/tabs";
+import { governanceFailure, governanceRequest } from "@/components/workspaces/governance-error";
 import { reviewRequest } from "./review-thread-list";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
-import { isLinkEntry, isSharedEntry, notificationHref, notificationLabel, notificationLine, notificationTitle } from "./notification-href";
+import { canDecideProposal, isLinkEntry, isProposalEntry, isSharedEntry, notificationHref, notificationLabel, notificationLine, notificationTitle } from "./notification-href";
 import { NotificationListSkeleton } from "./knowledge-skeletons";
 import { InboxDiscussion } from "./inbox-discussion";
 
@@ -23,6 +24,8 @@ type View = "inbox" | "activity";
  * a drawer over it — and a rem more, for a classic scrollbar the pane's stable gutter keeps (17px on Windows).
  */
 const SPLIT_MIN_PX = 75 * 16;
+/** A shared document opens as a page and a proposal opens nothing: neither has a discussion for the pane. */
+const hasPane = (kind?: string) => !isSharedEntry(kind) && !isProposalEntry(kind);
 const ABOUT = "Comments on your shared documents, and replies in discussions you follow on pages shared with you. Opening a discussion marks it read; resolving it is a separate action.";
 
 function useSplit() {
@@ -72,7 +75,9 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
 
   // A dead link's entry needs nothing from anyone: it is history, not attention.
   // A shared document has no discussion to stay open: once read it is history.
-  const needsAttention = (item: ShareCommentNotificationView) => item.readAt === null || (!isSharedEntry(item.kind) && item.threadStatus === "OPEN" && item.linkAvailable !== false);
+  // A proposal stays only while the owner still has it to decide.
+  const needsAttention = (item: ShareCommentNotificationView) => item.readAt === null
+    || (isProposalEntry(item.kind) ? canDecideProposal(item) : !isSharedEntry(item.kind) && item.threadStatus === "OPEN" && item.linkAvailable !== false);
   const attention = useMemo(() => items.filter(needsAttention), [items]);
   // The entry being read stays in its place even once reading it has settled it, so ↑/↓ go on from there.
   const shown = view === "inbox" ? items.filter(item => needsAttention(item) || (split && item.id === selectedId)) : items;
@@ -101,8 +106,22 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
     } finally { marking.current.delete(key); setBusy(false); }
   }, []);
 
-  // A shared document opens as a page; it has no discussion for the pane.
-  const selected = split ? items.find(item => item.id === selectedId && !isSharedEntry(item.kind)) : undefined;
+  // The owner's decision on a proposal, then the list as the server holds it after.
+  const decide = async (entry: ShareCommentNotificationView, decision: "approve" | "decline") => {
+    setBusy(true);
+    setError(null);
+    try {
+      await governanceRequest(`/api/share-links/${entry.shareLinkId}/proposals/${entry.proposalId}/${decision}`, "POST");
+      // Deciding it is reading it (spec: unread until decided or opened); the server leaves the owner's own row as it was.
+      if (entry.readAt === null) await reviewRequest("/api/review-notifications/activity", { action: "mark-read", eventId: entry.id });
+      await load();
+      window.dispatchEvent(new Event("kh:notification-changed"));
+    } catch (cause) {
+      setError(governanceFailure(cause).message);
+    } finally { setBusy(false); }
+  };
+
+  const selected = split ? items.find(item => item.id === selectedId && hasPane(item.kind)) : undefined;
   // Looking at an entry is reading it, as opening it always was; nothing is selected unasked (spec).
   const unreadSelection = selected?.readAt === null ? selected : null;
   useEffect(() => { if (unreadSelection) void mark(unreadSelection, true); }, [unreadSelection, mark]);
@@ -116,15 +135,15 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
   };
   const openRow = (item: ShareCommentNotificationView) => (event: MouseEvent) => {
     // A modified click still opens the document in a new tab.
-    if (!split || isSharedEntry(item.kind) || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    if (!split || !hasPane(item.kind) || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
     event.preventDefault();
     select(item);
   };
   const step = (event: KeyboardEvent<HTMLUListElement>) => {
     if (!split || (event.key !== "ArrowDown" && event.key !== "ArrowUp")) return;
     event.preventDefault();
-    // A shared document has no pane to show beside the list: ↑/↓ step over it, as clicking it leaves the pane alone.
-    const panes = shown.filter(item => !isSharedEntry(item.kind));
+    // A shared document or a proposal has no pane to show beside the list: ↑/↓ step over it, as clicking it leaves the pane alone.
+    const panes = shown.filter(item => hasPane(item.kind));
     const at = panes.findIndex(item => item.id === selectedId);
     const next = panes[at === -1 ? 0 : Math.min(panes.length - 1, Math.max(0, at + (event.key === "ArrowDown" ? 1 : -1)))];
     if (!next) return;
@@ -169,8 +188,13 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
             <span aria-hidden="true" className={`mt-2 h-2 w-2 shrink-0 rounded-full ${item.readAt === null ? "bg-kh-primary" : "bg-transparent"}`} />
             {href
               ? <Link className={row} href={href} prefetch={isLinkEntry(item.kind) ? false : undefined} data-inbox-entry={item.id} aria-current={current ? "true" : undefined} onClick={openRow(item)}>{content}</Link>
-              : split && !isSharedEntry(item.kind) ? <button type="button" className={row} data-inbox-entry={item.id} aria-current={current ? "true" : undefined} onClick={() => select(item)}>{content}</button>
-              : <div className="min-w-0 flex-1 px-1 py-1">{content}</div>}
+              : split && hasPane(item.kind) ? <button type="button" className={row} data-inbox-entry={item.id} aria-current={current ? "true" : undefined} onClick={() => select(item)}>{content}</button>
+              : <div className="min-w-0 flex-1 px-1 py-1">{content}
+                {canDecideProposal(item) && <span className="mt-2 flex gap-2">
+                  <Button variant="secondary" size="sm" disabled={busy} aria-label={`Approve adding ${item.personName ?? "someone"}`} onClick={() => void decide(item, "approve")}>Approve</Button>
+                  <Button variant="ghost" size="sm" disabled={busy} aria-label={`Decline adding ${item.personName ?? "someone"}`} onClick={() => void decide(item, "decline")}>Decline</Button>
+                </span>}
+              </div>}
             {item.readAt === null && <Button variant="ghost" size="sm" disabled={busy} onClick={() => void mark(item)}>Mark read</Button>}
           </li>; })}
         </ul>}
