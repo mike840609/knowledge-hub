@@ -26,7 +26,7 @@ function service(threads: ReviewThread[], comments: ReviewComment[], markdown = 
     sourcePolicy: { findById: async () => ({ id, workspaceId: id, status: "ACTIVE", name: "Wiki" }) },
     tree: { listBySource: async () => [id, otherId].map(documentId => ({ id: documentId, sourceId: id, documentId, nodeType: "DOCUMENT", parentId: null, status: "ACTIVE" })) },
     revisions: { findCurrent: async (documentId: string) => ({ id: documentId, revisionNo: 1, title: documentId === id ? "First" : "Second", markdown, createdAt: now }) },
-    linkedEntries: { findByDocumentId: async () => null },
+    linkedEntries: { findByDocumentId: async () => null }, links: { loadCatalog: async () => [], loadValidEdges: async () => [] },
     reviewThreads: { listByDocument: async (documentId: string) => threads.filter(t => t.documentId === documentId) },
     reviewComments: { listByThreads },
   } as unknown as KnowledgeRepositories;

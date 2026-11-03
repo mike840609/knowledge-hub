@@ -13,6 +13,8 @@ export type LocalGraphData = {
   openHref: string;
   /** Where each depth is drawn; null where switching would leave the page, as from the composer. */
   depthHrefs: { 1: string; 2: string } | null;
+  /** Copy for Agent with this neighbourhood preselected; null where it is not offered. */
+  agentContextHref: string | null;
 };
 
 /**
@@ -61,9 +63,16 @@ function LocalGraph({ graph, focusId }: { graph: LocalGraphData; focusId: string
       ) : (
         <p className="mt-1 px-2 text-body-sm text-kh-text-muted">Nothing is linked to or from this document yet.</p>
       )}
-      <Link href={graph.openHref} className="mt-1 inline-block rounded-md px-1 text-caption text-kh-link underline underline-offset-2 kh-focus-ring">
-        Open in graph
-      </Link>
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <Link href={graph.openHref} className="inline-block rounded-md px-1 text-caption text-kh-link underline underline-offset-2 kh-focus-ring">
+          Open in graph
+        </Link>
+        {graph.agentContextHref ? (
+          <Link href={graph.agentContextHref} prefetch={false} aria-label="Copy for Agent with nearby documents" className="inline-block rounded-md px-1 text-caption text-kh-link underline underline-offset-2 kh-focus-ring">
+            Copy for Agent
+          </Link>
+        ) : null}
+      </div>
     </section>
   );
 }
