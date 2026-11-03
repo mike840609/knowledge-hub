@@ -6,7 +6,6 @@ import {
   assertShareLinkCreation,
   isActiveShareLink,
   isShareToken,
-  MAX_NAMED_SHARE_RECIPIENTS,
   normalizeRecipients,
   shareLinkExpiry,
   shareLinkPath,
@@ -20,10 +19,12 @@ import { DocumentNotFoundError, DomainError, IntegrityViolationError, SourceNotF
 import { linkLookupKey } from "../domain/link-graph";
 import { buildLinkResolver } from "../domain/link-resolution";
 import { MENTION_LIMIT } from "../domain/review-mention";
+import type { ShareProposal } from "../domain/share-proposal";
 import type { OpenFolderLink } from "../ports/document-share-link-repository";
 import type { ShareTokenIssuer } from "../ports/share-token-issuer";
 import { openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
 import { linkOrigin } from "./internal/link-origin";
+import { addNamedRecipients, appendRecipientEvent, SHARE_RECIPIENT_ADDED_EVENT } from "./named-recipients";
 import type { TreeViewNode } from "../ports/tree-repository";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
 
@@ -44,6 +45,8 @@ export type ShareLinkView = {
 };
 
 export type ShareRecipientView = { userId: string; name: string; nameEn: string | null; empId: string; addedAt: Date };
+/** A PENDING proposal as its link's owner decides it. `proposedByName` is the proposer's current name. */
+export type ShareProposalView = { id: string; userId: string; name: string; nameEn: string | null; empId: string; orgCode: string; proposedByName: string | null; createdAt: Date };
 export type ShareRecipientCandidate = { id: string; name: string; nameEn: string | null; empId: string };
 
 type ShareCreateInput = { label?: unknown; expiresInDays?: unknown; recipients?: unknown };
@@ -101,8 +104,9 @@ export type SharedView = (({ kind: "DOCUMENT" } & SharedDocumentView) | SharedFo
 
 export const SHARE_LINK_CREATED_EVENT = "DOCUMENT_SHARE_LINK_CREATED";
 export const SHARE_LINK_REVOKED_EVENT = "DOCUMENT_SHARE_LINK_REVOKED";
-export const SHARE_RECIPIENT_ADDED_EVENT = "DOCUMENT_SHARE_RECIPIENT_ADDED";
+export { SHARE_RECIPIENT_ADDED_EVENT };
 export const SHARE_RECIPIENT_REMOVED_EVENT = "DOCUMENT_SHARE_RECIPIENT_REMOVED";
+export const SHARE_PROPOSAL_DECLINED_EVENT = "DOCUMENT_SHARE_PROPOSAL_DECLINED";
 
 /**
  * Document share links (share-link spec). `create`, `list` and `revoke` are
@@ -299,13 +303,68 @@ export class DocumentShareService {
       const ids = normalizeRecipients(userIds, { ownerId: caller.identity.id });
       // INSERT IGNORE would swallow a missing user as it swallows a duplicate.
       await requireExistingUsers(repositories, ids);
-      const named = new Set((await repositories.shareLinks.listRecipients(link.id)).map((recipient) => recipient.userId));
-      const added = ids.filter((id) => !named.has(id));
-      if (named.size + added.length > MAX_NAMED_SHARE_RECIPIENTS) throw new DomainError("INVALID_REQUEST", `A link can name at most ${MAX_NAMED_SHARE_RECIPIENTS} recipients.`);
-      if (added.length === 0) return;
+      await addNamedRecipients(repositories, caller, link, workspace.id, ids, this.clock());
+    });
+  }
+
+  /** The people proposed for a NAMED link and still PENDING, oldest first. Owner of the link only; a revoked link is refused. */
+  async listProposals(caller: CallerContext, linkId: string): Promise<ShareProposalView[]> {
+    if (!isUuid(linkId)) throw new ShareLinkNotFoundError();
+    return this.unitOfWork.run(async (repositories) => {
+      await syncCallerIdentity(repositories.users, caller);
+      const link = await repositories.shareLinks.findById(linkId);
+      if (!link || link.createdBy !== caller.identity.id || link.revokedAt !== null) throw new ShareLinkNotFoundError();
+      const proposals = await repositories.shareProposals.listByLink(link.id, "PENDING");
+      const users = new Map((await repositories.users.findByIds([...new Set(proposals.flatMap((p) => [p.userId, p.proposedBy]))])).map((user) => [user.id, user]));
+      return proposals.flatMap((proposal) => {
+        const user = users.get(proposal.userId);
+        if (!user) return [];
+        return [{ id: proposal.id, userId: user.id, name: user.name, nameEn: user.nameEn, empId: user.emp_id, orgCode: user.org_code, proposedByName: users.get(proposal.proposedBy)?.name ?? null, createdAt: proposal.createdAt }];
+      });
+    });
+  }
+
+  /**
+   * Adds the proposed person through the one add path, then marks the proposal APPROVED (mention proposals
+   * spec, "Owner decision API"). At the recipient limit it fails and the proposal stays PENDING.
+   */
+  async approveProposal(caller: CallerContext, linkId: string, proposalId: string): Promise<void> {
+    await this.decideProposal(caller, linkId, proposalId, "APPROVED", async (repositories, link, workspaceId, proposal, now) => {
+      await addNamedRecipients(repositories, caller, link, workspaceId, [proposal.userId], now);
+      await repositories.shareProposals.decide(proposal.id, "APPROVED", caller.identity.id, now);
+    });
+  }
+
+  /** Declines a proposal; final for proposals of that person on this link. Names nobody. */
+  async declineProposal(caller: CallerContext, linkId: string, proposalId: string): Promise<void> {
+    await this.decideProposal(caller, linkId, proposalId, "DECLINED", async (repositories, link, workspaceId, proposal, now) => {
+      await repositories.shareProposals.decide(proposal.id, "DECLINED", caller.identity.id, now);
+      await appendRecipientEvent(repositories, caller, workspaceId, link.id, SHARE_PROPOSAL_DECLINED_EVENT, proposal.userId, now, { proposalId: proposal.id });
+    });
+  }
+
+  /**
+   * The owner's decision on a PENDING proposal of a link that opens now. Every refusal is the same not-found;
+   * repeating the decision already made is a no-op.
+   */
+  private async decideProposal(
+    caller: CallerContext,
+    linkId: string,
+    proposalId: string,
+    decision: "APPROVED" | "DECLINED",
+    apply: (repositories: KnowledgeRepositories, link: DocumentShareLink, workspaceId: string, proposal: ShareProposal, now: Date) => Promise<void>,
+  ): Promise<void> {
+    if (!isUuid(linkId) || !isUuid(proposalId)) throw new ShareLinkNotFoundError();
+    await this.unitOfWork.run(async (repositories) => {
+      await syncCallerIdentity(repositories.users, caller);
       const now = this.clock();
-      await repositories.shareLinks.insertRecipients(link.id, added, caller.identity.id, now);
-      for (const userId of added) await appendRecipientEvent(repositories, caller, workspace.id, link.id, SHARE_RECIPIENT_ADDED_EVENT, userId, now);
+      const { link, workspace } = await lockOwnedLink(repositories, caller, linkId);
+      await requireLiveLink(repositories, link, now, caller.identity.id);
+      const proposal = await repositories.shareProposals.lockById(proposalId);
+      if (!proposal || proposal.shareLinkId !== link.id) throw new ShareLinkNotFoundError();
+      if (proposal.status === decision) return;
+      if (proposal.status !== "PENDING") throw new ShareLinkNotFoundError();
+      await apply(repositories, link, workspace.id, proposal, now);
     });
   }
 
@@ -466,19 +525,13 @@ async function requireExistingUsers(repositories: KnowledgeRepositories, ids: re
   if (ids.some((id) => !found.has(id))) throw new DomainError("INVALID_REQUEST", "Every recipient must be an existing user.");
 }
 
-function appendRecipientEvent(repositories: KnowledgeRepositories, caller: CallerContext, workspaceId: string, linkId: string, eventType: string, userId: string, at: Date) {
-  return repositories.auditEvents.append({
-    id: uuidv7(),
-    workspaceId,
-    actorUserId: caller.identity.id,
-    actorKind: "USER",
-    eventType,
-    targetType: "DOCUMENT_SHARE_LINK",
-    targetId: linkId,
-    payload: { userId },
-    correlationId: null,
-    createdAt: at,
-  });
+/** The link opens now for its owner, judged as a reader's link is: revoked, archived or out of reach answers not-found. */
+async function requireLiveLink(repositories: KnowledgeRepositories, link: DocumentShareLink, now: Date, ownerId: string): Promise<void> {
+  const target = link.target.kind === "DOCUMENT"
+    ? await repositories.documents.findById(link.target.documentId)
+    : await repositories.tree.findById(link.target.folderNodeId);
+  if (!target) throw new ShareLinkNotFoundError();
+  await requireOpenLink(repositories, link, target, now, ownerId);
 }
 
 /**

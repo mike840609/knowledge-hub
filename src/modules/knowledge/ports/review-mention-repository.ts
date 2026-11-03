@@ -10,6 +10,8 @@ export interface ReviewMentionRepository {
   listRecentByRecipient(userId: string, limit: number): Promise<ReviewMention[]>;
   /** Unread rows only, newest first; whether each may still be shown is judged live by the service. */
   listUnreadByRecipient(userId: string, limit: number): Promise<ReviewMention[]>;
+  /** The user's mention rows (read or not) carried by this link; approval follows their threads. */
+  listByLinkAndUser(linkId: string, userId: string): Promise<ReviewMention[]>;
   /** The user's mention rows (read or not) on comments of these threads. */
   findByThreads(userId: string, threadIds: readonly string[]): Promise<ReviewMention[]>;
   /** Who these comments mention. Empty input reads nothing. */
