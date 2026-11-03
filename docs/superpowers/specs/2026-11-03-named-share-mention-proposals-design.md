@@ -21,6 +21,8 @@ approves; approval adds them as a recipient, exactly as if the owner had named t
 - The proposed person's Inbox shows, while pending: who mentioned them, the document
   title, and "someone proposed sharing a document with you". No comment text,
   no link, no way to open it.
+- **The owner mentioning a non-recipient adds them** (the user's decision,
+  2026-11-03): the owner decides the list, so their mention needs no approval.
 - The owner decides in two places, one decision: an Inbox entry with Approve / Decline,
   and a "Pending" section in the link's Manage panel.
 - **Approve:** the person becomes a recipient (same row, same "shared with you" entry,
@@ -30,9 +32,6 @@ approves; approval adds them as a recipient, exactly as if the owner had named t
 
 ## Non-goals
 
-- Owner writes. The owner can name recipients directly; the owner's Workspace view
-  keeps today's rule (`mentionLinksForOwner` lists a NAMED link only when everyone
-  mentioned is a recipient).
 - LINK (anyone-with-the-link) shares. Their mentions already admit anyone.
 - Proposals without a mention (a "suggest someone" button). The mention is the proposal.
 - Expiry of proposals. A pending proposal waits until decided or the link dies.
@@ -82,8 +81,7 @@ makes the user a recipient, at which point it is live with no further write.
 ## Write path
 
 In `DocumentReviewService.mentionLink`, for a **link write** (`originShareLinkId` set)
-through a NAMED link **by a caller who is not the Workspace owner** (the owner reading
-through their own NAMED link keeps today's refusal):
+through a NAMED link **by a caller who is not the Workspace owner**:
 
 1. Every mentioned id must exist (unchanged).
 2. Split the ids into recipients (admitted) and others.
@@ -94,7 +92,15 @@ through their own NAMED link keeps today's refusal):
 4. Refused when the link is full: if recipients + pending proposals would exceed
    `MAX_NAMED_SHARE_RECIPIENTS` (50), fail with a clear message.
 
-Owner writes are unchanged (anti-goal: a second way to add recipients for the owner).
+**Owner writes** (the Workspace owner, whether through the NAMED link's Hub reader or
+from the Workspace view handing over a NAMED link with `mentionLinkId`): every mentioned
+non-recipient is **added as a recipient** in the same transaction as the comment,
+through the existing add path (audit `SHARE_RECIPIENT_ADDED`, `SHARED_WITH_YOU` entry,
+limit of 50; over the limit the write is refused). Their mention is then live and
+follows as any mention does. A pending proposal for that person becomes `APPROVED`.
+`mentionLinksForOwner` therefore lists every live link of the document, NAMED ones
+whatever the mentioned people, and the owner's link picker says that choosing a NAMED
+link adds the people not yet on it.
 
 `mentionOnWrite` must **not** create a follow for a non-admitted user
 (`followForMention` judges the link for them; confirm it refuses, and test it).
@@ -181,7 +187,9 @@ and Approve / Decline. Same API as the Inbox.
 - Revoked link → pending entries name nothing; approve answers not-found.
 - Non-owner (including the proposer) cannot approve/decline.
 - Link full → write refused.
-- Owner write mentioning a non-recipient through a NAMED link → still refused.
+- Owner write mentioning a non-recipient through a NAMED link (Hub reader, and Workspace
+  view with `mentionLinkId`) → recipient added, `SHARED_WITH_YOU` entry, mention live,
+  follow created, pending proposal marked `APPROVED`; over 50 → refused, nothing written.
 - `tests/unit/share-link-single-exception.test.ts` still passes (no new caller-less entry).
 - e2e: recipient mentions an outsider; outsider's Inbox shows the pending entry with
   title and proposer, no text; owner approves from Inbox; outsider opens the share and
