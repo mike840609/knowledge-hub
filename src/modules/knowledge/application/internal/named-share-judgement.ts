@@ -7,8 +7,8 @@ import { openShareLinkTarget } from "./folder-link-reach";
 /** What a named link opens for its viewer: a document, or a folder (by name). */
 export type NamedShareTarget = { documentId: string } | { folderName: string };
 
-/** What a named link opens for this viewer now: its document, or its folder's name; null for every refusal. */
-async function openNamedTarget(r: KnowledgeRepositories, link: DocumentShareLink, userId: string, now: Date): Promise<NamedShareTarget | null> {
+/** What a named link opens for this viewer now: its document, or its folder's name; null for every refusal. Proposal entries judge through it too. */
+export async function openNamedTarget(r: KnowledgeRepositories, link: DocumentShareLink, userId: string, now: Date): Promise<NamedShareTarget | null> {
   if (link.target.kind === "DOCUMENT") {
     const document = await r.documents.findById(link.target.documentId);
     return document && await openShareLinkTarget(r, link, document, now, userId) ? { documentId: document.id } : null;

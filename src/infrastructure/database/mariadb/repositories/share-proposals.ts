@@ -3,6 +3,8 @@ import type { NewShareProposal, ShareProposalRepository } from "@/modules/knowle
 import type { DbRow, QueryConnection } from "./shared";
 import { affectedRows, asDate, asNullableDate, asNumber } from "./shared";
 
+/** A decision is news for the proposed person and the proposer, even if they marked the pending entry read (mark-all does). */
+const DECISION_UNREAD = "proposed_read_at = NULL, proposer_read_at = NULL";
 const READ_COLUMN: Record<ProposalParty, string> = { OWNER: "owner_read_at", PROPOSED: "proposed_read_at", PROPOSER: "proposer_read_at" };
 
 function mapProposal(row: DbRow): ShareProposal {
@@ -54,7 +56,7 @@ export class MariaDbShareProposalRepository implements ShareProposalRepository {
 
   async decide(id: string, status: "APPROVED" | "DECLINED", by: string, at: Date): Promise<boolean> {
     const result = await this.connection.query(
-      "UPDATE document_share_link_proposals SET status = ?, decided_by = ?, decided_at = ? WHERE id = ? AND status = 'PENDING'",
+      `UPDATE document_share_link_proposals SET status = ?, decided_by = ?, decided_at = ?, ${DECISION_UNREAD} WHERE id = ? AND status = 'PENDING'`,
       [status, by, at, id],
     );
     return affectedRows(result) === 1;
@@ -62,7 +64,7 @@ export class MariaDbShareProposalRepository implements ShareProposalRepository {
 
   async approvePending(linkId: string, userId: string, by: string, at: Date): Promise<void> {
     await this.connection.query(
-      "UPDATE document_share_link_proposals SET status = 'APPROVED', decided_by = ?, decided_at = ? WHERE share_link_id = ? AND user_id = ? AND status = 'PENDING'",
+      `UPDATE document_share_link_proposals SET status = 'APPROVED', decided_by = ?, decided_at = ?, ${DECISION_UNREAD} WHERE share_link_id = ? AND user_id = ? AND status = 'PENDING'`,
       [by, at, linkId, userId],
     );
   }

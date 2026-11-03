@@ -133,6 +133,18 @@ describe("share proposals repository", () => {
     await run(s => s.approvePending(link, randomUUID(), f.owner, at(7)));
   });
 
+  it("makes a decision unread for the proposed person and the proposer, whatever they had read (decide and approvePending)", async () => {
+    const f = await fixture();
+    const link = await f.namedLink();
+    const declined = await f.propose(link, f.carol), approved = await f.propose(link, f.dave);
+    for (const user of [f.owner, f.carol, f.dave, f.writer]) await run(s => s.markAllRead(user, at(3)));
+    await run(s => s.decide(declined.id, "DECLINED", f.owner, at(5)));
+    await run(s => s.approvePending(link, f.dave, f.owner, at(6)));
+    for (const { id } of [declined, approved]) {
+      expect(await run(s => s.findById(id))).toMatchObject({ ownerReadAt: at(3), proposedReadAt: null, proposerReadAt: null });
+    }
+  });
+
   it("locks a row by id inside a transaction", async () => {
     const f = await fixture();
     const { id } = await f.propose(await f.namedLink(), f.carol);

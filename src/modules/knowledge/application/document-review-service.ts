@@ -8,11 +8,12 @@ import { MENTION_LIMIT, MENTION_PREFIX, normalizeMentions, splitMentions, type M
 import { followForMention } from "./follow-for-mention";
 import { addNamedRecipients } from "./named-recipients";
 import { createReviewAnchorRelocator, validateReviewAnchor } from "../domain/review-anchor";
-import { projectShareCommentNotification, EXCERPT_LIMIT, SHARED_PREFIX, type ShareCommentNotificationView } from "../domain/share-comment-event";
+import { projectShareCommentNotification, EXCERPT_LIMIT, PROPOSAL_PREFIX, SHARED_PREFIX, type ShareCommentNotificationView } from "../domain/share-comment-event";
+import type { ProposalParty, ShareProposal } from "../domain/share-proposal";
 import { orderFollowedDiscussions, summarizeFollowedThread, type FollowedDiscussionView } from "../domain/review-follow";
 import type { DocumentShareLink } from "../domain/document-share-link";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
-import { judgeNamedShares, namedShareTitle } from "./internal/named-share-judgement";
+import { judgeNamedShares, namedShareTitle, openNamedTarget, type NamedShareTarget } from "./internal/named-share-judgement";
 import { audienceAdmits, documentReachesFolder, linkOpensFor, openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
 import { hubSharePath, shareDiscussionHref } from "@/lib/share-paths";
 
@@ -27,6 +28,9 @@ type MentionRequest = { ids: string[]; linkId: string | null; hashed: Record<str
 type MentionPlan = { link: DocumentShareLink; add: string[]; propose: string[] };
 /** A followed discussion on a folder link names its document, which that link's page needs (`?d=`); a document link's needs none. */
 const folderDocument = (link: DocumentShareLink, documentId: string) => link.target.kind === "FOLDER" ? { documentId } : {};
+const PROPOSAL_PARTIES: readonly string[] = ["OWNER", "PROPOSED", "PROPOSER"] satisfies ProposalParty[];
+/** One party's view of one proposal, judged now: `target` is null when the link no longer opens for that party. */
+type JudgedProposal = { party: ProposalParty; proposal: ShareProposal; link: DocumentShareLink | undefined; target: NamedShareTarget | null; createdAt: Date; readAt: Date | null };
 const newestFirst = (views: ShareCommentNotificationView[]) => views.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id));
 export class DocumentReviewService {
   constructor(private readonly uow:KnowledgeUnitOfWork, private readonly clock:()=>Date=()=>new Date(), private readonly writesEnabled:()=>boolean=()=>false) {}
@@ -72,6 +76,7 @@ export class DocumentReviewService {
         ...(await this.followViews(r, caller.identity.id)).filter(view => view.readAt === null),
         ...(await this.mentionViews(r, await this.unreadMentions(r, caller.identity.id), caller.identity.id)).filter(view => view.readAt === null),
         ...await this.sharedViews(r, caller, true),
+        ...await this.proposalViews(r, caller, true),
       ]),
     }));
   }
@@ -82,7 +87,8 @@ export class DocumentReviewService {
       const follows = (await this.followedThreads(r, caller.identity.id)).filter(({ summary }) => !("unavailable" in summary) && !!summary.latestReply && summary.unread > 0).length;
       const mentions = (await this.judgedMentions(r, await this.unreadMentions(r, caller.identity.id), caller.identity.id)).filter(judged => "comment" in judged).length;
       const named = (await this.judgedShares(r, caller.identity.id, true)).filter(share => share.target).length;
-      return { count: owner + follows + mentions + named };
+      const proposals = (await this.judgedProposals(r, caller.identity.id)).filter(judged => judged.readAt === null).length;
+      return { count: owner + follows + mentions + named + proposals };
     });
   }
   /** Lightweight counts for My shares. No comment bodies or full revisions are loaded. */
@@ -95,20 +101,33 @@ export class DocumentReviewService {
       const size = 50;
       const events = await r.shareCommentEvents.listRecentByRecipient(caller.identity.id, before, size + 1);
       const page = events.slice(0, size);
-      // Follows and mentions are not paged: at most FOLLOW_LIMIT each, all on the first page (specs 2026-10-22, 2026-10-29, deviation).
+      // Follows, mentions, named shares and proposals are not paged: at most FOLLOW_LIMIT each, all on the first page (specs 2026-10-22, 2026-10-29, deviation).
       const follows = before ? [] : await this.followViews(r, caller.identity.id);
       const mentions = before ? [] : await this.mentionViews(r, await r.reviewMentions.listRecentByRecipient(caller.identity.id, FOLLOW_LIMIT), caller.identity.id);
       const named = before ? [] : await this.sharedViews(r, caller, false);
+      const proposals = before ? [] : await this.proposalViews(r, caller, false);
       return {
-        notifications: newestFirst([...await this.notificationViews(r, page), ...follows, ...mentions, ...named]),
+        notifications: newestFirst([...await this.notificationViews(r, page), ...follows, ...mentions, ...named, ...proposals]),
         nextCursor: events.length > size && page.length
           ? { createdAt: page[page.length - 1].createdAt.toISOString(), id: page[page.length - 1].id }
           : null,
       };
     });
   }
-  /** An owner event by its id, a followed discussion by `follow:<threadId>`, a mention by `mention:<commentId>`, or a named share by `shared:<linkId>`; only the caller's own rows change. */
+  /**
+   * An owner event by its id, a followed discussion by `follow:<threadId>`, a mention by `mention:<commentId>`, a named share
+   * by `shared:<linkId>`, or one party's proposal entry by `proposal:<party>:<proposalId>`; only the caller's own rows change.
+   */
   async markEventRead(caller: CallerContext, eventId: string) {
+    if (eventId.startsWith(PROPOSAL_PREFIX)) {
+      const [party, proposalId] = eventId.slice(PROPOSAL_PREFIX.length).split(":");
+      if (!PROPOSAL_PARTIES.includes(party) || !isUuid(proposalId ?? "")) return;
+      await this.uow.run(async r => {
+        const proposal = await r.shareProposals.findById(proposalId);
+        if (proposal && await this.isProposalParty(r, proposal, party as ProposalParty, caller.identity.id)) await r.shareProposals.markRead(proposal.id, party as ProposalParty, this.clock());
+      });
+      return;
+    }
     if (eventId.startsWith(SHARED_PREFIX)) {
       const linkId = eventId.slice(SHARED_PREFIX.length);
       // The row is the caller's own by (link, user); anyone else's id matches nothing. A malformed id would fail the UUID column.
@@ -131,6 +150,7 @@ export class DocumentReviewService {
       await r.reviewFollows.markAllSeen(caller.identity.id, this.clock());
       await r.reviewMentions.markAllRead(caller.identity.id, this.clock());
       await r.shareLinks.markAllRecipientRead(caller.identity.id, this.clock());
+      await r.shareProposals.markAllRead(caller.identity.id, this.clock());
     });
   }
   /** The owner has looked at one discussion: its notices are read, the rest of the document's are not. */
@@ -376,15 +396,23 @@ export class DocumentReviewService {
       if (unread.length < FOLLOW_LIMIT) return unread.filter(mention => !dead.some(gone => gone.mention.commentId === mention.commentId));
     }
   }
-  /** Mentions as Inbox entries, one per comment. A dead one names nothing and is never unread. */
+  /**
+   * Mentions as Inbox entries, one per comment. A dead one names nothing and is never unread. A dead one through a link
+   * with a PENDING or DECLINED proposal of this user is not listed: that proposal's entry stands for it.
+   */
   private async mentionViews(r: KnowledgeRepositories, mentions: readonly ReviewMention[], userId: string): Promise<ShareCommentNotificationView[]> {
     const views: ShareCommentNotificationView[] = [];
     const titles = new Map<string, string>();
     const authorNames = new Map<string, string | undefined>();
     const hrefOf = this.discussionHrefs(r, userId);
-    for (const judged of await this.judgedMentions(r, mentions, userId)) {
+    const judgedMentions = await this.judgedMentions(r, mentions, userId);
+    const proposed = judgedMentions.some(judged => !("comment" in judged))
+      ? new Set((await r.shareProposals.listForProposed(userId, FOLLOW_LIMIT)).filter(proposal => proposal.status !== "APPROVED").map(proposal => proposal.shareLinkId.toLowerCase()))
+      : new Set<string>();
+    for (const judged of judgedMentions) {
       const { mention } = judged;
       const base = { id: `${MENTION_PREFIX}${mention.commentId}`, workspaceId: "", documentId: "", sourceId: "", commentId: mention.commentId, createdAt: mention.createdAt };
+      if (!("comment" in judged) && proposed.has(mention.shareLinkId.toLowerCase())) continue;
       if (!("comment" in judged)) { views.push({ ...base, kind: "MENTION", commentId: "", threadId: "", documentTitle: "", authorName: undefined, excerpt: "", readAt: mention.createdAt, threadStatus: "OPEN", linkAvailable: false }); continue; }
       const { thread, comment, link } = judged;
       if (!titles.has(thread.documentId)) titles.set(thread.documentId, (await r.revisions.findCurrent(thread.documentId))?.title ?? "");
@@ -415,6 +443,68 @@ export class DocumentReviewService {
       });
     }
     return views;
+  }
+  /**
+   * The caller's proposal entries, each judged now: the owner's on every proposal of their links, the proposed person's
+   * while PENDING or once DECLINED (an approved one is their `SHARED_WITH_YOU`), the proposer's once decided. The link is
+   * judged for the owner and the proposer as themselves, and for the proposed person, whom it does not name, as its owner
+   * sees it: does it open at all. A link that no longer opens names nothing and is never unread. The owner's request is
+   * unread until read or decided; a decision is news again for the other two (the repository clears their read on deciding).
+   * ponytail: at most FOLLOW_LIMIT rows per party, a few reads each; paging once proposals are many.
+   */
+  private async judgedProposals(r: KnowledgeRepositories, userId: string): Promise<JudgedProposal[]> {
+    const rows: Array<{ party: ProposalParty; proposal: ShareProposal }> = [
+      ...(await r.shareProposals.listForOwner(userId, FOLLOW_LIMIT)).map(proposal => ({ party: "OWNER" as const, proposal })),
+      ...(await r.shareProposals.listForProposed(userId, FOLLOW_LIMIT)).filter(proposal => proposal.status !== "APPROVED").map(proposal => ({ party: "PROPOSED" as const, proposal })),
+      ...(await r.shareProposals.listForProposer(userId, FOLLOW_LIMIT)).map(proposal => ({ party: "PROPOSER" as const, proposal })),
+    ];
+    if (rows.length === 0) return [];
+    const links = new Map((await r.shareLinks.findByIds([...new Set(rows.map(({ proposal }) => proposal.shareLinkId))])).map(link => [link.id.toLowerCase(), link]));
+    const targets = new Map<string, NamedShareTarget | null>();
+    const now = this.clock();
+    const judged: JudgedProposal[] = [];
+    for (const { party, proposal } of rows) {
+      const link = links.get(proposal.shareLinkId.toLowerCase());
+      const viewer = party === "PROPOSER" ? proposal.proposedBy : link?.createdBy;
+      const key = `${proposal.shareLinkId}:${viewer}`;
+      if (link && viewer && !targets.has(key)) targets.set(key, await openNamedTarget(r, link, viewer, now));
+      const target = targets.get(key) ?? null;
+      const createdAt = party === "OWNER" || proposal.status === "PENDING" ? proposal.createdAt : proposal.decidedAt ?? proposal.createdAt;
+      const read = party === "OWNER" ? proposal.ownerReadAt ?? (proposal.status === "PENDING" ? null : proposal.decidedAt)
+        : party === "PROPOSED" ? proposal.proposedReadAt : proposal.proposerReadAt;
+      judged.push({ party, proposal, link, target, createdAt, readAt: target ? read : read ?? createdAt });
+    }
+    return judged;
+  }
+  /** Proposals as Inbox entries, one per party (see `judgedProposals`); `unreadOnly` leaves out read ones. Never the comment. */
+  private async proposalViews(r: KnowledgeRepositories, caller: CallerContext, unreadOnly: boolean): Promise<ShareCommentNotificationView[]> {
+    const names = new Map<string, string | undefined>();
+    const nameOf = async (id: string) => {
+      if (!names.has(id)) names.set(id, (await r.users.findById(id))?.name);
+      return names.get(id);
+    };
+    const views: ShareCommentNotificationView[] = [];
+    for (const { party, proposal, link, target, createdAt, readAt } of await this.judgedProposals(r, caller.identity.id)) {
+      if (unreadOnly && readAt !== null) continue;
+      const kind = party === "OWNER" ? "PROPOSAL_REQUEST" as const : proposal.status === "PENDING" ? "PROPOSAL_PENDING" as const : "PROPOSAL_DECIDED" as const;
+      const base = {
+        id: `${PROPOSAL_PREFIX}${party}:${proposal.id}`, workspaceId: "", documentId: "", sourceId: "", threadId: "", commentId: "", excerpt: "",
+        createdAt, readAt, threadStatus: "OPEN" as const, kind, proposalId: proposal.id, proposalStatus: proposal.status,
+      };
+      if (!target || !link) { views.push({ ...base, documentTitle: "", authorName: undefined, linkAvailable: false }); continue; }
+      views.push({
+        ...base, documentTitle: await namedShareTitle(r, caller, target), targetKind: link.target.kind, linkAvailable: true,
+        authorName: kind === "PROPOSAL_DECIDED" ? undefined : await nameOf(proposal.proposedBy),
+        ...(party === "PROPOSED" ? {} : { personName: await nameOf(proposal.userId) }),
+        ...(party === "OWNER" ? { shareLinkId: link.id } : {}),
+      });
+    }
+    return views;
+  }
+  /** Whether `userId` is this party of the proposal: the link's owner, the proposed person, or the proposer. */
+  private async isProposalParty(r: KnowledgeRepositories, proposal: ShareProposal, party: ProposalParty, userId: string): Promise<boolean> {
+    const partyId = party === "OWNER" ? (await r.shareLinks.findById(proposal.shareLinkId))?.createdBy : party === "PROPOSED" ? proposal.userId : proposal.proposedBy;
+    return partyId?.toLowerCase() === userId.toLowerCase();
   }
   /**
    * Every named document a folder link reaches now. The link, folder, Source, Workspace and
