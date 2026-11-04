@@ -18,3 +18,15 @@ export class TaskArtifactError extends DomainError {
     this.name = "TaskArtifactError";
   }
 }
+
+/**
+ * No database connection could be obtained. Nothing was written, so the
+ * request is retryable (design §7, 503). Declared here so the route maps it
+ * without importing the driver.
+ */
+export class DatabaseUnavailableError extends DomainError {
+  constructor() {
+    super("DATABASE_UNAVAILABLE", "The database is unavailable. Nothing was saved; try again in a moment.");
+    this.name = "DatabaseUnavailableError";
+  }
+}

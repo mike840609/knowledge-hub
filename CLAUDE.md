@@ -67,7 +67,10 @@ src/app/                  routes and API handlers
 src/components/           UI (see the design language contract below)
 ```
 
-The four modules are `identity`, `workspaces`, `knowledge` and `sources`.
+The five modules are `identity`, `workspaces`, `knowledge`, `sources` and
+`task-knowledge`. The fifth is a recorded deviation: Task Knowledge Export lives
+in its own module rather than inside `knowledge`
+(`docs/superpowers/specs/2026-11-04-task-knowledge-export-design.md` §3).
 
 These boundaries are enforced by `no-restricted-imports` in
 `eslint.config.mjs`, not by convention — `make lint` fails on a violation:
@@ -76,6 +79,13 @@ These boundaries are enforced by `no-restricted-imports` in
   under `infrastructure/`. Modules depend on ports.
 - `src/modules/knowledge/**` additionally may not import `@/modules/sources/**`.
   Knowledge reaches Sources through its `source-policy` port only.
+- `src/modules/task-knowledge/**` is held to the same rule: it reaches
+  Workspace, Source, SourceEntry and Document data only through its own
+  lookup ports (`ports/lookups.ts`). Path normalization that must match Folder
+  Sync happens in the infrastructure adapter, which may use the `sources`
+  domain. Its export credential is a non-human principal limited to
+  `task-result:create`; it carries no human's identity and does not decide the
+  Phase 7 Agent-identity model (design §3, §10).
 - `src/components/**` and `src/app/**` may not import `infrastructure/` or
   `mariadb`. Web adapters call application services through the composition
   root.

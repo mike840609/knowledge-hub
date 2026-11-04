@@ -14,6 +14,11 @@ const knowledgeBoundaryRestrictions = [
   { "group": ["@/modules/sources/**", "../sources/**", "../../sources/**"], "message": "Knowledge must use its source-policy port; it must not depend on Sources implementation." },
 ];
 
+const taskKnowledgeBoundaryRestrictions = [
+  ...moduleBoundaryRestrictions,
+  { "group": ["@/modules/sources/**", "**/modules/sources/**", "../sources/**", "../../sources/**", "../../../sources/**"], "message": "Task knowledge must reach Sources through its lookup ports; it must not depend on the Sources module." },
+];
+
 /**
  * §10 of the design contract says there is one focus idiom, `.kh-focus-ring`,
  * and no second spelling. Unlike the type, radius, elevation and container
@@ -57,6 +62,14 @@ export default tseslint.config(
     rules: {
       "no-restricted-imports": ["error", {
         "patterns": knowledgeBoundaryRestrictions,
+      }]
+    }
+  },
+  {
+    files: ["src/modules/task-knowledge/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": ["error", {
+        "patterns": taskKnowledgeBoundaryRestrictions,
       }]
     }
   },

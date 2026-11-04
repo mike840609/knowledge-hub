@@ -7,6 +7,7 @@ import { folderShareLinksMigration } from "./028-folder-share-links";
 import { reviewCommentMentionsMigration } from "./029-review-comment-mentions";
 import { namedShareRecipientsMigration } from "./030-named-share-recipients";
 import { feedbackStatusMigration } from "./031-feedback-status";
+import { taskKnowledgeExportMigration } from "./032-task-knowledge-export";
 import { shareCommentEventsMigration } from "./022-share-comment-events";
 import { reviewCommentEditDeleteMigration } from "./021-review-comment-edit-delete";
 import { feedbackReportsMigration } from "./020-feedback-reports";
@@ -62,4 +63,5 @@ export const migrations = [
   reviewCommentMentionsMigration,
   namedShareRecipientsMigration,
   feedbackStatusMigration,
+  taskKnowledgeExportMigration,
 ] as const;
