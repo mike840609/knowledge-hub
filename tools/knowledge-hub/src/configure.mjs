@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline";
-import { checkHubUrl, IS_WINDOWS, keysUsingBinding, projectKey, readCredential, readProject, writeCredential, writeProject } from "./project-config.mjs";
+import { checkHubUrl, configKey, IS_WINDOWS, keysUsingBinding, readCredential, writeConfig, writeCredential } from "./project-config.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -42,28 +42,22 @@ export async function configure(flags) {
   if (flags.rotate) {
     if (!UUID.test(flags.rotate)) throw new UsageError("--rotate needs a binding ID.");
     storeCredential(flags.rotate, await readToken(`New export token for binding ${flags.rotate}: `));
-    console.log(`Credential for binding ${flags.rotate} replaced; ${keysUsingBinding(flags.rotate).length} project key(s) use it.`);
+    console.log(`Credential for binding ${flags.rotate} replaced; ${keysUsingBinding(flags.rotate).length} profile(s) use it.`);
     return 0;
   }
-  const key = projectKey(process.cwd(), flags.profile);
-  if (flags.from) {
-    const source = readProject(projectKey(flags.from, flags.profile));
-    if (!source) throw new UsageError(`${flags.from} is not configured${flags.profile ? ` for profile ${flags.profile}` : ""}.`);
-    writeProject(key, source);
-    console.log(`This project now shares binding ${source.bindingId} with ${flags.from}. Both export into the same binding.`);
-    return 0;
-  }
+  if (flags.from !== undefined) throw new UsageError("configure --from is no longer needed: one configure serves every project on this machine.");
+  const key = configKey(flags.profile);
   const hubUrl = (flags["hub-url"] ?? (await ask("Knowledge Hub URL"))).replace(/\/+$/, "");
   const allowInsecureLocalhost = flags["allow-insecure-localhost"] === true;
   const problem = checkHubUrl(hubUrl, allowInsecureLocalhost);
   if (problem) throw new UsageError(problem);
   const bindingId = flags["binding-id"] ?? (await ask("Binding ID"));
   if (!UUID.test(bindingId)) throw new UsageError("The binding ID is not a valid ID.");
-  // Always asks: after a rotation this same command must take the new token. Sharing without one is --from.
+  // Always asks: after a rotation this same command must take the new token.
   const replaced = readCredential(bindingId) !== null;
   storeCredential(bindingId, await readToken(`Export token for binding ${bindingId}: `));
-  if (replaced) console.log(`Replaced the stored credential for binding ${bindingId}; ${keysUsingBinding(bindingId).length} project key(s) already use it.`);
-  writeProject(key, { hubUrl, bindingId, allowInsecureLocalhost });
-  console.log(`Configured ${key} to export with binding ${bindingId}.`);
+  if (replaced) console.log(`Replaced the stored credential for binding ${bindingId}.`);
+  writeConfig(key, { hubUrl, bindingId, allowInsecureLocalhost });
+  console.log(`Configured${flags.profile ? ` profile ${flags.profile}` : ""} to export with binding ${bindingId}, from every project on this machine.`);
   return 0;
 }

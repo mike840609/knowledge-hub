@@ -50,6 +50,12 @@ describe("the shared hub-export Skill", () => {
     for (const field of ["schemaVersion", "taskId", "artifactRevision", "bindingId"]) expect(skill()).not.toContain(field);
   });
 
+  it("leaves completedAt to the command instead of guessing a time", () => {
+    const text = skill();
+    expect(text.toLowerCase()).toMatch(/leave out `completedat`[^\n]*the command sets[^\n]*current time/);
+    expect(/```json\n([\s\S]*?)```/.exec(text)![1]).not.toContain("completedAt");
+  });
+
   it("records verification from evidence only and references Wiki pages only when explicit", () => {
     const text = skill().toLowerCase();
     expect(text).toMatch(/never .*"passed".*without/);
@@ -104,8 +110,17 @@ describe("the setup docs", () => {
     const text = readFileSync(path.join(ROOT, doc), "utf8");
     const block = /<!-- example-content -->\s*```json\n([\s\S]*?)```/.exec(text);
     expect(block).not.toBeNull();
-    expect(() => parseTaskContent(JSON.parse(block![1]))).not.toThrow();
-    for (const command of ["configure --from", "configure --rotate", "export --retry", "install-agent"]) expect(text).toContain(command);
+    // What the CLI sends: the example plus the completion time it sets.
+    expect(() => parseTaskContent({ completedAt: "2026-11-05T10:00:00Z", ...JSON.parse(block![1]) })).not.toThrow();
+    for (const command of ["/cli/knowledge-hub.tgz", "configure --rotate", "export --retry", "install-agent"]) expect(text).toContain(command);
+    expect(text).not.toContain("configure --from");
+    expect(text).not.toContain("npm pack");
+  });
+
+  it.each(["docs/task-export-setup.md", "docs/task-export-setup.zh-TW.md"])("%s example content may leave completedAt to the CLI", (doc) => {
+    const text = readFileSync(path.join(ROOT, doc), "utf8");
+    const block = /<!-- example-content -->\s*```json\n([\s\S]*?)```/.exec(text);
+    expect(JSON.parse(block![1])).not.toHaveProperty("completedAt");
   });
 });
 

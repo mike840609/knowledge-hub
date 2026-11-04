@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { MAX_ARTIFACT_BYTES, validateArtifact, validateContent } from "./artifact.mjs";
 import { UsageError } from "./configure.mjs";
-import { checkHubUrl, projectKey, readCredential, readProject } from "./project-config.mjs";
+import { checkHubUrl, configKey, readConfig, readCredential } from "./project-config.mjs";
 import { secretRule } from "./secret-scan.mjs";
 import { knownLatest, listMetas, readMeta, readRevision, saveRevision, sha256, unconfirmedRevision, writeMeta } from "./state.mjs";
 
@@ -22,9 +22,9 @@ const taskCommand = (taskId) => `knowledge-hub export --task ${taskId}`;
 const discardCommand = (taskId) => `knowledge-hub export --discard ${taskId}`;
 
 function context(flags) {
-  const key = projectKey(process.cwd(), flags.profile);
-  const project = readProject(key);
-  if (!project) throw new Refusal("This project is not configured. Run `knowledge-hub configure` here first (or `configure --from <otherRoot>`).");
+  const key = configKey(flags.profile);
+  const project = readConfig(key);
+  if (!project) throw new Refusal(`Export is not configured${flags.profile ? ` for profile ${flags.profile}` : ""}. Run the \`knowledge-hub configure\` command from the Knowledge Hub setup page first.`);
   return { key, project };
 }
 
@@ -43,6 +43,8 @@ async function readContent(project) {
   } catch {
     throw new Refusal("stdin is not valid JSON task content.");
   }
+  // The Agent cannot read the clock; the CLI can. Set once here, so a retry resends the same bytes.
+  if (raw && typeof raw === "object" && !Array.isArray(raw) && raw.completedAt === undefined) raw.completedAt = new Date().toISOString();
   try {
     validateContent(raw);
   } catch (error) {
@@ -82,8 +84,8 @@ function pendingList(key) {
 function recordedBindingRefusal(meta, project) {
   if (meta.bindingId === project.bindingId) return;
   throw new Refusal(
-    `Task ${meta.taskId} was sent under binding ${meta.bindingId}, but this project is now configured with binding ${project.bindingId}.\n` +
-      `Run ${discardCommand(meta.taskId)}, or reconfigure this project to binding ${meta.bindingId}.`,
+    `Task ${meta.taskId} was sent under binding ${meta.bindingId}, but export is now configured with binding ${project.bindingId}.\n` +
+      `Run ${discardCommand(meta.taskId)}, or run configure again with binding ${meta.bindingId}.`,
   );
 }
 
@@ -143,8 +145,8 @@ async function send(key, project, meta, revisionNo) {
       revision.bindingId = body.bindingId;
       meta.bindingId = body.bindingId;
       save({ state: "rejected", lastOutcome: status });
-      console.error(`Knowledge Hub stored this revision under binding ${body.bindingId}, but this project is configured with binding ${project.bindingId}. Task ID: ${id}`);
-      console.error(`The token stored for this project belongs to the other binding. Fix it with: knowledge-hub configure --rotate ${project.bindingId}`);
+      console.error(`Knowledge Hub stored this revision under binding ${body.bindingId}, but export is configured with binding ${project.bindingId}. Task ID: ${id}`);
+      console.error(`The stored token belongs to the other binding. Fix it with: knowledge-hub configure --rotate ${project.bindingId}`);
       return EXIT.ACTION;
     }
     save({ state: "confirmed", lastOutcome: status });
@@ -188,7 +190,7 @@ async function exportNew(flags) {
   const pending = pendingList(key);
   if (pending.length > 0) {
     throw new Refusal(
-      `Earlier exports from this project are not confirmed yet. If one of them is this same task, retry it instead of exporting again:\n${pending.join("\n")}`,
+      `Earlier exports are not confirmed yet. If one of them is this same task, retry it instead of exporting again:\n${pending.join("\n")}`,
     );
   }
   const content = await readContent(project);
@@ -199,7 +201,7 @@ async function exportNew(flags) {
 
 function knownTask(key, taskId) {
   const meta = taskId ? readMeta(key, taskId) : null;
-  if (!meta) throw new Refusal(`Task ${taskId ?? "(none)"} is not known in this project's saved exports.`);
+  if (!meta) throw new Refusal(`Task ${taskId ?? "(none)"} is not known in the saved exports on this machine.`);
   return meta;
 }
 

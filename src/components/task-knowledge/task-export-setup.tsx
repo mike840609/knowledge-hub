@@ -32,12 +32,10 @@ async function send(path: string, method: string, body?: unknown): Promise<unkno
 function Commands({ bindingId, token }: Issued) {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const [copied, setCopied] = useState(false);
+  const local = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin) ? " --allow-insecure-localhost" : "";
   const commands = [
-    "# once per machine, from a Knowledge Hub checkout",
-    "cd <hub-checkout>/tools/knowledge-hub && npm pack && npm install -g ./knowledge-hub-*.tgz",
-    "knowledge-hub install-agent",
-    "# once per project, in that project; paste the token at the hidden prompt",
-    `knowledge-hub configure --hub-url ${origin} --binding-id ${bindingId}`,
+    "# once per machine; paste the token at the hidden prompt",
+    `npm install -g ${origin}/cli/knowledge-hub.tgz && knowledge-hub install-agent && knowledge-hub configure --hub-url ${origin} --binding-id ${bindingId}${local}`,
   ].join("\n");
   return (
     <div className="space-y-3 rounded-md border border-kh-border p-4" role="status">

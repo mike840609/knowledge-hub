@@ -135,28 +135,31 @@ describe("configure", () => {
     expect((await run(["configure", "--hub-url", "https://hub.example.com", "--binding-id", B1], { stdin: TOKEN })).code).toBe(0);
   });
 
-  it("gives two worktrees of one repository two keys, and joins them only through --from", async () => {
+  it("one configure serves every project and worktree of the user", async () => {
     const git = (args: string[], cwd = project) => spawnSync("git", args, { cwd, env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null" } });
     git(["init", "-q"]);
     git(["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "x"]);
     const sibling = path.join(project, "..", `${path.basename(project)}-wt`);
     git(["worktree", "add", "-q", sibling]);
+    const unrelated = realpathSync(mkdtempSync(path.join(tmpdir(), "kh-other-")));
     try {
-      await configure();
+      expect((await configure([], TOKEN, unrelated)).code).toBe(0);
       const nested = path.join(project, "sub");
       mkdirSync(nested);
-      expect((await run(["export", "--new"], { stdin: content(), cwd: nested })).code).toBe(0);
-      const unconfigured = await run(["export", "--new"], { stdin: content(), cwd: sibling });
-      expect(unconfigured.code).toBe(2);
-      expect(hub.received).toHaveLength(1);
-      const joined = await run(["configure", "--from", project], { cwd: sibling });
-      expect(joined.code).toBe(0);
-      expect(joined.out).toContain(B1);
-      expect((await run(["export", "--new"], { stdin: content(), cwd: sibling })).code).toBe(0);
-      expect(hub.received.map((request) => request.token)).toEqual([TOKEN, TOKEN]);
+      for (const cwd of [nested, sibling, unrelated]) expect((await run(["export", "--new"], { stdin: content(), cwd })).code).toBe(0);
+      expect(hub.received.map((request) => request.token)).toEqual([TOKEN, TOKEN, TOKEN]);
     } finally {
       rmSync(sibling, { recursive: true, force: true });
+      rmSync(unrelated, { recursive: true, force: true });
     }
+  });
+
+  it("refuses an export before configure, naming configure", async () => {
+    const result = await exportNew();
+    expect(result.code).toBe(2);
+    expect(result.out).toContain("knowledge-hub configure");
+    expect(result.out).not.toContain("--from");
+    expect(hub.received).toHaveLength(0);
   });
 
   it("separates bindings by --profile", async () => {
@@ -167,11 +170,10 @@ describe("configure", () => {
     expect(hub.received[0].token).toBe(TOKEN2);
   });
 
-  it("--rotate updates every key that shares the binding", async () => {
+  it("--rotate updates every project using the binding", async () => {
     await configure();
     const other = realpathSync(mkdtempSync(path.join(tmpdir(), "kh-other-")));
     try {
-      await run(["configure", "--from", project], { cwd: other });
       expect((await run(["configure", "--rotate", B1], { stdin: TOKEN2 })).code).toBe(0);
       await exportNew();
       await run(["export", "--new"], { stdin: content(), cwd: other });
@@ -179,6 +181,39 @@ describe("configure", () => {
     } finally {
       rmSync(other, { recursive: true, force: true });
     }
+  });
+});
+
+describe("completedAt", () => {
+  beforeEach(async () => { await configure(); });
+  const withoutTime = () => { const { completedAt: _omit, ...rest } = minimal; void _omit; return JSON.stringify(rest); };
+
+  it("is set by the CLI to the current time when the Agent leaves it out", async () => {
+    const before = Date.now();
+    expect((await exportNew(withoutTime())).code).toBe(0);
+    const sent = hub.received[0].json.completedAt as string;
+    expect(sent).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/);
+    expect(Date.parse(sent)).toBeGreaterThanOrEqual(before - 1000);
+    expect(Date.parse(sent)).toBeLessThanOrEqual(Date.now() + 1000);
+    expect(() => parseTaskArtifact(hub.received[0].json)).not.toThrow();
+  });
+
+  it("keeps the Agent's own time when it gives one", async () => {
+    await exportNew(content({ completedAt: "2026-11-04T10:00:00+08:00" }));
+    expect(hub.received[0].json.completedAt).toBe("2026-11-04T10:00:00+08:00");
+  });
+
+  it("a retry resends the same bytes, the CLI-set time included", async () => {
+    hub.replies.push("timeout");
+    const first = await exportNew(withoutTime());
+    expect(first.code).toBe(3);
+    expect((await run(["export", "--retry", taskIdOf(first.out)])).code).toBe(0);
+    expect(hub.received[1].body.equals(hub.received[0].body)).toBe(true);
+  });
+
+  it("still refuses a malformed time", async () => {
+    expect((await exportNew(content({ completedAt: "yesterday" }))).code).toBe(2);
+    expect(hub.received).toHaveLength(0);
   });
 });
 

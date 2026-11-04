@@ -5,62 +5,41 @@
 
 [English](task-export-setup.md)
 
-## 1. 安裝指令
-
-需要 Node.js 20.19 以上。在 Hub repository 的 checkout 中：
-
-```bash
-cd tools/knowledge-hub
-npm pack                       # 產生 knowledge-hub-<version>.tgz
-npm install -g ./knowledge-hub-*.tgz
-knowledge-hub help
-```
-
-這個 tarball 沒有任何相依套件；可以複製到另一台機器，用同樣方式安裝。
-
-## 2. 建立 binding
+## 1. 建立 binding
 
 在 Knowledge Hub 開啟 **My Space → Tasks → Set up export**，替 binding 取個標籤（例如所在的機器），
-然後建立。Agent 用路徑寫的 Wiki 引用，只要 My Space 裡恰好有一個已同步資料夾有該路徑，就會連到那一頁。頁面只會顯示一次密鑰，並附上這個 binding 專用的
-`configure` 指令。請立刻複製密鑰，之後不會再顯示。
+然後建立。頁面只會顯示一次密鑰，並附上這個 binding 專用的一行設定指令。請立刻複製密鑰，之後不會再顯示。
 
-## 3. 設定每個專案
+## 2. 每台機器執行一次設定指令
 
-在專案根目錄執行頁面顯示的指令，然後在隱藏輸入提示貼上密鑰：
+需要 Node.js 20.19 以上。執行頁面顯示的那一行，然後在隱藏輸入提示貼上密鑰：
 
 ```bash
-knowledge-hub configure --hub-url https://km.example.com --binding-id <binding-id>
+npm install -g https://km.example.com/cli/knowledge-hub.tgz && knowledge-hub install-agent && knowledge-hub configure --hub-url https://km.example.com --binding-id <binding-id>
 ```
 
-密鑰不會出現在命令列上。它以 binding 為單位存在你的使用者設定目錄，只有你能讀取；
-執行 `configure` 一律會詢問密鑰並取代已存的那份，所以輪替後用同一個指令即可換上新密鑰；
-要在另一個專案沿用 binding 而不再貼一次，請用 `configure --from`。
+- `npm install -g` 安裝 Hub 自己提供的 `knowledge-hub` 指令，版本一定和伺服器一致。
+- `install-agent` 在 `~/.claude/skills/hub-export/SKILL.md` 安裝 Claude Code Skill，並在
+  `~/.config/opencode/commands/hub-export.md` 安裝指向同一份 Skill 的 OpenCode 指令。
+  它不會覆寫你改過的檔案；加 `--force` 才會取代。加 `--claude` 只裝 Claude Code。
+- `configure` 把 Hub URL、binding 與密鑰存在你的使用者設定目錄，只有你能讀取。密鑰不會出現在命令列上。
 
-- **Git worktree 與其他 checkout：** 用
-  `knowledge-hub configure --from <已設定專案的路徑>` 沿用已設定的專案。
-- **同一專案兩個 binding：** 在 `configure` 與每次 `export` 加上 `--profile <name>`。
+這樣就完成了：這台機器上的每個專案與 worktree 都能匯出，不必逐一設定專案。
+
+- **第二個 binding：** 在 `configure` 與每次 `export` 加上 `--profile <name>`。
 - **輪替密鑰：** 先在設定頁輪替，再執行
-  `knowledge-hub configure --rotate <binding-id>` 貼上新密鑰。所有使用該 binding 的
-  專案都會一起更新。
+  `knowledge-hub configure --rotate <binding-id>` 貼上新密鑰。再執行一次同樣的
+  `configure` 也會詢問密鑰並取代已存的那份。
 
-## 4. 安裝 `/hub-export` 指令
+Agent 用路徑寫的 Wiki 引用，只要 My Space 裡恰好有一個已同步資料夾有該路徑，就會連到那一頁。
 
-```bash
-knowledge-hub install-agent              # Claude Code 與 OpenCode
-knowledge-hub install-agent --claude     # 只裝 Claude Code
-```
-
-這會在 `~/.claude/skills/hub-export/SKILL.md` 安裝 Claude Code Skill，並在
-`~/.config/opencode/commands/hub-export.md` 安裝指向同一份 Skill 的 OpenCode 指令。
-它不會覆寫你改過的檔案；加 `--force` 才會取代。
-
-## 5. 匯出任務
+## 3. 匯出任務
 
 完成任務後輸入 `/hub-export`。Agent 會寫一段任務的簡短描述，pipe 給
 `knowledge-hub export --new`，並回報 URL 與 Task ID。之後要更新這筆匯出，請 Agent
 更新即可；它會執行 `knowledge-hub export --task <task-id>`。
 
-Agent 寫出的內容長這樣：
+Agent 寫出的內容長這樣，完成時間由指令補上：
 
 <!-- example-content -->
 ```json
@@ -69,7 +48,6 @@ Agent 寫出的內容長這樣：
   "status": "completed",
   "title": "修正登入重新導向迴圈",
   "summary": "Session cookie 過期時，登入頁不再導向自己。",
-  "completedAt": "2026-11-04T10:00:00+08:00",
   "verification": { "status": "passed", "checks": ["npm test -- auth: 12 passed"] },
   "references": [
     { "type": "WIKI", "path": "architecture/auth.md" },

@@ -7,71 +7,52 @@ never sent unless you ask for it (`/hub-export`).
 
 [繁體中文](task-export-setup.zh-TW.md)
 
-## 1. Install the command
-
-Node.js 20.19 or later is required. From a checkout of the Hub repository:
-
-```bash
-cd tools/knowledge-hub
-npm pack                       # writes knowledge-hub-<version>.tgz
-npm install -g ./knowledge-hub-*.tgz
-knowledge-hub help
-```
-
-The tarball has no dependencies; you can copy it to another machine and install it
-there the same way.
-
-## 2. Create a binding
+## 1. Create a binding
 
 In Knowledge Hub open **My Space → Tasks → Set up export**, give the binding a
-label (for example the machine it runs on), and create it. A Wiki reference the
-Agent writes as a path links to the page when exactly one synced folder in My
-Space has that path. The page shows a secret
-once, and the exact `configure` command for this binding. Copy the secret now;
-it is not shown again.
+label (for example the machine it runs on), and create it. The page shows a
+secret once, and one setup line for this binding. Copy the secret now; it is not
+shown again.
 
-## 3. Configure each project
+## 2. Run the setup line, once per machine
 
-Run the command the page shows from the project root, then paste the secret at
-the hidden prompt:
+Node.js 20.19 or later is required. Run the line the page shows, then paste the
+secret at the hidden prompt:
 
 ```bash
-knowledge-hub configure --hub-url https://km.example.com --binding-id <binding-id>
+npm install -g https://km.example.com/cli/knowledge-hub.tgz && knowledge-hub install-agent && knowledge-hub configure --hub-url https://km.example.com --binding-id <binding-id>
 ```
 
-The secret is never passed on the command line. It is stored once per binding in
-your user config directory, readable only by you. Running `configure` always asks
-for the secret and replaces the stored one, so the same command takes a new secret
-after a rotation; to reuse a binding in another project without pasting it, use
-`configure --from`.
+- `npm install -g` installs the `knowledge-hub` command the Hub itself serves, so
+  its version always matches the server.
+- `install-agent` installs a Claude Code Skill at
+  `~/.claude/skills/hub-export/SKILL.md` and an OpenCode command at
+  `~/.config/opencode/commands/hub-export.md` that points at the same Skill. It
+  never overwrites a file you edited; `--force` replaces it. `--claude` installs
+  the Claude Code Skill only.
+- `configure` stores the Hub URL, the binding and the secret in your user config
+  directory, readable only by you. The secret is never passed on the command line.
 
-- **Git worktrees and other checkouts:** reuse an already configured project with
-  `knowledge-hub configure --from <path-to-configured-project>`.
-- **Two bindings in one project:** add `--profile <name>` to `configure` and to
-  every `export`.
+That is all: every project and worktree on this machine can now export. There is
+nothing to configure per project.
+
+- **A second binding:** add `--profile <name>` to `configure` and to every
+  `export`.
 - **Rotating the secret:** rotate it on the setup page, then run
-  `knowledge-hub configure --rotate <binding-id>` and paste the new one. Every
-  project using that binding picks it up.
+  `knowledge-hub configure --rotate <binding-id>` and paste the new one.
+  Running the same `configure` again also asks for the secret and replaces it.
 
-## 4. Install the `/hub-export` command
+A Wiki reference the Agent writes as a path links to the page when exactly one
+synced folder in My Space has that path.
 
-```bash
-knowledge-hub install-agent              # Claude Code and OpenCode
-knowledge-hub install-agent --claude     # Claude Code only
-```
-
-This installs a Claude Code Skill at `~/.claude/skills/hub-export/SKILL.md` and an
-OpenCode command at `~/.config/opencode/commands/hub-export.md` that points at the
-same Skill. It never overwrites a file you edited; `--force` replaces it.
-
-## 5. Export a task
+## 3. Export a task
 
 After finishing a task, type `/hub-export`. The Agent writes a short description
 of the task, pipes it to `knowledge-hub export --new`, and reports the URL and the
 Task ID. To update that export later, ask the Agent to update it; it runs
 `knowledge-hub export --task <task-id>`.
 
-The content the Agent writes looks like this:
+The content the Agent writes looks like this; the command adds the completion time:
 
 <!-- example-content -->
 ```json
@@ -80,7 +61,6 @@ The content the Agent writes looks like this:
   "status": "completed",
   "title": "Fix login redirect loop",
   "summary": "Stopped the sign-in page from redirecting to itself when the session cookie had expired.",
-  "completedAt": "2026-11-04T10:00:00Z",
   "verification": { "status": "passed", "checks": ["npm test -- auth: 12 passed"] },
   "references": [
     { "type": "WIKI", "path": "architecture/auth.md" },

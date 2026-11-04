@@ -17,13 +17,22 @@ Success: one command from a configured project yields a new Task Result, visible
 | Summary | Current Claude Code/OpenCode Agent | Hub-hosted LLM |
 | Tooling | Shared Skill + CLI, installed per user; OpenCode command adapter | MCP write server |
 | Target | Owner's My Space only | Team Workspace auto-export |
-| Binding | One-time Local Project → the owner's My Space; no Source is chosen | Per-task Workspace selection |
+| Binding | One-time per-user setup → the owner's My Space; no Source is chosen (Amendment 2) | Per-task Workspace selection |
 | Connections | Explicit Wiki references resolved across the My Space's ACTIVE FOLDER_SYNC Sources | LLM semantic matching |
 | Storage | Independent Task Knowledge asset and revision | Converting to editable Wiki |
 | Reliability | Idempotent API, CLI-owned task identity, confirmed revision sequence, manual retry | Persistent Outbox and daemon |
 | Future | MCP retrieval, automatic Hooks, graph integration | Not required to ship MVP |
 
 **Amendment (2026-11-04, during implementation).** The binding first named one FOLDER_SYNC Source, chosen at setup. The Source served only Wiki path resolution, yet it made export impossible for a user with no synced folder. The binding now names the owner's My Space, and a Wiki path is resolved by exact match across that My Space's ACTIVE FOLDER_SYNC Sources: one match resolves, a path present in several Sources is AMBIGUOUS, none is UNRESOLVED. Resolution never leaves the My Space, so no cross-Workspace guarantee changes. §4, §6 and §7 below are written for the amended binding.
+
+**Amendment 2 (2026-11-05): one setup per machine.** A real run showed setup was four install steps from a Hub checkout plus a `configure` in every project and worktree, although a binding no longer names anything project-specific. Now:
+
+- **Install from the Hub.** The Hub serves the CLI it was built with at `GET /cli/knowledge-hub.tgz`, packed from `tools/knowledge-hub` (`npm pack`) before `next dev` and `next build`, so `npm install -g <hub>/cli/knowledge-hub.tgz` needs no checkout and installs the server's own version. The path is public by exact match (site password and Google sign-in exempt, like the ingest route) because npm sends no session; the tarball holds only the CLI and the Skill, the same for every user, never data, config or a credential.
+- **Configure once per user.** Config is keyed by profile only (`default`, or `--profile <name>` for a second binding), not by project. One `configure` serves every project and worktree; `configure --from` is removed. Revision state is kept per profile, so an unconfirmed export blocks `--new` from any project until it is retried.
+- **The CLI dates the task.** `completedAt` is optional in Agent content; when it is absent the CLI sets the current time before saving revision 1 (or the new revision), so a retry still resends identical bytes. The Agent no longer guesses a time it cannot read.
+- **One line on the setup page.** `npm install -g <hub>/cli/knowledge-hub.tgz && knowledge-hub install-agent && knowledge-hub configure --hub-url <hub> --binding-id <id>`, then the token at the hidden prompt.
+
+§4, §5, §6 and §8 below are written for this setup.
 
 ## 3. Existing system boundaries
 
@@ -40,8 +49,8 @@ The feature is wired in `src/server/composition.ts`, the only composition root, 
 ## 4. User flow
 
 1. A browser-authenticated user in an ACTIVE PERSONAL My Space creates an Export Binding for it (a label only) and a restricted credential.
-2. Once per machine, the user installs the CLI from a packed tarball (`npm pack` in `<hub-checkout>/tools/knowledge-hub`, then `npm install -g <tarball>`), so later branch switches in the Hub checkout do not change the installed CLI. They run `knowledge-hub install-agent`, which copies the shared Skill and the OpenCode command into the user-level directories of each tool. They then work in any project, not only the Hub repo.
-3. Once per project, the user runs `knowledge-hub configure` there. The CLI stores, locally and outside the repo, the Hub URL (with `--allow-insecure-localhost` only for a local development server), the binding ID and the credential. Credential input must not appear in shell history, Agent prompts, command arguments or Git. In another worktree of the same project, `knowledge-hub configure --from <otherRoot>` makes that worktree use the same binding on purpose; there is never a silent fallback.
+2. Once per machine, the user runs the setup page's one line: `npm install -g <hub>/cli/knowledge-hub.tgz` installs the CLI the Hub serves; `knowledge-hub install-agent` copies the shared Skill and the OpenCode command into the user-level directories of each tool. They then work in any project, not only the Hub repo.
+3. In the same line, `knowledge-hub configure` stores, per user and outside every repo, the Hub URL (with `--allow-insecure-localhost` only for a local development server), the binding ID and the credential. It serves every project and worktree. Credential input must not appear in shell history, Agent prompts, command arguments or Git.
 4. The user completes a task and invokes `/hub-export`.
 5. The Agent writes the summary content (§5, Agent-authored fields) as JSON to the CLI's stdin: `knowledge-hub export --new`. The CLI mints the Task ID, sets revision 1, saves the full artifact in its own state directory, records its hash, and posts HTTPS to Knowledge Hub. The Agent never writes files outside the project and never sets identity fields. It must not invent tests, changes or references.
 6. On a retryable failure the CLI keeps the saved artifact as unconfirmed and prints `knowledge-hub export --retry <taskId>`, which resends it unchanged.
@@ -51,7 +60,7 @@ This MVP does not auto-detect task completion. Only completed tasks can be expor
 
 ## 5. Artifact contract
 
-**Agent-authored fields** (what the Agent pipes to the CLI): `agent`, `status: completed`, non-empty `title`, `summary`, `completedAt`, `verification.status` (`passed`, `failed`, `not_run`, `not_applicable`); optional `verification.checks`, `findings`, `decisions`, `changes`, `references`.
+**Agent-authored fields** (what the Agent pipes to the CLI): `agent`, `status: completed`, non-empty `title`, `summary`, `verification.status` (`passed`, `failed`, `not_run`, `not_applicable`); optional `completedAt` (the CLI sets the current time when it is absent; the stored artifact always has it), `verification.checks`, `findings`, `decisions`, `changes`, `references`.
 
 **CLI-owned fields** (added by the CLI, never accepted from the Agent): `schemaVersion: 1`, `taskId` (UUIDv4), `artifactRevision` (positive integer). The binding is not an artifact field: the server takes it from the credential.
 
@@ -69,7 +78,7 @@ Non-WIKI references stay external and are rendered as links only when they pass 
 
 **Task identity.** The CLI mints Task IDs; the Agent never does.
 
-**Revision sequence.** The CLI keeps its state per project key: each task created under the key, with every saved revision's canonical hash, the binding it was sent under, its state, and a sticky `mayBeStored` flag (set by any send whose outcome the CLI could not trust: network error, timeout or 5xx; never cleared by a later answer). Task IDs are looked up only within the key, so a `--from` sibling worktree has its own task list. Losing the state directory is harmless except that old tasks can no longer be revised from this machine (`--task` exits 2).
+**Revision sequence.** The CLI keeps its state per profile: each task created under the key, with every saved revision's canonical hash, the binding it was sent under, its state, and a sticky `mayBeStored` flag (set by any send whose outcome the CLI could not trust: network error, timeout or 5xx; never cleared by a later answer). Task IDs are looked up only within the profile. Losing the state directory is harmless except that old tasks can no longer be revised from this machine (`--task` exits 2).
 
 A saved revision is in one of three states:
 - **unconfirmed:** saved, and not yet answered with 200/201 or a final rejection. This covers network errors, timeouts, 5xx, and the two recoverable rejections: 401 (fix with `configure --rotate`, then `--retry`) and 409 `TASK_ARCHIVED` (restore in My Space, then `--retry`).
@@ -77,7 +86,7 @@ A saved revision is in one of three states:
 - **rejected:** the server answered any other 4xx, or answered 200/201 with a different `bindingId` (the **response `bindingId` mismatch**: the revision is stored under the server's binding, which the CLI records as the binding the task was sent under, replacing the configured one. A later `--task` from the corrected key therefore meets the recorded-binding refusal, and the user continues with `--new`; the CLI never sends that task under a second binding). A rejected revision blocks nothing. The CLI prints why, and the next step.
 
 Commands:
-- `export --new` mints a task and saves revision 1. It is refused (exit 2) while this project key has an unconfirmed revision. The refusal lists every task with an unconfirmed revision, each with its `title`, `completedAt`, `summary` opening and `--retry` command, so the Agent can tell whether one of them is the same work (§8, Skill rule). A timeout that actually committed therefore leads to `--retry` (answered 200), not to a second Task.
+- `export --new` mints a task and saves revision 1. It is refused (exit 2) while this profile has an unconfirmed revision. The refusal lists every task with an unconfirmed revision, each with its `title`, `completedAt`, `summary` opening and `--retry` command, so the Agent can tell whether one of them is the same work (§8, Skill rule). A timeout that actually committed therefore leads to `--retry` (answered 200), not to a second Task.
 - `export --retry <taskId>` resends the task's unconfirmed revision unchanged. If none is unconfirmed, it says so and exits 0.
 - `export --task <taskId>` reads new content and saves revision n+1, where n is the latest revision the server is known to hold: the larger of the latest confirmed revision and the latest number reported in a 409 body, with "none known" counting as 0. If revision n+1 already exists locally as rejected, its number is reused and its record replaced. It is refused while the task has an unconfirmed revision, and refused (the **recorded-binding refusal**) when the current configuration names a different binding than the one the task was sent under.
 - `export --discard <taskId>` marks the task's unconfirmed revision rejected without sending it. It is the explicit way out when an unconfirmed revision should not or cannot be sent: its binding was revoked, the key now uses another binding, or the task was archived on purpose. A revision with `mayBeStored` set (any earlier send ended in a network error, timeout or 5xx, which a proxy may return after the server committed) may already be stored on the server, even if a later send was answered with 401; the CLI says so and recommends `--retry` first to find out. Discarding never removes anything from Hub.
@@ -105,7 +114,7 @@ Server rules:
 
 **Local storage:** the CLI keeps one credential file per binding under the user's configuration directory, created with mode `0600` on POSIX. On Windows, where `chmod` does not apply, the file lives under the user profile and the CLI prints a warning that protection depends on the profile's ACL. Project keys reference a binding; they do not copy its credential, so one rotation is entered once (`knowledge-hub configure --rotate <bindingId>`) and every key that uses the binding picks it up. No OS keychain integration in MVP; no new runtime package. The CLI accepts the token through a hidden interactive prompt or stdin, never as ordinary argv.
 
-**Local config** is keyed by the realpath of the project's Git top-level directory (or of the working directory when the project is not in Git), plus an optional `--profile <name>` for several bindings in one project. Each worktree is a separate key. `configure --from` is the only way two keys use one binding, and it is an explicit act. The CLI checks the `bindingId` in every 200/201 response against the configured one and stops with an error if they differ (a token pasted under the wrong binding).
+**Local config** is per user, keyed by profile: `default`, or `--profile <name>` for another binding. Every project and worktree uses it; no project is configured on its own. The CLI checks the `bindingId` in every 200/201 response against the configured one and stops with an error if they differ (a token pasted under the wrong binding).
 
 **Archival and revocation.** Task Result lifecycle is `ACTIVE` / `ARCHIVED`, as everywhere in the product; there is no hard delete. The owner may archive and restore a Task Result from My Space; archiving an archived task or restoring an active one is a no-op, as for documents. A new revision into an ARCHIVED task is refused (409, `TASK_ARCHIVED`): a credential cannot change a lifecycle the owner set. An exact replay of a revision already accepted still answers 200, because it changes nothing. Revoking a binding stops new ingestion immediately; existing Task Results remain readable by their owner and show the binding's revoked status.
 
@@ -178,7 +187,7 @@ Definition of done: one manual command in either tool, in an ordinary project, p
 
 Automatic Hook/Plugin, persistent retry Outbox, MCP, complete conversation history, Team auto-export, semantic relations, CodeGraph, Task nodes in the general Graph, PDF/binary storage, historical Session backfill, automatic Wiki updates, credential expiry and OS keychain storage.
 
-**Agent-offered export (drafted 2026-11-05, not built).** Instead of a hook, the shared Skill could have the Agent *offer* an export at the end of a completed task; only a clear yes sends, through the unchanged §4 workflow. Drafted rules: offer only in a project where a new `knowledge-hub status` exits 0 (binding and credential present; prints no credential); "completed" means the user asked for work, the Agent did it in this conversation, it is ending its turn reporting it done (not asking, blocked or failing), and no check it ran is left failing; one question naming the title, silence or anything unclear is a no; at most once per task, never again after a no; a follow-up on an exported task offers `--task`, never a second `--new`. Claude Code loads Skills on its own judgement; OpenCode support is unverified. Build it with its own spec amendment when the manual trigger has been used for real.
+**Agent-offered export (drafted 2026-11-05, not built).** Instead of a hook, the shared Skill could have the Agent *offer* an export at the end of a completed task; only a clear yes sends, through the unchanged §4 workflow. Drafted rules: offer only where a new `knowledge-hub status` exits 0 (binding and credential present; prints no credential); "completed" means the user asked for work, the Agent did it in this conversation, it is ending its turn reporting it done (not asking, blocked or failing), and no check it ran is left failing; one question naming the title, silence or anything unclear is a no; at most once per task, never again after a no; a follow-up on an exported task offers `--task`, never a second `--new`. Claude Code loads Skills on its own judgement; OpenCode support is unverified. Build it with its own spec amendment when the manual trigger has been used for real.
 
 **Phase 7 relation.** The export credential is a non-human principal limited to `task-result:create`. The roadmap's Phase 7 open question (whether an Agent acts as a delegated human identity or as a generalised Principal) remains open. This MVP does not answer it, and does not create a precedent for it: the export credential is a narrow, revocable write grant and carries no human's identity. Phase 7 must decide the general model; the roadmap records this dependency.
 

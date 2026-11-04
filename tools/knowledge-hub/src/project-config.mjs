@@ -1,5 +1,4 @@
-import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -18,12 +17,9 @@ export function userDirs() {
   return { config: path.join(config, "knowledge-hub"), state: path.join(state, "knowledge-hub") };
 }
 
-/** The realpath of the Git top-level, or of the directory itself outside Git, plus the optional profile. */
-export function projectKey(cwd, profile) {
-  const git = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd, encoding: "utf8" });
-  const root = git.status === 0 && git.stdout.trim() ? git.stdout.trim() : cwd;
-  const real = realpathSync(root);
-  return profile ? `${real}#profile=${profile}` : real;
+/** Config is per user, not per project: one key per profile (task knowledge export design, Amendment 2). */
+export function configKey(profile) {
+  return profile ? `profile=${profile}` : "default";
 }
 
 function readJson(file, fallback) {
@@ -40,21 +36,21 @@ export function writePrivate(file, text) {
   renameSync(temporary, file);
 }
 
-const projectsFile = () => path.join(userDirs().config, "projects.json");
+const profilesFile = () => path.join(userDirs().config, "profiles.json");
 const credentialFile = (bindingId) => path.join(userDirs().config, "credentials", `${bindingId}.json`);
 
-export function readProject(key) {
-  return readJson(projectsFile(), {})[key] ?? null;
+export function readConfig(key) {
+  return readJson(profilesFile(), {})[key] ?? null;
 }
 
-export function writeProject(key, project) {
-  const all = readJson(projectsFile(), {});
-  all[key] = project;
-  writePrivate(projectsFile(), `${JSON.stringify(all, null, 2)}\n`);
+export function writeConfig(key, config) {
+  const all = readJson(profilesFile(), {});
+  all[key] = config;
+  writePrivate(profilesFile(), `${JSON.stringify(all, null, 2)}\n`);
 }
 
 export function keysUsingBinding(bindingId) {
-  return Object.entries(readJson(projectsFile(), {})).filter(([, project]) => project.bindingId === bindingId).map(([key]) => key);
+  return Object.entries(readJson(profilesFile(), {})).filter(([, config]) => config.bindingId === bindingId).map(([key]) => key);
 }
 
 export function readCredential(bindingId) {

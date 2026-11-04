@@ -23,6 +23,16 @@ test("task results in My Space: export, browse, version, archive and restore, al
   await page.getByRole("button", { name: "Create binding" }).click();
   const token = await page.getByLabel("Export token").inputValue();
 
+  // One setup line, once per machine, installing the CLI this Hub serves.
+  const origin = new URL(page.url()).origin;
+  const setupLine = await page.locator("pre").innerText();
+  expect(setupLine).toContain(`npm install -g ${origin}/cli/knowledge-hub.tgz && knowledge-hub install-agent && knowledge-hub configure --hub-url ${origin} --binding-id `);
+  expect(setupLine).toContain("--allow-insecure-localhost");
+  expect(setupLine).not.toContain("checkout");
+  const tarball = await request.get("/cli/knowledge-hub.tgz");
+  expect(tarball.status()).toBe(200);
+  expect([...(await tarball.body()).subarray(0, 2)]).toEqual([0x1f, 0x8b]);
+
   const taskId = crypto.randomUUID();
   const first = {
     schemaVersion: 1, taskId, artifactRevision: 1, agent: "claude-code", status: "completed",

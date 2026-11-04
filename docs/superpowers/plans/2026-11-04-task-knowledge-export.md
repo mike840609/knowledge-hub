@@ -12,6 +12,8 @@
 
 **Amendment (2026-11-04, after Task 10):** the binding names the owner's My Space instead of one FOLDER_SYNC Source (spec amendment above §3). Where a task below says "bound Source", read "the binding Workspace's ACTIVE FOLDER_SYNC Sources": an exact path in one of them resolves, a path in several is AMBIGUOUS, and the setup page asks for a label only.
 
+**Amendment 2 (2026-11-05):** setup is once per machine (spec Amendment 2). Where a task below keys CLI config or state by project root, or uses `configure --from` or a Hub checkout with `npm pack`, read: config and state keyed by profile, no `--from`, and `npm install -g <hub>/cli/knowledge-hub.tgz` from the tarball `scripts/pack-cli.mjs` packs before dev and build. `completedAt` is optional in Agent content; the CLI sets the current time.
+
 ## Global Constraints
 
 - **Trigger:** manual `/hub-export` only; no Stop/Idle Hook, background daemon or persistent Outbox.
