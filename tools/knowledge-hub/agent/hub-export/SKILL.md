@@ -74,8 +74,10 @@ Do not write the JSON to a file outside the project; pipe it.
 ## 4. Act on the result
 
 - Exit 0: report the URL and the Task ID the command printed.
+- Exit 2 whose message names `knowledge-hub configure` or `--discard` is a setup problem, not a content problem: report the message and the next command verbatim, and stop.
 - Exit 2 without `--retry` hints means the command refused the content locally (for example an absolute `CODE_FILE` path, a suspected secret, or content over 64 KiB): correct your own JSON (make the path relative, remove the secret, shorten the text), run the same command again, and tell the user what you changed.
 - Exit 2 with `--retry` hints means earlier exports from this project are not confirmed yet, and `--new` was refused. Run each `knowledge-hub export --retry <task-id>` it lists, one at a time. If one fails, report its message and stop. After they succeed, judge by meaning whether a listed task is the same work as the current task — not by titles or times being equal. If it is the same work, report the retried URL and stop. Run `--new` again only for clearly different work; when unsure, ask the user.
+- After a refused `--task` (exit 2 naming `--retry`), run that `knowledge-hub export --retry <task-id>`, then run the same `--task` again with the same content; never switch to `--new` for an update.
 - Exit 3: Knowledge Hub could not be reached or gave no trustworthy answer. Report the printed message; the user can run the printed `knowledge-hub export --retry <task-id>` later.
 - Exit 4: it will not succeed without a user action. Report the printed message and the next command verbatim, and stop.
 

@@ -11,6 +11,12 @@ export const EXIT = { OK: 0, REFUSED: 2, RETRYABLE: 3, ACTION: 4 };
 
 class Refusal extends Error {}
 
+// The 4xx codes the ingest route answers with; any other 4xx came from something else at that address.
+const HUB_ERROR_CODES = new Set([
+  "MALFORMED_JSON", "CREDENTIAL_INVALID", "SCOPE_DENIED", "REVISION_CONFLICT", "REVISION_OUT_OF_ORDER",
+  "TASK_ARCHIVED", "PAYLOAD_TOO_LARGE", "INVALID_ARTIFACT", "UNSUPPORTED_SCHEMA_VERSION",
+]);
+
 const retryCommand = (taskId) => `knowledge-hub export --retry ${taskId}`;
 const taskCommand = (taskId) => `knowledge-hub export --task ${taskId}`;
 const discardCommand = (taskId) => `knowledge-hub export --discard ${taskId}`;
@@ -146,6 +152,12 @@ async function send(key, project, meta, revisionNo) {
     console.log(`Task ID: ${id}`);
     console.log(`To update this export later: ${taskCommand(id)}`);
     return EXIT.OK;
+  }
+  if (status < 500 && !HUB_ERROR_CODES.has(body?.error?.code)) {
+    save({ lastOutcome: status });
+    console.error(`The answer (${status}) is not Knowledge Hub's answer; the revision was kept unsent. Task ID: ${id}`);
+    console.error(`Check the Hub URL (${project.hubUrl}) with knowledge-hub configure, then run: ${retryCommand(id)}`);
+    return EXIT.ACTION;
   }
   const code = body?.error?.code ?? "UNKNOWN";
   const message = body?.error?.message ?? "";

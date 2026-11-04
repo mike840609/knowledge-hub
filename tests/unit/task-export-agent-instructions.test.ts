@@ -73,6 +73,14 @@ describe("the shared hub-export Skill", () => {
     expect(skill().toLowerCase()).toMatch(/exit 2[^\n]*without[^\n]*--retry[^\n]*correct/);
   });
 
+  it("stops on an exit 2 that names configure or --discard instead of rewriting the content", () => {
+    expect(skill().toLowerCase()).toMatch(/exit 2[^\n]*names[^\n]*configure[^\n]*--discard[^\n]*stop/);
+  });
+
+  it("after a refused --task, retries and runs the same --task again, never --new", () => {
+    expect(skill().toLowerCase()).toMatch(/refused `?--task`?[^\n]*--retry[^\n]*same `?--task`?[^\n]*never[^\n]*--new/);
+  });
+
   it("mentions no credential file, token or header", () => {
     for (const text of [skill(), adapter()]) {
       expect(text).not.toMatch(/x-knowledge-hub-export-token/i);

@@ -212,6 +212,16 @@ describe("untrusted answers", () => {
     }
   });
 
+  it.each([404, 401])("keeps the revision for --retry when a %s is not Knowledge Hub's answer", async (status) => {
+    await configure();
+    hub.replies.push({ status, raw: "<html>Not here</html>" });
+    const first = await run(["export", "--new"], { stdin: content() });
+    expect(first.code).toBe(4);
+    expect(first.out).toMatch(/not Knowledge Hub's answer/i);
+    expect(first.out).not.toContain("configure --rotate");
+    expect((await run(["export", "--retry", taskIdOf(first.out)])).code).toBe(0);
+  });
+
   it("treats a 2xx that is not Knowledge Hub's answer as unknown, not as stored or mismatched", async () => {
     await configure();
     hub.replies.push({ status: 200, raw: "<html>sign in</html>" });
