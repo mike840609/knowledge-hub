@@ -14,6 +14,7 @@ import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
 import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Label } from "@/components/ui/label";
+import { groupSourceItems, showSourceGroupLabels } from "@/lib/source-groups";
 
 export function SourceList({ workspaceId, items, limits }: { workspaceId: string; items: SourceListItemModel[]; limits?: FolderImportClientLimits }) {
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -46,6 +47,15 @@ export function SourceList({ workspaceId, items, limits }: { workspaceId: string
       />
     );
   }
+  const groups = groupSourceItems(visible);
+  const labelled = showSourceGroupLabels(groups);
+  const rows = (groupItems: SourceListItemModel[]) => (
+    <ul onKeyDown={navigateListRows} className="-mx-3 flex flex-col gap-1">
+      {groupItems.map((item) => (
+        <SourceListRow key={item.source.id} workspaceId={workspaceId} item={item} limits={limits} />
+      ))}
+    </ul>
+  );
   return (
     <div className="space-y-3">
     <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-kh-border pb-3">
@@ -55,11 +65,16 @@ export function SourceList({ workspaceId, items, limits }: { workspaceId: string
     </div>
     <p role="status" className="text-caption text-kh-text-muted">{visible.length} of {items.length} sources{attentionOnly ? " · failed sync or awaiting Apply" : ""}</p>
     {!visible.length ? <div className="space-y-2"><p className="text-body text-kh-text-muted">No sources match these filters.</p>{attentionOnly ? <Button variant="ghost" size="sm" onClick={() => setAttentionOnly(false)}>Show all sources</Button> : null}</div> : null}
-    <ul onKeyDown={navigateListRows} className="-mx-3 flex flex-col gap-1">
-      {visible.map((item) => (
-        <SourceListRow key={item.source.id} workspaceId={workspaceId} item={item} limits={limits} />
-      ))}
-    </ul>
+    {labelled ? (
+      <div className="space-y-4">
+        {groups.map((group) => (
+          <section key={group.key} aria-labelledby={`source-group-${group.key}`} className="space-y-1">
+            <h2 id={`source-group-${group.key}`} className="px-1 text-caption font-medium text-kh-text-muted">{group.label}</h2>
+            {rows(group.items)}
+          </section>
+        ))}
+      </div>
+    ) : visible.length > 0 ? rows(visible) : null}
     </div>
   );
 }
