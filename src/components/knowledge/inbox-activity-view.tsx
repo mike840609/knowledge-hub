@@ -5,7 +5,7 @@ import { CheckCheck, MessageSquareText, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { useInboxUnread } from "@/components/shell/use-inbox-unread";
 import { Button } from "@/components/ui/button";
-import { mergeInboxDiscussions, sortInboxDiscussions, type InboxDiscussionView, type InboxKindFilter, type InboxPage, type InboxStatusFilter } from "@/modules/knowledge/domain/inbox-discussion";
+import { filterInboxDiscussions, mergeInboxDiscussions, sortInboxDiscussions, type InboxDiscussionView, type InboxKindFilter, type InboxPage, type InboxStatusFilter } from "@/modules/knowledge/domain/inbox-discussion";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
 import { InboxDiscussion } from "./inbox-discussion";
 import { InboxDiscussionRow } from "./inbox-discussion-row";
@@ -138,6 +138,15 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
   const beginBusy = () => { busyCount.current += 1; setBusy(true); };
   const endBusy = () => { busyCount.current = Math.max(0, busyCount.current - 1); if (busyCount.current === 0) setBusy(false); };
 
+  // One row is always sanctioned to stay: the selected one, which the reader is still looking at.
+  // Every other row must match the active filter after a selection or a write, so a row that no
+  // longer matches leaves without waiting for a Refresh.
+  const applyFilter = useCallback((rows: InboxDiscussionView[], keepId: string | null) => {
+    const filtered = filterInboxDiscussions(rows, filtersRef.current);
+    const kept = keepId ? rows.find(row => row.threadId === keepId) : undefined;
+    return sortInboxDiscussions(kept && !filtered.some(row => row.threadId === kept.threadId) ? [...filtered, kept] : filtered);
+  }, []);
+
   const clearSelection = useCallback(() => {
     selectedIdRef.current = null;
     fromLookup.current = false;
@@ -215,11 +224,11 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
     setError(null);
     try {
       await reviewRequest("/api/review-notifications/inbox", { action: "mark-thread-read", threadId: discussion.threadId });
-      // Under Unread a row the mark settles no longer matches the filter: it leaves the list at once,
-      // unless it is the selected row, which the reader is still looking at.
-      setDiscussions(previous => previous
-        .filter(item => !(item.threadId === discussion.threadId && filtersRef.current.unread && discussion.threadId !== selectedIdRef.current))
-        .map(item => item.threadId === discussion.threadId ? { ...item, unreadCount: 0 } : item));
+      // The mark may settle the row out of the active filter; only the selected row stays.
+      setDiscussions(previous => applyFilter(
+        previous.map(item => item.threadId === discussion.threadId ? { ...item, unreadCount: 0 } : item),
+        selectedIdRef.current,
+      ));
       setSelectedFallback(previous => previous && previous.threadId === discussion.threadId ? { ...previous, unreadCount: 0 } : previous);
       window.dispatchEvent(new Event("kh:notification-changed"));
     } catch (cause) {
@@ -229,20 +238,23 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
       marking.current.delete(discussion.threadId);
       endBusy();
     }
-  }, []);
+  }, [applyFilter]);
 
   const select = (discussion: InboxDiscussionView) => {
     selectedIdRef.current = discussion.threadId;
     fromLookup.current = false;
     setSelectedId(discussion.threadId);
     setSelectedFallback(null);
+    // The previous selection stops being the exception: a row it no longer matches leaves now.
+    setDiscussions(previous => applyFilter(previous, discussion.threadId));
     writeLocation(filtersRef.current, discussion.threadId);
     if (discussion.unreadCount > 0) void markThread(discussion);
   };
 
   // A write in the pane settles the row it is about: the one discussion is read unfiltered, replaced
-  // in place (and in the fallback) and the list re-sorted, so the row stays even when the write makes
-  // it stop matching the active filter. The owner's and a mention's view of one thread merge to one row.
+  // in place (and in the fallback) and the list re-sorted, so the selected row stays even when the
+  // write makes it stop matching the active filter; a sibling row the write settles out of the filter
+  // leaves. The owner's and a mention's view of one thread merge to one row.
   // An owner thread the server no longer returns has been hidden or retracted with its last visible
   // comment: the row goes, and with it the pane if that row was open. A followed or mentioned thread
   // may instead have lost its link, so its row stays and the pane's placeholder answers.
@@ -251,7 +263,10 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
       const result = await reviewRequest<InboxPage>(inboxUrl(DEFAULT_FILTERS, { threadId }));
       const found = withDates(result.discussions).find(discussion => discussion.threadId === threadId);
       if (found) {
-        setDiscussions(previous => mergeInboxDiscussions(previous.map(item => item.threadId === threadId ? found : item)));
+        setDiscussions(previous => applyFilter(
+          previous.map(item => item.threadId === threadId ? found : item),
+          selectedIdRef.current,
+        ));
         setSelectedFallback(previous => previous && previous.threadId === threadId ? found : previous);
         window.dispatchEvent(new Event("kh:notification-changed"));
         return;
@@ -265,7 +280,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
     } catch {
       // The write succeeded; a failed read of its row leaves the row as it was.
     }
-  }, [clearSelection]);
+  }, [applyFilter, clearSelection]);
 
   const loadOlder = async () => {
     if (!next || moreLoading) return;
@@ -295,9 +310,10 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
       await reviewRequest("/api/review-notifications/inbox", { action: "mark-all-read" });
       // Under Unread every row the mark settles stops matching the filter; the selected row stays as
       // the reader's place.
-      setDiscussions(previous => previous
-        .filter(item => !filtersRef.current.unread || item.threadId === selectedIdRef.current)
-        .map(item => ({ ...item, unreadCount: 0 })));
+      setDiscussions(previous => applyFilter(
+        previous.map(item => ({ ...item, unreadCount: 0 })),
+        selectedIdRef.current,
+      ));
       setSelectedFallback(previous => previous ? { ...previous, unreadCount: 0 } : previous);
       setShared([]);
       window.dispatchEvent(new Event("kh:notification-changed"));

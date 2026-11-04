@@ -308,6 +308,65 @@ it("a write to a sibling thread in the pane settles that thread's row, not the s
   expect(item()).toBe("t1");
 });
 
+it("selecting another row drops a settled row that no longer matches the Open filter", async () => {
+  window.history.replaceState(null, "", "/w/ws/inbox?status=open");
+  page = { discussions: [discussion("t1", { latestAt: at(20) }), discussion("t2", { latestAt: at(10) })], shared: [], nextCursor: null };
+  filtered = { discussions: [discussion("t1", { latestAt: at(20) }), discussion("t2", { latestAt: at(10) })], shared: [], nextCursor: null };
+  threads["doc-t1"] = [thread("t1")];
+  threads["doc-t2"] = [thread("t2")];
+  lookup = discussion("t1", { status: "RESOLVED", latestAt: at(20) });
+  await mount();
+  await click(row("t1"));
+  await click(paneButton("Resolve")!);
+  await settle();
+  // The selected row is sanctioned to stay under the filter the write made it stop matching.
+  expect(row("t1").textContent).toContain("Resolved");
+  await click(row("t2"));
+  // Once it is no longer the selection, the settled row leaves without a Refresh.
+  expect(rows().map(element => element.dataset.inboxEntry)).toEqual(["t2"]);
+  expect(pane()?.textContent).toContain("body of t2");
+  expect(item()).toBe("t2");
+});
+
+it("selecting another row drops the previous selection once its mark read no longer matches Unread", async () => {
+  window.history.replaceState(null, "", "/w/ws/inbox?unread=1");
+  page = { discussions: [discussion("t1", { unreadCount: 1, latestAt: at(20) }), discussion("t2", { unreadCount: 1, latestAt: at(10) })], shared: [], nextCursor: null };
+  filtered = { discussions: [discussion("t1", { unreadCount: 1, latestAt: at(20) }), discussion("t2", { unreadCount: 1, latestAt: at(10) })], shared: [], nextCursor: null };
+  threads["doc-t1"] = [thread("t1")];
+  threads["doc-t2"] = [thread("t2")];
+  await mount();
+  await click(row("t1"));
+  // The selected row is read but stays as the reader's place.
+  expect(rows().map(element => element.dataset.inboxEntry)).toEqual(["t1", "t2"]);
+  await click(row("t2"));
+  // Its mark read leaves it matching; the previous selection, now read, does not.
+  expect(rows().map(element => element.dataset.inboxEntry)).toEqual(["t2"]);
+  expect(row("t2").getAttribute("aria-current")).toBe("true");
+  expect(item()).toBe("t2");
+});
+
+it("a sibling write under the Open filter removes the sibling row it settles out of the filter", async () => {
+  window.history.replaceState(null, "", "/w/ws/inbox?status=open");
+  page = {
+    discussions: [discussion("t1", { latestAt: at(20) }), discussion("t2", { latestAt: at(10), documentId: "doc-t1", documentTitle: "Doc t1" })],
+    shared: [],
+    nextCursor: null,
+  };
+  filtered = { ...page };
+  threads["doc-t1"] = [thread("t1"), thread("t2")];
+  lookup = discussion("t2", { documentId: "doc-t1", documentTitle: "Doc t1", status: "RESOLVED", latestAt: at(10) });
+  await mount();
+  await click(row("t1"));
+  const sibling = pane()!.querySelector<HTMLElement>('[data-review-thread="t2"]')!;
+  await act(async () => { sibling.querySelector<HTMLButtonElement>('button[aria-label="Resolve"]')!.click(); });
+  await settle();
+  expect(requests).toContain("/api/documents/doc-t1/review-threads/t2/resolution");
+  // t2 was not selected, so resolving it out of the Open filter removes its row at once.
+  expect(rows().map(element => element.dataset.inboxEntry)).toEqual(["t1"]);
+  expect(item()).toBe("t1");
+  expect(pane()).not.toBeNull();
+});
+
 it("an owner row the server stops returning is removed with its pane", async () => {
   page = { discussions: [discussion("t1")], shared: [], nextCursor: null };
   threads["doc-t1"] = [thread("t1")];
@@ -345,7 +404,7 @@ it("a link row whose lookup comes back empty is kept for the pane's placeholder"
 
 it("marking an unselected row read under the Unread filter removes it", async () => {
   window.history.replaceState(null, "", "/w/ws/inbox?unread=1");
-  page = { discussions: [discussion("t1", { unreadCount: 1 }), discussion("t2", { unreadCount: 1 })], shared: [], nextCursor: null };
+  page = { discussions: [discussion("t1", { unreadCount: 1, latestAt: at(20) }), discussion("t2", { unreadCount: 1, latestAt: at(10) })], shared: [], nextCursor: null };
   threads["doc-t1"] = [thread("t1")];
   await mount();
   expect(rows().map(element => element.dataset.inboxEntry)).toEqual(["t1", "t2"]);

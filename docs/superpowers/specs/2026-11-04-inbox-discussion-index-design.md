@@ -308,8 +308,9 @@ appends a page re-sorts the whole list. A filter change starts from no cursor.
   - `{ action: "mark-read", eventId }` — a shared-with-you row, as today.
   - `{ action: "mark-all-read" }` — every source, as today.
 - The old `GET /api/review-notifications/activity` is retired once the page
-  stops using it; its POST actions move to the new route. If another caller
-  remains, keep the route and say so.
+  stops using it; its POST actions move to the new route. It has no production
+  caller left: `listActivityForOwner` remains on the service as an internal/test
+  read only.
 
 ## Copy
 

@@ -94,7 +94,7 @@ export class DocumentReviewService {
   async listUnreadShareCountsForOwner(caller: CallerContext) {
     return this.uow.run(r => r.shareCommentEvents.listUnreadCountsByRecipient(caller.identity.id));
   }
-  /** A bounded, cursor-paged cross-document activity feed, including already-read comments. */
+  /** Retained as an internal/test read only; the product's activity route is retired in favor of `listInbox`. */
   async listActivityForOwner(caller: CallerContext, before?: { createdAt: Date; id: string }) {
     return this.uow.run(async r => {
       const size = 50;

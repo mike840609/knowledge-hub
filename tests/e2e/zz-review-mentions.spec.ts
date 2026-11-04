@@ -17,7 +17,7 @@ test("a reader mentions someone new on the shared page; the mention and the next
   const token = doc.links[0].path.split("/").pop()!;
   const viewer = phase3Origin("viewer"), mentioned = phase3Origin("groupAdmin");
   // Start the mentioned person's Inbox empty, so its badge counts this test's entry alone.
-  expect((await request.post(`${mentioned}/api/review-notifications/activity`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
+  expect((await request.post(`${mentioned}/api/review-notifications/inbox`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
 
   // The reader writes the mention with the keyboard.
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -81,7 +81,7 @@ test("a reader mentions someone new on the shared page; the mention and the next
   await page.getByRole("tab", { name: "Following", exact: true }).click();
   await expect(page.getByRole("list", { name: "Inbox discussions" }).locator(`a[href="/s/${token}?thread=${threadId}"]`)).toContainText("Owner answer");
   // Leave this person's Inbox as it was found for a repeated run.
-  expect((await request.post(`${mentioned}/api/review-notifications/activity`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
+  expect((await request.post(`${mentioned}/api/review-notifications/inbox`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
 });
 
 test("an owner with no live share link is told to create one before mentioning", async ({ page, request }) => {
@@ -108,7 +108,7 @@ test("a mentioned person who stopped following clears the mention by opening its
   const doc = await createReviewDocument(request);
   const token = doc.links[0].path.split("/").pop()!;
   const viewer = phase3Origin("viewer"), mentioned = phase3Origin("groupAdmin");
-  expect((await request.post(`${mentioned}/api/review-notifications/activity`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
+  expect((await request.post(`${mentioned}/api/review-notifications/inbox`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
   const { candidates } = await (await request.get(`${viewer}/api/review-mentions/candidates?query=groupAdmin&token=${token}`, { headers: { Origin: viewer } })).json();
   const body = "Unfollowed but still @Phase3 groupAdmin";
   const created = await request.post(`${viewer}/api/share-review/threads`, { headers: { Origin: viewer }, data: { token, expectedRevisionId: doc.revisionId, anchor: ANCHOR, body, idempotencyKey: crypto.randomUUID(), mentions: [candidates[0].id] } });
@@ -188,7 +188,7 @@ test("a mention written after CJK text is recorded and reaches the person", asyn
   const doc = await createReviewDocument(request);
   const token = doc.links[0].path.split("/").pop()!;
   const viewer = phase3Origin("viewer"), mentioned = phase3Origin("groupAdmin");
-  expect((await request.post(`${mentioned}/api/review-notifications/activity`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
+  expect((await request.post(`${mentioned}/api/review-notifications/inbox`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${viewer}${doc.links[0].path}`);
   await openReviewDiscussions(page);
@@ -221,7 +221,7 @@ test("a revoked link leaves a mention naming nothing", async ({ page, request })
   const doc = await createReviewDocument(request);
   const token = doc.links[0].path.split("/").pop()!;
   const owner = phase3Origin("reviewOwner"), viewer = phase3Origin("viewer"), mentioned = phase3Origin("groupAdmin");
-  expect((await request.post(`${mentioned}/api/review-notifications/activity`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
+  expect((await request.post(`${mentioned}/api/review-notifications/inbox`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
   const { candidates } = await (await request.get(`${viewer}/api/review-mentions/candidates?query=groupAdmin&token=${token}`, { headers: { Origin: viewer } })).json();
   const body = "請@Phase3 groupAdmin 你看";
   const created = await request.post(`${viewer}/api/share-review/threads`, { headers: { Origin: viewer }, data: { token, expectedRevisionId: doc.revisionId, anchor: ANCHOR, body, idempotencyKey: crypto.randomUUID(), mentions: [candidates[0].id] } });
