@@ -93,6 +93,8 @@ async function post(project, bytes) {
       method: "POST",
       headers: { "content-type": "application/json", "x-knowledge-hub-export-token": token },
       body: bytes,
+      // Never follow: a redirect would carry the token header to whatever host it names.
+      redirect: "manual",
       signal: AbortSignal.timeout(timeoutMs()),
     });
     const body = await response.json().catch(() => null);
@@ -117,12 +119,25 @@ async function send(key, project, meta, revisionNo) {
     console.error(`The revision may already be stored. Run: ${retryCommand(id)}`);
     return EXIT.RETRYABLE;
   }
+  if (status >= 300 && status < 400) {
+    save({ lastOutcome: status });
+    console.error(`Knowledge Hub answered with a redirect (${status}); it was not followed and nothing was sent elsewhere. Task ID: ${id}`);
+    console.error(`Check the Hub URL (${project.hubUrl}) with knowledge-hub configure, then run: ${retryCommand(id)}`);
+    return EXIT.ACTION;
+  }
+  const hubAnswer = typeof body?.bindingId === "string" && typeof body?.url === "string" && body.url.startsWith("/");
+  if ((status === 200 || status === 201) && !hubAnswer) {
+    save({ lastOutcome: "retryable", mayBeStored: true });
+    console.error(`The answer (${status}) did not come from Knowledge Hub's ingest API. Task ID: ${id}`);
+    console.error(`The revision may already be stored. Run: ${retryCommand(id)}`);
+    return EXIT.RETRYABLE;
+  }
   if (status === 200 || status === 201) {
-    if (body?.bindingId !== project.bindingId) {
-      revision.bindingId = body?.bindingId ?? null;
-      meta.bindingId = body?.bindingId ?? null;
+    if (body.bindingId !== project.bindingId) {
+      revision.bindingId = body.bindingId;
+      meta.bindingId = body.bindingId;
       save({ state: "rejected", lastOutcome: status });
-      console.error(`Knowledge Hub stored this revision under binding ${body?.bindingId}, but this project is configured with binding ${project.bindingId}. Task ID: ${id}`);
+      console.error(`Knowledge Hub stored this revision under binding ${body.bindingId}, but this project is configured with binding ${project.bindingId}. Task ID: ${id}`);
       console.error(`The token stored for this project belongs to the other binding. Fix it with: knowledge-hub configure --rotate ${project.bindingId}`);
       return EXIT.ACTION;
     }

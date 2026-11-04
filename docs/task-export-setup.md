@@ -38,8 +38,10 @@ knowledge-hub configure --hub-url https://km.example.com --binding-id <binding-i
 ```
 
 The secret is never passed on the command line. It is stored once per binding in
-your user config directory, readable only by you; a second project that uses the
-same binding asks for nothing.
+your user config directory, readable only by you. Running `configure` always asks
+for the secret and replaces the stored one, so the same command takes a new secret
+after a rotation; to reuse a binding in another project without pasting it, use
+`configure --from`.
 
 - **Git worktrees and other checkouts:** reuse an already configured project with
   `knowledge-hub configure --from <path-to-configured-project>`.

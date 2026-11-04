@@ -59,7 +59,10 @@ export async function configure(flags) {
   if (problem) throw new UsageError(problem);
   const bindingId = flags["binding-id"] ?? (await ask("Binding ID"));
   if (!UUID.test(bindingId)) throw new UsageError("The binding ID is not a valid ID.");
-  if (!readCredential(bindingId)) storeCredential(bindingId, await readToken(`Export token for binding ${bindingId}: `));
+  // Always asks: after a rotation this same command must take the new token. Sharing without one is --from.
+  const replaced = readCredential(bindingId) !== null;
+  storeCredential(bindingId, await readToken(`Export token for binding ${bindingId}: `));
+  if (replaced) console.log(`Replaced the stored credential for binding ${bindingId}; ${keysUsingBinding(bindingId).length} project key(s) already use it.`);
   writeProject(key, { hubUrl, bindingId, allowInsecureLocalhost });
   console.log(`Configured ${key} to export with binding ${bindingId}.`);
   return 0;

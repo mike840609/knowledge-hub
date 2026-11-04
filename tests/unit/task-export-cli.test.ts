@@ -18,7 +18,7 @@ const fixture = (file: string) => readFileSync(path.join(FIXTURES, file), "utf8"
 const minimal = JSON.parse(fixture("content/valid-minimal.json"));
 const content = (overrides: Record<string, unknown> = {}) => JSON.stringify({ ...minimal, ...overrides });
 
-type Reply = { status: number; body?: unknown } | "timeout";
+type Reply = { status: number; body?: unknown; raw?: string; location?: string } | "timeout";
 type Received = { token: string | undefined; body: Buffer; json: Record<string, unknown> };
 
 /** A stand-in Knowledge Hub: answers from a queue, else accepts as the configured binding would. */
@@ -51,8 +51,8 @@ class FakeHub {
     this.received.push({ token: request.headers["x-knowledge-hub-export-token"] as string | undefined, body, json });
     const reply = this.replies.shift() ?? { status: 201, body: { taskResultId: `tr-${json.taskId}`, revisionNo: json.artifactRevision, bindingId: this.bindingId, url: "/w/w1/tasks/tr" } };
     if (reply === "timeout") return;
-    response.writeHead(reply.status, { "content-type": "application/json" });
-    response.end(JSON.stringify(reply.body ?? {}));
+    response.writeHead(reply.status, { "content-type": reply.raw === undefined ? "application/json" : "text/html", ...(reply.location ? { location: reply.location } : {}) });
+    response.end(reply.raw ?? JSON.stringify(reply.body ?? {}));
   }
 }
 
@@ -68,7 +68,7 @@ function run(args: string[], options: { stdin?: string; cwd?: string } = {}): Pr
   return new Promise((resolve) => {
     const child: ChildProcessWithoutNullStreams = spawn(process.execPath, [CLI, ...args], {
       cwd: options.cwd ?? project,
-      env: { NODE_ENV: "test", HOME: home, USERPROFILE: home, PATH: process.env.PATH ?? "", KNOWLEDGE_HUB_TIMEOUT_MS: "400" },
+      env: { NODE_ENV: "test", HOME: home, USERPROFILE: home, PATH: process.env.PATH ?? "", KNOWLEDGE_HUB_TIMEOUT_MS: "1500" },
     });
     let out = "";
     child.stdout.on("data", (data) => { out += data; });
@@ -179,6 +179,47 @@ describe("configure", () => {
     } finally {
       rmSync(other, { recursive: true, force: true });
     }
+  });
+});
+
+describe("configure after a rotation", () => {
+  it("replaces the stored credential when configure is run again with a new token", async () => {
+    await configure();
+    expect((await configure([], TOKEN2)).code).toBe(0);
+    await exportNew();
+    expect(hub.received[0].token).toBe(TOKEN2);
+  });
+});
+
+describe("untrusted answers", () => {
+  it("never follows a redirect, so the token reaches no other host", async () => {
+    await configure();
+    const elsewhere: string[] = [];
+    const other = createServer((request, response) => { elsewhere.push(String(request.headers["x-knowledge-hub-export-token"])); response.end(); });
+    await new Promise<void>((resolve) => other.listen(0, "127.0.0.1", resolve));
+    const port = (other.address() as { port: number }).port;
+    try {
+      for (const status of [302, 307]) hub.replies.push({ status, location: `http://127.0.0.1:${port}/steal` });
+      const first = await run(["export", "--new"], { stdin: content() });
+      expect(first.code).toBe(4);
+      expect(first.out).toMatch(/redirect/i);
+      const id = taskIdOf(first.out);
+      expect((await run(["export", "--retry", id])).code).toBe(4);
+      expect(elsewhere).toEqual([]);
+      expect((await run(["export", "--retry", id])).code).toBe(0);
+    } finally {
+      await new Promise<void>((resolve) => other.close(() => resolve()));
+    }
+  });
+
+  it("treats a 2xx that is not Knowledge Hub's answer as unknown, not as stored or mismatched", async () => {
+    await configure();
+    hub.replies.push({ status: 200, raw: "<html>sign in</html>" });
+    const first = await run(["export", "--new"], { stdin: content() });
+    expect(first.code).toBe(3);
+    expect(first.out).toMatch(/may already be stored/i);
+    expect(first.out).not.toMatch(/undefined/);
+    expect((await run(["export", "--retry", taskIdOf(first.out)])).code).toBe(0);
   });
 });
 
@@ -484,7 +525,7 @@ describe("response codes", () => {
   });
 
   it("an unreachable Hub exits 3", async () => {
-    await run(["configure", "--hub-url", "http://127.0.0.1:9", "--binding-id", B1, "--allow-insecure-localhost"]);
+    expect((await run(["configure", "--hub-url", "http://127.0.0.1:9", "--binding-id", B1, "--allow-insecure-localhost"], { stdin: TOKEN })).code).toBe(0);
     expect((await exportNew()).code).toBe(3);
   });
 });

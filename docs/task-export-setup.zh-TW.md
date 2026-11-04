@@ -34,7 +34,8 @@ knowledge-hub configure --hub-url https://km.example.com --binding-id <binding-i
 ```
 
 密鑰不會出現在命令列上。它以 binding 為單位存在你的使用者設定目錄，只有你能讀取；
-第二個使用同一 binding 的專案不會再詢問。
+執行 `configure` 一律會詢問密鑰並取代已存的那份，所以輪替後用同一個指令即可換上新密鑰；
+要在另一個專案沿用 binding 而不再貼一次，請用 `configure --from`。
 
 - **Git worktree 與其他 checkout：** 用
   `knowledge-hub configure --from <已設定專案的路徑>` 沿用已設定的專案。
