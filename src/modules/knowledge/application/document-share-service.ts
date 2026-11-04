@@ -24,7 +24,7 @@ import type { OpenFolderLink } from "../ports/document-share-link-repository";
 import type { ShareTokenIssuer } from "../ports/share-token-issuer";
 import { openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
 import { linkOrigin } from "./internal/link-origin";
-import { addNamedRecipients, appendRecipientEvent, SHARE_RECIPIENT_ADDED_EVENT } from "./named-recipients";
+import { addNamedRecipients, appendRecipientEvent } from "./named-recipients";
 import type { TreeViewNode } from "../ports/tree-repository";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
 
@@ -104,7 +104,6 @@ export type SharedView = (({ kind: "DOCUMENT" } & SharedDocumentView) | SharedFo
 
 export const SHARE_LINK_CREATED_EVENT = "DOCUMENT_SHARE_LINK_CREATED";
 export const SHARE_LINK_REVOKED_EVENT = "DOCUMENT_SHARE_LINK_REVOKED";
-export { SHARE_RECIPIENT_ADDED_EVENT };
 export const SHARE_RECIPIENT_REMOVED_EVENT = "DOCUMENT_SHARE_RECIPIENT_REMOVED";
 export const SHARE_PROPOSAL_DECLINED_EVENT = "DOCUMENT_SHARE_PROPOSAL_DECLINED";
 

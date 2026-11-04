@@ -100,7 +100,7 @@ export function NamedShareRecipients({ linkId, onCount }: { linkId: string; onCo
       )}
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          <RecipientPicker value={pending} onChange={setPending} disabled={busy} exclude={(people ?? []).map((person) => person.userId)} label="Add people to this link" />
+          <RecipientPicker value={pending} onChange={setPending} disabled={busy} exclude={[...(people ?? []).map((person) => person.userId), ...proposals.map((proposal) => proposal.userId)]} label="Add people to this link" />
         </div>
         <Button
           variant="secondary"

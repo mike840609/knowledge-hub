@@ -3,6 +3,7 @@ import { DomainError } from "@/shared/domain/errors";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { MAX_NAMED_SHARE_RECIPIENTS, type DocumentShareLink } from "../domain/document-share-link";
 import type { KnowledgeRepositories } from "../ports/unit-of-work";
+import { followForMention } from "./follow-for-mention";
 import { openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
 
 export const SHARE_RECIPIENT_ADDED_EVENT = "DOCUMENT_SHARE_RECIPIENT_ADDED";
@@ -61,22 +62,41 @@ async function followMentionedThreads(r: KnowledgeRepositories, link: DocumentSh
   const commentIds = [...new Set((await r.reviewMentions.listByLinkAndUser(link.id, userId)).map((mention) => mention.commentId))];
   if (commentIds.length === 0) return;
   const threadIds = [...new Set((await r.reviewComments.findByIds(commentIds)).map((comment) => comment.threadId))];
+  // Threads of one document share its read, and current follows often share their link: one read each, not one per thread.
+  const documents = new Map<string, Awaited<ReturnType<KnowledgeRepositories["documents"]["findById"]>>>();
+  const documentFor = async (documentId: string) => {
+    if (!documents.has(documentId)) documents.set(documentId, await r.documents.findById(documentId));
+    return documents.get(documentId) ?? null;
+  };
+  const links = new Map<string, DocumentShareLink | null>([[link.id, link]]);
+  const linkFor = async (linkId: string) => {
+    if (!links.has(linkId)) links.set(linkId, (await r.shareLinks.findByIds([linkId]))[0] ?? null);
+    return links.get(linkId) ?? null;
+  };
   for (const thread of await r.reviewThreads.findByIds(threadIds)) {
     // Only a discussion the person can now reach through this link: not a hidden one, nor one on a document it no longer opens.
-    if (thread.visibility === "HIDDEN" || !await linkOpensOnDocument(r, link.id, thread.documentId, userId, at)) continue;
-    const follow = { threadId: thread.id, userId, shareLinkId: link.id, at };
-    if (await r.reviewFollows.followIfAbsent(follow)) continue;
-    const row = await r.reviewFollows.lockFollow(thread.id, userId);
-    if (!row?.following || await linkOpensOnDocument(r, row.shareLinkId, thread.documentId, userId, at)) continue;
-    await r.reviewFollows.moveToLink(thread.id, userId, link.id, at);
+    if (thread.visibility === "HIDDEN" || !await linkOpensOnDocument(r, link, thread.documentId, userId, at, documentFor)) continue;
+    await followForMention(r.reviewFollows, {
+      threadId: thread.id, userId, shareLinkId: link.id, at,
+      currentLinkValid: async (linkId) => {
+        const current = await linkFor(linkId);
+        return !!current && await linkOpensOnDocument(r, current, thread.documentId, userId, at, documentFor);
+      },
+      reFollowWhenStopped: false,
+    });
   }
 }
 
 /** Whether a link opens this document for this person now: the judgement `mentionOnWrite` makes of a current follow's link. */
-async function linkOpensOnDocument(r: KnowledgeRepositories, linkId: string, documentId: string, userId: string, now: Date): Promise<boolean> {
-  const link = (await r.shareLinks.findByIds([linkId]))[0];
-  if (!link) return false;
-  const document = await r.documents.findById(documentId);
+async function linkOpensOnDocument(
+  r: KnowledgeRepositories,
+  link: DocumentShareLink,
+  documentId: string,
+  userId: string,
+  now: Date,
+  documentFor: (documentId: string) => ReturnType<KnowledgeRepositories["documents"]["findById"]> = (id) => r.documents.findById(id),
+): Promise<boolean> {
+  const document = await documentFor(documentId);
   if (!document) return false;
   if (link.target.kind === "DOCUMENT") return link.target.documentId === documentId && !!await openShareLinkTarget(r, link, document, now, userId);
   const folder = await r.tree.findById(link.target.folderNodeId);

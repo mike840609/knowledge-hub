@@ -54,6 +54,17 @@ export class MariaDbShareProposalRepository implements ShareProposalRepository {
     return asNumber(rows[0]?.pending ?? 0, "pending share proposal count");
   }
 
+  async hasAnyInvolving(userId: string): Promise<boolean> {
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT EXISTS(
+         SELECT 1 FROM document_share_link_proposals p JOIN document_share_links l ON l.id = p.share_link_id
+         WHERE l.created_by = ? OR (p.user_id = ? AND p.status <> 'APPROVED') OR (p.proposed_by = ? AND p.status <> 'PENDING')
+       ) AS found`,
+      [userId, userId, userId],
+    );
+    return asNumber(rows[0]?.found ?? 0, "share proposal existence") === 1;
+  }
+
   async decide(id: string, status: "APPROVED" | "DECLINED", by: string, at: Date): Promise<boolean> {
     const result = await this.connection.query(
       `UPDATE document_share_link_proposals SET status = ?, decided_by = ?, decided_at = ?, ${DECISION_UNREAD} WHERE id = ? AND status = 'PENDING'`,

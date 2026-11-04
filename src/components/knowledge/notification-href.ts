@@ -38,7 +38,11 @@ const proposalTarget = (entry: Entry) => entry.targetKind === "FOLDER" ? `《${e
 
 function proposalLine(entry: Entry): string {
   const target = proposalTarget(entry);
-  if (entry.kind === "PROPOSAL_REQUEST") return `${entry.authorName ?? "Someone"} wants to add ${entry.personName ?? "someone"} to ${target}`;
+  if (entry.kind === "PROPOSAL_REQUEST") {
+    if (entry.proposalStatus === "APPROVED") return `You approved adding ${entry.personName ?? "someone"} to ${target}.`;
+    if (entry.proposalStatus === "DECLINED") return `You declined adding ${entry.personName ?? "someone"} to ${target}.`;
+    return `${entry.authorName ?? "Someone"} wants to add ${entry.personName ?? "someone"} to ${target}`;
+  }
   if (entry.kind === "PROPOSAL_PENDING") return `${entry.authorName ?? "Someone"} mentioned you in ${target} — someone proposed sharing a document with you. Waiting for the owner.`;
   if (entry.proposalStatus === "APPROVED") return `The owner added ${entry.personName ?? "someone"} to ${target}.`;
   // Declined: the proposer's notice names the person; the proposed person's own does not, it is about them.

@@ -459,6 +459,8 @@ export class DocumentReviewService {
    * ponytail: at most FOLLOW_LIMIT rows per party, a few reads each; paging once proposals are many.
    */
   private async judgedProposals(r: KnowledgeRepositories, userId: string): Promise<JudgedProposal[]> {
+    // Most readers are party to none: one indexed existence read replaces the three list reads (and their links) below.
+    if (!await r.shareProposals.hasAnyInvolving(userId)) return [];
     const rows: Array<{ party: ProposalParty; proposal: ShareProposal }> = [
       ...(await r.shareProposals.listForOwner(userId, FOLLOW_LIMIT)).map(proposal => ({ party: "OWNER" as const, proposal })),
       ...(await r.shareProposals.listForProposed(userId, FOLLOW_LIMIT)).filter(proposal => proposal.status !== "APPROVED").map(proposal => ({ party: "PROPOSED" as const, proposal })),

@@ -111,6 +111,20 @@ describe("share proposals repository", () => {
     expect(await run(s => s.countPending(link))).toBe(0);
   });
 
+  it("answers whether a user is a party to any proposal that would be listed", async () => {
+    const f = await fixture();
+    expect(await run(s => s.hasAnyInvolving(f.owner))).toBe(false);
+    const link = await f.namedLink();
+    const { id } = await f.propose(link, f.carol, f.writer);
+    expect(await run(s => s.hasAnyInvolving(f.owner))).toBe(true);
+    expect(await run(s => s.hasAnyInvolving(f.carol))).toBe(true);
+    // A pending proposal is not yet the proposer's notice (their list holds decided rows only).
+    expect(await run(s => s.hasAnyInvolving(f.writer))).toBe(false);
+    expect(await run(s => s.hasAnyInvolving(f.dave))).toBe(false);
+    await run(s => s.decide(id, "DECLINED", f.owner, at(5)));
+    expect(await run(s => s.hasAnyInvolving(f.writer))).toBe(true);
+  });
+
   it("lists a link's proposals, optionally by status, oldest first", async () => {
     const f = await fixture();
     const link = await f.namedLink();

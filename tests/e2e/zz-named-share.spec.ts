@@ -197,7 +197,7 @@ test.describe("named-recipient share, end to end", () => {
     const request_ = page.getByRole("listitem").filter({ hasText: `Phase3 nonCreator wants to add Phase3 viewer to 《${title}》` });
     await expect(request_).toBeVisible(ROUND_TRIP);
     await request_.getByRole("button", { name: "Approve adding Phase3 viewer" }).click();
-    await expect(page.getByRole("listitem").filter({ hasText: `wants to add Phase3 viewer to 《${title}》` }).getByRole("button", { name: "Approve adding Phase3 viewer" })).toHaveCount(0, ROUND_TRIP);
+    await expect(page.getByRole("button", { name: "Approve adding Phase3 viewer" })).toHaveCount(0, ROUND_TRIP);
 
     // The outsider is now a recipient: the share is in their Inbox, opens in the Hub and shows the comment.
     await page.goto(`${outsider}/w/${outsiderWorkspace}/inbox`);

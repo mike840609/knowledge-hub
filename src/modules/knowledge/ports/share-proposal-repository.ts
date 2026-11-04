@@ -11,6 +11,8 @@ export interface ShareProposalRepository {
   /** Oldest first. */
   listByLink(linkId: string, status?: ShareProposalStatus): Promise<ShareProposal[]>;
   countPending(linkId: string): Promise<number>;
+  /** Whether any proposal would be listed for this user as owner, proposed person or proposer. */
+  hasAnyInvolving(userId: string): Promise<boolean>;
   /** Only from PENDING; true when it changed. */
   decide(id: string, status: "APPROVED" | "DECLINED", by: string, at: Date): Promise<boolean>;
   /** APPROVED for the row of (link, user) whatever its status, if any: the owner adding them outranks a decline. An APPROVED row is left as it was. */

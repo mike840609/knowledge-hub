@@ -23,9 +23,11 @@ const decided = (status: "APPROVED" | "DECLINED", over: Partial<ShareCommentNoti
 const dead = (over: Partial<ShareCommentNotificationView> = {}) => entry({ documentTitle: "", authorName: undefined, personName: undefined, shareLinkId: undefined, targetKind: undefined, linkAvailable: false, ...over });
 
 describe("what a proposal entry says", () => {
-  it("the owner's request names proposer, person and what the link opens", () => {
+  it("the owner's request names proposer, person and what the link opens, then reads as a decision", () => {
     expect(notificationLine(entry())).toBe("Dana wants to add Lee to 《Quarterly plan》");
     expect(notificationLine(entry({ targetKind: "FOLDER", documentTitle: "Plans" }))).toBe("Dana wants to add Lee to 《Plans》 folder");
+    expect(notificationLine(entry({ proposalStatus: "APPROVED" }))).toBe("You approved adding Lee to 《Quarterly plan》.");
+    expect(notificationLine(entry({ proposalStatus: "DECLINED" }))).toBe("You declined adding Lee to 《Quarterly plan》.");
   });
   it("the proposed person, while pending, learns only who and where", () => {
     expect(notificationLine(pending())).toBe("Dana mentioned you in 《Quarterly plan》 — someone proposed sharing a document with you. Waiting for the owner.");
@@ -264,6 +266,26 @@ describe("the Manage panel", () => {
       await act(async () => {});
       expect(changed).toHaveBeenCalledTimes(2);
     } finally { window.removeEventListener("kh:notification-changed", changed); }
+  });
+
+  it("does not offer someone already pending in the add picker", async () => {
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit = {}) => {
+      if (url.endsWith("/recipients")) return json({ recipients: [] });
+      if (url.endsWith("/proposals")) return json({ proposals: listed });
+      if (url.startsWith("/api/share-recipients/candidates")) return json({ candidates: [
+        { id: "u-lee", name: "李小龍", nameEn: "Lee", empId: "E42", orgCode: "ORG-7" },
+        { id: "u-other", name: "其他人", nameEn: "Other", empId: "E43", orgCode: "ORG-7" },
+      ] });
+      throw new Error(`unexpected ${init.method ?? "GET"} ${url}`);
+    });
+    await mount();
+    const input = host.querySelector<HTMLInputElement>('input[role="combobox"]')!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    act(() => { setter.call(input, "e"); input.dispatchEvent(new Event("input", { bubbles: true })); });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 250)); });
+    const offered = [...host.querySelectorAll<HTMLElement>('[role="option"]')].map(option => option.textContent).join(" ");
+    expect(offered).toContain("其他人");
+    expect(offered).not.toContain("李小龍");
   });
 
   it("a proposer whose name is gone is shown as someone", async () => {

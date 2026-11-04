@@ -35,7 +35,7 @@
 ### Task 1: Proposal storage
 
 **Files:**
-- Create: `src/infrastructure/database/mariadb/migrations/031-share-link-proposals.ts`
+- Create: `src/infrastructure/database/mariadb/migrations/032-share-link-proposals.ts`
 - Modify: `src/infrastructure/database/mariadb/migrations/index.ts`
 - Create: `src/modules/knowledge/domain/share-proposal.ts`
 - Create: `src/modules/knowledge/ports/share-proposal-repository.ts`
@@ -70,7 +70,7 @@
 
 - [ ] **Step 1: Write the failing integration test** — cases: insert then `insertIfAbsent` again → `false`; `decide` PENDING→DECLINED → `true`, again → `false`; `insertIfAbsent` after DECLINED → `false`; `countPending` counts PENDING only; `approvePending` flips only PENDING; `listForProposer` excludes PENDING; `markRead` sets only the party's column.
 - [ ] **Step 2: Run, verify it fails** — `npx tsx scripts/test/integration.ts tests/integration/share-proposals-repository.test.ts` → FAIL (table missing).
-- [ ] **Step 3: Migration 031** — table as in the spec's Model section, `UNIQUE KEY uq_share_proposal (share_link_id, user_id)`, `status ENUM('PENDING','APPROVED','DECLINED') NOT NULL`, `KEY ix_proposal_user (user_id, created_at)`, `KEY ix_proposal_by (proposed_by, created_at)`, FKs to `document_share_links`, `users` (×3 incl. `decided_by`), `review_comments(id)`, all `ON DELETE RESTRICT`. Then the domain type, port, adapter, wiring.
+- [ ] **Step 3: Migration 032** — table as in the spec's Model section, `UNIQUE KEY uq_share_proposal (share_link_id, user_id)`, `status ENUM('PENDING','APPROVED','DECLINED') NOT NULL`, `KEY ix_proposal_user (user_id, created_at)`, `KEY ix_proposal_by (proposed_by, created_at)`, FKs to `document_share_links`, `users` (×3 incl. `decided_by`), `review_comments(id)`, all `ON DELETE RESTRICT`. Then the domain type, port, adapter, wiring.
 - [ ] **Step 4: Run, verify it passes**; `make db-migrate` locally.
 - [ ] **Step 5: Commit** `feat(share): store mention proposals`.
 
