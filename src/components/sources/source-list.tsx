@@ -49,21 +49,22 @@ export function SourceList({ workspaceId, items, limits }: { workspaceId: string
   }
   const groups = groupSourceItems(visible);
   const labelled = showSourceGroupLabels(groups);
+  const showCount = attentionOnly || visible.length !== items.length;
   const rows = (groupItems: SourceListItemModel[]) => (
-    <ul onKeyDown={navigateListRows} className="-mx-3 flex flex-col gap-1">
+    <ul className="-mx-3 flex flex-col gap-1">
       {groupItems.map((item) => (
         <SourceListRow key={item.source.id} workspaceId={workspaceId} item={item} limits={limits} />
       ))}
     </ul>
   );
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" onKeyDown={navigateListRows}>
     <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-kh-border pb-3">
       <label className="flex min-h-8 items-center gap-2 text-body-sm"><input type="checkbox" checked={attentionOnly} onChange={e => setAttentionOnly(e.target.checked)} />Needs attention ({attentionCount})</label>
     <label className="flex min-h-8 items-center gap-2 text-body-sm"><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />Show archived</label>
       <Label inline className="ml-auto">Sort sources<SelectMenu aria-label="Sort sources" value={sort} onValueChange={setSort} options={[{ value: "attention", label: "Attention first" }, { value: "name", label: "Name" }, { value: "recent", label: "Last successful sync" }]} /></Label>
     </div>
-    <p role="status" className="text-caption text-kh-text-muted">{visible.length} of {items.length} sources{attentionOnly ? " · failed sync or awaiting Apply" : ""}</p>
+    {showCount ? <p role="status" className="text-caption text-kh-text-muted">{visible.length} of {items.length} sources{attentionOnly ? " · failed sync or awaiting Apply" : ""}</p> : null}
     {!visible.length ? <div className="space-y-2"><p className="text-body text-kh-text-muted">No sources match these filters.</p>{attentionOnly ? <Button variant="ghost" size="sm" onClick={() => setAttentionOnly(false)}>Show all sources</Button> : null}</div> : null}
     {labelled ? (
       <div className="space-y-4">

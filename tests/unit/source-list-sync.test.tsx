@@ -102,6 +102,33 @@ it("hides both group labels when a filter leaves one group", async () => {
   expect(container.textContent).not.toContain("Source hub");
 });
 
+it("moves row focus across source groups", async () => {
+  await render([
+    source("hub", { sourceType: "HUB", ownership: "HUB_MANAGED" }),
+    source("sync"),
+  ]);
+  const rows = [...container.querySelectorAll<HTMLAnchorElement>("a[data-list-row]")];
+  expect(rows).toHaveLength(2);
+  await act(async () => rows[0]!.focus());
+  const arrow = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true });
+  await act(async () => rows[0]!.dispatchEvent(arrow));
+  expect(arrow.defaultPrevented).toBe(true);
+  expect(document.activeElement).toBe(rows[1]);
+});
+
+it("hides the result count when every source is visible", async () => {
+  await render();
+  expect(container.querySelector('p[role="status"]')).toBeNull();
+});
+
+it("shows the result count when a filter hides sources", async () => {
+  await render([source("one")]);
+  const attention = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+    .find((input) => input.parentElement?.textContent?.includes("Needs attention"));
+  await act(async () => attention!.click());
+  expect(container.querySelector('p[role="status"]')?.textContent).toContain("0 of 1 sources");
+});
+
 it.each([{sourceType:"HUB",ownership:"HUB_MANAGED"},{sourceType:"FILE_UPLOAD"},{status:"ARCHIVED"},{ownership:"HUB_MANAGED"}])("does not offer folder sync for ineligible source %j",async overrides => {
   await render([source("one",overrides)]);expect(container.querySelector('button[aria-label^="Check for changes:"]')).toBeNull();
 });
