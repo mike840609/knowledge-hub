@@ -1,6 +1,6 @@
 # Inbox: one entry in the rail
 
-Status: agreed with the user on 2026-10-31 (approach A, Linear's model: one entry).
+Status: agreed with the user on 2026-10-31 (approach A, Linear's model: one entry). The Inbox page's list is superseded on 2026-11-04 by the discussion index; the single rail entry and badge stay.
 
 ## Intent
 

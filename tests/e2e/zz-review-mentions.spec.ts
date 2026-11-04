@@ -76,7 +76,10 @@ test("a reader mentions someone new on the shared page; the mention and the next
   await page.goto(`${mentioned}/w/${workspaceId}/inbox`);
   await expect(page.getByRole("link", { name: "Inbox, 1 unread", exact: true })).toBeVisible();
   const followed = page.getByRole("list", { name: "Inbox discussions" }).locator(`a[href="/s/${token}?thread=${threadId}"]`).filter({ hasText: "Owner answer" });
-  await expect(followed).toContainText("Discussion you follow");
+  // A mention that is also followed keeps the stronger relationship on its one row, and the thread is under `Following`.
+  await expect(followed).toContainText("Mentioned you");
+  await page.getByRole("tab", { name: "Following", exact: true }).click();
+  await expect(page.getByRole("list", { name: "Inbox discussions" }).locator(`a[href="/s/${token}?thread=${threadId}"]`)).toContainText("Owner answer");
   // Leave this person's Inbox as it was found for a repeated run.
   expect((await request.post(`${mentioned}/api/review-notifications/activity`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
 });
@@ -213,7 +216,7 @@ test("a mention written after CJK text is recorded and reaches the person", asyn
     .toEqual([expect.objectContaining({ kind: "MENTION", excerpt: body, authorName: "Phase3 viewer", linkAvailable: true })]);
 });
 
-// Spec 2026-11-02: a dead mention is a placeholder in Activity, with no link and none of the words.
+// Spec 2026-11-04: a dead mention has no row in the discussion index (Shares > Discussions keeps it).
 test("a revoked link leaves a mention naming nothing", async ({ page, request }) => {
   const doc = await createReviewDocument(request);
   const token = doc.links[0].path.split("/").pop()!;
@@ -232,16 +235,11 @@ test("a revoked link leaves a mention naming nothing", async ({ page, request })
   // A dead entry has no thread id; its id is still `mention:<commentId>`.
   expect(unread.notifications.filter((notice: { id: string }) => notice.id === `mention:${commentId}`)).toEqual([]);
 
+  // The link died, so there is nothing to review: the index drops the row rather than leaving a dead entry.
+  const peek = await (await request.get(`${owner}/api/documents/${doc.documentId}/peek?brief`)).json();
   const workspaceId = await personalWorkspaceId(request, mentioned);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${mentioned}/w/${workspaceId}/inbox`);
-  await page.getByRole("tab", { name: "All activity" }).click();
-  const dead = page.getByRole("list", { name: "Activity history" })
-    .getByRole("listitem")
-    .filter({ hasText: "A shared discussion" })
-    .filter({ hasText: "This link is no longer available." })
-    .first();
-  await expect(dead).toBeVisible();
-  await expect(dead.getByRole("link")).toHaveCount(0);
-  await expect(dead).not.toContainText("請@Phase3 groupAdmin");
+  await expect(page.getByRole("list", { name: "Inbox discussions" }).getByRole("listitem").filter({ hasText: peek.title })).toHaveCount(0);
+  await expect(page.getByText("請@Phase3 groupAdmin")).toHaveCount(0);
 });

@@ -2,7 +2,7 @@ import { expect, test } from "./fixtures/test";
 import { phase3Origin } from "./fixtures/phase3-identities";
 import { createReviewDocument } from "./fixtures/document-review";
 
-test("owner Inbox shows a shared comment, retains activity after read, and links to its thread", async ({ page, request }) => {
+test("owner Inbox is a discussion index, one row per discussion, settled and filtered", async ({ page, request }) => {
   const doc = await createReviewDocument(request);
   const owner = phase3Origin("reviewOwner");
   const viewer = phase3Origin("viewer");
@@ -18,36 +18,79 @@ test("owner Inbox shows a shared comment, retains activity after read, and links
   });
   expect(created.status()).toBe(201);
   const thread = await created.json();
+  // The owner's Inbox is every document's; this run may already hold other specs' discussions.
+  const title: string = (await (await request.get(`${owner}/api/documents/${doc.documentId}/peek?brief`)).json()).title;
+
+  // The page opens on the whole index: one row for the discussion, no second count, the `All` tab.
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${owner}/w/${doc.workspaceId}/inbox`);
   await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
+  await expect(page.getByText("Inbox ·")).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "All", exact: true })).toHaveAttribute("aria-selected", "true");
   const inbox = page.getByRole("list", { name: "Inbox discussions" });
-  await expect(inbox.getByText("Inbox verification comment")).toBeVisible();
-  await inbox.getByRole("listitem").filter({ hasText: "Inbox verification comment" }).getByRole("button", { name: "Mark read" }).click();
-  await page.getByRole("tab", { name: "All activity" }).click();
-  const activity = page.getByRole("list", { name: "Activity history" });
-  const row = activity.getByRole("link", { name: /Inbox verification comment/ });
-  await expect(row).toContainText("Read");
-  // Selected, the discussion sits beside the list and takes a reply there.
-  await row.click();
+  const rows = inbox.getByRole("listitem").filter({ hasText: title });
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("Inbox verification comment");
+
+  // A second comment on the same thread is still one row, showing the newest line and every comment.
+  const replied = await request.post(`${viewer}/api/share-review/threads/${thread.id}/replies`, {
+    headers: { Origin: viewer },
+    data: { token, body: "A second reader comment", idempotencyKey: crypto.randomUUID() },
+  });
+  expect(replied.status()).toBe(200);
+  await page.reload();
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("A second reader comment");
+  await expect(rows.first()).toContainText("2 comments");
+
+  // Selecting the row opens the discussion beside the list and marks it read.
+  await rows.first().getByRole("link").click();
   await expect(page).toHaveURL(/[?&]item=/);
   const selected = page.getByRole("region", { name: "Selected discussion" });
-  await expect(selected.getByText("Inbox verification comment", { exact: true })).toBeVisible();
-  await selected.getByRole("button", { name: "Reply" }).click();
-  await selected.getByRole("textbox", { name: "Reply" }).fill("Answered from the Inbox");
-  await selected.getByRole("button", { name: "Reply" }).last().click();
-  await expect(selected.getByText("Answered from the Inbox", { exact: true })).toBeVisible();
+  const card = selected.getByRole("region", { name: "Discussion thread" });
+  await expect(card.getByText("Inbox verification comment", { exact: true })).toBeVisible();
+  await expect(card.getByText("A second reader comment", { exact: true })).toBeVisible();
+  await card.getByRole("button", { name: "Reply", exact: true }).click();
+  await card.getByRole("textbox", { name: "Reply", exact: true }).fill("Answered from the Inbox");
+  await card.getByRole("button", { name: "Reply", exact: true }).click();
+  await expect(card.getByText("Answered from the Inbox", { exact: true })).toBeVisible();
+  // The reply settles the row it is about: no Refresh, and the count follows the pane.
+  await expect(rows.first()).toContainText("3 comments");
+
+  // Resolving under the `Open` filter leaves the selected row in place, saying `Resolved`.
+  await page.getByLabel("Status").selectOption("open");
+  await expect(page).toHaveURL(/[?&]status=open/);
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first().getByRole("link")).toHaveAttribute("aria-current", "true");
+  await card.getByRole("button", { name: "Resolve", exact: true }).click();
+  await expect(rows.first()).toContainText("Resolved");
+  await expect(page.getByLabel("Status")).toHaveValue("open");
+  await expect(rows.first().getByRole("link")).toHaveAttribute("aria-current", "true");
+
+  // The document stays one click away, on its own discussion.
   await selected.getByRole("link", { name: "Open document" }).click();
   await expect(page).toHaveURL(new RegExp(`thread=${thread.id}`));
-  const card = page.getByRole("region", { name: "Discussion thread" });
-  await expect(card.getByText("Inbox verification comment", { exact: true })).toBeVisible();
-  await expect(card.getByText("Answered from the Inbox", { exact: true })).toBeVisible();
+  const opened = page.getByRole("region", { name: "Discussion thread" });
+  await expect(opened.getByText("Inbox verification comment", { exact: true })).toBeVisible();
+  await expect(opened.getByText("Answered from the Inbox", { exact: true })).toBeVisible();
 
-  // Narrow, the Inbox is a list whose rows open the document.
+  // The relationship tabs are over the same index; this discussion is neither followed nor mentioned.
+  await page.goto(`${owner}/w/${doc.workspaceId}/inbox`);
+  await page.getByRole("tab", { name: "Following", exact: true }).click();
+  await expect(page).toHaveURL(/[?&]kind=follow/);
+  await expect(page.getByText("No discussions match these filters.", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Mentions", exact: true }).click();
+  await expect(page).toHaveURL(/[?&]kind=mention/);
+  await expect(page.getByText("No discussions match these filters.", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "All", exact: true }).click();
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("A second reader comment");
+
+  // Narrow, the same index is a plain list whose rows open the document; there is no pane.
   await page.setViewportSize({ width: 600, height: 900 });
   await page.goto(`${owner}/w/${doc.workspaceId}/inbox`);
-  await page.getByRole("tab", { name: "All activity" }).click();
+  await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Selected discussion" })).toHaveCount(0);
-  await page.getByRole("list", { name: "Activity history" }).getByRole("link", { name: /Inbox verification comment/ }).click();
+  await rows.first().getByRole("link").click();
   await expect(page).toHaveURL(new RegExp(`thread=${thread.id}`));
 });
