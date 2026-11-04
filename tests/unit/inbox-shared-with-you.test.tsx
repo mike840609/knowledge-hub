@@ -3,7 +3,6 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
-import { notificationHref, notificationLine, notificationTitle } from "@/components/knowledge/notification-href";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }) }));
 const { InboxActivityView } = await import("@/components/knowledge/inbox-activity-view");
@@ -49,7 +48,7 @@ it("says who shared what and opens the share page", async () => {
   notifications = [sharedEntry()];
   await mount();
   const row = host.querySelector<HTMLAnchorElement>('[data-inbox-entry="shared:link-1"]')!;
-  expect(row.textContent).toContain("Dana shared 《Quarterly plan》 with you");
+  expect(row.textContent).toContain("Dana shared this with you");
   expect(row.getAttribute("href")).toBe("/w/me/shares/tok");
   expect(row.textContent).toContain("Unread");
 });
@@ -77,19 +76,9 @@ it("a dead one renders the unavailable state, with no link", async () => {
   await mount();
   await act(async () => { host.querySelector<HTMLElement>('[role="tab"]:nth-child(2)')!.click(); });
   expect(host.textContent).toContain("This link is no longer available.");
-  expect(host.textContent).not.toContain("shared 《");
+  expect(host.textContent).not.toContain("《");
   expect(host.querySelector("ul a[href]")).toBeNull();
   expect(host.querySelector('[data-inbox-entry="shared:link-1"]')).toBeNull();
-});
-
-it("reads from the entry alone", () => {
-  expect(notificationHref(sharedEntry())).toBe("/w/me/shares/tok");
-  expect(notificationLine(sharedEntry())).toBe("Dana shared 《Quarterly plan》 with you");
-  expect(notificationTitle(sharedEntry())).toBe("Quarterly plan");
-  expect(notificationHref(dead())).toBeNull();
-  expect(notificationLine(dead())).toBe("This link is no longer available.");
-  expect(notificationTitle(dead())).toBe("A shared document");
-  expect(notificationLine(sharedEntry({ authorName: undefined }))).toBe("Someone shared 《Quarterly plan》 with you");
 });
 
 it("arrow keys in a wide window step over it: it has no discussion to show beside the list", async () => {

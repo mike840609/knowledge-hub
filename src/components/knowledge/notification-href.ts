@@ -23,7 +23,7 @@ export function notificationHref(entry: Entry): string | null {
 
 export function notificationLine(entry: Entry): string {
   if (isLinkEntry(entry.kind) && !entry.linkAvailable) return "This link is no longer available.";
-  if (isSharedEntry(entry.kind)) return `${entry.authorName ?? "Someone"} shared 《${entry.documentTitle}》 with you`;
+  if (isSharedEntry(entry.kind)) return `${entry.authorName ?? "Someone"} shared this with you`;
   const said = `${entry.authorName ?? "Someone"}: ${entry.excerpt}`;
   return (entry.replyCount ?? 0) > 1 ? `${entry.replyCount} new replies · ${said}` : said;
 }
