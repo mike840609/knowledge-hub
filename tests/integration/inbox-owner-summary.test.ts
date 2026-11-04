@@ -154,6 +154,33 @@ describe("the owner discussion summary", () => {
     expect(await summaries(f)).toEqual([]);
   });
 
+  it("counts only unread events whose comment is still visible, like the badge", async () => {
+    const f = await fixture();
+    const comments = await f.uow.run(r => r.reviewComments.listByThread(f.thread.id));
+    const readerComments = comments.filter(comment => comment.authorUserId === f.reader.identity.id)
+      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
+    const ownerReply = comments.find(comment => comment.authorUserId === f.owner.identity.id);
+    if (!ownerReply || readerComments.length !== 2) throw new Error("fixture discussion is not the expected three comments");
+    const [first, second] = readerComments;
+
+    expect((await summaries(f))[0]).toMatchObject({ commentCount: 3, unreadCount: 2 });
+    expect((await f.service.listUnreadShareCountsForOwner(f.owner)).map(row => row.unreadCount)).toEqual([2]);
+
+    // Hiding a comment removes it from the row and from the badge, even though its event row stays.
+    await f.service.setVisibility(f.owner, { documentId: f.documentId, threadId: f.thread.id, commentId: second.id, visibility: "HIDDEN", reason: "spam" });
+    const hidden = (await summaries(f))[0];
+    expect(hidden).toMatchObject({ commentCount: 2, unreadCount: 1 });
+    expect(hidden.latestAt).toEqual(ownerReply.createdAt);
+    expect((await f.service.listUnreadShareCountsForOwner(f.owner)).map(row => row.unreadCount)).toEqual([1]);
+
+    // Deleting the other reader comment likewise drops its event from the count.
+    await f.service.deleteForLink(f.reader, { token: f.token, threadId: f.thread.id, commentId: first.id });
+    const deleted = (await summaries(f))[0];
+    expect(deleted).toMatchObject({ commentCount: 1, unreadCount: 0 });
+    expect(deleted.latestAt).toEqual(ownerReply.createdAt);
+    expect(await f.service.listUnreadShareCountsForOwner(f.owner)).toEqual([]);
+  });
+
   it("never lists another Workspace's discussion", async () => {
     const f = await fixture();
     const elsewhere = await f.elsewhere();

@@ -108,6 +108,8 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
    * caller's personal Workspace, with at least one share-comment event there. Hidden threads,
    * hidden/deleted comments and retracted threads drop out of the grouped join, so the row's
    * `latestAt`, `commentCount` and unread count always describe what the reader can see.
+   * The unread count also joins the comment and applies the same visibility rules as the
+   * rail badge, so an event whose comment is hidden or deleted stops making the row unread.
    * Filters and the `(latestAt, threadId)` cursor run before `LIMIT`.
    */
   async listDiscussionSummaries(query: InboxOwnerQuery): Promise<InboxOwnerSummary[]> {
@@ -133,7 +135,9 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
               COALESCE(JSON_UNQUOTE(JSON_EXTRACT(t.anchor_json,'$.exact')),'') AS quote,
               MAX(c.created_at) AS latest_at, COUNT(c.id) AS comment_count,
               (SELECT COUNT(*) FROM share_comment_events e
-                WHERE e.thread_id=t.id AND e.workspace_id=w.id AND e.read_at IS NULL) AS unread_count,
+                JOIN document_review_comments uc ON uc.id=e.comment_id
+                WHERE e.thread_id=t.id AND e.workspace_id=w.id AND e.read_at IS NULL
+                  AND uc.deleted_at IS NULL AND uc.visibility='VISIBLE') AS unread_count,
               t.status,
               EXISTS (SELECT 1 FROM review_comment_mentions m
                       JOIN document_review_comments mc ON mc.id=m.comment_id
