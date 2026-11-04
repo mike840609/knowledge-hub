@@ -21,7 +21,7 @@ import { ReviewThreadList, reviewRequest } from "./review-thread-list";
  * and its discussions, or — for a followed or mentioned discussion — that discussion through the link's
  * token. A dead link asks for nothing.
  */
-export function InboxDiscussion({ entry }: { entry: InboxDiscussionView }) {
+export function InboxDiscussion({ entry, onChanged }: { entry: InboxDiscussionView; onChanged?: (threadId: string) => void }) {
   const follow = entry.kind !== "OWNER";
   // The reader's 48px path line: what this is on the left, the way to the full page on the right.
   return <section aria-label="Selected discussion" className="flex h-full min-h-0 min-w-0 flex-col">
@@ -29,14 +29,14 @@ export function InboxDiscussion({ entry }: { entry: InboxDiscussionView }) {
       <h2 className="min-w-0 truncate text-body text-kh-text-muted">{entry.documentTitle || "Untitled"}</h2>
       {entry.href && <Link className={buttonClasses({ variant: "secondary", size: "sm" })} href={entry.href} prefetch={follow ? false : undefined}>Open document</Link>}
     </header>
-    {follow ? <FollowedDiscussion entry={entry} /> : <OwnerDocument entry={entry} />}
+    {follow ? <FollowedDiscussion entry={entry} onChanged={onChanged} /> : <OwnerDocument entry={entry} onChanged={onChanged ? () => onChanged(entry.threadId) : undefined} />}
   </section>;
 }
 
 type Peek = { title: string; markdown: string; revisionId: string; status: string; sourceStatus: string; linkView: DocumentLinkView | null };
 
 /** The owner's document as the reader shows it, its discussions beside it, the entry's one open. */
-function OwnerDocument({ entry }: { entry: InboxDiscussionView }) {
+function OwnerDocument({ entry, onChanged }: { entry: InboxDiscussionView; onChanged?: () => void }) {
   const [peek, setPeek] = useState<Peek>();
   const [error, setError] = useState<string>();
   useEffect(() => {
@@ -53,7 +53,7 @@ function OwnerDocument({ entry }: { entry: InboxDiscussionView }) {
     <DocumentPane>
       <div className="kh-reading-column py-6">
         {!markdownOpensWithHeading(peek.markdown) && <h1 className="mb-6 text-page-title font-semibold tracking-tight text-kh-text">{peek.title}</h1>}
-        <OwnerReviewPanel documentId={entry.documentId} revisionId={peek.revisionId} markdown={peek.markdown} thread={entry.threadId}
+        <OwnerReviewPanel documentId={entry.documentId} revisionId={peek.revisionId} markdown={peek.markdown} thread={entry.threadId} onChanged={onChanged}
           readOnly={peek.status !== "ACTIVE" || peek.sourceStatus !== "ACTIVE"}>
           <article data-review-document className={MARKDOWN_ARTICLE}>
             <MarkdownRenderer markdown={peek.markdown} links={peek.linkView ? renderedLinksFrom(peek.linkView) : undefined} />
@@ -69,7 +69,7 @@ function OwnerDocument({ entry }: { entry: InboxDiscussionView }) {
  * is the entry's server-built `href`, which this view neither frames nor reads, so the passage is its quote
  * and the page is Open document.
  */
-function FollowedDiscussion({ entry }: { entry: InboxDiscussionView }) {
+function FollowedDiscussion({ entry, onChanged }: { entry: InboxDiscussionView; onChanged?: (threadId: string) => void }) {
   const token = entry.token;
   // A folder link's discussion is reached through the document it is on; a document link's names none.
   const documentId = entry.documentId || undefined;
@@ -93,7 +93,7 @@ function FollowedDiscussion({ entry }: { entry: InboxDiscussionView }) {
   if (error) return <p role="alert" className="px-6 text-body-sm">{error}</p>;
   if (!loaded) return <p role="status" className="px-6 text-body-sm text-kh-text-muted">Loading discussion…</p>;
   if (!loaded.thread) return <p className="px-6 text-body-sm text-kh-text-muted">This discussion is no longer available here.</p>;
-  const share = async (path: string, body: object) => { await reviewRequest(`/api/share-review/threads/${path}`, { token, documentId, ...body }); await load(); };
+  const share = async (path: string, body: object) => { await reviewRequest(`/api/share-review/threads/${path}`, { token, documentId, ...body }); await load(); onChanged?.(entry.threadId); };
   return <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
     <ReviewThreadList threads={[loaded.thread]} activeThreadId={loaded.thread.id} filter="ALL" onFilterChange={() => {}} writesEnabled={loaded.writesEnabled}
       mentionScope={loaded.writesEnabled && loaded.signedIn ? (documentId ? { token, documentId } : { token }) : undefined}

@@ -232,6 +232,23 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
     if (discussion.unreadCount > 0) void markThread(discussion);
   };
 
+  // A write in the pane settles the row it is about: the one discussion is read unfiltered, replaced
+  // in place (and in the fallback) and the list re-sorted, so the row stays even when the write makes
+  // it stop matching the active filter. The owner's and a mention's view of one thread merge to one row.
+  const refreshOne = useCallback(async (threadId: string) => {
+    try {
+      const result = await reviewRequest<InboxPage>(inboxUrl(DEFAULT_FILTERS, { threadId }));
+      const found = withDates(result.discussions).find(discussion => discussion.threadId === threadId);
+      // An empty answer is not a removal: a row the write settled stays as the pane left it.
+      if (!found) return;
+      setDiscussions(previous => mergeInboxDiscussions(previous.map(item => item.threadId === threadId ? found : item)));
+      setSelectedFallback(previous => previous && previous.threadId === threadId ? found : previous);
+      window.dispatchEvent(new Event("kh:notification-changed"));
+    } catch {
+      // The write succeeded; a failed read of its row leaves the row as it was.
+    }
+  }, []);
+
   const loadOlder = async () => {
     if (!next || moreLoading) return;
     const started = generation.current;
@@ -364,7 +381,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 pb-6">{list}</div>
     </div>
     <div className="min-h-0 min-w-0">
-      {selected ? <InboxDiscussion key={selected.threadId} entry={selected} />
+      {selected ? <InboxDiscussion key={selected.threadId} entry={selected} onChanged={refreshOne} />
         : loading && selectedId ? <p role="status" className="px-6 py-4 text-body-sm text-kh-text-muted">Loading…</p>
         : <div className="px-6 py-16 text-center text-kh-text-muted">
           <MessageSquareText size={24} className="mx-auto mb-3" aria-hidden="true" />

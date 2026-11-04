@@ -96,6 +96,7 @@ beforeEach(() => {
     }
     if (url === "/api/share-review/threads/query") return json({ threads: threads[`token:${body.token}`] ?? [], writesEnabled: true, callerUserId: "me", revisionId: "r" });
     if (/^\/api\/share-review\/threads\/[^/]+\/replies$/.test(url)) return json({ ok: true });
+    if (/^\/api\/documents\/[^/]+\/review-threads\/[^/]+\/(replies|resolution|visibility)$/.test(url)) return json({ ok: true });
     if (url.startsWith("/api/review-mentions/candidates")) return json({ candidates: [] });
     const peek = url.match(/^\/api\/documents\/([^/]+)\/peek\?brief$/);
     if (peek) return json({ title: `Doc ${peek[1]}`, markdown: `Passage of ${peek[1]}.`, revisionId: "r", status: "ACTIVE", sourceStatus: "ACTIVE", linkView: null });
@@ -127,6 +128,14 @@ const tab = async (label: string) => {
 };
 const button = async (label: string) => {
   await act(async () => { [...host.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === label)!.click(); });
+  await settle();
+};
+const paneButton = (label: string) => [...pane()!.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === label || item.getAttribute("aria-label") === label);
+const typeIn = async (element: HTMLTextAreaElement, value: string) => {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(element, value);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  });
   await settle();
 };
 const change = async (value: string) => {
@@ -240,6 +249,41 @@ it("keeps the selected row after its mark under the active Unread filter", async
   expect(item()).toBe("t1");
   expect(pane()).not.toBeNull();
   expect(markReadButtons()).toHaveLength(0);
+});
+
+it("a reply in the pane updates the row without Refresh", async () => {
+  page = { discussions: [discussion("t1")], shared: [], nextCursor: null };
+  threads["doc-t1"] = [thread("t1")];
+  lookup = discussion("t1", { commentCount: 2, latest: { authorName: "Ann", excerpt: "Answered from the Inbox", createdAt: at(20) }, latestAt: at(20) });
+  await mount();
+  await click(row("t1"));
+  await click(paneButton("Reply")!);
+  await typeIn(pane()!.querySelector<HTMLTextAreaElement>('textarea[aria-label="Reply"]')!, "Answered from the Inbox");
+  await click(paneButton("Reply")!);
+  await settle();
+  expect(requests).toContain("/api/documents/doc-t1/review-threads/t1/replies");
+  expect(gets.some(url => url.includes("threadId=t1"))).toBe(true);
+  expect(row("t1").textContent).toContain("2 comments");
+  expect(row("t1").textContent).toContain("Answered from the Inbox");
+});
+
+it("resolving under the Open filter keeps the selected row, marked Resolved", async () => {
+  window.history.replaceState(null, "", "/w/ws/inbox?status=open");
+  page = { discussions: [discussion("t1")], shared: [], nextCursor: null };
+  filtered = { discussions: [discussion("t1")], shared: [], nextCursor: null };
+  threads["doc-t1"] = [thread("t1")];
+  lookup = discussion("t1", { status: "RESOLVED" });
+  await mount();
+  await click(row("t1"));
+  // A pane write must settle this one row, not re-read the list under the filter that now excludes it.
+  filtered = { discussions: [], shared: [], nextCursor: null };
+  await click(paneButton("Resolve")!);
+  await settle();
+  expect(requests).toContain("/api/documents/doc-t1/review-threads/t1/resolution");
+  expect(gets.some(url => url.includes("threadId=t1"))).toBe(true);
+  expect(row("t1").textContent).toContain("Resolved");
+  expect(pane()).not.toBeNull();
+  expect(item()).toBe("t1");
 });
 
 it("a filter change clears a selection it excludes", async () => {

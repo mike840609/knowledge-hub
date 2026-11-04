@@ -29,7 +29,7 @@ import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewRequest, t
  * The owner replies, resolves and hides, and starts a discussion as a reader of a link does: by
  * selecting a passage (docs/superpowers/specs/2026-10-13-review-anchors-and-owner-threads-design.md).
  */
-export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = false, contentPending = false, prepareComment, commentAvailable = false, thread, children }: { /** A discussion to open on arrival in place of `?thread=`, with its passage scrolled into view. The Inbox passes it, and marks the entry read itself. */ thread?: string; prepareComment?: (capture: CaptureReviewAnchor) => PreparedReviewComment; commentAvailable?: boolean; documentId: string; revisionId: string; markdown: string; readOnly?: boolean; contentPending?: boolean; children: ReactNode }) {
+export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = false, contentPending = false, prepareComment, commentAvailable = false, thread, onChanged, children }: { /** A discussion to open on arrival in place of `?thread=`, with its passage scrolled into view. The Inbox passes it, and marks the entry read itself. */ thread?: string; /** Called after a successful write and this panel's own reload, so a host list can settle the row it shows. */ onChanged?: () => void; prepareComment?: (capture: CaptureReviewAnchor) => PreparedReviewComment; commentAvailable?: boolean; documentId: string; revisionId: string; markdown: string; readOnly?: boolean; contentPending?: boolean; children: ReactNode }) {
   const [result, setResult] = useState<{ threads: OwnerReviewThreadView[]; writesEnabled: boolean; revisionId: string; callerUserId: string }>();
   const [error, setError] = useState<string>();
   const [activeThreadId, setActiveThreadId] = useState<string>();
@@ -191,7 +191,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
       if (!revision || savingDocument || saveError) throw new Error("Wait for the document to finish saving before commenting.");
       const created = await reviewRequest<{ id: string }>(base, { expectedRevisionId: revision, anchor: selection.chosen, body, idempotencyKey, ...(mentions.length ? { mentions, mentionLinkId } : {}) });
       selection.clear(); setPrepared(undefined); setCommentRevision(undefined);
-      setFilter(current => current === "RESOLVED" ? "OPEN" : current); setActiveThreadId(created.id); await load();
+      setFilter(current => current === "RESOLVED" ? "OPEN" : current); setActiveThreadId(created.id); await load(); onChanged?.();
     }} />;
   // Beside its passage where the discussions are a rail; at the top of the drawer, which covers the passage, where they are not.
   const draft = composer && inline && (!revisionChanged || !!prepared) ? { anchor: selection.chosen!, composer } : undefined;
@@ -248,12 +248,12 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
           {result && <div className="mt-3"><ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={prepared?.markdown ?? (revisionChanged || contentPending ? undefined : markdown)} activeThreadId={activeThreadId} onActivate={setActiveThreadId} unreadThreadIds={unreadThreadIds}
             focusAnchor={revisionChanged || contentPending ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }}
             threads={result.threads} writesEnabled={result.writesEnabled && !readOnly} canResolve={!readOnly}
-            mentionScope={mentionScope} reply={async (threadId, body, idempotencyKey, mentions, mentionLinkId) => { await reviewRequest(`${base}/${threadId}/replies`, { body, idempotencyKey, ...(mentions.length ? { mentions, mentionLinkId } : {}) }); if (unreadThreadIds.has(threadId)) void markRead(threadId); await load(); }}
+            mentionScope={mentionScope} reply={async (threadId, body, idempotencyKey, mentions, mentionLinkId) => { await reviewRequest(`${base}/${threadId}/replies`, { body, idempotencyKey, ...(mentions.length ? { mentions, mentionLinkId } : {}) }); if (unreadThreadIds.has(threadId)) void markRead(threadId); await load(); onChanged?.(); }}
             author={{
-              edit: async (threadId, commentId, body) => { await reviewRequest(`${base}/${threadId}/comments/${commentId}/body`, { body }); await load(); },
-              remove: async (threadId, commentId) => { await reviewRequest(`${base}/${threadId}/comments/${commentId}/deletion`, {}); await load(); },
+              edit: async (threadId, commentId, body) => { await reviewRequest(`${base}/${threadId}/comments/${commentId}/body`, { body }); await load(); onChanged?.(); },
+              remove: async (threadId, commentId) => { await reviewRequest(`${base}/${threadId}/comments/${commentId}/deletion`, {}); await load(); onChanged?.(); },
             }}
-            moderate={async (threadId, action, value, commentId) => { const path = commentId ? `${base}/${threadId}/comments/${commentId}/visibility` : `${base}/${threadId}/${action}`; await reviewRequest(path, action === "resolution" ? { status: value } : { visibility: value }); await load(); }} /></div>}
+            moderate={async (threadId, action, value, commentId) => { const path = commentId ? `${base}/${threadId}/comments/${commentId}/visibility` : `${base}/${threadId}/${action}`; await reviewRequest(path, action === "resolution" ? { status: value } : { visibility: value }); await load(); onChanged?.(); }} /></div>}
         </div></ReviewPanelShell>
       </aside>
     </div>
