@@ -421,10 +421,10 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
     <div className="min-h-0 min-w-0">
       {selected ? <InboxDiscussion key={selected.threadId} entry={selected} onChanged={refreshOne} />
         : loading && selectedId ? <p role="status" className="px-6 py-4 text-body-sm text-kh-text-muted">Loading…</p>
-        : <div className="px-6 py-6 text-center text-kh-text-muted">
-          <MessageSquareText size={20} className="mx-auto mb-2" aria-hidden="true" />
+        : <div className="flex h-full flex-col items-center justify-center px-6 text-center text-kh-text-muted">
+          <MessageSquareText size={20} className="mb-2" aria-hidden="true" />
           <p className="text-body font-medium">Select a discussion</p>
-          <p className="mx-auto mt-1 max-w-measure text-body-sm">{ABOUT}</p>
+          <p className="mt-1 max-w-measure text-body-sm">{ABOUT}</p>
         </div>}
     </div>
   </main>}</div>;
