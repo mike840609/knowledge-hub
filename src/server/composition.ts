@@ -50,6 +50,7 @@ import { HubIdentityResolver } from "@/modules/identity/application/hub-identity
 import { establishTrustedCaller as establishTrustedCallerWith } from "@/server/trusted-caller";
 import { MariaDbTaskKnowledgeUnitOfWork } from "@/infrastructure/database/mariadb/task-knowledge-transaction";
 import { ManageExportBindingService } from "@/modules/task-knowledge/application/manage-export-binding";
+import { IngestTaskResultService } from "@/modules/task-knowledge/application/ingest-task-result";
 import { importRuntimeConfig } from "@/server/import-config";
 import { createIdentityProvider } from "@/server/identity-provider-factory";
 import { closeDatabasePool, getDatabasePool } from "./database-pool";
@@ -152,6 +153,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   };
   return {
     taskExportBindings: new ManageExportBindingService(taskKnowledgeUnitOfWork),
+    taskIngest: new IngestTaskResultService(taskKnowledgeUnitOfWork),
     personalProfile: new PersonalProfileService(unitOfWork),
     agentContext: new AgentContextService(unitOfWork),
     importScope: new GetImportScopeService(unitOfWork), sourceHealth:new GetSourceHealthService(unitOfWork), folderUpdates:new ListFolderUpdatesService(unitOfWork), syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, personal, personalPreferences, feedbackReports, feedbackIssues, workspaceAdmin, teams, governance, reviewReadAvailable: true, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, savedShares, reviews, sources, workspaces, search, imports };

@@ -173,6 +173,15 @@ pass.
   (`docs/superpowers/specs/2026-11-03-named-recipient-share-design.md`, deviation 2). Every other entry,
   and every write, requires one; `tests/unit/share-link-single-exception.test.ts`
   enforces it.
+  One write has no caller either, outside the share-link grant:
+  `IngestTaskResultService.ingest`, reached only from
+  `POST /api/task-results/ingest`. Its authority is a Task Knowledge export
+  credential, which names one binding (one Source in the owner's My Space) and
+  permits only `task-result:create`; it is not a delegated human identity. Every
+  other task-knowledge entry takes a caller, and caller-less helpers under
+  `application/internal/` are imported only from `application/`
+  (`tests/unit/task-export-single-exception.test.ts`;
+  `docs/superpowers/specs/2026-11-04-task-knowledge-export-design.md` §3).
 - **`org_code` does not decide access.** It answers which company org a user
   belongs to; workspace membership answers what they can open. Cross-org
   membership is legal and same-org membership is not automatic.

@@ -169,6 +169,11 @@ function canonical(value: unknown): string {
   return JSON.stringify(value);
 }
 
+/** Sorted-key JSON: what is stored, and what the content hash covers. */
+export function canonicalTaskJson(artifact: TaskArtifactV1): string {
+  return canonical(artifact);
+}
+
 export function canonicalTaskHash(artifact: TaskArtifactV1): string {
   return createHash("sha256").update(canonical(artifact)).digest("hex");
 }
