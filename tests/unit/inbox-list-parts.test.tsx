@@ -23,9 +23,16 @@ const sharedEntry = (over: Partial<ShareCommentNotificationView> = {}): ShareCom
   readAt: null, threadStatus: "OPEN", kind: "SHARED_WITH_YOU", linkAvailable: true,
   href: "/w/me/shares/tok", ...over,
 });
-const change = (element: HTMLSelectElement, value: string) => {
-  Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(element, value);
-  element.dispatchEvent(new Event("change", { bubbles: true }));
+const settle = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+const chooseStatus = async (value: string) => {
+  const trigger = host.querySelector<HTMLElement>('[role="combobox"]')!;
+  await act(async () => { trigger.click(); });
+  await settle();
+  const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(item => item.getAttribute("data-value") === value)!;
+  await act(async () => { option.dispatchEvent(new MouseEvent("mousemove", { bubbles: true })); });
+  await settle();
+  await act(async () => { option.click(); });
+  await settle();
 };
 
 let host: HTMLDivElement, root: Root;
@@ -42,7 +49,7 @@ it("switches the relationship tab, the status and the unread toggle", async () =
   await act(async () => root.render(<InboxFilters kind="all" status="all" unread={false} onKindChange={onKindChange} onStatusChange={onStatusChange} onUnreadChange={onUnreadChange} />));
   await act(async () => { host.querySelector<HTMLElement>('[role="tab"]:nth-of-type(3)')!.click(); });
   expect(onKindChange).toHaveBeenCalledWith("follow");
-  await act(async () => { change(host.querySelector("select") as HTMLSelectElement, "open"); });
+  await chooseStatus("open");
   expect(onStatusChange).toHaveBeenCalledWith("open");
   await act(async () => { [...host.querySelectorAll("button")].find(b => b.textContent === "Unread")!.click(); });
   expect(onUnreadChange).toHaveBeenCalledWith(true);
@@ -54,8 +61,8 @@ it("names the four relationships and marks the current one and the unread toggle
   expect(tabs.map(tab => tab.textContent)).toEqual(["All", "My documents", "Following", "Mentions"]);
   expect(tabs.map(tab => tab.getAttribute("aria-selected"))).toEqual(["false", "false", "false", "true"]);
   expect(host.querySelector('[role="tablist"]')?.getAttribute("aria-label")).toBe("Inbox relationships");
-  expect(host.querySelector("select")?.getAttribute("aria-label") ?? host.querySelector("label")?.textContent).toBe("Status");
-  expect(host.querySelector("select")?.value).toBe("resolved");
+  expect(host.querySelector('[role="combobox"]')?.getAttribute("aria-label")).toBe("Status");
+  expect(host.querySelector('[role="combobox"]')?.getAttribute("data-value")).toBe("resolved");
   expect([...host.querySelectorAll("button")].find(b => b.textContent === "Unread")?.getAttribute("aria-pressed")).toBe("true");
 });
 

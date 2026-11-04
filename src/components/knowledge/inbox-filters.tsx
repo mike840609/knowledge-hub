@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { tabClasses, tabListClasses } from "@/components/ui/tab";
 import type { InboxKindFilter, InboxStatusFilter } from "@/modules/knowledge/domain/inbox-discussion";
 
@@ -10,6 +10,12 @@ const RELATIONSHIPS: readonly { value: InboxKindFilter; label: string }[] = [
   { value: "owner", label: "My documents" },
   { value: "follow", label: "Following" },
   { value: "mention", label: "Mentions" },
+];
+
+const STATUSES: readonly { value: InboxStatusFilter; label: string }[] = [
+  { value: "all", label: "Any status" },
+  { value: "open", label: "Open" },
+  { value: "resolved", label: "Resolved" },
 ];
 
 /**
@@ -47,16 +53,13 @@ export function InboxFilters({
       >{relationship.label}</button>)}
     </div>
     <div className="flex flex-wrap items-center gap-1">
-      <label htmlFor="inbox-status" className="sr-only">Status</label>
-      <Select
+      <SelectMenu
         id="inbox-status"
+        aria-label="Status"
         value={status}
-        onChange={event => onStatusChange(event.target.value as InboxStatusFilter)}
-      >
-        <option value="all">Any status</option>
-        <option value="open">Open</option>
-        <option value="resolved">Resolved</option>
-      </Select>
+        onValueChange={value => onStatusChange(value)}
+        options={STATUSES}
+      />
       <Button variant={unread ? "soft" : "ghost"} aria-pressed={unread} onClick={() => onUnreadChange(!unread)}>
         Unread
       </Button>

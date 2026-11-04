@@ -138,12 +138,14 @@ const typeIn = async (element: HTMLTextAreaElement, value: string) => {
   });
   await settle();
 };
-const change = async (value: string) => {
-  const select = host.querySelector("select") as HTMLSelectElement;
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, value);
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+const choose = async (value: string) => {
+  const trigger = host.querySelector<HTMLElement>('[role="combobox"]')!;
+  await act(async () => { trigger.click(); });
+  await settle();
+  const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(item => item.getAttribute("data-value") === value)!;
+  await act(async () => { option.dispatchEvent(new MouseEvent("mousemove", { bubbles: true })); });
+  await settle();
+  await act(async () => { option.click(); });
   await settle();
 };
 const item = () => new URL(window.location.href).searchParams.get("item");
@@ -479,7 +481,7 @@ it("writes the tabs, the status and the unread toggle to the URL and the request
   expect(new URL(window.location.href).searchParams.get("kind")).toBe("mention");
   expect(inboxGets()).toContain("kind=mention");
 
-  await change("resolved");
+  await choose("resolved");
   expect(new URL(window.location.href).searchParams.get("status")).toBe("resolved");
   expect(inboxGets()).toContain("status=resolved");
 
@@ -489,7 +491,7 @@ it("writes the tabs, the status and the unread toggle to the URL and the request
 
   await button("All");
   await button("Unread");
-  await change("all");
+  await choose("all");
   expect(new URL(window.location.href).searchParams.get("kind")).toBeNull();
   expect(new URL(window.location.href).searchParams.get("status")).toBeNull();
   expect(new URL(window.location.href).searchParams.get("unread")).toBeNull();
@@ -504,7 +506,7 @@ it("reads the tab, status and unread from the URL once on mount", async () => {
   expect(inboxGets()).toContain("status=open");
   expect(inboxGets()).toContain("unread=1");
   expect(host.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Mentions");
-  expect((host.querySelector("select") as HTMLSelectElement).value).toBe("open");
+  expect(host.querySelector('[role="combobox"]')?.getAttribute("data-value")).toBe("open");
   expect([...host.querySelectorAll("button")].find(element => element.textContent === "Unread")?.getAttribute("aria-pressed")).toBe("true");
   // A filter is active, so the named-share section stays in Shares.
   expect(host.textContent).not.toContain("Shared with you");
