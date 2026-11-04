@@ -1,6 +1,6 @@
 # Knowledge Hub — Task Knowledge Export Design
 
-**Status:** Approved, 2026-11-04; revised after two design reviews (same day). Manual MVP. The automatic-ingestion direction is deferred (§10).
+**Status:** Approved, 2026-11-04; revised after three design reviews (same day). Manual MVP. The automatic-ingestion direction is deferred (§10).
 **Scope:** Manual Skill/Command trigger + Agent-generated summary + shared CLI + Task Ingestion API + My Space.
 
 ## 1. Why and success
@@ -20,29 +20,30 @@ Success: one command from a configured project yields a new Task Result, visible
 | Source binding | One-time Local Project → My Space → FOLDER_SYNC Wiki Source | Per-task selection |
 | Connections | Explicit Wiki references scoped to bound Source | LLM semantic matching |
 | Storage | Independent Task Knowledge asset and revision | Converting to editable Wiki |
-| Reliability | Idempotent API, CLI-owned task identity and frozen drafts, manual retry | Persistent Outbox and daemon |
+| Reliability | Idempotent API, CLI-owned task identity, confirmed revision sequence, manual retry | Persistent Outbox and daemon |
 | Future | MCP retrieval, automatic Hooks, graph integration | Not required to ship MVP |
 
 ## 3. Existing system boundaries
 
 The existing `sources` module owns folder snapshots, SourceEntry mappings, and revisions. Keep Folder Sync's immutable snapshot/Preview/Confirm/Apply contract and SOURCE_MANAGED read-only policy unchanged. The existing My Space has an owner and lifecycle; the existing graph supports DOCUMENT and UNRESOLVED nodes, not Task nodes. Use MariaDB and Next.js; no GPU, LLM service, embeddings, Graph DB or CodeGraph required.
 
-**Recorded deviations from `CLAUDE.md`** (the implementation PR reflects each in `CLAUDE.md`, and the first two in `eslint.config.mjs`):
+The feature is wired in `src/server/composition.ts`, the only composition root, and follows the Workspace shared write lock design (`docs/superpowers/specs/2026-10-07-workspace-shared-write-lock-design.md`): its writers hold the Workspace row in share mode and never take it `FOR UPDATE` (§6).
 
-1. **Module:** the feature lives in a fifth module, `src/modules/task-knowledge/`, not inside `knowledge`. It is held to the same boundary as `knowledge`: no `next`, `react`, `mariadb`, `infrastructure` or `server` imports, and no import of `@/modules/sources/**`. It reaches Workspace, Source, SourceEntry and Document data only through its own ports, which the infrastructure adapter implements. Path normalization that must match Folder Sync is done in that adapter, which may use the `sources` domain.
-2. **Composition root:** the feature is wired in `src/server/composition.ts`, the only composition root. No second root is created.
-3. **A write without a caller.** `CLAUDE.md` requires a caller for every write. `IngestTaskResultService.ingest` is the one task-knowledge entry that writes without a `CallerContext`: its authority is the export credential, which names exactly one binding and one permitted act (`task-result:create`). It is reached only from `POST /api/task-results/ingest`. Every other task-knowledge entry takes a caller. A test enforces both facts, in the style of `tests/unit/share-link-single-exception.test.ts`.
-4. **Phase 7:** the export credential is a non-human, credential-scoped principal. It is not a delegation of a human's identity, and it does not decide the Phase 7 Agent-identity model (§10).
+**Recorded deviations from `CLAUDE.md`** (the implementation PR records each in `CLAUDE.md`; the first is also enforced in `eslint.config.mjs`):
+
+1. **Module:** the feature lives in a fifth module, `src/modules/task-knowledge/`, not inside `knowledge`. It is held to the same boundary as `knowledge`: no `next`, `react`, `mariadb`, `infrastructure` or `server` imports, and no import of `@/modules/sources/**`. It reaches Workspace, Source, SourceEntry and Document data only through its own ports, which the infrastructure adapter implements. Path normalization that must match Folder Sync is done in that adapter, which may use the `sources` domain; the adapter converts any `sources` error into a task-knowledge outcome.
+2. **A write without a caller.** `CLAUDE.md` requires a caller for every write. `IngestTaskResultService.ingest` is the one task-knowledge entry that writes without a `CallerContext`: its authority is the export credential, which names exactly one binding and one permitted act (`task-result:create`). It is reached only from `POST /api/task-results/ingest`. Every other public method of a task-knowledge service takes a caller. A test enforces both facts, in the style of `tests/unit/share-link-single-exception.test.ts`.
+3. **Phase 7:** the export credential is a non-human, credential-scoped principal. It is not a delegation of a human's identity, and it does not decide the Phase 7 Agent-identity model (§10).
 
 ## 4. User flow
 
 1. A browser-authenticated user in an ACTIVE PERSONAL My Space selects an ACTIVE FOLDER_SYNC Wiki Source and creates an Export Binding and a restricted credential.
-2. Once per machine, the user installs the CLI (`npm install -g <hub-checkout>/tools/knowledge-hub`) and runs `knowledge-hub install-agent`, which copies the shared Skill and the OpenCode command into the user-level directories of each tool. They then work in any project, not only the Hub repo.
-3. Once per project, the user runs `knowledge-hub configure` there. The CLI stores, locally and outside the repo, the Hub URL, the binding ID, the project root (the root for CODE_FILE paths) and the credential. Credential input must not appear in shell history, Agent prompts, command arguments or Git. In another worktree of the same project, `knowledge-hub configure --from <otherRoot>` copies that configuration on purpose; there is never a silent fallback.
+2. Once per machine, the user installs the CLI from a packed tarball (`npm pack` in `<hub-checkout>/tools/knowledge-hub`, then `npm install -g <tarball>`), so later branch switches in the Hub checkout do not change the installed CLI. They run `knowledge-hub install-agent`, which copies the shared Skill and the OpenCode command into the user-level directories of each tool. They then work in any project, not only the Hub repo.
+3. Once per project, the user runs `knowledge-hub configure` there. The CLI stores, locally and outside the repo, the Hub URL, the binding ID, the project root (the root for CODE_FILE paths) and the credential. Credential input must not appear in shell history, Agent prompts, command arguments or Git. In another worktree of the same project, `knowledge-hub configure --from <otherRoot>` makes that worktree use the same binding on purpose; there is never a silent fallback.
 4. The user completes a task and invokes `/hub-export`.
 5. The Agent writes the summary content (§5, Agent-authored fields) as JSON to the CLI's stdin: `knowledge-hub export --new`. The CLI mints the Task ID, sets revision 1, saves the full artifact in its own state directory, records its hash, and posts HTTPS to Knowledge Hub. The Agent never writes files outside the project and never sets identity fields. It must not invent tests, changes or references.
-6. On a retryable failure the CLI keeps the saved artifact and prints `knowledge-hub export --retry <taskId>`, which resends it unchanged.
-7. Server derives owner/workspace/source from the restricted credential and verifies current state. The server atomically persists the task, revision and its references, and replies with the result URL.
+6. On a retryable failure the CLI keeps the saved artifact as unconfirmed and prints `knowledge-hub export --retry <taskId>`, which resends it unchanged.
+7. Server derives owner/workspace/source from the restricted credential and verifies current state. The server atomically persists the task, revision and its references, and replies with the result URL and the binding ID.
 
 This MVP does not auto-detect task completion. Only completed tasks can be exported; an incomplete/failed task must not be labeled completed. `/hub-export` must not send full conversation history or hidden reasoning.
 
@@ -56,55 +57,69 @@ Verification is self-reported evidence, not certification by Hub. A missing chec
 
 Reference types:
 - **WIKI:** exact Source-relative path or validated Document ID.
-- **CODE_FILE:** project-relative path only. No absolute path, no `..` segment, no drive letter, no control characters. The CLI checks that it resolves inside the project root; the file need not still exist (a task may delete it). The server stores the relative path as text.
+- **CODE_FILE:** project-relative path only. No absolute path, no leading `/` or `\`, no `..` segment, no drive letter, no control characters. The CLI checks that it resolves inside the project root; the file need not still exist (a task may delete it). The server stores the relative path as text.
 - **COMMIT:** opaque identifier, bounded length and charset.
 - **PR_URL:** `https:` scheme only, no userinfo, no control characters, bounded length.
 
-Non-WIKI references stay external and are rendered as links only when they pass the scheme rule above. No full source contents, raw terminal logs or environment variables. MVP limit: 64 KiB artifact, 32 references, bounded string fields; reject unsafe, unknown and oversized data without silent truncation. The local client should scan for forbidden content, but this is not a guarantee that all secrets can be detected.
+Non-WIKI references stay external and are rendered as links only when they pass the scheme rule above. No full source contents, raw terminal logs or environment variables. MVP limit: 64 KiB artifact, 32 references, bounded string fields; reject unsafe, unknown and oversized data without silent truncation.
 
-**Task identity and frozen drafts.** The CLI mints Task IDs; the Agent never does. Each saved artifact is frozen: the CLI records its canonical hash when it saves it and refuses to send a file whose hash no longer matches. `export --retry <taskId>` resends the latest saved revision unchanged, so a timeout followed by a retry yields the same Task. Changed content for an existing task is an explicit new revision: `knowledge-hub export --task <taskId>` reads new Agent-authored content from stdin and saves revision n+1. The CLI records, per task, the binding it was first sent under, and refuses `--retry` or `--task` under a different binding. A 409 response prints the `--task` command to send the change as a new revision.
+**Forbidden content.** The parsers reject secret-named fields. In addition, the CLI refuses content that contains its own configured export token, or any of a small set of high-signal secret patterns (a PEM private-key header, an AWS access key ID `AKIA…`, GitHub tokens `ghp_…`/`github_pat_…`), and reports only which rule matched, never the value. This is a safety net, not a guarantee that every secret is detected.
+
+**Task identity.** The CLI mints Task IDs; the Agent never does.
+
+**Revision sequence.** For each task the CLI records every saved revision with its canonical hash, the binding it was sent under, and whether the server has **confirmed** it (answered 200 or 201).
+- `export --new` mints a task and saves revision 1. It is refused while this project key has any unconfirmed revision; the CLI prints the `--retry` command instead. A timeout that actually committed therefore leads to `--retry` (answered 200), not to a second Task.
+- `export --retry <taskId>` resends the task's unconfirmed revision unchanged. If none is unconfirmed, it says so and exits 0.
+- `export --task <taskId>` reads new content and saves revision n+1, where n is the latest confirmed revision. It is refused while the task has an unconfirmed revision, and refused under a different binding than the task's.
+- The server accepts revision 1 only for a task it does not have, and revision n only when n = latest + 1. An exact replay of any revision it already accepted answers 200. Any other revision number answers 409 `REVISION_OUT_OF_ORDER`. The stored latest revision only moves forward.
+- Same task and revision with different content answers 409 `REVISION_CONFLICT`. With CLI-minted UUIDv4 task IDs and frozen saved revisions this is close to unreachable; it is the server-side backstop.
+
+**Frozen revisions.** The CLI refuses to send a saved revision whose file no longer matches its recorded hash. The hash lives in the same user-writable state directory, so this catches accidental edits, not deliberate tampering; `REVISION_CONFLICT` and `REVISION_OUT_OF_ORDER` on the server are the real backstop.
 
 ## 6. Project Source Binding / security
 
 **Binding** holds `ownerUserId`, `sourceId`, a non-sensitive `label`, `status` (`ACTIVE` / `REVOKED`), and timestamps. The Source is fixed when the binding is created and never changes; to use another Source, create another binding. Workspace is **not** stored on the binding: it is derived as `Source → Workspace` on every request. Owner is held once on the binding and is the only owner record for its Task Results. Local absolute paths are never sent to Hub.
 
-**Credentials:** each binding has one active credential at a time, high-entropy (`randomBytes(32)`), scoped only to `task-result:create` for that binding, with no expiry (rotation is the remedy). The server stores its SHA-256 hash, never the plaintext. The token is shown once in the browser-authenticated creation or rotation response, with `Cache-Control: no-store`. **Rotation** issues a new token and revokes the previous one in one transaction; the old token fails on its next use. **Revoking** a binding revokes its credential. Credentials cannot confer generic `document.write` or `source.manage`.
+**Credentials:** each binding has at most one active credential, high-entropy (`randomBytes(32)`), scoped only to `task-result:create` for that binding, with no expiry (rotation is the remedy). The server stores its SHA-256 hash, never the plaintext. The token is shown once in the browser-authenticated creation or rotation response, with `Cache-Control: no-store`. **Rotation** issues a new token and revokes the previous one in one transaction; the old token fails on its next use. **Revoking** a binding revokes its credential. Credentials cannot confer generic `document.write` or `source.manage`.
 
-**Local storage:** the CLI keeps the credential in a per-user file under the user's configuration directory, created with mode `0600` on POSIX. On Windows, where `chmod` does not apply, the file lives under the user profile and the CLI prints a warning that protection depends on the profile's ACL. No OS keychain integration in MVP; no new runtime package. The CLI accepts the token through a hidden interactive prompt or stdin, never as ordinary argv.
+**Local storage:** the CLI keeps one credential file per binding under the user's configuration directory, created with mode `0600` on POSIX. On Windows, where `chmod` does not apply, the file lives under the user profile and the CLI prints a warning that protection depends on the profile's ACL. Project keys reference a binding; they do not copy its credential, so one rotation is entered once (`knowledge-hub configure --rotate <bindingId>`) and every key that uses the binding picks it up. No OS keychain integration in MVP; no new runtime package. The CLI accepts the token through a hidden interactive prompt or stdin, never as ordinary argv.
 
-**Local config** is keyed by the realpath of the project's Git top-level directory (or of the working directory when the project is not in Git), plus an optional `--profile <name>` for several bindings in one project. Each worktree is a separate key. `configure --from` is the only way two keys share a binding, and it is an explicit act.
+**Local config** is keyed by the realpath of the project's Git top-level directory (or of the working directory when the project is not in Git), plus an optional `--profile <name>` for several bindings in one project. Each worktree is a separate key. `configure --from` is the only way two keys use one binding, and it is an explicit act. The CLI checks the `bindingId` in every 200/201 response against the configured one and stops with an error if they differ (a token pasted under the wrong binding).
 
-**Archival and revocation.** Task Result lifecycle is `ACTIVE` / `ARCHIVED`, as everywhere in the product; there is no hard delete. The owner may archive and restore a Task Result from My Space. Ingesting a new revision into an ARCHIVED task is refused (409, `TASK_ARCHIVED`): a credential cannot change a lifecycle the owner set. Revoking a binding stops new ingestion immediately; existing Task Results remain readable by their owner and show the binding's revoked status.
+**Archival and revocation.** Task Result lifecycle is `ACTIVE` / `ARCHIVED`, as everywhere in the product; there is no hard delete. The owner may archive and restore a Task Result from My Space; archiving an archived task or restoring an active one is a no-op, as for documents. A new revision into an ARCHIVED task is refused (409, `TASK_ARCHIVED`): a credential cannot change a lifecycle the owner set. An exact replay of a revision already accepted still answers 200, because it changes nothing. Revoking a binding stops new ingestion immediately; existing Task Results remain readable by their owner and show the binding's revoked status.
 
-**Write checks.** Each ingest checks credential status, binding status, Workspace `PERSONAL` and `ACTIVE`, that the binding owner is the Workspace owner, and that the Source is an `ACTIVE` `FOLDER_SYNC` Source of that Workspace. ("Source ownership" in the `SOURCE_MANAGED` / `HUB_MANAGED` sense is unrelated and not consulted: Task Results never write to the Source.) The order is fixed so that revocation cannot lose a race:
-1. Hash the token; read credential and binding without a lock to learn the Source and so the Workspace.
-2. Lock the Workspace (`workspaces.lockById`).
-3. Re-read credential, binding, Source and Workspace under that lock, and apply every check above to the re-read rows.
-4. Write.
+**Write checks.** Each ingest checks credential status, binding status, Workspace `PERSONAL` and `ACTIVE`, that the binding owner is the Workspace owner, and that the Source is an `ACTIVE` `FOLDER_SYNC` Source of that Workspace. ("Source ownership" in the `SOURCE_MANAGED` / `HUB_MANAGED` sense is unrelated and not consulted: Task Results never write to the Source.)
 
-Revoke and rotate take the same Workspace lock before changing credential or binding rows. Never accept caller-provided Owner, Workspace or Source identity. Team or cross-workspace writes are forbidden.
+**Lock order.** Every task-knowledge writer follows the global order Snapshot → Source → Workspace → deeper, and takes the Workspace row in share mode (`lockSharedById`), never `FOR UPDATE`:
+- **Ingest:** hash the token and read credential and binding without a lock, to learn the Source and so the Workspace. Read the Source (non-locking). Lock the Workspace shared and check its kind, status and owner on the locked row. Lock the binding row in share mode and re-read the credential, then check both. Lock the existing `task_results` row `FOR UPDATE`, if there is one, and check its lifecycle and latest revision. Write.
+- **Revoke and rotate:** lock the Workspace shared, then the binding row `FOR UPDATE`, then change binding and credential rows. A revoke that commits first is seen by ingest's re-read under the binding lock; a revoke that waits commits after the ingest. In both cases no ingest commits after the revoke has committed.
+- **Archive and restore:** lock the Workspace shared, then the `task_results` row `FOR UPDATE`.
+
+The Source is read without a lock. Archiving the Source while an ingest is in flight is accepted: Task Results never write to the Source, and the next ingest sees the archived Source and is refused. All transactions run READ COMMITTED, so each re-read under a lock sees the latest committed row.
+
+Never accept caller-provided Owner, Workspace or Source identity. Team or cross-workspace writes are forbidden.
 
 ## 7. Ingestion and references
 
-**Authentication.** The export credential travels in `X-Knowledge-Hub-Export-Token`. It does not use `Authorization`, because the site password (HTTP Basic) acts on that header. `POST /api/task-results/ingest` is the only route exempt from the site-password gate and the Google session gate, exempt by exact pathname: no trailing slash, no case folding, no prefix. The route answers only `POST` (others 405) and authenticates solely by the export credential. A custom header also forces a CORS preflight, which a cross-site browser request cannot pass. This is a deliberate change to the security boundary; `docs/superpowers/specs/2026-10-25-google-login-design.md` gets a pointer to this section.
+**Authentication.** The export credential travels in `X-Knowledge-Hub-Export-Token`. It does not use `Authorization`, because the site password (HTTP Basic) acts on that header. `POST /api/task-results/ingest` is the only route exempt from the site-password gate and the Google session gate, exempt by exact pathname: no trailing slash, no case folding, no prefix. The route authenticates solely by the export credential. A custom header also forces a CORS preflight; the route answers that preflight with 405 and no `Access-Control-Allow-*` header, so a cross-site browser request cannot proceed. This is a deliberate change to the security boundary; `docs/superpowers/specs/2026-10-25-google-login-design.md` gets a pointer to this section.
 
 **Responses.** `POST /api/task-results/ingest`:
-- 201: new revision created.
-- 200: exact replay (same revision, same canonical hash).
+- 201: new revision created. Body `{ taskResultId, revisionNo, bindingId, url }`.
+- 200: exact replay of an accepted revision. Same body.
 - 400: malformed JSON.
-- 401: credential missing, unknown or revoked.
-- 403: credential is live, but its binding, Workspace or Source no longer allows the write.
-- 405: any method other than `POST`.
-- 409: same revision with differing content (`REVISION_CONFLICT`), or the task is archived (`TASK_ARCHIVED`).
+- 401: credential missing, unknown or revoked (including through binding revocation, which revokes it).
+- 403: credential is live, but its Workspace or Source no longer allows the write.
+- 405: any other method, including `OPTIONS`. The route exports explicit handlers for every other method, so Next.js does not answer `OPTIONS` itself.
+- 409: `REVISION_CONFLICT` (same revision, different content), `REVISION_OUT_OF_ORDER` (§5), or `TASK_ARCHIVED`.
 - 413: body over 64 KiB, measured on the bytes actually read, not on `Content-Length`.
 - 422: valid JSON that fails the artifact contract, including an unsupported `schemaVersion`.
 - 503: retryable (lock wait timeout, database unavailable).
 
-Response bodies are private and uncached (`Cache-Control: private, no-store`).
+Every response, including 405, is private and uncached (`Cache-Control: private, no-store`).
 
-**Identity and concurrency.** Task identity is unique by `(bindingId, taskId)`; revision is unique by `(taskResultId, artifactRevision)`. The owner is reached through the binding, so it is not part of the key. Same revision with the same canonical content hash is a no-op replay; different content is rejected. Concurrent POSTs cannot produce duplicate tasks or partial revision/reference rows. A new revision retains prior revisions.
+**Identity and concurrency.** Task identity is unique by `(bindingId, taskId)`; revision is unique by `(taskResultId, artifactRevision)`. The owner is reached through the binding, so it is not part of the key. Concurrent POSTs cannot produce duplicate tasks or partial revision/reference rows. A new revision retains prior revisions.
 
-**References.** Explicit Wiki resolution uses **only** `(bound sourceId, exact sourcePath)` or a validated Document ID. The sourcePath is normalized exactly as Folder Sync normalized `source_entries.source_path` (`normalizeImportPath`), and compared byte-exactly; this happens in the infrastructure adapter, so the two can never drift. Never use existing Wiki Link title ranking to assert a unique Task reference. Only ACTIVE Source, SourceEntry and Document are eligible. Missing: UNRESOLVED; multiple/ambiguous: AMBIGUOUS; later revoked/archived: UNAVAILABLE. Save the original locator and resolved Document ID. Following a reference always rechecks live authorization/lifecycle. A stored historical ID is not a capability.
+**References.** Explicit Wiki resolution uses **only** `(bound sourceId, exact sourcePath)` or a validated Document ID. The sourcePath is normalized exactly as Folder Sync normalized `source_entries.source_path` (`normalizeImportPath`), and compared byte-exactly; this happens in the infrastructure adapter, so the two can never drift. A path that `normalizeImportPath` rejects is stored as UNRESOLVED. Never use existing Wiki Link title ranking to assert a unique Task reference. Only ACTIVE Source, SourceEntry and Document are eligible. Missing: UNRESOLVED; multiple/ambiguous: AMBIGUOUS; later revoked/archived: UNAVAILABLE. Save the original locator and resolved Document ID. Following a reference always rechecks live authorization/lifecycle. A stored historical ID is not a capability.
 
 ## 8. My Space UI
 
@@ -113,13 +128,15 @@ A small Task Results list/detail view within My Space, without a new top-level s
 ## 9. Failures and tests
 
 - Agent has partial context: summarize only supported facts, do not infer passing tests.
-- Export aborted/offline: the saved artifact is retained; retry is explicit (`export --retry`). No background daemon in MVP.
-- Timeout then retry: same saved artifact, same Task ID, same hash; the server answers 200 or 201 without duplicating the task.
-- Saved artifact edited by hand or by the Agent: the CLI refuses to send it.
-- Changed content for an exported task: `export --task` creates the next revision; prior revisions remain.
-- Archived task: a new revision is refused until the owner restores it.
+- Export aborted/offline: the saved revision is retained as unconfirmed; retry is explicit (`export --retry`). No background daemon in MVP.
+- Timeout that actually committed, then `/hub-export` again: `--new` is refused and points to `--retry`, which answers 200.
+- Saved revision edited by hand or by the Agent: the CLI refuses to send it.
+- Changed content for an exported task: `export --task` creates the next revision after the latest confirmed one; prior revisions remain.
+- Revision sent out of order (late retry, skipped revision): 409 `REVISION_OUT_OF_ORDER`; the latest revision never moves backwards.
+- Archived task: a new revision is refused until the owner restores it; an exact replay still answers 200.
 - Replay/concurrent upload: unique constraints + transaction enforce idempotency.
-- Revocation concurrent with ingest: the Workspace lock and post-lock re-read decide; no commit after revocation wins.
+- Revocation concurrent with ingest: the binding lock and the re-read under it decide; no commit after revocation wins.
+- Folder Sync Apply on the bound Source while an ingest runs: both hold the Workspace shared, so neither waits on the other.
 - Workspace revoked/archived or credential revoked: reject without fallback to another Workspace.
 - Source moved/archived or paths collide: preserve original reference, do not guess.
 - Data policy: reject overly broad content, secret-like data and traversal paths; do not log secrets.
