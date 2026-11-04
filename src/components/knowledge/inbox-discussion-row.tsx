@@ -36,7 +36,7 @@ export function InboxDiscussionRow({
     event.preventDefault();
     onSelect(discussion);
   };
-  return <li className={`flex items-start gap-3 py-3 ${selected ? "-mx-2 rounded-md bg-kh-bg-selected px-2" : ""}`}>
+  return <li className={`flex items-start gap-3 py-2.5 ${selected ? "-mx-2 rounded-md bg-kh-bg-selected px-2" : ""}`}>
     <span aria-hidden="true" className={`mt-2 h-2 w-2 shrink-0 rounded-full ${unread ? "bg-kh-primary" : "bg-transparent"}`} />
     <Link
       className="kh-focus-ring min-w-0 flex-1 rounded-md px-1 py-1 text-left hover:bg-kh-bg-hover"
@@ -47,9 +47,9 @@ export function InboxDiscussionRow({
       onClick={open}
     >
       <span className={`block truncate text-body ${unread ? "font-medium" : ""}`}>{discussion.documentTitle || "Untitled"}</span>
-      {discussion.quote && <span className="mt-1 block truncate text-caption text-kh-text-muted">{discussion.quote}</span>}
-      <span className="mt-1 block truncate text-body-sm text-kh-text-muted">{said}</span>
-      <span className="mt-1 flex flex-wrap items-center gap-x-1 text-caption text-kh-text-muted">
+      {discussion.quote && <span className="mt-0.5 block truncate text-caption text-kh-text-muted">{discussion.quote}</span>}
+      <span className="mt-0.5 block truncate text-body-sm text-kh-text-muted">{said}</span>
+      <span className="mt-0.5 flex flex-wrap items-center gap-x-1 text-caption text-kh-text-muted">
         <Timestamp value={discussion.latestAt} variant="relative" />
         <span aria-hidden="true">·</span>
         <span>{comments}</span>

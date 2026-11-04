@@ -35,7 +35,7 @@ export function InboxFilters({
   onUnreadChange: (unread: boolean) => void;
   sticky?: boolean;
 }) {
-  return <div className={`space-y-3 pb-3 ${sticky ? "sticky top-0 z-10 bg-kh-bg" : ""}`}>
+  return <div className={`space-y-2 pb-3 ${sticky ? "sticky top-0 z-10 bg-kh-bg" : ""}`}>
     <div role="tablist" aria-label="Inbox relationships" className={tabListClasses}>
       {RELATIONSHIPS.map(relationship => <button
         key={relationship.value}
@@ -46,10 +46,11 @@ export function InboxFilters({
         onClick={() => onKindChange(relationship.value)}
       >{relationship.label}</button>)}
     </div>
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-1">
       <label htmlFor="inbox-status" className="sr-only">Status</label>
       <Select
         id="inbox-status"
+        className="!border-transparent text-body-sm text-kh-text-muted hover:bg-kh-bg-hover"
         value={status}
         onChange={event => onStatusChange(event.target.value as InboxStatusFilter)}
       >
@@ -57,7 +58,7 @@ export function InboxFilters({
         <option value="open">Open</option>
         <option value="resolved">Resolved</option>
       </Select>
-      <Button variant={unread ? "soft" : "secondary"} aria-pressed={unread} onClick={() => onUnreadChange(!unread)}>
+      <Button variant={unread ? "soft" : "ghost"} aria-pressed={unread} onClick={() => onUnreadChange(!unread)}>
         Unread
       </Button>
     </div>

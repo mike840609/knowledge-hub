@@ -371,7 +371,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
   const header = <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Inbox" actions={
     <div className="flex items-center gap-2">
       <Button variant="ghost" icon aria-label="Refresh discussions" onClick={refresh} disabled={loading || busy}><RefreshCw size={16} /></Button>
-      <Button variant="secondary" onClick={() => void markAll()} disabled={busy || badge === 0}><CheckCheck size={16} />Mark all read</Button>
+      <Button variant="ghost" onClick={() => void markAll()} disabled={busy || badge === 0}><CheckCheck size={16} />Mark all read</Button>
     </div>
   } />;
   const errorLine = error && <p role="alert" className="text-body-sm text-kh-danger">{error}</p>;
@@ -382,11 +382,11 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
       onUnreadChange={value => applyFilters({ unread: value })} />
     {defaultView && <InboxSharedWithYou workspaceId={workspaceId} shared={shared} busy={busy} onMarkRead={entry => void markShared(entry)} />}
     {loading ? <NotificationListSkeleton /> : discussions.length === 0 ? (
-      <div className="py-12 text-center text-kh-text-muted">
-        <MessageSquareText size={24} className="mx-auto mb-3" aria-hidden="true" />
+      <div className="py-6 text-center text-kh-text-muted">
+        <MessageSquareText size={20} className="mx-auto mb-2" aria-hidden="true" />
         <p className="text-body font-medium">{empty.title}</p>
         {empty.detail && <p className="mt-1 text-body-sm">{empty.detail}</p>}
-        {filtered && !unreadOnly && <div className="mt-3 flex justify-center"><Button variant="link" onClick={() => applyFilters(DEFAULT_FILTERS)}>Clear filters</Button></div>}
+        {filtered && !unreadOnly && <div className="mt-2 flex justify-center"><Button variant="link" onClick={() => applyFilters(DEFAULT_FILTERS)}>Clear filters</Button></div>}
       </div>
     ) : <ul aria-label="Inbox discussions" className="divide-y divide-kh-border" onKeyDown={step}>
       {discussions.map(discussion => <InboxDiscussionRow
@@ -421,8 +421,8 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
     <div className="min-h-0 min-w-0">
       {selected ? <InboxDiscussion key={selected.threadId} entry={selected} onChanged={refreshOne} />
         : loading && selectedId ? <p role="status" className="px-6 py-4 text-body-sm text-kh-text-muted">Loading…</p>
-        : <div className="px-6 py-16 text-center text-kh-text-muted">
-          <MessageSquareText size={24} className="mx-auto mb-3" aria-hidden="true" />
+        : <div className="px-6 py-6 text-center text-kh-text-muted">
+          <MessageSquareText size={20} className="mx-auto mb-2" aria-hidden="true" />
           <p className="text-body font-medium">Select a discussion</p>
           <p className="mx-auto mt-1 max-w-measure text-body-sm">{ABOUT}</p>
         </div>}
