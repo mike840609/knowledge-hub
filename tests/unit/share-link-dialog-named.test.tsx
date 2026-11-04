@@ -43,6 +43,7 @@ beforeEach(() => {
     }
     if (url.startsWith("/api/share-recipients/candidates")) return json({ candidates: [ALICE, BOB] });
     if (/\/api\/share-links\/[^/]+\/recipients$/.test(url) && method === "GET") return json({ recipients });
+    if (/\/api\/share-links\/[^/]+\/proposals$/.test(url) && method === "GET") return json({ proposals: [] });
     if (/\/api\/share-links\/[^/]+\/recipients$/.test(url) && method === "POST") {
       for (const id of body.userIds) { const who = [ALICE, BOB].find((person) => person.id === id)!; recipients.push({ userId: who.id, name: who.name, nameEn: who.nameEn, empId: who.empId, addedAt: "2026-11-03T00:00:00.000Z" }); }
       return new Response(null, { status: 204 });

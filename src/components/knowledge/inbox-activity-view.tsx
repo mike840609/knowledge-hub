@@ -7,11 +7,14 @@ import { useInboxUnread } from "@/components/shell/use-inbox-unread";
 import { Button } from "@/components/ui/button";
 import { filterInboxDiscussions, mergeInboxDiscussions, sortInboxDiscussions, type InboxDiscussionView, type InboxKindFilter, type InboxPage, type InboxStatusFilter } from "@/modules/knowledge/domain/inbox-discussion";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
+import { governanceFailure, governanceRequest } from "@/components/workspaces/governance-error";
 import { InboxDiscussion } from "./inbox-discussion";
 import { InboxDiscussionRow } from "./inbox-discussion-row";
 import { InboxFilters } from "./inbox-filters";
+import { InboxProposals } from "./inbox-proposals";
 import { InboxSharedWithYou } from "./inbox-shared-with-you";
 import { NotificationListSkeleton } from "./knowledge-skeletons";
+import { canDecideProposal } from "./notification-href";
 import { reviewRequest } from "./review-thread-list";
 
 type Filters = { kind: InboxKindFilter; status: InboxStatusFilter; unread: boolean };
@@ -105,6 +108,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
   const [unread, setUnread] = useState(initial.filters.unread);
   const [discussions, setDiscussions] = useState<InboxDiscussionView[]>([]);
   const [shared, setShared] = useState<ShareCommentNotificationView[]>([]);
+  const [proposals, setProposals] = useState<ShareCommentNotificationView[]>([]);
   const [next, setNext] = useState<Cursor>(null);
   // Read once, from the URL; the URL follows the view from here on, never the other way round.
   const [selectedId, setSelectedId] = useState<string | null>(initial.item);
@@ -134,6 +138,8 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
   const busyCount = useRef(0);
   // Bumped by a filter change or Refresh: an older page that started under the previous view is not merged.
   const generation = useRef(0);
+  // A refused proposal decision re-reads the list beside its message; the reload must not erase it.
+  const preserveError = useRef(false);
 
   const beginBusy = () => { busyCount.current += 1; setBusy(true); };
   const endBusy = () => { busyCount.current = Math.max(0, busyCount.current - 1); if (busyCount.current === 0) setBusy(false); };
@@ -182,7 +188,8 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
     let live = true;
     const current: Filters = { kind, status, unread };
     setLoading(true);
-    setError(null);
+    if (!preserveError.current) setError(null);
+    preserveError.current = false;
     void (async () => {
       try {
         const result = await reviewRequest<InboxPage>(inboxUrl(current));
@@ -190,6 +197,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
         const first = withDates(result.discussions);
         setDiscussions(first);
         setShared(result.shared);
+        setProposals((result.proposals ?? []).filter(item => item.readAt === null || canDecideProposal(item)));
         setNext(result.nextCursor);
         await reconcile(first, current, () => live);
       } catch (cause) {
@@ -316,6 +324,8 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
       ));
       setSelectedFallback(previous => previous ? { ...previous, unreadCount: 0 } : previous);
       setShared([]);
+      // A pending owner request stays actionable after it is read; every other notice is history.
+      setProposals(previous => previous.filter(canDecideProposal));
       window.dispatchEvent(new Event("kh:notification-changed"));
     } catch (cause) {
       setError(failure(cause, "Could not mark discussions as read."));
@@ -334,6 +344,45 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
       window.dispatchEvent(new Event("kh:notification-changed"));
     } catch (cause) {
       setError(failure(cause, "Could not mark the share as read."));
+    } finally {
+      endBusy();
+    }
+  };
+
+  // The owner decides a proposal from its notice. The entry keeps the decision in place until the
+  // next read, so the reader sees the result; a refusal re-reads the list beside the server's message.
+  const decide = async (entry: ShareCommentNotificationView, decision: "approve" | "decline") => {
+    if (busy) return;
+    beginBusy();
+    setError(null);
+    try {
+      await governanceRequest(`/api/share-links/${entry.shareLinkId}/proposals/${entry.proposalId}/${decision}`, "POST");
+      setProposals(previous => previous.map(item => item.id === entry.id
+        ? { ...item, proposalStatus: decision === "approve" ? "APPROVED" : "DECLINED", readAt: item.readAt ?? new Date() }
+        : item));
+      window.dispatchEvent(new Event("kh:notification-changed"));
+    } catch (cause) {
+      setError(governanceFailure(cause).message);
+      preserveError.current = true;
+      refresh();
+    } finally {
+      endBusy();
+    }
+  };
+
+  const markProposal = async (entry: ShareCommentNotificationView) => {
+    if (busy) return;
+    beginBusy();
+    setError(null);
+    try {
+      await reviewRequest("/api/review-notifications/inbox", { action: "mark-read", eventId: entry.id });
+      // A pending owner request stays until it is decided; a notice is history once read.
+      setProposals(previous => previous.flatMap(item => item.id !== entry.id
+        ? [item]
+        : canDecideProposal(item) ? [{ ...item, readAt: new Date() }] : []));
+      window.dispatchEvent(new Event("kh:notification-changed"));
+    } catch (cause) {
+      setError(failure(cause, "Could not mark the proposal as read."));
     } finally {
       endBusy();
     }
@@ -380,6 +429,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
       onKindChange={value => applyFilters({ kind: value })}
       onStatusChange={value => applyFilters({ status: value })}
       onUnreadChange={value => applyFilters({ unread: value })} />
+    <InboxProposals proposals={proposals} busy={busy} onDecide={(entry, decision) => void decide(entry, decision)} onMarkRead={entry => void markProposal(entry)} />
     {defaultView && <InboxSharedWithYou workspaceId={workspaceId} shared={shared} busy={busy} onMarkRead={entry => void markShared(entry)} />}
     {loading ? <NotificationListSkeleton /> : discussions.length === 0 ? (
       <div className="py-6 text-center text-kh-text-muted">

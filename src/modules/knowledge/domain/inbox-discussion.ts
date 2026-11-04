@@ -26,6 +26,8 @@ export type InboxDiscussionView = {
 export type InboxPage = {
   discussions: InboxDiscussionView[];
   shared: ShareCommentNotificationView[];
+  /** Proposal notices are not discussions; the first page carries the ones the reader can act on. */
+  proposals?: ShareCommentNotificationView[];
   nextCursor: { latestAt: string; threadId: string } | null;
 };
 

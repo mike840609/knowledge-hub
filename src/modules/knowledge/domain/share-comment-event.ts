@@ -1,3 +1,4 @@
+import type { ShareProposalStatus } from "./share-proposal";
 export type ShareCommentEvent = {
   id: string; workspaceId: string; documentId: string;
   threadId: string; commentId: string; originShareLinkId: string;
@@ -19,11 +20,20 @@ export type ShareCommentNotificationView = {
    * SHARED_WITH_YOU: an owner named the caller on a NAMED share. `documentTitle` is the document's or the folder's
    * name, `authorName` the owner's, `createdAt` when the caller was added, and `href` the reader in the caller's own
    * Workspace; it carries no ids and no token. A link that no longer opens gives `linkAvailable: false` and none of it.
+   * PROPOSAL_REQUEST (the link's owner), PROPOSAL_PENDING and PROPOSAL_DECIDED (the proposed person: pending or declined;
+   * the proposer: approved or declined): one proposal to add `personName` to a NAMED link, `proposalStatus` its state now.
+   * `documentTitle` is what the link opens (`targetKind`), `authorName` the proposer on a request or a pending notice; only
+   * the owner's request carries `shareLinkId`. None carries a comment, `href` or token; a link that no longer opens for
+   * that party gives `linkAvailable: false`, no names and no title.
    */
-  kind?: "OWNER" | "FOLLOW" | "MENTION" | "SHARED_WITH_YOU"; token?: string; replyCount?: number; linkAvailable?: boolean; href?: string;
+  kind?: "OWNER" | "FOLLOW" | "MENTION" | "SHARED_WITH_YOU" | "PROPOSAL_REQUEST" | "PROPOSAL_PENDING" | "PROPOSAL_DECIDED";
+  token?: string; replyCount?: number; linkAvailable?: boolean; href?: string;
+  proposalId?: string; proposalStatus?: ShareProposalStatus; personName?: string; shareLinkId?: string; targetKind?: "DOCUMENT" | "FOLDER";
 };
 /** `shared:<linkId>` is the Inbox id of a named share, as `follow:` and `mention:` are of theirs. */
 export const SHARED_PREFIX = "shared:";
+/** `proposal:<party>:<proposalId>` is a proposal's Inbox id; one proposal is an entry for each of its parties. */
+export const PROPOSAL_PREFIX = "proposal:";
 export const EXCERPT_LIMIT = 80;
 export function projectShareCommentNotification(input: {
   id: string; workspaceId: string; documentId: string; sourceId: string; documentTitle: string;

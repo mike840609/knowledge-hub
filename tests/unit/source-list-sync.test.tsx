@@ -37,6 +37,133 @@ it("syncs only the clicked source and opens its preview without nesting the butt
   expect(state.run).toHaveBeenCalledWith(expect.objectContaining({target:{kind:"existing",workspaceId:"ws",sourceId:"two",sourceName:""},limits}));
   expect(state.push).toHaveBeenCalledWith("/w/ws/sources/imports/preview-1");
 });
+it("groups sources by how they are managed and labels both groups", async () => {
+  await render([
+    source("sync", { name: "Vendor Compliance Vault" }),
+    source("hub", { name: "Obsidian Wiki", sourceType: "HUB", ownership: "HUB_MANAGED" }),
+    source("upload", { name: "Uploaded brief", sourceType: "FILE_UPLOAD", ownership: "HUB_MANAGED" }),
+  ]);
+  const headings = [...container.querySelectorAll("h2")].map((heading) => heading.textContent);
+  expect(headings).toEqual(["Managed in Hub", "Synced folders"]);
+  const sections = [...container.querySelectorAll("section")];
+  expect(sections).toHaveLength(2);
+  expect(sections[0]?.textContent).toContain("Obsidian Wiki");
+  expect(sections[0]?.textContent).toContain("Uploaded brief");
+  expect(sections[0]?.textContent).not.toContain("Vendor Compliance Vault");
+  expect(sections[1]?.textContent).toContain("Vendor Compliance Vault");
+});
+
+it("hides the group's type label from its rows but keeps File upload", async () => {
+  await render([
+    source("hub", { name: "Notes", sourceType: "HUB", ownership: "HUB_MANAGED" }),
+    source("upload", { name: "Uploads", sourceType: "FILE_UPLOAD", ownership: "HUB_MANAGED" }),
+    source("sync", { name: "Vendor" }),
+  ]);
+  const row = (name: string) => [...container.querySelectorAll("a[data-list-row]")].find((link) => link.textContent?.includes(name));
+  expect(row("Notes")?.textContent).not.toContain("Hub");
+  expect(row("Uploads")?.textContent).toContain("File upload");
+  expect(row("Vendor")?.textContent).not.toContain("Folder sync");
+});
+
+it("keeps the type label in a flat list", async () => {
+  await render([source("hub", { sourceType: "HUB", ownership: "HUB_MANAGED" })]);
+  expect(container.querySelector("a[data-list-row]")?.textContent).toContain("Hub");
+});
+
+it("puts the group with an attention item first when sorting by attention", async () => {
+  const failed = source("sync");
+  failed.latestRun = {
+    id: "run",
+    sourceId: "sync",
+    triggeredBy: "user",
+    basedOnVersion: 0,
+    resultVersion: null,
+    status: "FAILED",
+    summary: {},
+    startedAt: new Date("2026-10-02T00:00:00Z"),
+    completedAt: null,
+  };
+  await render([source("hub", { sourceType: "HUB", ownership: "HUB_MANAGED" }), failed]);
+  const headings = [...container.querySelectorAll("h2")].map((heading) => heading.textContent);
+  expect(headings).toEqual(["Synced folders", "Managed in Hub"]);
+});
+
+it("does not label a list with only one kind of source", async () => {
+  await render([source("one")]);
+  expect(container.querySelector("h2")).toBeNull();
+  expect(container.querySelectorAll("section")).toHaveLength(0);
+
+  await render([source("hub", { sourceType: "HUB", ownership: "HUB_MANAGED" })]);
+  expect(container.querySelector("h2")).toBeNull();
+  expect(container.querySelectorAll("section")).toHaveLength(0);
+});
+
+it("keeps the chosen order inside each group", async () => {
+  await render([
+    source("hub-z", { name: "Zeta notes", sourceType: "HUB", ownership: "HUB_MANAGED" }),
+    source("hub-a", { name: "Alpha notes", sourceType: "HUB", ownership: "HUB_MANAGED" }),
+    source("sync-z", { name: "Zulu folder" }),
+    source("sync-a", { name: "Alpha folder" }),
+  ]);
+  const sections = [...container.querySelectorAll("section")];
+  const names = (section: Element | undefined) => [...(section?.querySelectorAll("a[data-list-row] > span:first-child") ?? [])].map((span) => span.textContent);
+  expect(names(sections[0])).toEqual(["Alpha notes", "Zeta notes"]);
+  expect(names(sections[1])).toEqual(["Alpha folder", "Zulu folder"]);
+});
+
+it("hides both group labels when a filter leaves one group", async () => {
+  const failed = source("sync");
+  failed.latestRun = {
+    id: "run",
+    sourceId: "sync",
+    triggeredBy: "user",
+    basedOnVersion: 0,
+    resultVersion: null,
+    status: "FAILED",
+    summary: {},
+    startedAt: new Date("2026-10-02T00:00:00Z"),
+    completedAt: null,
+  };
+  await render([failed, source("hub", { sourceType: "HUB", ownership: "HUB_MANAGED" })]);
+  expect(container.querySelectorAll("h2")).toHaveLength(2);
+
+  const attention = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+    .find((input) => input.parentElement?.textContent?.includes("Needs attention"));
+  expect(attention).not.toBeUndefined();
+  await act(async () => attention!.click());
+
+  expect(container.querySelectorAll("h2")).toHaveLength(0);
+  expect(container.textContent).toContain("Source sync");
+  expect(container.textContent).not.toContain("Source hub");
+});
+
+it("moves row focus across source groups", async () => {
+  await render([
+    source("hub", { sourceType: "HUB", ownership: "HUB_MANAGED" }),
+    source("sync"),
+  ]);
+  const rows = [...container.querySelectorAll<HTMLAnchorElement>("a[data-list-row]")];
+  expect(rows).toHaveLength(2);
+  await act(async () => rows[0]!.focus());
+  const arrow = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true });
+  await act(async () => rows[0]!.dispatchEvent(arrow));
+  expect(arrow.defaultPrevented).toBe(true);
+  expect(document.activeElement).toBe(rows[1]);
+});
+
+it("hides the result count when every source is visible", async () => {
+  await render();
+  expect(container.querySelector('p[role="status"]')).toBeNull();
+});
+
+it("shows the result count when a filter hides sources", async () => {
+  await render([source("one")]);
+  const attention = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+    .find((input) => input.parentElement?.textContent?.includes("Needs attention"));
+  await act(async () => attention!.click());
+  expect(container.querySelector('p[role="status"]')?.textContent).toContain("0 of 1 source");
+});
+
 it.each([{sourceType:"HUB",ownership:"HUB_MANAGED"},{sourceType:"FILE_UPLOAD"},{status:"ARCHIVED"},{ownership:"HUB_MANAGED"}])("does not offer folder sync for ineligible source %j",async overrides => {
   await render([source("one",overrides)]);expect(container.querySelector('button[aria-label^="Check for changes:"]')).toBeNull();
 });
