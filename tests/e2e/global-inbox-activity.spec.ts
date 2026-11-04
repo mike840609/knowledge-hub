@@ -2,6 +2,9 @@ import { expect, test } from "./fixtures/test";
 import { phase3Origin } from "./fixtures/phase3-identities";
 import { createReviewDocument } from "./fixtures/document-review";
 
+// The index is a client fetch; a loaded CI box needs more than the default expect timeout.
+const LOADED = { timeout: 15_000 };
+
 test("owner Inbox is a discussion index, one row per discussion, settled and filtered", async ({ page, request }) => {
   const doc = await createReviewDocument(request);
   const owner = phase3Origin("reviewOwner");
@@ -29,8 +32,16 @@ test("owner Inbox is a discussion index, one row per discussion, settled and fil
   await expect(page.getByRole("tab", { name: "All", exact: true })).toHaveAttribute("aria-selected", "true");
   const inbox = page.getByRole("list", { name: "Inbox discussions" });
   const rows = inbox.getByRole("listitem").filter({ hasText: title });
-  await expect(rows).toHaveCount(1);
+  await expect(rows).toHaveCount(1, LOADED);
   await expect(rows.first()).toContainText("Inbox verification comment");
+
+  // The row's own Mark read settles the thread without selecting it.
+  const markRead = rows.first().getByRole("button", { name: /^Mark read:/ });
+  await expect(markRead).toBeVisible(LOADED);
+  await markRead.click();
+  await expect(markRead).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Selected discussion" })).toHaveCount(0);
+  await expect(page).not.toHaveURL(/[?&]item=/);
 
   // A second comment on the same thread is still one row, showing the newest line and every comment.
   const replied = await request.post(`${viewer}/api/share-review/threads/${thread.id}/replies`, {
@@ -39,17 +50,19 @@ test("owner Inbox is a discussion index, one row per discussion, settled and fil
   });
   expect(replied.status()).toBe(200);
   await page.reload();
-  await expect(rows).toHaveCount(1);
+  await expect(rows).toHaveCount(1, LOADED);
   await expect(rows.first()).toContainText("A second reader comment");
   await expect(rows.first()).toContainText("2 comments");
+  // The new comment is unread again: the per-row control returns without a second count on the page.
+  await expect(rows.first().getByRole("button", { name: /^Mark read:/ })).toBeVisible(LOADED);
 
   // Selecting the row opens the discussion beside the list and marks it read.
   await rows.first().getByRole("link").click();
-  await expect(page).toHaveURL(/[?&]item=/);
+  await expect(page).toHaveURL(new RegExp(`[?&]item=${thread.id}(&|$)`));
   const selected = page.getByRole("region", { name: "Selected discussion" });
   const card = selected.getByRole("region", { name: "Discussion thread" });
-  await expect(card.getByText("Inbox verification comment", { exact: true })).toBeVisible();
-  await expect(card.getByText("A second reader comment", { exact: true })).toBeVisible();
+  await expect(card.getByText("Inbox verification comment", { exact: true })).toBeVisible(LOADED);
+  await expect(card.getByText("A second reader comment", { exact: true })).toBeVisible(LOADED);
   await card.getByRole("button", { name: "Reply", exact: true }).click();
   await card.getByRole("textbox", { name: "Reply", exact: true }).fill("Answered from the Inbox");
   await card.getByRole("button", { name: "Reply", exact: true }).click();
@@ -71,19 +84,19 @@ test("owner Inbox is a discussion index, one row per discussion, settled and fil
   await selected.getByRole("link", { name: "Open document" }).click();
   await expect(page).toHaveURL(new RegExp(`thread=${thread.id}`));
   const opened = page.getByRole("region", { name: "Discussion thread" });
-  await expect(opened.getByText("Inbox verification comment", { exact: true })).toBeVisible();
-  await expect(opened.getByText("Answered from the Inbox", { exact: true })).toBeVisible();
+  await expect(opened.getByText("Inbox verification comment", { exact: true })).toBeVisible(LOADED);
+  await expect(opened.getByText("Answered from the Inbox", { exact: true })).toBeVisible(LOADED);
 
   // The relationship tabs are over the same index; this discussion is neither followed nor mentioned.
   await page.goto(`${owner}/w/${doc.workspaceId}/inbox`);
   await page.getByRole("tab", { name: "Following", exact: true }).click();
   await expect(page).toHaveURL(/[?&]kind=follow/);
-  await expect(page.getByText("No discussions match these filters.", { exact: true })).toBeVisible();
+  await expect(page.getByText("No discussions match these filters.", { exact: true })).toBeVisible(LOADED);
   await page.getByRole("tab", { name: "Mentions", exact: true }).click();
   await expect(page).toHaveURL(/[?&]kind=mention/);
-  await expect(page.getByText("No discussions match these filters.", { exact: true })).toBeVisible();
+  await expect(page.getByText("No discussions match these filters.", { exact: true })).toBeVisible(LOADED);
   await page.getByRole("tab", { name: "All", exact: true }).click();
-  await expect(rows).toHaveCount(1);
+  await expect(rows).toHaveCount(1, LOADED);
   await expect(rows.first()).toContainText("A second reader comment");
 
   // Narrow, the same index is a plain list whose rows open the document; there is no pane.

@@ -229,17 +229,29 @@ test("a revoked link leaves a mention naming nothing", async ({ page, request })
   const query = await (await request.post(`${viewer}/api/share-review/threads/query`, { headers: { Origin: viewer }, data: { token } })).json();
   const thread = query.threads.find((candidate: { comments: Array<{ body: string }> }) => candidate.comments[0].body === body);
   const commentId: string = thread.comments[0].id;
-  expect((await request.post(`${owner}/api/share-links/${doc.links[0].id}/revoke`)).ok()).toBe(true);
+  // The link dies, so there is nothing to review: the index drops the row rather than leaving a dead entry.
+  const peek = await (await request.get(`${owner}/api/documents/${doc.documentId}/peek?brief`)).json();
+  const workspaceId = await personalWorkspaceId(request, mentioned);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  // While the link opens, the mention is one index row for its document: the absence below is a removal,
+  // not a list that never rendered.
+  const deadRow = () => page.getByRole("list", { name: "Inbox discussions" }).getByRole("listitem").filter({ hasText: peek.title });
+  await page.goto(`${mentioned}/w/${workspaceId}/inbox`);
+  await expect(page.getByRole("heading", { name: "Inbox", level: 1 })).toBeVisible();
+  await expect(deadRow()).toHaveCount(1);
+  await expect(deadRow()).toContainText("請@Phase3 groupAdmin");
 
+  expect((await request.post(`${owner}/api/share-links/${doc.links[0].id}/revoke`)).ok()).toBe(true);
   const unread = await (await request.get(`${mentioned}/api/review-notifications/unread`, { headers: { Origin: mentioned } })).json();
   // A dead entry has no thread id; its id is still `mention:<commentId>`.
   expect(unread.notifications.filter((notice: { id: string }) => notice.id === `mention:${commentId}`)).toEqual([]);
 
-  // The link died, so there is nothing to review: the index drops the row rather than leaving a dead entry.
-  const peek = await (await request.get(`${owner}/api/documents/${doc.documentId}/peek?brief`)).json();
-  const workspaceId = await personalWorkspaceId(request, mentioned);
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto(`${mentioned}/w/${workspaceId}/inbox`);
-  await expect(page.getByRole("list", { name: "Inbox discussions" }).getByRole("listitem").filter({ hasText: peek.title })).toHaveCount(0);
-  await expect(page.getByText("請@Phase3 groupAdmin")).toHaveCount(0);
+  const listed = page.waitForResponse(response => new URL(response.url()).pathname === "/api/review-notifications/inbox" && response.request().method() === "GET");
+  await page.reload();
+  expect((await listed).ok()).toBe(true);
+  // The list has rendered (its loading status is gone) before the absence is trusted.
+  await expect(page.getByText("Loading comments")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Inbox", level: 1 })).toBeVisible();
+  await expect(deadRow()).toHaveCount(0);
+  await expect(page.getByText(body, { exact: true })).toHaveCount(0);
 });
