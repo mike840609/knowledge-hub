@@ -50,7 +50,6 @@ export function InboxFilters({
       <label htmlFor="inbox-status" className="sr-only">Status</label>
       <Select
         id="inbox-status"
-        className="!border-transparent text-body-sm text-kh-text-muted hover:bg-kh-bg-hover"
         value={status}
         onChange={event => onStatusChange(event.target.value as InboxStatusFilter)}
       >
