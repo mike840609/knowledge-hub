@@ -401,8 +401,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     setSource(value => !value);
   }}>
     <FileCode2 className="h-4 w-4 sm:hidden" aria-hidden="true" />
-    <span className="max-sm:hidden">Markdown source</span>
-    <span className="sm:hidden">Source</span>
+    <span className="max-sm:sr-only">Markdown source</span>
   </Button>;
   const article = <>
     {showEditHint && <p className="mb-2 text-caption text-kh-text-muted">Click anywhere in the text to edit.</p>}
@@ -468,7 +467,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     inspectorData={{ ...detail.inspectorData, revisions, selectedRevisionNo: revisions.find(item => item.id === savedRevision)?.revisionNo ?? detail.inspectorData.selectedRevisionNo }}
     breadcrumb={[...detail.breadcrumb.slice(0, -1), { label: displayTitle }]} outline={outline}
     contentOwnsTitle={markdownOpensWithHeading(content.markdown)}
-    editorActions={<><AutosaveIndicator state={status} attention={attention} /><Button type="button" variant="ghost" aria-label="Rename title" title="Rename title" disabled={!editable || !!recovery || (!ready && !source && !failed)} onClick={focusTitle} className="max-lg:px-2"><Pencil className="h-4 w-4" aria-hidden="true" /><span className="max-lg:sr-only">Rename</span></Button>{markdownToggle}</>}
+    editorActions={<><AutosaveIndicator state={status} attention={attention} /><Button type="button" variant="ghost" aria-label="Rename document" title="Rename document" disabled={!editable || !!recovery || (!ready && !source && !failed)} onClick={focusTitle}><Pencil className="h-4 w-4" aria-hidden="true" /></Button>{markdownToggle}</>}
     titleControl={resolved.source !== "H1" ? <textarea ref={titleInput} aria-label="Title" value={content.title} disabled={!editable} maxLength={512} rows={1}
       onChange={event => change({ ...queue.current!.current, title: event.target.value })}
       onKeyDown={event => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.blur(); } }}

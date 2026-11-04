@@ -26,7 +26,7 @@ test("rename selects an opening heading and preserves the document body", async 
   const result = await response.json();
   const url = `/w/${workspace}/knowledge/${result.sourceId}/${result.documentId}`;
   const editor = await surface(page, url);
-  await page.getByRole("button", { name: "Rename title" }).click();
+  await page.getByRole("button", { name: "Rename document" }).click();
   await expect(editor).toBeFocused();
   await page.keyboard.insertText("New heading");
   await saved(page);
@@ -42,7 +42,7 @@ test("rename also selects the heading in Markdown mode", async ({ page }) => {
   const url = `/w/${workspace}/knowledge/${result.sourceId}/${result.documentId}`;
   await surface(page, url);
   await page.getByRole("button", { name: "Markdown source" }).click();
-  await page.getByRole("button", { name: "Rename title" }).click();
+  await page.getByRole("button", { name: "Rename document" }).click();
   await page.keyboard.insertText("New heading");
   await saved(page);
   await page.reload();
@@ -57,7 +57,7 @@ test("renaming a frontmatter title persists without changing other metadata or b
   const result = await response.json();
   const url = `/w/${workspace}/knowledge/${result.sourceId}/${result.documentId}`;
   await surface(page, url);
-  await page.getByRole("button", { name: "Rename title" }).click();
+  await page.getByRole("button", { name: "Rename document" }).click();
   const title = page.getByRole("textbox", { name: "Title", exact: true });
   await expect(title).toBeFocused();
   await title.fill("Updated title");
@@ -219,7 +219,7 @@ test("inline: content and title autosave without navigating or losing focus", as
   await saved(page);
   await expect(editor).toBeFocused();
   await expect(page).toHaveURL(new RegExp(`${url}$`));
-  await page.getByRole("button", { name: "Rename title" }).click();
+  await page.getByRole("button", { name: "Rename document" }).click();
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toBeFocused();
   await page.getByRole("textbox", { name: "Title", exact: true }).fill("Renamed inline");
   await saved(page);
