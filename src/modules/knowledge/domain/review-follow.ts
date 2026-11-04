@@ -20,14 +20,14 @@ export function summarizeFollowedThread({ thread, comments, userId, seenAt, link
   thread: ReviewThread; comments: ReviewComment[]; userId: string; seenAt: Date; linkValid: boolean;
   /** Comments the Inbox already shows as mentions: neither unread nor the latest reply. */
   excludeCommentIds?: ReadonlySet<string>;
-}): { latest: ReviewComment; latestReply: ReviewComment | null; unread: number } | { unavailable: true } | null {
+}): { latest: ReviewComment; latestReply: ReviewComment | null; unread: number; commentCount: number } | { unavailable: true } | null {
   if (!linkValid) return { unavailable: true };
   if (thread.visibility === "HIDDEN" || isRetractedThread(comments)) return null;
   const standing = comments.filter(comment => !comment.deletedAt && comment.visibility === "VISIBLE");
   const latest = standing.at(-1);
   if (!latest) return null;
   const replies = standing.filter(comment => comment.authorUserId !== userId && !excludeCommentIds?.has(comment.id));
-  return { latest, latestReply: replies.at(-1) ?? null, unread: replies.filter(comment => comment.createdAt > seenAt).length };
+  return { latest, latestReply: replies.at(-1) ?? null, unread: replies.filter(comment => comment.createdAt > seenAt).length, commentCount: standing.length };
 }
 
 /** Unread first, then the newest activity; a dead link has no time to sort by and goes last. */
