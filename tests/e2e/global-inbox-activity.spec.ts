@@ -1,6 +1,7 @@
 import { expect, test } from "./fixtures/test";
 import { phase3Origin } from "./fixtures/phase3-identities";
 import { createReviewDocument } from "./fixtures/document-review";
+import { chooseOption, expectChosen } from "./fixtures/select-menu";
 
 // The index is a client fetch; a loaded CI box needs more than the default expect timeout.
 const LOADED = { timeout: 15_000 };
@@ -71,13 +72,13 @@ test("owner Inbox is a discussion index, one row per discussion, settled and fil
   await expect(rows.first()).toContainText("3 comments");
 
   // Resolving under the `Open` filter leaves the selected row in place, saying `Resolved`.
-  await page.getByLabel("Status").selectOption("open");
+  await chooseOption(page.getByLabel("Status"), "open");
   await expect(page).toHaveURL(/[?&]status=open/);
   await expect(rows).toHaveCount(1);
   await expect(rows.first().getByRole("link")).toHaveAttribute("aria-current", "true");
   await card.getByRole("button", { name: "Resolve", exact: true }).click();
   await expect(rows.first()).toContainText("Resolved");
-  await expect(page.getByLabel("Status")).toHaveValue("open");
+  await expectChosen(page.getByLabel("Status"), "open");
   await expect(rows.first().getByRole("link")).toHaveAttribute("aria-current", "true");
 
   // The document stays one click away, on its own discussion.
