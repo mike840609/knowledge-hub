@@ -42,6 +42,12 @@ function edgePath(edges: readonly { from: string; to: string }[], at: ReadonlyMa
  * the canvas that takes `lg` radius, a border and the popover elevation
  * (design language §5, §6); it never takes pointer events, so it cannot get
  * between the reader and the graph.
+ *
+ * It fades in with the same beat as the dimming it triggers (§9), so the card and
+ * the graph settling around the node read as one gesture. Fade only: the card is
+ * placed by `left`/`top` and the node under it, and a scale would have to replace
+ * the translate that anchors it. Leaving is instant — the card points at a node
+ * that is no longer hovered.
  */
 function NodeCard({ node, left, top, below }: { node: GraphViewNode; left: number; top: number; below: boolean }) {
   const unresolved = node.kind === "UNRESOLVED";
@@ -50,7 +56,7 @@ function NodeCard({ node, left, top, below }: { node: GraphViewNode; left: numbe
       role="tooltip"
       data-graph-card
       style={{ left, top }}
-      className={`pointer-events-none absolute z-10 max-w-64 rounded-lg border border-kh-border bg-kh-bg px-2.5 py-1.5 shadow-popover ${
+      className={`kh-fade-in pointer-events-none absolute z-10 max-w-64 rounded-lg border border-kh-border bg-kh-bg px-2.5 py-1.5 shadow-popover ${
         below ? "-translate-x-1/2" : "-translate-x-1/2 -translate-y-full"
       }`}
     >

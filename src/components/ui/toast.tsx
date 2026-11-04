@@ -53,7 +53,7 @@ export type ToastRequest = {
 /** Long enough for a push and a redirect and the refresh that follows, short enough that a later, unrelated navigation still clears the toast. */
 const SURVIVES_NAVIGATION_MS = 3_000;
 
-type ActiveToast = ToastRequest & { id: number; state: "idle" | "undoing" };
+type ActiveToast = ToastRequest & { id: number; state: "idle" | "undoing" | "leaving" };
 
 const ToastContext = createContext<((request: ToastRequest) => void) | null>(null);
 
@@ -85,24 +85,33 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToast({ ...request, id, state: "idle" });
   }, []);
 
+  // The exit animation owns the unmount: every close path marks the toast leaving, and its
+  // `animationend` removes it. A direct removal would be the one overlay in the app that vanishes.
+  const dismiss = useCallback(() => {
+    setToast((current) => (current && current.state !== "leaving" ? { ...current, state: "leaving" } : current));
+  }, []);
+
   // A toast describes what just happened here. Somewhere else, it is litter —
   // unless its own action is what sent the reader there.
   useEffect(() => {
     const keep = survivor.current;
     const survives = keep !== null && Date.now() < keep.until;
     if (!survives) survivor.current = null;
-    setToast((current) => (survives && current !== null && current.id === keep.id ? current : null));
+    setToast((current) => {
+      if (survives && current !== null && current.id === keep.id) return current;
+      return current ? { ...current, state: "leaving" } : null;
+    });
   }, [pathname]);
 
   useEffect(() => {
-    if (!toast || toast.state === "undoing") return;
+    if (!toast || toast.state !== "idle") return;
     const duration = toast.undo ? DISMISS_MS.undoable : DISMISS_MS.plain;
     let timer = window.setTimeout(function expire() {
       if (held.current) {
         timer = window.setTimeout(expire, 1_000);
         return;
       }
-      setToast((current) => (current?.id === toast.id ? null : current));
+      setToast((current) => (current?.id === toast.id ? { ...current, state: "leaving" } : current));
     }, duration);
     return () => window.clearTimeout(timer);
   }, [toast]);
@@ -146,7 +155,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toast ? (
           <div
             key={toast.id}
-            className={`pointer-events-auto flex items-center gap-3 rounded-lg border bg-kh-bg px-4 py-3 shadow-modal ${
+            data-leaving={toast.state === "leaving" ? "" : undefined}
+            onAnimationEnd={(event) => {
+              // The toast's own exit, not an animation inside it bubbling up.
+              if (event.target !== event.currentTarget || event.animationName !== "kh-toast-leave") return;
+              setToast((current) => (current?.id === toast.id ? null : current));
+            }}
+            className={`kh-toast pointer-events-auto flex items-center gap-3 rounded-lg border bg-kh-bg px-4 py-3 shadow-modal ${
               toast.tone === "danger" ? "border-kh-danger-border" : "border-kh-border"
             }`}
           >
@@ -166,7 +181,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <button
               type="button"
               aria-label="Dismiss notification"
-              onClick={() => setToast(null)}
+              onClick={dismiss}
               className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}
             >
               <X className="h-4 w-4" aria-hidden="true" />

@@ -151,6 +151,17 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   const hint = !open ? undefined : noLink ? NO_LINK_HINT : failure ?? (answeredEmpty ? NO_MATCH_HINT : undefined);
   const listed = candidates.length > 0;
   const addsNote = `Adds them to this link${found?.targetKind === "FOLDER" ? " (whole folder)" : ""}`;
+
+  // Keep the list mounted from its first appearance at this `@` until the trigger goes away: a
+  // debounced query empties it between keystrokes, and remounting would replay the entrance on
+  // every result. It still hides while empty, so nobody is picked from a list that is not
+  // answering the text as it is now.
+  const [shownFor, setShownFor] = useState<number>();
+  useEffect(() => {
+    if (!open) { setShownFor(undefined); return; }
+    if ((listed || hint) && shownFor !== triggerStart) setShownFor(triggerStart);
+  }, [open, listed, hint, shownFor, triggerStart]);
+  const showList = open && (listed || hint || shownFor === triggerStart);
   const optionId = (index: number) => `${listId}-option-${index}`;
 
   function track() { if (ref.current) setCaret(ref.current.selectionStart ?? 0); }
@@ -200,7 +211,7 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
     }),
   };
 
-  const list: ReactNode = (listed || hint) && <div className="absolute inset-x-0 top-full z-30 mt-1 rounded-md border border-kh-border bg-kh-bg p-1 shadow-popover">
+  const list: ReactNode = showList && <div hidden={!listed && !hint} className="kh-pop-in absolute inset-x-0 top-full z-30 mt-1 rounded-md border border-kh-border bg-kh-bg p-1 shadow-popover">
     {listed
       ? <ul id={listId} role="listbox" aria-label="People to mention">{candidates.map((candidate, index) => <li key={candidate.id} id={optionId(index)} role="option" aria-selected={index === active}
           className={`cursor-default rounded-md px-2 py-1 ${index === active ? "bg-kh-bg-selected text-kh-selected-text" : ""}`}

@@ -31,7 +31,7 @@ export function DocumentPreviewLink({ documentId, href, title, note, className, 
     <Tooltip.Trigger render={<Link href={href} prefetch={false} className={className} />} delay={400}>{children}</Tooltip.Trigger>
     <Tooltip.Portal>
       <Tooltip.Positioner side="bottom" align="start" sideOffset={8} className="z-[80]">
-        <Tooltip.Popup className="max-w-[min(22rem,90vw)] rounded-lg border border-kh-border bg-kh-bg-raised p-3 text-body-sm text-kh-text shadow-popover">
+        <Tooltip.Popup className="max-w-[min(22rem,90vw)] rounded-lg border border-kh-border bg-kh-bg-raised p-3 text-body-sm text-kh-text shadow-popover transition-[opacity,transform] duration-120 ease-out data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0">
           <span className="block font-semibold">{preview?.title ?? title}</span>
           {note ? <span className="block text-kh-text-muted">{note}</span> : null}
           <span className="mt-1 block whitespace-normal break-words text-kh-text-muted" aria-live="polite">{failed ? "Preview unavailable. Open the link to view the document." : preview ? preview.excerpt || "This document has no text to preview." : "Loading preview…"}</span>

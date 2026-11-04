@@ -201,7 +201,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
     {visible.length === 0 && !draft && <p className="py-6 text-body-sm text-kh-text-muted">{threads.length === 0 ? (writesEnabled ? "No comments yet. Select text in the document to start a comment." : "No comments yet.") : filter === "OPEN" && threads.every(thread => thread.status === "RESOLVED") ? "Every comment is resolved." : "No comments here."}</p>}
     <div ref={railRef} data-review-rail={railMarkdown !== undefined ? "" : undefined} data-positioned={layout ? "" : undefined} className="kh-review-thread-list" style={layout ? { "--review-list-height": `${layout.height}px` } as CSSProperties : undefined}>
     {/* The box is placed before its field mounts: the field takes focus on mounting, and focused at the rail's top it scrolls the page away from the passage. */}
-    {draft && <section data-review-draft={DRAFT_ID} aria-label="New comment" style={layout ? { "--review-thread-top": `${layout.positions[DRAFT_ID] ?? 0}px` } as CSSProperties : undefined}>{layout?.positions[DRAFT_ID] !== undefined && draft.composer}</section>}
+    {draft && <section data-review-draft={DRAFT_ID} aria-label="New comment" style={layout ? { "--review-thread-top": `${layout.positions[DRAFT_ID] ?? 0}px` } as CSSProperties : undefined} className={layout?.positions[DRAFT_ID] !== undefined ? "kh-pop-in" : undefined}>{layout?.positions[DRAFT_ID] !== undefined && draft.composer}</section>}
     {groups.flatMap(group => {
       // The passage being read and the first group start expanded; the rest open on demand.
       const expanded = expandedGroups[group.key] ?? (group.key === firstGroupKey || group.threads.some(item => item.id === activeThreadId));

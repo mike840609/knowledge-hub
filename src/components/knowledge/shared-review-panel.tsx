@@ -147,7 +147,7 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
         {brand}
         {/* -me-3 takes back the last button's padding, so its label ends on the column's edge as the brand starts on it. */}
         <div className={wide ? "-me-3 ml-auto flex shrink-0 items-center gap-1" : "-me-3 flex min-w-0 items-center justify-end gap-1"}>
-          <span aria-live="polite">{arrived && <Button type="button" variant="soft" onClick={showArrived} className="max-sm:px-2"><span className="max-sm:hidden">{arrived.count === 1 ? "1 new comment" : `${arrived.count} new comments`}</span><span className="sm:hidden">{arrived.count} new</span></Button>}</span>
+          <span aria-live="polite">{arrived && <Button type="button" variant="soft" onClick={showArrived} className="kh-pop-in max-sm:px-2"><span className="max-sm:hidden">{arrived.count === 1 ? "1 new comment" : `${arrived.count} new comments`}</span><span className="sm:hidden">{arrived.count} new</span></Button>}</span>
           <Button ref={entryRef} type="button" variant="ghost" aria-label={`${open ? "Hide comments" : "Show comments"}${result ? `, ${result.threads.length} comments` : ""}${allResolved ? ", all resolved" : ""}`} aria-expanded={open} aria-controls="shared-document-discussions" onPointerDown={event => event.preventDefault()} onClick={toggle} className="max-sm:gap-1 max-sm:px-2">
             <MessageSquare className="size-4" aria-hidden="true" />
             <span className="max-sm:sr-only">Comments{allResolved ? ` · ${result.threads.length} resolved` : result && result.threads.length > 0 ? ` (${result.threads.length})` : ""}</span>

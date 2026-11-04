@@ -23,8 +23,11 @@ export function AutosaveIndicator({ state, attention }: { state: string; attenti
     return () => clearTimeout(timer);
   }, [state, attention]);
   const showing = Boolean(attention ?? message);
+  // The slot never moves; the sentence arrives and leaves softly. A save that is over in a moment
+  // stays silent, so this fade is only ever seen on a slow save, the confirmation after it, and the
+  // states that ask for attention.
   return <span role="status" aria-live="polite" data-autosave-status={state}
-    className={`inline-block text-right text-caption ${attention ? "text-kh-danger" : "text-kh-text-muted"} ${showing ? "w-20" : "w-20 max-sm:w-0 max-sm:overflow-hidden"}`}>
+    className={`inline-block text-right text-caption transition-opacity duration-120 ease-out ${attention ? "text-kh-danger" : "text-kh-text-muted"} ${showing ? "w-20 opacity-100" : "w-20 opacity-0 max-sm:w-0 max-sm:overflow-hidden"}`}>
     {attention ?? message}
   </span>;
 }
