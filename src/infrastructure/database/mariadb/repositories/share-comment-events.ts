@@ -1,6 +1,6 @@
-import { asDate, asNullableDate, type DbRow, type QueryConnection } from "./shared";
+import { asDate, asNullableDate, asNumber, type DbRow, type QueryConnection } from "./shared";
 import type { ShareCommentEvent } from "@/modules/knowledge/domain/share-comment-event";
-import type { ShareCommentEventRepository, ShareDocumentUnreadCount } from "@/modules/knowledge/ports/share-comment-event-repository";
+import type { InboxOwnerQuery, InboxOwnerSummary, ShareCommentEventRepository, ShareDocumentUnreadCount } from "@/modules/knowledge/ports/share-comment-event-repository";
 function map(row: DbRow): ShareCommentEvent {
   return {
     id: String(row.id), workspaceId: String(row.workspace_id), documentId: String(row.document_id),
@@ -102,5 +102,64 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
        SET e.read_at=? WHERE w.personal_owner_user_id=? AND e.document_id=? AND e.thread_id=? AND e.read_at IS NULL`,
       [at, recipientUserId, documentId, threadId],
     );
+  }
+  /**
+   * The Inbox index's owner source: one row per visible discussion on a document in the
+   * caller's personal Workspace, with at least one share-comment event there. Hidden threads,
+   * hidden/deleted comments and retracted threads drop out of the grouped join, so the row's
+   * `latestAt`, `commentCount` and unread count always describe what the reader can see.
+   * Filters and the `(latestAt, threadId)` cursor run before `LIMIT`.
+   */
+  async listDiscussionSummaries(query: InboxOwnerQuery): Promise<InboxOwnerSummary[]> {
+    if (query.threadIds && query.threadIds.length === 0) return [];
+    // The mention recipient binds first (SELECT list), then the Workspace owner (WHERE).
+    const args: (string | Date | number)[] = [query.recipientUserId, query.recipientUserId];
+    let where = "w.personal_owner_user_id=? AND w.workspace_type='PERSONAL' AND t.visibility='VISIBLE'";
+    if (query.status) { where += " AND t.status=?"; args.push(query.status); }
+    if (query.threadIds) {
+      where += ` AND t.id IN (${query.threadIds.map(() => "?").join(",")})`;
+      args.push(...query.threadIds);
+    }
+    const having: string[] = [];
+    if (query.unreadOnly) having.push("unread_count>0");
+    if (query.mentionedOnly) having.push("mentioned=1");
+    if (query.before) {
+      having.push("(latest_at<? OR (latest_at=? AND thread_id<?))");
+      args.push(query.before.latestAt, query.before.latestAt, query.before.threadId);
+    }
+    args.push(query.limit);
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT t.id AS thread_id, t.document_id, d.source_id, rv.title AS document_title,
+              COALESCE(JSON_UNQUOTE(JSON_EXTRACT(t.anchor_json,'$.exact')),'') AS quote,
+              MAX(c.created_at) AS latest_at, COUNT(c.id) AS comment_count,
+              (SELECT COUNT(*) FROM share_comment_events e
+                WHERE e.thread_id=t.id AND e.workspace_id=w.id AND e.read_at IS NULL) AS unread_count,
+              t.status,
+              EXISTS (SELECT 1 FROM review_comment_mentions m
+                      JOIN document_review_comments mc ON mc.id=m.comment_id
+                      WHERE m.mentioned_user_id=? AND mc.thread_id=t.id
+                        AND mc.deleted_at IS NULL AND mc.visibility='VISIBLE') AS mentioned
+       FROM document_review_threads t
+       JOIN knowledge_documents d ON d.id=t.document_id
+       JOIN knowledge_sources s ON s.id=d.source_id
+       JOIN workspaces w ON w.id=s.workspace_id
+       JOIN knowledge_revisions rv ON rv.id=d.current_revision_id
+       JOIN document_review_comments c ON c.thread_id=t.id AND c.deleted_at IS NULL AND c.visibility='VISIBLE'
+       WHERE ${where}
+         AND EXISTS (SELECT 1 FROM share_comment_events e0 WHERE e0.thread_id=t.id AND e0.workspace_id=w.id)
+       GROUP BY t.id,t.document_id,d.source_id,rv.title,t.anchor_json,t.status,w.id
+       ${having.length ? `HAVING ${having.join(" AND ")}` : ""}
+       ORDER BY latest_at DESC, thread_id DESC LIMIT ?`,
+      args,
+    );
+    return rows.map(row => ({
+      threadId: String(row.thread_id), documentId: String(row.document_id), sourceId: String(row.source_id),
+      documentTitle: String(row.document_title), quote: String(row.quote),
+      latestAt: asDate(row.latest_at),
+      commentCount: asNumber(row.comment_count, "comment count"),
+      unreadCount: asNumber(row.unread_count, "unread count"),
+      status: String(row.status) as InboxOwnerSummary["status"],
+      mentioned: Number(row.mentioned) === 1,
+    }));
   }
 }
