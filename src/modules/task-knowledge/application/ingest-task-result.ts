@@ -8,8 +8,8 @@ import {
   ScopeDeniedError,
   TaskArchivedError,
 } from "../domain/task-errors";
-import type { StoredTaskReference } from "../ports/task-export-store";
 import type { TaskKnowledgeRepositories, TaskKnowledgeUnitOfWork } from "../ports/unit-of-work";
+import { resolveTaskReferences } from "./internal/resolve-task-references";
 
 export type IngestResult = {
   state: "CREATED" | "EXISTING";
@@ -18,16 +18,6 @@ export type IngestResult = {
   bindingId: string;
   workspaceId: string;
 };
-
-/** Until exact resolution runs, a WIKI reference is stored UNRESOLVED; external ones carry no resolution. */
-function unresolved(artifact: TaskArtifactV1): StoredTaskReference[] {
-  return (artifact.references ?? []).map((reference, ordinal) => ({
-    ordinal,
-    reference,
-    resolution: reference.type === "WIKI" ? "UNRESOLVED" : null,
-    resolvedDocumentId: null,
-  }));
-}
 
 /**
  * The one task-knowledge write without a CallerContext (design §3, deviation
@@ -44,8 +34,8 @@ export class IngestTaskResultService {
     const artifactJson = canonicalTaskJson(artifact);
     const contentHash = canonicalTaskHash(artifact);
     return this.unitOfWork.run(async (r) => {
-      const { bindingId, workspaceId } = await this.authorize(r, tokenHash);
-      return this.store(r, { bindingId, workspaceId, artifact, artifactJson, contentHash });
+      const scope = await this.authorize(r, tokenHash);
+      return this.store(r, { ...scope, artifact, artifactJson, contentHash });
     });
   }
 
@@ -64,13 +54,13 @@ export class IngestTaskResultService {
     const current = await r.taskExports.findCredentialByHash(tokenHash);
     if (locked?.status !== "ACTIVE" || current?.status !== "ACTIVE" || current.bindingId !== binding.id) throw new CredentialInvalidError();
     if (locked.ownerUserId !== workspace.ownerUserId) throw new ScopeDeniedError();
-    return { bindingId: binding.id, workspaceId: source.workspaceId };
+    return { bindingId: binding.id, workspaceId: source.workspaceId, sourceId: source.sourceId };
   }
 
   /** The six ordered rules, decided from the locked task row only. */
   private async store(
     r: TaskKnowledgeRepositories,
-    input: { bindingId: string; workspaceId: string; artifact: TaskArtifactV1; artifactJson: string; contentHash: string },
+    input: { bindingId: string; workspaceId: string; sourceId: string; artifact: TaskArtifactV1; artifactJson: string; contentHash: string },
   ): Promise<IngestResult> {
     const { artifact, bindingId } = input;
     const revisionNo = artifact.artifactRevision;
@@ -88,7 +78,7 @@ export class IngestTaskResultService {
     if (task.lifecycle === "ARCHIVED") throw new TaskArchivedError();
     if (revisionNo !== task.latestRevisionNo + 1) throw new RevisionOutOfOrderError(task.latestRevisionNo);
     await r.taskExports.insertRevision({ id: uuidv7(), taskResultId: task.id, revisionNo, artifactJson: input.artifactJson, contentHash: input.contentHash });
-    await r.taskExports.insertReferences(task.id, revisionNo, unresolved(artifact));
+    await r.taskExports.insertReferences(task.id, revisionNo, await resolveTaskReferences(r, input.sourceId, artifact.references ?? []));
     await r.taskExports.advanceLatestRevision(task.id, revisionNo);
     return answer("CREATED");
   }
