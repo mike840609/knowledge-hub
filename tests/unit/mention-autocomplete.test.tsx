@@ -298,6 +298,19 @@ test("owner's links are not asked again for who the comment names: the server no
   expect(requests.filter(url => url.includes("/review-mentions/links"))).toEqual(["/api/review-mentions/links?documentId=doc-1"]);
 });
 
+test("an owner's restored draft loads its links before sending", async () => {
+  stubFetch({ links: [{ id: "link-a", label: "Team", active: true }] });
+  const draftKey = "kh:review-draft:reply:t3";
+  sessionStorage.setItem(draftKey, "Please look @Ming Chen at this");
+  sessionStorage.setItem(`${draftKey}:mentions`, JSON.stringify([{ id: MING.id, name: "Ming Chen" }]));
+  const sent: Sent[] = [];
+  render({ documentId: "doc-1" }, sent, { draftKey });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
+  expect(requests).toContain("/api/review-mentions/links?documentId=doc-1");
+  await submit();
+  expect(sent).toEqual([expect.objectContaining({ body: "Please look @Ming Chen at this", mentions: [MING.id], linkId: "link-a" })]);
+});
+
 test("a NAMED link in the owner's choice says it adds people not yet on it", async () => {
   stubFetch({ links: [{ id: "link-a", label: "Team", active: true }, { id: "link-n", label: "Reviewers", active: true, audience: "NAMED" }] });
   const textarea = render({ documentId: "doc-1" });

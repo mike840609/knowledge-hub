@@ -115,15 +115,16 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
 
   const triggerStart = trigger?.start;
   // The owner mentions through a live link of the document. Its links are read on each new `@` (one may have been created,
-  // revoked or expired); an answer for an earlier `@` is dropped.
+  // revoked or expired), and once for a restored draft that already names someone without opening the list in this mount.
+  const needsLinksForRestoredMentions = !!owner && !open && links === undefined && mentionedIds(body, picks).length > 0;
   useEffect(() => {
-    if (!open || !owner) return;
+    if (!owner || (!open && !needsLinksForRestoredMentions)) return;
     let current = true;
     reviewRequest<{ links: MentionLink[] }>(`/api/review-mentions/links?documentId=${encodeURIComponent(owner)}`)
       .then(result => { if (current) { setLinks(result.links); setFailure(undefined); } })
       .catch(error => { if (current) setFailure(error instanceof Error ? error.message : "Could not load share links."); });
     return () => { current = false; };
-  }, [open, owner, triggerStart]);
+  }, [open, owner, triggerStart, needsLinksForRestoredMentions]);
 
   useEffect(() => {
     if (!searchable) return;
