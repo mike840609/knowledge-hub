@@ -7,7 +7,10 @@ test("sources list renders compact rows", async ({ page }) => {
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/sources`);
 
   await expect(page.getByRole("heading", { name: "Sources", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Obsidian Wiki/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Managed in Hub", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Synced folders", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Managed in Hub" }).getByRole("link", { name: /^Obsidian Wiki/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Synced folders" }).getByRole("link", { name: /^Vendor Compliance Vault/ })).toBeVisible();
   await expect(page.getByText("All sources", { exact: false })).toHaveCount(0);
 });
 

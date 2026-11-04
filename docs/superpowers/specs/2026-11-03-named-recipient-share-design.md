@@ -158,15 +158,15 @@ the company deployment as they are assumed to be here.
 
 - Writes already require a trusted caller; they now also pass the NAMED check.
   Query reads (`/api/share-review/*` query) pass the optional caller.
-- **Mention candidates** for a NAMED link: only its recipients and the owner.
+- Superseded by 2026-11-03-named-share-mention-proposals-design.md: **Mention candidates** for a NAMED link: only its recipients and the owner.
   The server enforces this in `/api/review-mentions/candidates`; the composer
   just shows what comes back.
-- **Writing a mention of a non-recipient through a NAMED link is refused**
+- Superseded by 2026-11-03-named-share-mention-proposals-design.md: **Writing a mention of a non-recipient through a NAMED link is refused**
   server-side (the write path checks each mentioned id against the recipient
   list, owner included as allowed). A stored dead entry would tell the person
   the share exists. (Claude's call.) A mention stored while the person *was* a
   recipient and later removed is judged per request and names nothing.
-- **Owner mentions from the Workspace view:** `mentionLinksForOwner` offers a
+- Superseded by 2026-11-03-named-share-mention-proposals-design.md: **Owner mentions from the Workspace view:** `mentionLinksForOwner` offers a
   NAMED link only when the mentioned person is on its list. Mentioning is never
   a second way to add a recipient. (Claude's call.)
 - **Re-adding a removed recipient** is a fresh add: a new "shared with you"
@@ -257,7 +257,7 @@ Where the build differs from the text above, this section is the record.
 3. **"Shared with you" on the Shares page is its own section**, above the saved
    shares, not rows merged into that list. Its entries are not saved shares and
    offer no Save or Remove.
-4. **Mentioning a non-recipient through a NAMED link is refused at write time**
+4. Superseded by 2026-11-03-named-share-mention-proposals-design.md: **Mentioning a non-recipient through a NAMED link is refused at write time**
    (`MENTION_NOT_RECIPIENT`). The owner's mention-link offers
    (`mentionLinksForOwner`) omit NAMED links when no mentioned ids are given,
    since such a link cannot be judged without them.

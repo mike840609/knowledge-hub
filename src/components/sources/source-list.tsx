@@ -14,6 +14,7 @@ import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
 import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Label } from "@/components/ui/label";
+import { groupSourceItems, showSourceGroupLabels } from "@/lib/source-groups";
 
 export function SourceList({ workspaceId, items, limits }: { workspaceId: string; items: SourceListItemModel[]; limits?: FolderImportClientLimits }) {
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -46,20 +47,39 @@ export function SourceList({ workspaceId, items, limits }: { workspaceId: string
       />
     );
   }
+  const groups = groupSourceItems(visible);
+  const orderedGroups = sort === "attention"
+    ? [...groups].sort((a, b) => Number(b.items.some(needsAttention)) - Number(a.items.some(needsAttention)))
+    : groups;
+  const labelled = showSourceGroupLabels(orderedGroups);
+  const showCount = attentionOnly || visible.length !== items.length;
+  const sourceNoun = items.length === 1 ? "source" : "sources";
+  const rows = (groupItems: SourceListItemModel[], showType: (item: SourceListItemModel) => boolean = () => true) => (
+    <ul className="-mx-3 flex flex-col gap-1">
+      {groupItems.map((item) => (
+        <SourceListRow key={item.source.id} workspaceId={workspaceId} item={item} limits={limits} showTypeLabel={showType(item)} />
+      ))}
+    </ul>
+  );
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" onKeyDown={navigateListRows}>
     <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-kh-border pb-3">
       <label className="flex min-h-8 items-center gap-2 text-body-sm"><input type="checkbox" checked={attentionOnly} onChange={e => setAttentionOnly(e.target.checked)} />Needs attention ({attentionCount})</label>
     <label className="flex min-h-8 items-center gap-2 text-body-sm"><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />Show archived</label>
       <Label inline className="ml-auto">Sort sources<SelectMenu aria-label="Sort sources" value={sort} onValueChange={setSort} options={[{ value: "attention", label: "Attention first" }, { value: "name", label: "Name" }, { value: "recent", label: "Last successful sync" }]} /></Label>
     </div>
-    <p role="status" className="text-caption text-kh-text-muted">{visible.length} of {items.length} sources{attentionOnly ? " · failed sync or awaiting Apply" : ""}</p>
+    {showCount ? <p role="status" className="text-caption text-kh-text-muted">{visible.length} of {items.length} {sourceNoun}{attentionOnly ? " · failed sync or awaiting Apply" : ""}</p> : null}
     {!visible.length ? <div className="space-y-2"><p className="text-body text-kh-text-muted">No sources match these filters.</p>{attentionOnly ? <Button variant="ghost" size="sm" onClick={() => setAttentionOnly(false)}>Show all sources</Button> : null}</div> : null}
-    <ul onKeyDown={navigateListRows} className="-mx-3 flex flex-col gap-1">
-      {visible.map((item) => (
-        <SourceListRow key={item.source.id} workspaceId={workspaceId} item={item} limits={limits} />
-      ))}
-    </ul>
+    {labelled ? (
+      <div className="space-y-4">
+        {orderedGroups.map((group) => (
+          <section key={group.key} aria-labelledby={`source-group-${group.key}`} className="space-y-1">
+            <h2 id={`source-group-${group.key}`} className="px-1 text-caption font-medium text-kh-text-muted">{group.label}</h2>
+            {rows(group.items, (item) => group.key === "hub" && item.source.sourceType === "FILE_UPLOAD")}
+          </section>
+        ))}
+      </div>
+    ) : visible.length > 0 ? rows(visible) : null}
     </div>
   );
 }

@@ -39,7 +39,7 @@
 | --- | --- | --- |
 | Contract | `src/modules/task-knowledge/domain/task-artifact.ts`, `task-references.ts`, `task-errors.ts`; shared fixtures `tests/fixtures/task-artifact/**` | Pure parsers for Agent content and full artifact, canonical hashing, reference validation, error codes |
 | Ports | `src/modules/task-knowledge/ports/{task-export-store,unit-of-work,lookups}.ts` | `TaskExportStore`, `TaskKnowledgeUnitOfWork`, and local lookup ports (local models, no sources imports) |
-| Storage | `src/infrastructure/database/mariadb/migrations/032-task-knowledge-export.ts`, `migrations/index.ts`, `repositories/task-knowledge.ts`, `task-knowledge-transaction.ts` | Tables, repository, lookup adapters over the existing repository factory (including Folder Sync path normalization), isolated transaction |
+| Storage | `src/infrastructure/database/mariadb/migrations/033-task-knowledge-export.ts`, `migrations/index.ts`, `repositories/task-knowledge.ts`, `task-knowledge-transaction.ts` | Tables, repository, lookup adapters over the existing repository factory (including Folder Sync path normalization), isolated transaction |
 | Boundary | `eslint.config.mjs`, `CLAUDE.md`, `tests/unit/task-knowledge-boundary.test.ts`, `tests/unit/task-export-single-exception.test.ts` | Enforce the module boundary and the one caller-less write; record the three deviations |
 | Binding | `src/modules/task-knowledge/application/manage-export-binding.ts`, `src/app/api/workspaces/[workspaceId]/task-export-bindings/route.ts`, `.../[bindingId]/route.ts`, `.../[bindingId]/credentials/route.ts`, `src/app/w/[workspaceId]/tasks/setup/page.tsx`, `src/components/task-knowledge/task-export-setup.tsx` | Browser-authenticated create/list/revoke/rotate, one-time token display, Source chooser |
 | Ingestion | `src/modules/task-knowledge/application/ingest-task-result.ts`, `src/app/api/task-results/ingest/route.ts`, `src/lib/auth-paths.ts`, `src/lib/site-password.ts` | Credential auth, lock order, revision sequence, HTTP contract, exact-path exemption |
@@ -101,7 +101,7 @@ Paths above are the intended interfaces, not a license to refactor unrelated mod
 **Files:**
 - Modify: `eslint.config.mjs`
 - Modify: `CLAUDE.md` (fifth module, its boundary, and design §3 deviations 1 and 3)
-- Create: `src/infrastructure/database/mariadb/migrations/032-task-knowledge-export.ts`
+- Create: `src/infrastructure/database/mariadb/migrations/033-task-knowledge-export.ts`
 - Modify: `src/infrastructure/database/mariadb/migrations/index.ts`
 - Create: `src/modules/task-knowledge/ports/task-export-store.ts`
 - Create: `src/modules/task-knowledge/ports/unit-of-work.ts`
@@ -141,7 +141,7 @@ Paths above are the intended interfaces, not a license to refactor unrelated mod
   - `TaskEntryLookup` finds an entry stored as `architecture/auth.md` from `architecture\auth.md`, `./architecture/auth.md` and `architecture//auth.md`; does not find it from `Architecture/auth.md`; returns `INVALID_PATH` (not a thrown sources error) for a path `normalizeImportPath` rejects.
   - `tests/unit/workspace-lock-modes.test.ts` still passes unchanged.
 - [ ] **Step 2: Run** `npx vitest run --config vitest.config.ts tests/unit/task-knowledge-boundary.test.ts tests/unit/workspace-lock-modes.test.ts` and `npm run test:integration -- tests/integration/task-export-storage.test.ts`; expect FAIL.
-- [ ] **Step 3: Implement** migration 032. Declare `utf8mb4_bin` explicitly on every identifier and locator text column (table defaults are `utf8mb4_unicode_ci`).
+- [ ] **Step 3: Implement** migration 033. Declare `utf8mb4_bin` explicitly on every identifier and locator text column (table defaults are `utf8mb4_unicode_ci`).
   - `task_export_bindings`: owner, source, label, status, timestamps. `source_id` is never updated.
   - `task_export_credentials`: `token_hash` binary with unique index, `binding_id`, `status`, `revoked_at`, generated `active_binding_id` with a unique index.
   - `task_results`: `binding_id`, `task_id`, lifecycle with provenance, `latest_revision_no`.

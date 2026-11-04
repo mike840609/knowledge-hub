@@ -21,13 +21,14 @@ function json(value: unknown) {
   return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
 }
 
-type Link = { id: string; label: string | null; active: boolean };
-function stubFetch({ candidates = [MING, MEI], links = [] as Link[] | (() => Link[]) } = {}) {
+type Link = { id: string; label: string | null; active: boolean; audience?: "LINK" | "NAMED"; targetKind?: "DOCUMENT" | "FOLDER" };
+type Candidate = { id: string; name: string; nameEn: string | null; empId: string; needsApproval?: boolean; addsRecipient?: boolean };
+function stubFetch({ candidates = [MING, MEI] as Candidate[], links = [] as Link[] | (() => Link[]), targetKind = undefined as "DOCUMENT" | "FOLDER" | undefined } = {}) {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     requests.push(url);
     // The server answers only the links that open now.
-    if (url.includes("/review-mentions/links")) return json({ links: (typeof links === "function" ? links() : links).filter(link => link.active).map(({ id, label }) => ({ id, label })) });
-    if (url.startsWith("/api/review-mentions/candidates")) return json({ candidates });
+    if (url.includes("/review-mentions/links")) return json({ links: (typeof links === "function" ? links() : links).filter(link => link.active).map(({ id, label, audience = "LINK", targetKind = "DOCUMENT" }) => ({ id, label, audience, targetKind })) });
+    if (url.startsWith("/api/review-mentions/candidates")) return json({ candidates, ...(targetKind ? { targetKind } : {}) });
     throw new Error(`unexpected ${url}`);
   }));
 }
@@ -244,7 +245,7 @@ test("owner with no live link: @ says to create one and offers nobody", async ()
   expect(options()).toHaveLength(0);
   expect(requests.filter(url => url.includes("candidates"))).toEqual([]);
   // Links are loaded once, when the list first opens.
-  expect(requests).toEqual(["/api/review-mentions/links?documentId=doc-1&mentionedUserIds="]);
+  expect(requests).toEqual(["/api/review-mentions/links?documentId=doc-1"]);
 });
 
 test("owner's links are read on each new @: a created link is offered, a revoked one is not", async () => {
@@ -288,44 +289,86 @@ test("owner with two live links chooses one under Share via, and it is sent", as
   expect(sent).toEqual([{ body: "@陳小明 ", mentions: [MING.id], linkId: "link-b" }]);
 });
 
-test("owner's links are asked again for who the comment names, so a link naming specific people is judged for them", async () => {
+test("owner's links are not asked again for who the comment names: the server no longer judges a link by them", async () => {
   stubFetch({ links: [{ id: "link-a", label: "Team", active: true }] });
   const textarea = render({ documentId: "doc-1" });
   await type(textarea, "@ming");
   key(textarea, "Enter");
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
-  expect(requests.filter(url => url.includes("/review-mentions/links"))).toEqual([
-    "/api/review-mentions/links?documentId=doc-1&mentionedUserIds=",
-    `/api/review-mentions/links?documentId=doc-1&mentionedUserIds=${MING.id}`,
-  ]);
+  expect(requests.filter(url => url.includes("/review-mentions/links"))).toEqual(["/api/review-mentions/links?documentId=doc-1"]);
 });
 
-test("owner's links follow who is named even when a pick lands while they are being read", async () => {
-  let release!: () => void;
-  const held = new Promise<void>(resolve => { release = resolve; });
-  const both = [{ id: "link-a", label: "Team" }, { id: "link-b", label: null }];
-  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
-    requests.push(url);
-    if (url.startsWith("/api/review-mentions/candidates")) return json({ candidates: url.includes("query=mei") ? [MEI] : [MING] });
-    const named = new URL(url, "http://hub.test").searchParams.get("mentionedUserIds");
-    if (named === MING.id) { await held; return json({ links: both }); }
-    // Only link-b names both people.
-    return json({ links: named === "" ? both : [{ id: "link-b", label: null }] });
-  }));
+test("an owner's restored draft loads its links before sending", async () => {
+  stubFetch({ links: [{ id: "link-a", label: "Team", active: true }] });
+  const draftKey = "kh:review-draft:reply:t3";
+  sessionStorage.setItem(draftKey, "Please look @Ming Chen at this");
+  sessionStorage.setItem(`${draftKey}:mentions`, JSON.stringify([{ id: MING.id, name: "Ming Chen" }]));
+  const sent: Sent[] = [];
+  render({ documentId: "doc-1" }, sent, { draftKey });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
+  expect(requests).toContain("/api/review-mentions/links?documentId=doc-1");
+  await submit();
+  expect(sent).toEqual([expect.objectContaining({ body: "Please look @Ming Chen at this", mentions: [MING.id], linkId: "link-a" })]);
+});
+
+test("a NAMED link in the owner's choice says it adds people not yet on it", async () => {
+  stubFetch({ links: [{ id: "link-a", label: "Team", active: true }, { id: "link-n", label: "Reviewers", active: true, audience: "NAMED" }] });
+  const textarea = render({ documentId: "doc-1" });
+  await type(textarea, "@ming");
+  key(textarea, "Enter");
+  const select = host.querySelector("select")!;
+  expect(Array.from(select.options).map(option => option.textContent)).toEqual(["Team", "Reviewers · Adds people not yet on it"]);
+});
+
+test("a NAMED folder link says it adds people to the whole folder", async () => {
+  stubFetch({ links: [{ id: "link-a", label: "Team", active: true }, { id: "link-f", label: "Plans", active: true, audience: "NAMED", targetKind: "FOLDER" }] });
+  const textarea = render({ documentId: "doc-1" });
+  await type(textarea, "@ming");
+  key(textarea, "Enter");
+  const select = host.querySelector("select")!;
+  expect(Array.from(select.options).map(option => option.textContent)).toEqual(["Team", "Plans · Adds people not yet on it (whole folder)"]);
+});
+
+test("the owner's only link, when NAMED, still says it adds people not yet on it", async () => {
+  stubFetch({ links: [{ id: "link-n", label: "Reviewers", active: true, audience: "NAMED" }] });
   const sent: Sent[] = [];
   const textarea = render({ documentId: "doc-1" }, sent);
   await type(textarea, "@ming");
+  expect(host.textContent).not.toContain("Adds people not yet on it");
   key(textarea, "Enter");
-  // MING's links are still being read when MEI is picked.
-  await type(textarea, "@陳小明 @mei");
-  key(textarea, "Enter");
-  await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
-  expect(requests).toContain(`/api/review-mentions/links?documentId=doc-1&mentionedUserIds=${encodeURIComponent(`${MING.id},${MEI.id}`)}`);
-  // MING's late answer is out of date and is dropped: one link names both, so there is nothing to choose.
-  await act(async () => { release(); await new Promise(resolve => setTimeout(resolve, 50)); });
   expect(host.querySelector("select")).toBeNull();
+  expect(host.textContent).toContain("Share via Reviewers · Adds people not yet on it");
   await submit();
-  expect(sent).toEqual([{ body: "@陳小明 @林美 ", mentions: [MING.id, MEI.id], linkId: "link-b" }]);
+  expect(sent).toEqual([{ body: "@陳小明 ", mentions: [MING.id], linkId: "link-n" }]);
+});
+
+test("a candidate not on a NAMED link says it needs the owner's approval; others say nothing", async () => {
+  stubFetch({ candidates: [{ ...MING, needsApproval: false }, { ...MEI, needsApproval: true }] });
+  const textarea = render({ token: "tok" });
+  await type(textarea, "@m");
+  expect(options()[0].textContent).not.toContain("Needs owner approval");
+  expect(options()[1].textContent).toContain("Needs owner approval");
+  const note = [...options()[1].querySelectorAll("span")].find(span => span.textContent === "Needs owner approval")!;
+  expect(note.className).toContain("text-caption");
+  expect(note.className).toContain("text-kh-text-muted");
+});
+
+test("the owner reading through a NAMED link sees which candidates a mention adds to it", async () => {
+  stubFetch({ candidates: [{ ...MING, addsRecipient: false }, { ...MEI, addsRecipient: true }], targetKind: "DOCUMENT" });
+  const textarea = render({ token: "tok" });
+  await type(textarea, "@m");
+  expect(options()[0].textContent).not.toContain("Adds them");
+  const note = [...options()[1].querySelectorAll("span")].find(span => span.textContent === "Adds them to this link")!;
+  expect(note).toBeDefined();
+  expect(note.className).toContain("text-caption");
+  expect(note.className).toContain("text-kh-text-muted");
+});
+
+test("on a folder link the note says the whole folder is opened", async () => {
+  stubFetch({ candidates: [{ ...MEI, addsRecipient: true }], targetKind: "FOLDER" });
+  const textarea = render({ token: "tok", documentId: "doc-1" });
+  await type(textarea, "@m");
+  expect(options()[0].textContent).toContain("Adds them to this link (whole folder)");
 });
 
 test("owner with one live link: no choice, its id is sent", async () => {

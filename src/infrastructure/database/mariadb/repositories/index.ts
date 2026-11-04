@@ -26,6 +26,7 @@ import { MariaDbWorkspaceGroupMappingRepository } from "./workspace-group-mappin
 import { MariaDbWorkspaceAuditEventRepository } from "./workspace-audit-events";
 import { MariaDbDocumentLinkRepository } from "./document-links";
 import { MariaDbDocumentShareLinkRepository } from "./document-share-links";
+import { MariaDbShareProposalRepository } from "./share-proposals";
 import { MariaDbExternalIdentityLinkRepository } from "./external-identity-links";
 import { MariaDbImportSnapshotRepository } from "./import-snapshots";
 import { MariaDbImportSnapshotEntryRepository } from "./import-snapshot-entries";
@@ -74,6 +75,7 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
     auditEvents: new MariaDbWorkspaceAuditEventRepository(connection),
     shareLinks: new MariaDbDocumentShareLinkRepository(connection),
     savedShares: new MariaDbSavedShareRepository(connection),
+    shareProposals: new MariaDbShareProposalRepository(connection),
     links: new MariaDbDocumentLinkRepository(connection),
     identityLinks: new MariaDbExternalIdentityLinkRepository(connection),
   };

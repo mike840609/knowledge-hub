@@ -9,7 +9,7 @@ import type { Migration } from "./types";
  * binding, never stored on task rows.
  */
 export const taskKnowledgeExportMigration: Migration = {
-  version: 32,
+  version: 33,
   name: "task-knowledge-export",
   statements: [
     `CREATE TABLE task_export_bindings (

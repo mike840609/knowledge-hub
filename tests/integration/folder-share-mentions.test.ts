@@ -82,8 +82,11 @@ describe("mentions through a folder link", () => {
   it("an owner may hand over the folder link above the document, and only a live one", async () => {
     const f = await fixture();
     const documentLink = await f.shares.create(f.owner, { documentId: f.doc.documentId });
-    const offered = (await f.service.mentionLinksForOwner(f.owner, { documentId: f.doc.documentId })).links.map(link => link.id);
-    expect(offered.sort()).toEqual([f.link.id, documentLink.id].sort());
+    const links = (await f.service.mentionLinksForOwner(f.owner, { documentId: f.doc.documentId })).links;
+    expect(links.map(link => link.id).sort()).toEqual([f.link.id, documentLink.id].sort());
+    // The picker tells the owner a folder link opens the whole folder.
+    expect(links.find(link => link.id === f.link.id)).toMatchObject({ targetKind: "FOLDER" });
+    expect(links.find(link => link.id === documentLink.id)).toMatchObject({ targetKind: "DOCUMENT" });
     const write = () => f.service.createForOwner(f.owner, {
       documentId: f.doc.documentId, expectedRevisionId: f.doc.revisionId, anchor: f.anchor, body: "Look", idempotencyKey: randomUUID(),
       mentions: [f.mentionedId.id], mentionLinkId: f.link.id,
