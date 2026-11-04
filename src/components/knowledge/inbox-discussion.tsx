@@ -8,6 +8,7 @@ import type { ReviewThreadView } from "@/modules/knowledge/domain/document-revie
 import type { InboxDiscussionView } from "@/modules/knowledge/domain/inbox-discussion";
 import { DocumentPane } from "./document-pane";
 import { governanceRequest } from "@/components/workspaces/governance-error";
+import { sharedDocumentParam } from "@/lib/share-paths";
 import { MARKDOWN_ARTICLE } from "./markdown-article";
 import { MarkdownRenderer } from "./markdown-renderer";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
@@ -71,8 +72,9 @@ function OwnerDocument({ entry, onChanged }: { entry: InboxDiscussionView; onCha
  */
 function FollowedDiscussion({ entry, onChanged }: { entry: InboxDiscussionView; onChanged?: (threadId: string) => void }) {
   const token = entry.token;
-  // A folder link's discussion is reached through the document it is on; a document link's names none.
-  const documentId = entry.documentId || undefined;
+  // A folder link's discussion is reached through the document it is on, which the entry's own href
+  // names with `d=`; a document link's names none, and its link query refuses an id it was not given.
+  const documentId = sharedDocumentParam(new URLSearchParams(entry.href.split("?")[1]).get("d") ?? undefined) ?? undefined;
   const [loaded, setLoaded] = useState<{ thread: ReviewThreadView | null; writesEnabled: boolean; signedIn: boolean }>();
   const [error, setError] = useState<string>();
 
