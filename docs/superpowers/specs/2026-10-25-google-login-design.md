@@ -159,7 +159,9 @@ is additive and only runs when `KM_IDENTITY_PROVIDER === "google"`:
 - Public paths for Google:
   - `/login`, `/api/auth/*`, `/api/health`, `/api/share-review/*`, `/sample-wiki/*`;
   - `/s` and `/s/<token>` — the public read page;
-  - static assets already excluded by the matcher.
+  - static assets already excluded by the matcher;
+  - `POST /api/task-results/ingest`, by exact pathname only: it authenticates by its own export
+    credential, see `2026-11-04-task-knowledge-export-design.md` §7.
 - `/s/<token>/open` is **protected**: it calls `establishTrustedCaller`, so a signed-out visitor
   is redirected to `/login?returnTo=/s/<token>/open`. The share-page link and its tests stay
   unchanged.

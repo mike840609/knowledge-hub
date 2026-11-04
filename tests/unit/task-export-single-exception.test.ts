@@ -138,7 +138,7 @@ describe("the one caller-less task-knowledge write", () => {
       .flatMap((dir) => filesUnder(path.join(SRC, dir)))
       .filter((file) => /\.ingest\(/.test(readFileSync(file, "utf8")))
       .map((file) => path.relative(SRC, file).split(path.sep).join("/"));
-    for (const caller of callers) expect(["app/api/task-results/ingest/route.ts"]).toContain(caller);
+    expect(callers).toEqual(["app/api/task-results/ingest/route.ts"]);
   });
 
   it("keeps internal helpers reachable only from application/", () => {

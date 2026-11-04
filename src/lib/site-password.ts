@@ -1,11 +1,13 @@
-const EXEMPT_EXACT = new Set(["/s", "/api/share-review", "/api/health"]);
+const EXEMPT_EXACT = new Set(["/s", "/api/share-review", "/api/health", "/api/task-results/ingest"]);
 const EXEMPT_PREFIXES = ["/s/", "/api/share-review/", "/sample-wiki/"];
 
 /**
  * Share links are the product's public surface: their pages and the
  * token-gated review API must keep working for a recipient who has no site
  * password. The health route stays reachable so an uptime check and a cold
- * database wake do not need a secret.
+ * database wake do not need a secret. The task export ingest route is exempt
+ * by exact pathname only: it authenticates by its own export credential
+ * (2026-11-04 task knowledge export design §7).
  */
 export function isSitePasswordExempt(pathname: string): boolean {
   return EXEMPT_EXACT.has(pathname) || EXEMPT_PREFIXES.some((prefix) => pathname.startsWith(prefix));

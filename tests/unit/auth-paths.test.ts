@@ -98,3 +98,17 @@ describe("returning to a shared folder page", () => {
     });
   });
 });
+
+describe("the task export ingest exemption", () => {
+  const nonExempt = ["/api/task-results/ingest/", "/api/task-results/ingest/extra", "/api/task-results/Ingest", "/api/task-results/%69ngest", "/api/task-results"];
+
+  it("is a Google public path only by its exact pathname", () => {
+    expect(isGooglePublicPath("/api/task-results/ingest")).toBe(true);
+    for (const path of nonExempt) expect(isGooglePublicPath(path)).toBe(false);
+  });
+
+  it("lets the exact path through the gate without a session, and no neighbour", () => {
+    expect(googleGate({ pathname: "/api/task-results/ingest", search: "", hasSession: false })).toEqual({ kind: "allow" });
+    for (const path of nonExempt) expect(googleGate({ pathname: path, search: "", hasSession: false })).toEqual({ kind: "unauthorized" });
+  });
+});

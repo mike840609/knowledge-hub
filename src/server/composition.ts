@@ -153,7 +153,6 @@ export function buildApplicationServices(databasePool: Pool, options: {
   };
   return {
     taskExportBindings: new ManageExportBindingService(taskKnowledgeUnitOfWork),
-    taskIngest: new IngestTaskResultService(taskKnowledgeUnitOfWork),
     personalProfile: new PersonalProfileService(unitOfWork),
     agentContext: new AgentContextService(unitOfWork),
     importScope: new GetImportScopeService(unitOfWork), sourceHealth:new GetSourceHealthService(unitOfWork), folderUpdates:new ListFolderUpdatesService(unitOfWork), syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, personal, personalPreferences, feedbackReports, feedbackIssues, workspaceAdmin, teams, governance, reviewReadAvailable: true, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, savedShares, reviews, sources, workspaces, search, imports };
@@ -172,6 +171,15 @@ export function applicationServices() {
  */
 export function shareReadService(): Pick<DocumentShareService, "readShared" | "readSharedTarget"> {
   return new DocumentShareService(new MariaDbUnitOfWork(getDatabasePool()), new RandomShareTokenIssuer());
+}
+
+/**
+ * `POST /api/task-results/ingest` (task knowledge export design §7). Like the
+ * share entry it bypasses applicationServices(): the caller is an export
+ * credential, not a browser identity, so no identity provider is built.
+ */
+export function taskIngestService(): Pick<IngestTaskResultService, "ingest"> {
+  return new IngestTaskResultService(new MariaDbTaskKnowledgeUnitOfWork(getDatabasePool()));
 }
 
 /** Token-scoped public review projection, independent of identity-provider setup. */
