@@ -148,7 +148,7 @@ test.describe("named-recipient share, end to end", () => {
     await expect(page.getByText("shared this with you")).toHaveCount(0);
     await page.goto(`${owner}/w/${ownerWorkspace}/knowledge/${doc.sourceId}/${doc.documentId}`);
     await openReviewDiscussions(page);
-    await expect(page.getByRole("region", { name: "Discussion thread" }).filter({ hasText: "Reader remark @Phase3 viewer" })).toBeVisible(ROUND_TRIP);
+    await expect(page.getByRole("region", { name: "Comment thread" }).filter({ hasText: "Reader remark @Phase3 viewer" })).toBeVisible(ROUND_TRIP);
   });
 
   test("a recipient mentions an outsider: the outsider learns title and proposer only, until the owner approves", async ({ page, request }) => {

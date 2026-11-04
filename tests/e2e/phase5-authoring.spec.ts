@@ -69,7 +69,7 @@ test("edits a hub-managed document and records a second revision", async ({ page
   await source.fill("updated body");
   await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
 
-  await editorForm.getByRole("button", { name: "Markdown", exact: true }).click();
+  await editorForm.getByRole("button", { name: "Markdown source", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("updated body", ROUND_TRIP);
   await page.locator("main").getByRole("button", { name: "Details" }).click();
   await page.getByRole("tab", { name: "History" }).click();

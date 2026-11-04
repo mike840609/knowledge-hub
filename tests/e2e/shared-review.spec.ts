@@ -186,7 +186,7 @@ test("a shared page with no discussions keeps them closed", async ({ page, reque
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${phase3NoSessionOrigin()}${doc.links[0].path}`);
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
-  await expect(page.getByRole("button", { name: /^Open discussions/ })).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("button", { name: /^Show comments/ })).toHaveAttribute("aria-expanded", "false");
 });
 
 test("review rejects cross-origin and browser-supplied identities", async ({ request }) => {

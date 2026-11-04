@@ -62,7 +62,7 @@ test("at 1512px, with the primary rail and the explorer collapsed, outline, arti
 
   await page.setViewportSize({ width: 1512, height: 900 });
   await page.goto(doc.href);
-  const rail = page.getByRole("complementary", { name: "Document discussions" });
+  const rail = page.getByRole("complementary", { name: "Document comments" });
   const outline = page.getByRole("complementary", { name: "On this page" });
   await expect(rail).toBeVisible();
   // With both open the pane is too narrow: the outline gives the discussions its place.

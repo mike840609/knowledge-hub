@@ -23,7 +23,7 @@ test("shared comments follow passage order and the selected card stays beside it
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${origin}${doc.links[0].path}`);
   // The reader's own discussions are not waiting for them, so the page opens without them.
-  await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeHidden();
+  await expect(page.getByRole("complementary", { name: "Document comments" })).toBeHidden();
   await expect(page.locator("[data-review-marker]")).toHaveCount(2);
   await expect(page.getByRole("button", { name: "2 comments on passage: Paragraph 20" })).toBeVisible();
   await openReviewDiscussions(page);
@@ -93,8 +93,8 @@ test("shared comments follow passage order and the selected card stays beside it
 
   // Collapsing recovers the full centered reading layout without losing the passage.
   const beforeCollapse = await page.evaluate(() => window.scrollY);
-  await page.getByRole("button", { name: "Collapse discussions" }).click();
-  await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeHidden();
+  await page.getByRole("button", { name: "Close comments", exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Document comments" })).toBeHidden();
   expect(await page.evaluate(() => window.scrollY)).toBeCloseTo(beforeCollapse, 0);
   // The column slides back to the centre; measure where it ends, not where it is mid-slide.
   await expect.poll(async () => { const collapsedArticle = (await page.locator("[data-review-document]").boundingBox())!; return Math.round(collapsedArticle.x + collapsedArticle.width / 2); }).toBe(720);
@@ -104,7 +104,7 @@ test("shared comments follow passage order and the selected card stays beside it
   await page.setViewportSize({ width: 390, height: 844 });
   // An open desktop rail becomes a drawer; close it before testing passage entry on mobile.
   await expect(page.getByRole("dialog")).toHaveCSS("opacity", "1");
-  await page.getByRole("button", { name: "Close discussions" }).click();
+  await page.getByRole("button", { name: "Close comments", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
   await later.scrollIntoViewIfNeeded();
   const mobilePoint = await later.evaluate(element => {
@@ -168,11 +168,11 @@ test("mobile comments can retry after a temporary loading failure", async ({ pag
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
-  await page.getByRole("button", { name: "Open discussions" }).click();
+  await page.getByRole("button", { name: "Show comments" }).click();
   const drawer = page.getByRole("dialog");
   await expect(drawer.getByRole("status")).toContainText("unavailable");
   await drawer.getByRole("button", { name: "Refresh comments" }).click();
-  await expect(drawer.getByRole("button", { name: "Comment on selected text" })).toBeVisible();
+  await expect(drawer.getByRole("button", { name: "Close comments and select text" })).toBeVisible();
   await expect(drawer.getByRole("status")).toHaveCount(0);
 });
 
@@ -182,7 +182,7 @@ test("on a screen too narrow for the rail, discussions are reachable from anywhe
   // A monitor turned to portrait: wide enough to read, too narrow for the reading column and a rail.
   await page.setViewportSize({ width: 1080, height: 1920 });
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
-  const open = page.getByRole("button", { name: "Open discussions" });
+  const open = page.getByRole("button", { name: "Show comments" });
   const article = page.locator("[data-review-document]").filter({ visible: true });
   await expect(article.locator("p")).toHaveCount(120);
   expect(await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight * 2), "the document must be long enough to scroll").toBe(true);
@@ -204,27 +204,27 @@ test("wide screens default to centered reading and open a 320px rail on demand",
   const doc = await createReviewDocument(request);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
-  const rail = page.getByRole("complementary", { name: "Document discussions" });
+  const rail = page.getByRole("complementary", { name: "Document comments" });
   const article = page.locator("[data-review-document]").filter({ visible: true });
   await expect(rail).toBeHidden();
-  await expect(page.getByRole("button", { name: "Open discussions" })).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("button", { name: "Show comments" })).toHaveAttribute("aria-expanded", "false");
   const initialBox = (await article.boundingBox())!;
   expect(initialBox.x + initialBox.width / 2).toBeCloseTo(720, 0);
   await openReviewDiscussions(page);
   // The rail's name and its collapse control are one row.
   const railRow = async (locator: ReturnType<typeof page.locator>) => { const box = (await locator.boundingBox())!; return box.y + box.height / 2; };
-  expect(Math.abs(await railRow(page.locator(".kh-review-panel h2").filter({ visible: true })) - await railRow(page.getByRole("button", { name: "Collapse discussions" })))).toBeLessThan(6);
+  expect(Math.abs(await railRow(page.locator(".kh-review-panel h2").filter({ visible: true })) - await railRow(page.getByRole("button", { name: "Close comments", exact: true })))).toBeLessThan(6);
   await expect(rail.getByRole("button", { name: "Comment on selected text" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Hide discussions" })).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("button", { name: "Hide comments" })).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const railBox = (await rail.boundingBox())!;
   const articleBox = (await article.boundingBox())!;
   expect(railBox.width).toBe(320);
   expect(articleBox.width).toBe(initialBox.width);
   expect(railBox.x).toBeGreaterThanOrEqual(articleBox.x + articleBox.width - 1);
-  await page.getByRole("button", { name: "Collapse discussions" }).click();
+  await page.getByRole("button", { name: "Close comments", exact: true }).click();
   await expect(rail).toBeHidden();
-  await expect(page.getByRole("button", { name: "Open discussions" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Show comments" })).toBeFocused();
   await expect.poll(async () => Math.round((await article.boundingBox())!.x)).toBe(Math.round(initialBox.x));
 });
 
@@ -238,10 +238,10 @@ test("opening and closing the rail moves nothing under the pointer where the win
   const where = async () => ({ article: (await article.boundingBox())!.x, entry: (await entry.boundingBox())!.x, save: (await save.boundingBox())!.x });
   const before = await where();
   await openReviewDiscussions(page);
-  await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Document comments" })).toBeVisible();
   // The column slides when it must; let a slide finish before measuring where it ended.
   await expect.poll(where).toEqual(before);
-  await page.getByRole("button", { name: "Collapse discussions" }).click();
+  await page.getByRole("button", { name: "Close comments", exact: true }).click();
   await expect.poll(where).toEqual(before);
 });
 
@@ -270,7 +270,7 @@ test("keyboard expansion keeps a stable focus target and Escape preserves reply 
   await page.keyboard.press("Shift+Tab");
   await expect(card.getByRole("button", { name: "😀 bold", exact: true })).toBeFocused();
   // Reset to compact, then use keyboard activation instead of focus-triggered expansion.
-  await page.getByRole("button", { name: "Collapse discussions" }).click();
+  await page.getByRole("button", { name: "Close comments", exact: true }).click();
   await openReviewDiscussions(page);
   await expand.focus();
   await page.keyboard.press("Enter");
@@ -281,7 +281,7 @@ test("keyboard expansion keeps a stable focus target and Escape preserves reply 
   await page.keyboard.press("Escape");
   await expect(card.getByRole("textbox", { name: "Reply" })).toHaveValue("Keep this draft");
   await expect(card.getByRole("textbox", { name: "Reply" })).toBeFocused();
-  await page.getByRole("button", { name: "Collapse discussions" }).click();
+  await page.getByRole("button", { name: "Close comments", exact: true }).click();
   await openReviewDiscussions(page);
   await expand.click();
   await expect(card.getByRole("textbox", { name: "Reply" })).toHaveValue("Keep this draft");
@@ -326,7 +326,7 @@ test("an outdated discussion's expansion button stays focused until activated", 
 test("collapsed selection offers Comment, and Escape preserves a new-comment draft", async ({ page, request }) => {
   const doc = await createReviewDocument(request);
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
-  await expect(page.getByRole("button", { name: "Open discussions, 0 comments", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show comments, 0 comments", exact: true })).toBeVisible();
   await selectPassage(page);
   await page.getByRole("button", { name: "Comment on selection" }).click();
   const input = page.getByRole("textbox", { name: "Add comment" });
@@ -335,7 +335,7 @@ test("collapsed selection offers Comment, and Escape preserves a new-comment dra
   await expect(input).toBeFocused();
   await expect(input).toHaveValue("New draft");
   await page.getByRole("button", { name: "Add comment", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Hide discussions, 1 comments", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Hide comments, 1 comments", exact: true })).toBeVisible();
 });
 
 test("a comment starts from a button beside the selection and opens in the rail level with the passage", async ({ page, request }) => {
@@ -425,7 +425,7 @@ test("saved-share actions coexist with comments on mobile without overflow", asy
   const bar = page.locator(".kh-review-entry");
   expect((await bar.boundingBox())!.height).toBeLessThanOrEqual(57);
   const saved = (await page.getByRole("button", { name: "Saved", exact: true }).boundingBox())!;
-  const entry = (await page.getByRole("button", { name: "Open discussions" }).boundingBox())!;
+  const entry = (await page.getByRole("button", { name: "Show comments" }).boundingBox())!;
   const open = (await bar.getByRole("link", { name: "Open in Knowledge Hub" }).boundingBox())!;
   for (const box of [saved, open]) expect(Math.abs(box.y - entry.y)).toBeLessThanOrEqual(2);
   expect(open.x + open.width).toBeLessThanOrEqual(390);
@@ -433,8 +433,8 @@ test("saved-share actions coexist with comments on mobile without overflow", asy
   await expect(page.getByRole("link", { name: "View saved shares" })).toHaveCount(0);
   await openReviewDiscussions(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.getByRole("button", { name: "Close discussions" }).click();
-  await expect(page.getByRole("button", { name: "Open discussions" })).toBeFocused();
+  await page.getByRole("button", { name: "Close comments", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Show comments" })).toBeFocused();
   await page.screenshot({ path: "/tmp/document-review-saved-share-mobile.png", fullPage: true });
   } finally {
     const state = await request.get(`${phase3Origin("viewer")}/api/saved-shares/state?token=${doc.links[0].path.split("/").pop()}`);
@@ -472,7 +472,7 @@ test("the shared page keeps one left edge: its bar, its byline, its article and 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${origin}${doc.links[0].path}`);
   await openReviewDiscussions(page);
-  await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Document comments" })).toBeVisible();
   await aligned();
 });
 
@@ -507,10 +507,10 @@ test("the shared rail's heading is one row, as the owner's is: its name and filt
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
   await openReviewDiscussions(page);
-  const rail = page.getByRole("complementary", { name: "Document discussions" });
+  const rail = page.getByRole("complementary", { name: "Document comments" });
   const place = async (locator: ReturnType<typeof page.locator>) => { const box = (await locator.boundingBox())!; return { middle: box.y + box.height / 2, left: box.x, bottom: box.y + box.height }; };
   const heading = await place(rail.locator("h2").filter({ visible: true }));
-  const [filter, refresh, close] = [await place(rail.getByRole("button", { name: "Filter discussions" })), await place(rail.getByRole("button", { name: "Refresh comments" })), await place(rail.getByRole("button", { name: "Collapse discussions" }))];
+  const [filter, refresh, close] = [await place(rail.getByRole("button", { name: "Filter comments" })), await place(rail.getByRole("button", { name: "Refresh comments" })), await place(rail.getByRole("button", { name: "Close comments", exact: true }))];
   for (const control of [filter, refresh, close]) expect(Math.abs(control.middle - heading.middle)).toBeLessThan(6);
   const lefts = [heading.left, filter.left, refresh.left, close.left];
   expect(lefts).toEqual([...lefts].sort((a, b) => a - b));
@@ -520,12 +520,12 @@ test("the shared rail's heading is one row, as the owner's is: its name and filt
   expect((await place(rail.getByRole("button", { name: "Comment on selected text" }))).middle).toBeGreaterThan(close.bottom);
 
   // As a drawer, which names and closes itself, the row is the filter and refresh.
-  await page.getByRole("button", { name: "Collapse discussions" }).click();
+  await page.getByRole("button", { name: "Close comments", exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await openReviewDiscussions(page);
   const drawer = page.getByRole("dialog", { name: "Comments" });
-  await expect(drawer.getByRole("button", { name: "Collapse discussions" })).toHaveCount(0);
+  await expect(drawer.getByRole("button", { name: "Close comments", exact: true })).toHaveCount(0);
   await expect(drawer.locator("h2").filter({ hasText: /^Comments$/ }).filter({ visible: true })).toHaveCount(1);
-  const [drawerFilter, drawerRefresh] = [await place(drawer.getByRole("button", { name: "Filter discussions" })), await place(drawer.getByRole("button", { name: "Refresh comments" }))];
+  const [drawerFilter, drawerRefresh] = [await place(drawer.getByRole("button", { name: "Filter comments" })), await place(drawer.getByRole("button", { name: "Refresh comments" }))];
   expect(Math.abs(drawerFilter.middle - drawerRefresh.middle)).toBeLessThan(6);
 });

@@ -24,7 +24,7 @@ export function AutosaveIndicator({ state, attention }: { state: string; attenti
   }, [state, attention]);
   const showing = Boolean(attention ?? message);
   return <span role="status" aria-live="polite" data-autosave-status={state}
-    className={`inline-block text-right text-caption text-kh-text-muted ${showing ? "w-20" : "w-20 max-sm:w-0 max-sm:overflow-hidden"}`}>
+    className={`inline-block text-right text-caption ${attention ? "text-kh-danger" : "text-kh-text-muted"} ${showing ? "w-20" : "w-20 max-sm:w-0 max-sm:overflow-hidden"}`}>
     {attention ?? message}
   </span>;
 }

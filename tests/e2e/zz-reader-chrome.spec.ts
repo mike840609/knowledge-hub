@@ -42,7 +42,7 @@ test("an external link in the editor is marked as one, and only an external link
 
 test("the Markdown toggle is one of the page's actions, and the title is not pushed down for it", async ({ page }) => {
   await open(page);
-  const toggle = page.getByRole("button", { name: "Markdown", exact: true });
+  const toggle = page.getByRole("button", { name: "Markdown source", exact: true });
   await expect(toggle).toBeVisible();
   // Beside Share, in the pinned line, not in the article.
   expect(await toggle.evaluate((element) => element.closest("article") === null)).toBe(true);

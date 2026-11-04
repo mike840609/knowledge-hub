@@ -62,7 +62,7 @@ test("a draft survives archiving and can be restored from Home", { tag: "@smoke-
   await page.getByRole("button", { name: "Restore document", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${document.documentId}$`));
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeEditable();
-  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await page.getByRole("button", { name: "Markdown source", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Markdown", exact: true })).toHaveValue("Unsaved draft body");
 });
 

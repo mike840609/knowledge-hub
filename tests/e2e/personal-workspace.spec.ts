@@ -25,12 +25,12 @@ test("personal rollout: disabled teams, drafts across browsers, organize, export
   expect(draft.ok()).toBe(true);
   await page.goto(href);
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(wait);
-  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await page.getByRole("button", { name: "Markdown source", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Markdown", exact: true })).toHaveValue("Persistent draft body", wait);
   const other = await browser.newContext(); const resumed = await other.newPage();
   await resumed.goto(`${new URL(page.url()).origin}${href}`);
   await expect(resumed.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(wait);
-  await resumed.getByRole("button", { name: "Markdown", exact: true }).click();
+  await resumed.getByRole("button", { name: "Markdown source", exact: true }).click();
   await expect(resumed.getByRole("textbox", { name: "Markdown", exact: true })).toHaveValue("Persistent draft body");
   await resumed.getByRole("button", { name: "Resume saving", exact: true }).click();
   const savedDocument = resumed.waitForResponse(response => response.url().endsWith(`/api/documents/${doc.documentId}`) && response.request().method() === "PATCH", wait);

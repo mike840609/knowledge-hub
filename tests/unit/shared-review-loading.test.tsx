@@ -22,7 +22,7 @@ function pendingFetch() {
   return async (response: Response) => { await act(async () => { waiting.shift()!(response); }); };
 }
 const render = async () => { await act(async () => root.render(<SharedReviewPanel token="share-token" revisionId="r1" markdown="Text." signInHref="/sign-in"><article data-review-document><p>Text.</p></article></SharedReviewPanel>)); };
-const loading = () => container.textContent?.includes("Loading discussions…");
+const loading = () => container.textContent?.includes("Loading comments…");
 
 it("says the discussions are loading until they arrive, then shows them", async () => {
   const answer = pendingFetch();
@@ -38,7 +38,7 @@ it("replaces the loading line with the failure, and shows it again while Retry r
   await render();
   await answer(json({ error: { message: "x" } }, 503));
   expect(loading()).toBe(false);
-  expect(container.textContent).toContain("Discussions are unavailable.");
+  expect(container.textContent).toContain("Comments are unavailable.");
   const retry = container.querySelector<HTMLButtonElement>('button[aria-label="Refresh comments"]')!;
   await act(async () => { retry.click(); });
   expect(loading()).toBe(true);
@@ -81,15 +81,15 @@ it("keeps the discussions shown when a Refresh fails, and says it failed", async
   const refresh = Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-label="Refresh comments"]')).at(-1)!;
   await act(async () => { refresh.click(); });
   await answer(json({ error: { message: "x" } }, 503));
-  expect(container.textContent).toContain("Discussions are unavailable.");
+  expect(container.textContent).toContain("Comments are unavailable.");
   expect(container.textContent).toContain("Settled");
 });
 
-it("tells a reader who can comment how to start a discussion", async () => {
+it("tells a reader who can comment how to start a comment", async () => {
   const answer = pendingFetch();
   await render();
   await answer(json({ threads: [], revisionId: "r1", writesEnabled: true, callerUserId: "u1" }));
-  expect(container.textContent).toContain("Select text in the document to start a discussion.");
+  expect(container.textContent).toContain("Select text in the document to start a comment.");
 });
 
 it("does not tell an anonymous reader to start one", async () => {
@@ -97,7 +97,7 @@ it("does not tell an anonymous reader to start one", async () => {
   await render();
   await answer(json({ threads: [], revisionId: "r1", writesEnabled: false, callerUserId: null }));
   expect(container.textContent).toContain("No comments yet.");
-  expect(container.textContent).not.toContain("start a discussion");
+  expect(container.textContent).not.toContain("start a comment");
 });
 
 it("says when every discussion is resolved, on the way in", async () => {
@@ -105,14 +105,14 @@ it("says when every discussion is resolved, on the way in", async () => {
   await render();
   await answer(json({ threads: [resolvedThread("t1"), resolvedThread("t2")], revisionId: "r1", writesEnabled: true, callerUserId: "u1" }));
   expect(entryButton().textContent).toBe("Comments · 2 resolved");
-  expect(entryButton().getAttribute("aria-label")).toBe("Open discussions, 2 comments, all resolved");
+  expect(entryButton().getAttribute("aria-label")).toBe("Show comments, 2 comments, all resolved");
 });
 
-it("names the comment button for what it does: comment on the selection", async () => {
+it("names the drawer's comment button for what it does: close and select", async () => {
   const answer = pendingFetch();
   await render();
   await answer(json({ threads: [], revisionId: "r1", writesEnabled: true, callerUserId: "u1" }));
-  const button = Array.from(container.querySelectorAll("button")).find(candidate => candidate.textContent === "Comment on selected text");
+  const button = Array.from(container.querySelectorAll("button")).find(candidate => candidate.textContent === "Close comments and select text");
   expect(button).toBeDefined();
   expect(button!.hasAttribute("aria-label")).toBe(false);
 });

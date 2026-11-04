@@ -120,7 +120,7 @@ export function DocumentHeader({
               <button
                 ref={review.buttonRef}
                 type="button"
-                aria-label={`${review.entry.open ? "Hide discussions" : "Open discussions"}, ${review.entry.count} comments, ${review.entry.awaiting} open`}
+                aria-label={`${review.entry.open ? "Hide comments" : "Show comments"}, ${review.entry.count} comments, ${review.entry.awaiting} open`}
                 aria-expanded={review.entry.open}
                 aria-controls="owner-document-discussions"
                 onPointerDown={(event) => event.preventDefault()}
@@ -177,7 +177,7 @@ export function DocumentHeader({
         <div className="kh-reading-column pb-3">
           {beforeTitle}
           {titleControl ?? (contentOwnsTitle ? null : (
-            <h1 className="mt-2 truncate text-page-title font-semibold tracking-tight text-kh-text" title={title}>{title}</h1>
+            <h1 className="mt-2 break-words text-page-title font-semibold tracking-tight text-kh-text" title={title}>{title}</h1>
           ))}
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">
             {readOnlyReason}
