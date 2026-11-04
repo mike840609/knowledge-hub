@@ -1,6 +1,6 @@
 # Knowledge Hub — Task Knowledge Export Design
 
-**Status:** Approved, 2026-11-04; revised after five design reviews (same day). Manual MVP. The automatic-ingestion direction is deferred (§10).
+**Status:** Approved, 2026-11-04; revised after seven design reviews (same day). Manual MVP. The automatic-ingestion direction is deferred (§10).
 **Scope:** Manual Skill/Command trigger + Agent-generated summary + shared CLI + Task Ingestion API + My Space.
 
 ## 1. Why and success
@@ -67,18 +67,18 @@ Non-WIKI references stay external and are rendered as links only when they pass 
 
 **Task identity.** The CLI mints Task IDs; the Agent never does.
 
-**Revision sequence.** The CLI keeps its state per project key: each task created under the key, with every saved revision's canonical hash, the binding it was sent under, its state, and the outcome of its last send. Task IDs are looked up only within the key, so a `--from` sibling worktree has its own task list. Losing the state directory is harmless except that old tasks can no longer be revised from this machine (`--task` exits 2).
+**Revision sequence.** The CLI keeps its state per project key: each task created under the key, with every saved revision's canonical hash, the binding it was sent under, its state, and a sticky `mayBeStored` flag (set by any send whose outcome the CLI could not trust: network error, timeout or 5xx; never cleared by a later answer). Task IDs are looked up only within the key, so a `--from` sibling worktree has its own task list. Losing the state directory is harmless except that old tasks can no longer be revised from this machine (`--task` exits 2).
 
 A saved revision is in one of three states:
 - **unconfirmed:** saved, and not yet answered with 200/201 or a final rejection. This covers network errors, timeouts, 5xx, and the two recoverable rejections: 401 (fix with `configure --rotate`, then `--retry`) and 409 `TASK_ARCHIVED` (restore in My Space, then `--retry`).
 - **confirmed:** the server answered 200 or 201 with the configured `bindingId`. On success the CLI prints the Task URL, the **Task ID**, and the `export --task <taskId>` command for a later update, because neither the URL nor My Space shows the CLI's Task ID.
-- **rejected:** the server answered any other 4xx, or answered 200/201 with a different `bindingId` (the **response `bindingId` mismatch**: the revision is stored under the server's binding, which the CLI records). A rejected revision blocks nothing. The CLI prints why, and the next step.
+- **rejected:** the server answered any other 4xx, or answered 200/201 with a different `bindingId` (the **response `bindingId` mismatch**: the revision is stored under the server's binding, which the CLI records as the binding the task was sent under, replacing the configured one. A later `--task` from the corrected key therefore meets the recorded-binding refusal, and the user continues with `--new`; the CLI never sends that task under a second binding). A rejected revision blocks nothing. The CLI prints why, and the next step.
 
 Commands:
 - `export --new` mints a task and saves revision 1. It is refused (exit 2) while this project key has an unconfirmed revision. The refusal lists every task with an unconfirmed revision, each with its `title`, `completedAt`, `summary` opening and `--retry` command, so the Agent can tell whether one of them is the same work (§8, Skill rule). A timeout that actually committed therefore leads to `--retry` (answered 200), not to a second Task.
 - `export --retry <taskId>` resends the task's unconfirmed revision unchanged. If none is unconfirmed, it says so and exits 0.
 - `export --task <taskId>` reads new content and saves revision n+1, where n is the latest revision the server is known to hold: the larger of the latest confirmed revision and the latest number reported in a 409 body, with "none known" counting as 0. If revision n+1 already exists locally as rejected, its number is reused and its record replaced. It is refused while the task has an unconfirmed revision, and refused (the **recorded-binding refusal**) when the current configuration names a different binding than the one the task was sent under.
-- `export --discard <taskId>` marks the task's unconfirmed revision rejected without sending it. It is the explicit way out when an unconfirmed revision should not or cannot be sent: its binding was revoked, the key now uses another binding, or the task was archived on purpose. A revision whose last send ended without an answer the CLI could trust (network error, timeout or 5xx, which a proxy may return after the server committed) may already be stored on the server; the CLI says so and recommends `--retry` first to find out. Discarding never removes anything from Hub.
+- `export --discard <taskId>` marks the task's unconfirmed revision rejected without sending it. It is the explicit way out when an unconfirmed revision should not or cannot be sent: its binding was revoked, the key now uses another binding, or the task was archived on purpose. A revision with `mayBeStored` set (any earlier send ended in a network error, timeout or 5xx, which a proxy may return after the server committed) may already be stored on the server, even if a later send was answered with 401; the CLI says so and recommends `--retry` first to find out. Discarding never removes anything from Hub.
 
 Every message that leaves a revision unconfirmed names the way forward and, where the forward path may not exist, `--discard` as the alternative:
 - 401: "`configure --rotate <bindingId>` then `--retry`; if the binding was revoked, `--discard <taskId>`".
@@ -123,7 +123,7 @@ Never accept caller-provided Owner, Workspace or Source identity. Team or cross-
 
 ## 7. Ingestion and references
 
-**Authentication.** The export credential travels in `X-Knowledge-Hub-Export-Token`. It does not use `Authorization`, because the site password (HTTP Basic) acts on that header. `POST /api/task-results/ingest` is the only route exempt from the site-password gate and the Google session gate, exempt by exact pathname: no trailing slash, no case folding, no prefix. The route authenticates solely by the export credential. A custom header also forces a CORS preflight; the route answers that preflight with 405 and no `Access-Control-Allow-*` header, so a cross-site browser request cannot proceed. This is a deliberate change to the security boundary; `docs/superpowers/specs/2026-10-25-google-login-design.md` gets a pointer to this section.
+**Authentication.** The export credential travels in `X-Knowledge-Hub-Export-Token`. It does not use `Authorization`, because the site password (HTTP Basic) acts on that header. `POST /api/task-results/ingest` is the only task-knowledge route exempt from the site-password gate and the Google session gate, exempt by exact pathname: no trailing slash, no case folding, no prefix. The route authenticates solely by the export credential. A custom header also forces a CORS preflight; the route answers that preflight with 405 and no `Access-Control-Allow-*` header, so a cross-site browser request cannot proceed. This is a deliberate change to the security boundary; `docs/superpowers/specs/2026-10-25-google-login-design.md` gets a pointer to this section.
 
 **Responses.** `POST /api/task-results/ingest`:
 - 201: new revision created. Body `{ taskResultId, revisionNo, bindingId, url }`.
@@ -136,13 +136,13 @@ Never accept caller-provided Owner, Workspace or Source identity. Team or cross-
 - 413: body over 64 KiB, measured on the bytes actually read, not on `Content-Length`.
 - 422: valid JSON that fails the artifact contract, including an unsupported `schemaVersion`.
 - 500: any other unexpected error; nothing is reported as success. The CLI treats it as retryable, which is safe because ingest is idempotent.
-- 503: retryable: lock wait timeout or deadlock (both already mapped to `WorkspaceBusyError` by `mapDatabaseError`; the transaction rolled back), or no database connection could be obtained (the pool's connection-acquire failure, detected in the route before any write).
+- 503: retryable: lock wait timeout or deadlock (both already mapped to `WorkspaceBusyError` by `mapDatabaseError`; the transaction rolled back), or no database connection could be obtained: the task-knowledge unit of work catches a failure of `pool.getConnection()` (which the existing unit of work leaves outside `mapDatabaseError`) and throws a named `DatabaseUnavailableError`, which the route maps to 503. Nothing has been written at that point.
 
 Every response, including 405, is private and uncached (`Cache-Control: private, no-store`).
 
 **Identity and concurrency.** Task identity is unique by `(bindingId, taskId)`; revision is unique by `(taskResultId, artifactRevision)`. The owner is reached through the binding, so it is not part of the key. Concurrent POSTs cannot produce duplicate tasks or partial revision/reference rows. A new revision retains prior revisions.
 
-**References.** Explicit Wiki resolution uses **only** `(bound sourceId, exact sourcePath)` or a validated Document ID. The sourcePath is normalized exactly as Folder Sync normalized `source_entries.source_path` (`normalizeImportPath`), and compared byte-exactly; this happens in the infrastructure adapter, so the two can never drift. A path that `normalizeImportPath` rejects is stored as UNRESOLVED. Never use existing Wiki Link title ranking to assert a unique Task reference. Only ACTIVE Source, SourceEntry and Document are eligible. Missing: UNRESOLVED; multiple/ambiguous: AMBIGUOUS; later revoked/archived: UNAVAILABLE. Save the original locator and resolved Document ID. Following a reference always rechecks live authorization/lifecycle. A stored historical ID is not a capability.
+**References.** Explicit Wiki resolution uses **only** `(bound sourceId, exact sourcePath)` or a validated Document ID. The sourcePath is normalized exactly as Folder Sync normalized `source_entries.source_path` (`normalizeImportPath`), and compared byte-exactly; this happens in the infrastructure adapter, so the two can never drift. A path that passed the contract's lexical check (§5) but that `normalizeImportPath` still rejects (for example `.` or `./`) is stored as UNRESOLVED; traversal, absolute paths, drive letters and control characters never get this far, because the contract rejects the whole artifact (422). Never use existing Wiki Link title ranking to assert a unique Task reference. Only ACTIVE Source, SourceEntry and Document are eligible. Missing: UNRESOLVED; multiple/ambiguous: AMBIGUOUS; later revoked/archived: UNAVAILABLE. Save the original locator and resolved Document ID. Following a reference always rechecks live authorization/lifecycle. A stored historical ID is not a capability.
 
 ## 8. My Space UI
 
