@@ -128,6 +128,8 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
   const fromLookup = useRef(initial.item !== null);
   const marking = useRef(new Set<string>());
   const busyCount = useRef(0);
+  // Bumped by a filter change or Refresh: an older page that started under the previous view is not merged.
+  const generation = useRef(0);
 
   const beginBusy = () => { busyCount.current += 1; setBusy(true); };
   const endBusy = () => { busyCount.current = Math.max(0, busyCount.current - 1); if (busyCount.current === 0) setBusy(false); };
@@ -187,7 +189,11 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
   }, [kind, status, unread, reload, reconcile]);
 
   const applyFilters = (change: Partial<Filters>) => {
-    const nextFilters: Filters = { ...filtersRef.current, ...change };
+    const current = filtersRef.current;
+    const nextFilters: Filters = { ...current, ...change };
+    if (nextFilters.kind !== current.kind || nextFilters.status !== current.status || nextFilters.unread !== current.unread) {
+      generation.current += 1;
+    }
     filtersRef.current = nextFilters;
     setKind(nextFilters.kind);
     setStatus(nextFilters.status);
@@ -196,7 +202,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
     writeLocation(nextFilters, selectedIdRef.current);
   };
 
-  const refresh = () => setReload(value => value + 1);
+  const refresh = () => { generation.current += 1; setReload(value => value + 1); };
 
   const markThread = useCallback(async (discussion: InboxDiscussionView) => {
     if (discussion.unreadCount === 0 || marking.current.has(discussion.threadId)) return;
@@ -228,16 +234,19 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
 
   const loadOlder = async () => {
     if (!next || moreLoading) return;
+    const started = generation.current;
     setMoreLoading(true);
     setError(null);
     try {
       const result = await reviewRequest<InboxPage>(inboxUrl(filtersRef.current, { cursor: next }));
+      // The view moved on while this page was in flight: it belongs to a list that no longer exists.
+      if (generation.current !== started) return;
       // A thread can reach the first page through a mention and the older page through its owner:
       // merge by thread (the owner's view wins) before sorting the whole list again.
       setDiscussions(previous => sortInboxDiscussions(mergeInboxDiscussions([...previous, ...withDates(result.discussions)])));
       setNext(result.nextCursor);
     } catch (cause) {
-      setError(failure(cause, "Could not load older discussions."));
+      if (generation.current === started) setError(failure(cause, "Could not load older discussions."));
     } finally {
       setMoreLoading(false);
     }
@@ -288,15 +297,17 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
 
   const selectedDiscussion = discussions.find(discussion => discussion.threadId === selectedId)
     ?? (selectedFallback && selectedFallback.threadId === selectedId ? selectedFallback : undefined);
-  // Opening a discussion marks it read, whether a row was chosen or a deep link opened it in the pane.
-  // `markThread` guards the id, so the select path and this effect never post twice for one thread.
+  // In the split layout, opening a discussion marks it read, whether a row was chosen or a deep link opened
+  // it in the pane; the narrow list has no pane and marks nothing. `markThread` guards the id, so the select
+  // path and this effect never post twice for one thread.
   useEffect(() => {
-    if (selectedDiscussion && selectedDiscussion.unreadCount > 0) void markThread(selectedDiscussion);
-  }, [selectedDiscussion, markThread]);
+    if (split && selectedDiscussion && selectedDiscussion.unreadCount > 0) void markThread(selectedDiscussion);
+  }, [split, selectedDiscussion, markThread]);
   const selected = split ? selectedDiscussion : undefined;
   const defaultView = kind === "all" && status === "all" && !unread;
   const filtered = kind !== "all" || status !== "all" || unread;
-  const empty = unread && kind === "all" && status === "all"
+  const unreadOnly = unread && kind === "all" && status === "all";
+  const empty = unreadOnly
     ? { title: "No unread discussions.", detail: "Clear the Unread filter to see everything." }
     : filtered
       ? { title: "No discussions match these filters.", detail: null }
@@ -320,7 +331,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
         <MessageSquareText size={24} className="mx-auto mb-3" aria-hidden="true" />
         <p className="text-body font-medium">{empty.title}</p>
         {empty.detail && <p className="mt-1 text-body-sm">{empty.detail}</p>}
-        {filtered && <div className="mt-3 flex justify-center"><Button variant="link" onClick={() => applyFilters(DEFAULT_FILTERS)}>Clear filters</Button></div>}
+        {filtered && !unreadOnly && <div className="mt-3 flex justify-center"><Button variant="link" onClick={() => applyFilters(DEFAULT_FILTERS)}>Clear filters</Button></div>}
       </div>
     ) : <ul aria-label="Inbox discussions" className="divide-y divide-kh-border" onKeyDown={step}>
       {discussions.map(discussion => <InboxDiscussionRow

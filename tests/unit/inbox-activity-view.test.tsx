@@ -46,6 +46,8 @@ let requests: string[];
 let unreadCount: number;
 let failMarks: number;
 let width: number;
+let holdCursor: boolean;
+let releaseCursor: (() => void) | null;
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/w/ws/inbox");
@@ -61,6 +63,8 @@ beforeEach(() => {
   requests = [];
   unreadCount = 1;
   failMarks = 0;
+  holdCursor = false;
+  releaseCursor = null;
   vi.stubGlobal("ResizeObserver", class {
     constructor(private readonly callback: ResizeObserverCallback) {}
     observe() { this.callback([{ contentRect: { width } } as ResizeObserverEntry], this as unknown as ResizeObserver); }
@@ -82,7 +86,10 @@ beforeEach(() => {
       }
       const query = new URL(url, "http://localhost").searchParams;
       if (query.get("threadId")) return json({ discussions: lookup ? [lookup] : [], shared: [], nextCursor: null });
-      if (query.get("beforeLatestAt")) return json(older);
+      if (query.get("beforeLatestAt")) {
+        if (holdCursor) await new Promise<void>(resolve => { releaseCursor = resolve; });
+        return json(older);
+      }
       if (query.get("kind") === "follow") return json({ discussions: following, shared: [], nextCursor: null });
       if (query.get("kind") || query.get("status") || query.get("unread")) return json(filtered ?? { ...page, shared: [] });
       return json(page);
@@ -132,6 +139,10 @@ const change = async (value: string) => {
 };
 const item = () => new URL(window.location.href).searchParams.get("item");
 const markReadButtons = () => [...host.querySelectorAll<HTMLButtonElement>("button")].filter(button => button.getAttribute("aria-label")?.startsWith("Mark read"));
+const release = async () => {
+  await act(async () => { releaseCursor?.(); releaseCursor = null; });
+  await settle();
+};
 
 it("renders one row per discussion and no page count", async () => {
   page = { discussions: [discussion("t1"), discussion("t2")], shared: [], nextCursor: null };
@@ -202,6 +213,33 @@ it("a deep-linked unread discussion opens in the pane and is marked read once", 
   expect(gets.some(url => url.includes("threadId=t2"))).toBe(true);
   expect(pane()?.textContent).toContain("Doc t2");
   expect(posts.filter(post => post.action === "mark-thread-read")).toEqual([{ action: "mark-thread-read", threadId: "t2" }]);
+});
+
+it("in a narrow box a deep-linked discussion neither opens a pane nor marks read", async () => {
+  width = 600;
+  window.history.replaceState(null, "", "/w/ws/inbox?item=t2");
+  page = { discussions: [discussion("t1")], shared: [], nextCursor: null };
+  lookup = discussion("t2", { documentTitle: "Doc t2", unreadCount: 1 });
+  await mount();
+  expect(gets.some(url => url.includes("threadId=t2"))).toBe(true);
+  expect(pane()).toBeNull();
+  expect(posts.filter(post => post.action === "mark-thread-read")).toEqual([]);
+});
+
+it("keeps the selected row after its mark under the active Unread filter", async () => {
+  window.history.replaceState(null, "", "/w/ws/inbox?unread=1");
+  page = { discussions: [discussion("t1", { unreadCount: 1 })], shared: [], nextCursor: null };
+  threads["doc-t1"] = [thread("t1")];
+  await mount();
+  expect(rows().map(element => element.dataset.inboxEntry)).toEqual(["t1"]);
+  await click(row("t1"));
+  expect(posts.filter(post => post.action === "mark-thread-read")).toEqual([{ action: "mark-thread-read", threadId: "t1" }]);
+  // The mark no longer matches the Unread filter, but the selected row stays until another selection or filter change.
+  expect(rows().map(element => element.dataset.inboxEntry)).toEqual(["t1"]);
+  expect(row("t1").getAttribute("aria-current")).toBe("true");
+  expect(item()).toBe("t1");
+  expect(pane()).not.toBeNull();
+  expect(markReadButtons()).toHaveLength(0);
 });
 
 it("a filter change clears a selection it excludes", async () => {
@@ -349,6 +387,30 @@ it("appends an older page, merges a duplicate thread and keeps newest first", as
   expect([...host.querySelectorAll("button")].find(element => element.textContent === "Load older discussions")).toBeUndefined();
 });
 
+it("a filter change resets the cursor and ignores an older page still in flight", async () => {
+  page = { discussions: [discussion("t1", { latestAt: at(10) })], shared: [], nextCursor: { latestAt: at(10).toISOString(), threadId: "t1" } };
+  older = { discussions: [discussion("stale", { latestAt: at(0) })], shared: [], nextCursor: { latestAt: at(0).toISOString(), threadId: "stale" } };
+  following = [];
+  await mount();
+  holdCursor = true;
+  await button("Load older discussions");
+  expect(requests.filter(url => url.includes("beforeLatestAt="))).toHaveLength(1);
+
+  // Switch tabs while the older page is still held by the server.
+  await tab("Following");
+  expect(inboxGets()).not.toContain("beforeLatestAt");
+  expect(inboxGets()).not.toContain("beforeThreadId");
+  expect(rows()).toHaveLength(0);
+  expect(host.textContent).toContain("No discussions match these filters.");
+
+  // The old page belongs to the old view: releasing it must not merge its rows or restore its cursor.
+  await release();
+  expect(rows()).toHaveLength(0);
+  expect(host.textContent).not.toContain("stale");
+  expect(host.textContent).toContain("No discussions match these filters.");
+  expect([...host.querySelectorAll("button")].find(element => element.textContent === "Load older discussions")).toBeUndefined();
+});
+
 it("shows each empty state, and Clear filters returns to the default view", async () => {
   page = { discussions: [], shared: [], nextCursor: null };
   await mount();
@@ -358,6 +420,7 @@ it("shows each empty state, and Clear filters returns to the default view", asyn
   filtered = { discussions: [], shared: [], nextCursor: null };
   await tab("Following");
   expect(host.textContent).toContain("No discussions match these filters.");
+  expect([...host.querySelectorAll("button")].find(element => element.textContent === "Clear filters")).not.toBeUndefined();
   await button("Clear filters");
   expect(new URL(window.location.href).searchParams.get("kind")).toBeNull();
   expect(inboxGets()).toBe("/api/review-notifications/inbox");
@@ -365,6 +428,8 @@ it("shows each empty state, and Clear filters returns to the default view", asyn
   await button("Unread");
   expect(host.textContent).toContain("No unread discussions.");
   expect(host.textContent).toContain("Clear the Unread filter to see everything.");
+  // The Unread state keeps its own copy and offers no generic Clear filters action.
+  expect([...host.querySelectorAll("button")].find(element => element.textContent === "Clear filters")).toBeUndefined();
 });
 
 it("marks all read: it clears the shared section and every row's dot", async () => {
