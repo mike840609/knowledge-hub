@@ -5,11 +5,9 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 
 type BindingView = {
   bindingId: string;
-  sourceName: string;
   label: string;
   status: "ACTIVE" | "REVOKED";
   hasActiveCredential: boolean;
@@ -61,10 +59,9 @@ function Commands({ bindingId, token }: Issued) {
   );
 }
 
-export function TaskExportSetup({ workspaceId, sources, bindings }: { workspaceId: string; sources: { id: string; name: string }[]; bindings: BindingView[] }) {
+export function TaskExportSetup({ workspaceId, bindings }: { workspaceId: string; bindings: BindingView[] }) {
   const router = useRouter();
   const base = `/api/workspaces/${workspaceId}/task-export-bindings`;
-  const [sourceId, setSourceId] = useState(sources[0]?.id ?? "");
   const [label, setLabel] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,33 +86,23 @@ export function TaskExportSetup({ workspaceId, sources, bindings }: { workspaceI
     <div className="max-w-panel space-y-6">
       {issued ? <Commands {...issued} /> : null}
       {error ? <p className="text-body text-kh-danger" role="alert">{error}</p> : null}
-      {sources.length === 0 ? (
-        <p className="text-body text-kh-text-muted">Sync a Wiki folder into My Space first; a binding links your project to one synced folder.</p>
-      ) : (
-        <form
+      <form
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
             void act(async () => {
-              const created = (await send(base, "POST", { sourceId, label })) as Issued;
+              const created = (await send(base, "POST", { label })) as Issued;
               setIssued(created);
               setLabel("");
             });
           }}
         >
           <div className="space-y-1">
-            <Label htmlFor="task-export-source">Wiki folder</Label>
-            <Select id="task-export-source" value={sourceId} onChange={(event) => setSourceId(event.target.value)}>
-              {sources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
-            </Select>
-          </div>
-          <div className="space-y-1">
             <Label htmlFor="task-export-label">Label</Label>
             <Input id="task-export-label" value={label} maxLength={200} required placeholder="work laptop" onChange={(event) => setLabel(event.target.value)} />
           </div>
           <Button type="submit" disabled={busy}>Create binding</Button>
         </form>
-      )}
       {bindings.length > 0 ? (
         <ul className="divide-y divide-kh-border rounded-md border border-kh-border">
           {bindings.map((binding) => (
@@ -123,7 +110,7 @@ export function TaskExportSetup({ workspaceId, sources, bindings }: { workspaceI
               <div className="min-w-0">
                 <p className="truncate text-body">{binding.label}</p>
                 <p className="text-caption text-kh-text-muted">
-                  {binding.sourceName} · {binding.status === "ACTIVE" ? "Active" : "Revoked"} · <span className="font-mono">{binding.bindingId}</span>
+                  {binding.status === "ACTIVE" ? "Active" : "Revoked"} · <span className="font-mono">{binding.bindingId}</span>
                 </p>
               </div>
               {binding.status === "ACTIVE" ? (

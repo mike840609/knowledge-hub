@@ -41,12 +41,12 @@ it("returns a rotated token once, uncached", async () => {
   expect(injected.rotate).toHaveBeenCalledWith(expect.anything(), { workspaceId: "w1", bindingId: "b1" });
 });
 
-it("creates with 201 from the body's sourceId and label only", async () => {
+it("creates with 201 from the body's label only, ignoring any Source or owner it names", async () => {
   injected.create.mockResolvedValue({ bindingId: "b2", token: "khx_t" });
   const response = await create(post("http://hub.test/api/workspaces/w1/task-export-bindings", { sourceId: "s1", label: "laptop", ownerUserId: "u2" }), params);
   expect(response.status).toBe(201);
   expect(response.headers.get("Cache-Control")).toBe("private, no-store");
-  expect(injected.create).toHaveBeenCalledWith(expect.objectContaining({ identity: expect.objectContaining({ id: "u1" }) }), { workspaceId: "w1", sourceId: "s1", label: "laptop" });
+  expect(injected.create).toHaveBeenCalledWith(expect.objectContaining({ identity: expect.objectContaining({ id: "u1" }) }), { workspaceId: "w1", label: "laptop" });
 });
 
 it("refuses a cross-site mutation before reaching the service", async () => {

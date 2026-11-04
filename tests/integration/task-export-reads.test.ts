@@ -25,7 +25,7 @@ async function exporter() {
   const seed = await seedMySpaceWithFolderSource(pool);
   const caller = callerFromIdentity(seed.owner);
   const bindings = new ManageExportBindingService(uow());
-  const { bindingId, token } = await bindings.create(caller, { workspaceId: seed.workspaceId, sourceId: seed.sourceId, label: "laptop" });
+  const { bindingId, token } = await bindings.create(caller, { workspaceId: seed.workspaceId, label: "laptop" });
   const ingest = (body: Record<string, unknown>) => new IngestTaskResultService(uow()).ingest(token, { ...base, ...body });
   return { ...seed, caller, bindings, bindingId, token, ingest };
 }

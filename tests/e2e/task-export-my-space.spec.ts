@@ -7,7 +7,7 @@ test("task results in My Space: export, browse, version, archive and restore, al
   const nav = await (await request.get("/api/workspaces")).json();
   const ws = nav.items.find((w: { type: string }) => w.type === "PERSONAL").id;
   const sourceName = `Task export ${Date.now()}`;
-  const snapshot = await stageReadingFolder(request, { workspaceId: ws, sourceName, fixture: "reading-flow-v1" });
+  const snapshot = await stageReadingFolder(request, { workspaceId: ws, sourceName, fixture: "task-export-my-space" });
   expect((await request.post(`/api/source-imports/${snapshot}/apply`, { data: {} })).ok()).toBe(true);
 
   // Discoverable from home, with no new sidebar entry.
@@ -19,7 +19,6 @@ test("task results in My Space: export, browse, version, archive and restore, al
   await expect(page.getByRole("heading", { name: "Tasks", exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: "Set up export" }).click();
-  await page.getByLabel("Wiki folder").selectOption({ label: sourceName });
   await page.getByLabel("Label").fill("e2e laptop");
   await page.getByRole("button", { name: "Create binding" }).click();
   const token = await page.getByLabel("Export token").inputValue();
@@ -30,7 +29,7 @@ test("task results in My Space: export, browse, version, archive and restore, al
     title: "Ünïcödé 任務 ✅", summary: HOSTILE, completedAt: "2026-11-04T10:00:00Z",
     verification: { status: "passed", checks: ["npm test: 3 passed"] },
     findings: ["data:text/html,<script>alert(1)</script>"],
-    references: [{ type: "WIKI", path: "guide.md" }, { type: "WIKI", path: "missing.md" }, { type: "PR_URL", url: "https://github.com/o/r/pull/1" }],
+    references: [{ type: "WIKI", path: "space-guide.md" }, { type: "WIKI", path: "missing.md" }, { type: "PR_URL", url: "https://github.com/o/r/pull/1" }],
   };
   const ingest = (body: unknown) => request.post("/api/task-results/ingest", { headers: { "x-knowledge-hub-export-token": token }, data: body });
   const created = await ingest(first);
@@ -47,7 +46,7 @@ test("task results in My Space: export, browse, version, archive and restore, al
   const hrefs = await page.locator("a[href]").evaluateAll((links) => links.map((link) => link.getAttribute("href") ?? ""));
   for (const href of hrefs) expect(href).not.toMatch(/^\s*(?:javascript|data|vbscript):/i);
 
-  await expect(page.getByRole("link", { name: "Team guide" })).toHaveAttribute("href", new RegExp(`^/w/${ws}/knowledge/[0-9a-f-]+/[0-9a-f-]+$`));
+  await expect(page.getByRole("link", { name: "Space guide" })).toHaveAttribute("href", new RegExp(`^/w/${ws}/knowledge/[0-9a-f-]+/[0-9a-f-]+$`));
   await expect(page.getByText("missing.md")).toBeVisible();
   await expect(page.getByRole("link", { name: "https://github.com/o/r/pull/1" })).toHaveAttribute("target", "_blank");
 

@@ -30,7 +30,7 @@ Against the built server, with the real CLI as a child process and a delaying pr
 - A browser session posting to the ingest route without the export header: 401. A binding request for an unknown Workspace: 404; `/w/<random>/tasks`: 404.
 - A real `OPTIONS` to `/api/task-results/ingest` through the middleware: 405, `Allow: POST`, `Cache-Control: private, no-store`, no `Access-Control-Allow-*` header.
 
-An archived or missing Source answering 403 is covered by `tests/integration/task-export-http.test.ts`, not by this E2E.
+An archived My Space answering 403 is covered by `tests/integration/task-export-http.test.ts`, not by this E2E.
 
 ## My Space UI (`tests/e2e/task-export-my-space.spec.ts`)
 
@@ -39,3 +39,9 @@ Discoverable from the Home actions menu with no sidebar entry; HTML, Markdown, `
 ## Agent tools: verification gap
 
 Installed locally: Claude Code 2.1.316 and OpenCode v2.1.4 (whose user commands directory, `~/.config/opencode/commands/`, exists). The manual check that `/hub-export` is discovered and runs in each tool, in a project other than the Hub repo, was **not run**: it installs into the user's real `~/.claude` and `~/.config/opencode`. `tests/unit/task-export-agent-instructions.test.ts` covers the installer into a temporary home. Run `knowledge-hub install-agent` and `/hub-export` in each tool to close this gap.
+
+## Amendment: Source-less binding (2026-11-04)
+
+After the binding stopped naming a Source, the full gate was rerun on the amended tree:
+unit 4409/4409, integration 1119/1119, typecheck, lint and build clean, and the two
+task-export E2E specs (`task-export-flow`, `task-export-my-space`) passed.

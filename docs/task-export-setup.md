@@ -2,7 +2,7 @@
 
 Save a task you finished with Claude Code or OpenCode as a task result in your
 Knowledge Hub My Space. The export goes through one restricted binding: it can
-only add task results to one folder-sync Source in your own My Space, and it is
+only add task results to your own My Space, and it is
 never sent unless you ask for it (`/hub-export`).
 
 [繁體中文](task-export-setup.zh-TW.md)
@@ -23,8 +23,10 @@ there the same way.
 
 ## 2. Create a binding
 
-In Knowledge Hub open **My Space → Tasks → Set up export**, choose the folder-sync
-Source the results belong to, and create the binding. The page shows a secret
+In Knowledge Hub open **My Space → Tasks → Set up export**, give the binding a
+label (for example the machine it runs on), and create it. A Wiki reference the
+Agent writes as a path links to the page when exactly one synced folder in My
+Space has that path. The page shows a secret
 once, and the exact `configure` command for this binding. Copy the secret now;
 it is not shown again.
 
@@ -117,7 +119,7 @@ a browser session or an `Authorization` header is never accepted there.
 |---|---|---|
 | 201 / 200 | New revision stored / exact replay of a stored one | 0 |
 | 401 | Secret unknown, rotated or revoked | 4 (`configure --rotate`, or `--discard`) |
-| 403 | Binding's Source or My Space no longer accepts writes | 4 |
+| 403 | The binding's My Space no longer accepts writes | 4 |
 | 409 | `TASK_ARCHIVED` (restore, then `--retry`), `REVISION_CONFLICT`, `REVISION_OUT_OF_ORDER` | 4 |
 | 413 / 422 | Over 64 KiB / fails the content contract | 4 |
 | 5xx, timeout | No trustworthy answer | 3 (`--retry`) |

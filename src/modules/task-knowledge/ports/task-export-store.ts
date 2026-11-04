@@ -8,7 +8,7 @@ export type ReferenceResolution = "RESOLVED" | "UNRESOLVED" | "AMBIGUOUS" | "UNA
 export type ExportBinding = {
   id: string;
   ownerUserId: string;
-  sourceId: string;
+  workspaceId: string;
   label: string;
   status: ExportBindingStatus;
   createdAt: Date;
@@ -18,8 +18,6 @@ export type ExportBinding = {
 /** What the owner sees in a list: never credential material. */
 export type ExportBindingSummary = {
   bindingId: string;
-  sourceId: string;
-  sourceName: string;
   label: string;
   status: ExportBindingStatus;
   hasActiveCredential: boolean;
@@ -60,16 +58,16 @@ export type StoredTaskReference = {
 /** A task with what its list row shows: the binding and the latest revision's artifact. */
 export type TaskListRow = { task: TaskResultRow; bindingLabel: string; bindingStatus: ExportBindingStatus; artifactJson: string };
 
-/** A task with its binding and the Workspace derived through the binding's Source. */
-export type TaskScope = { task: TaskResultRow; binding: ExportBinding; workspaceId: string };
+/** A task with its binding. */
+export type TaskScope = { task: TaskResultRow; binding: ExportBinding };
 
 export interface TaskExportStore {
-  insertBinding(binding: { id: string; ownerUserId: string; sourceId: string; label: string }): Promise<void>;
+  insertBinding(binding: { id: string; ownerUserId: string; workspaceId: string; label: string }): Promise<void>;
   getBinding(bindingId: string): Promise<ExportBinding | null>;
   lockBindingShared(bindingId: string): Promise<ExportBinding | null>;
   lockBindingForUpdate(bindingId: string): Promise<ExportBinding | null>;
   revokeBinding(bindingId: string): Promise<void>;
-  /** The owner's bindings whose Source lies in `workspaceId` (Workspace derived through the Source). */
+  /** The owner's bindings for `workspaceId`. */
   listBindings(ownerUserId: string, workspaceId: string): Promise<ExportBindingSummary[]>;
 
   insertCredential(credential: { id: string; bindingId: string; tokenHash: Uint8Array }): Promise<void>;
@@ -89,7 +87,7 @@ export interface TaskExportStore {
   insertReferences(taskResultId: string, revisionNo: number, references: readonly StoredTaskReference[]): Promise<void>;
   listReferences(taskResultId: string, revisionNo: number): Promise<StoredTaskReference[]>;
 
-  /** Tasks whose binding's Source lies in `workspaceId`, newest first, ids below `beforeId` when given. */
+  /** Tasks whose binding names `workspaceId`, newest first, ids below `beforeId` when given. */
   listTasks(workspaceId: string, query: { lifecycle: TaskLifecycle; beforeId: string | null; limit: number }): Promise<TaskListRow[]>;
   getTaskScope(taskResultId: string): Promise<TaskScope | null>;
   /** Newest first. */

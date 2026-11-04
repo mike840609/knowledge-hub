@@ -36,21 +36,14 @@ export type BindingRef = { workspaceId: string; bindingId: string };
 export class ManageExportBindingService {
   constructor(private readonly unitOfWork: TaskKnowledgeUnitOfWork) {}
 
-  async create(caller: CallerContext, input: { workspaceId: string; sourceId: string; label: string }): Promise<{ bindingId: string; token: string }> {
+  async create(caller: CallerContext, input: { workspaceId: string; label: string }): Promise<{ bindingId: string; token: string }> {
     const bindingLabel = label(input.label);
     if (!isUuid(input.workspaceId)) throw workspaceNotFound();
-    if (!isUuid(input.sourceId)) throw new DomainError("SOURCE_NOT_FOUND", "Source not found.");
     const bindingId = uuidv7();
     const token = issueExportToken();
     await this.unitOfWork.run(async (r) => {
-      // Source before Workspace keeps the global lock order (Snapshot → Source → Workspace).
-      const source = await r.sources.lockSharedById(input.sourceId);
-      if (!source || source.workspaceId !== input.workspaceId) throw new DomainError("SOURCE_NOT_FOUND", "Source not found.");
       assertOwnedPersonal(caller, await r.workspaces.lockSharedById(input.workspaceId));
-      if (source.sourceType !== "FOLDER_SYNC" || source.status !== "ACTIVE") {
-        throw new DomainError("TASK_EXPORT_SOURCE_INELIGIBLE", "Choose an active synced folder Source.");
-      }
-      await r.taskExports.insertBinding({ id: bindingId, ownerUserId: caller.identity.id, sourceId: source.sourceId, label: bindingLabel });
+      await r.taskExports.insertBinding({ id: bindingId, ownerUserId: caller.identity.id, workspaceId: input.workspaceId, label: bindingLabel });
       await r.taskExports.insertCredential({ id: uuidv7(), bindingId, tokenHash: hashExportToken(token) });
     });
     return { bindingId, token };
@@ -91,10 +84,9 @@ export class ManageExportBindingService {
     if (!isUuid(ref.workspaceId) || !isUuid(ref.bindingId)) throw bindingNotFound();
     await this.unitOfWork.run(async (r) => {
       const binding = await r.taskExports.getBinding(ref.bindingId);
-      const source = binding ? await r.sources.getById(binding.sourceId) : null;
-      if (!binding || !source || binding.ownerUserId !== caller.identity.id || source.workspaceId !== ref.workspaceId) throw bindingNotFound();
+      if (!binding || binding.ownerUserId !== caller.identity.id || binding.workspaceId !== ref.workspaceId) throw bindingNotFound();
       try {
-        assertOwnedPersonal(caller, await r.workspaces.lockSharedById(source.workspaceId), options);
+        assertOwnedPersonal(caller, await r.workspaces.lockSharedById(binding.workspaceId), options);
       } catch (error) {
         if (error instanceof DomainError && error.code === "WORKSPACE_NOT_FOUND") throw bindingNotFound();
         throw error;

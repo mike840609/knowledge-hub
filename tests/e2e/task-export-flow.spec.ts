@@ -47,7 +47,7 @@ function cli(home: string, project: string) {
 const content = (title: string, summary = "Stopped the guide page from redirecting to itself.") => JSON.stringify({
   agent: "claude-code", status: "completed", title, summary, completedAt: "2026-11-04T10:00:00Z",
   verification: { status: "passed", checks: ["npm test -- guide: 4 passed"] },
-  references: [{ type: "WIKI", path: "guide.md" }],
+  references: [{ type: "WIKI", path: "flow-guide.md" }],
 });
 
 const bindingRow = (page: Page, label: string) => page.getByRole("listitem").filter({ hasText: label });
@@ -58,12 +58,11 @@ test("manual task export from the CLI, through timeout, revisions, archive, rota
   const ws = nav.items.find((w: { type: string }) => w.type === "PERSONAL").id;
   const sourceName = `Flow export ${Date.now()}`;
   const label = `flow laptop ${Date.now()}`;
-  const snapshot = await stageReadingFolder(request, { workspaceId: ws, sourceName, fixture: "reading-flow-v1" });
+  const snapshot = await stageReadingFolder(request, { workspaceId: ws, sourceName, fixture: "task-export-flow" });
   expect((await request.post(`/api/source-imports/${snapshot}/apply`, { data: {} })).ok()).toBe(true);
 
   // Browser creates the binding; the token is shown once.
   await page.goto(`/w/${ws}/tasks/setup`);
-  await page.getByLabel("Wiki folder").selectOption({ label: sourceName });
   await page.getByLabel("Label").fill(label);
   await page.getByRole("button", { name: "Create binding" }).click();
   const token = await page.getByLabel("Export token").inputValue();
@@ -95,7 +94,7 @@ test("manual task export from the CLI, through timeout, revisions, archive, rota
     await expect(page.getByRole("link", { name: /Fix guide redirect/ })).toHaveCount(1);
     await page.goto(taskPath);
     await expect(page.getByRole("heading", { name: "Fix guide redirect" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Team guide" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Flow guide" })).toBeVisible();
 
     // --task adds revision 2.
     expect((await run(["export", "--task", taskId], content("Fix guide redirect (rev 2)"))).code).toBe(0);

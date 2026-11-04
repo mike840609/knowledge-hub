@@ -29,13 +29,14 @@ export interface TaskWorkspaceLookup {
 
 export interface TaskSourceLookup {
   getById(sourceId: string): Promise<TaskSourceState | null>;
-  /** `LOCK IN SHARE MODE`; used only by binding create. */
-  lockSharedById(sourceId: string): Promise<TaskSourceState | null>;
 }
 
 export interface TaskEntryLookup {
-  /** Normalizes `rawPath` exactly as Folder Sync did and compares byte-exactly; ACTIVE document entries only. */
-  findActiveEntriesByPath(sourceId: string, rawPath: string): Promise<TaskEntryMatch>;
+  /**
+   * Normalizes `rawPath` exactly as Folder Sync did and compares byte-exactly,
+   * across the Workspace's ACTIVE FOLDER_SYNC Sources; ACTIVE document entries only.
+   */
+  findActiveEntriesByPath(workspaceId: string, rawPath: string): Promise<TaskEntryMatch>;
 }
 
 export interface TaskDocumentLookup {

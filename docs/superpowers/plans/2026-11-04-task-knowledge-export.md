@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-04-task-knowledge-export-design.md`
 
+**Amendment (2026-11-04, after Task 10):** the binding names the owner's My Space instead of one FOLDER_SYNC Source (spec amendment above §3). Where a task below says "bound Source", read "the binding Workspace's ACTIVE FOLDER_SYNC Sources": an exact path in one of them resolves, a path in several is AMBIGUOUS, and the setup page asks for a label only.
+
 ## Global Constraints
 
 - **Trigger:** manual `/hub-export` only; no Stop/Idle Hook, background daemon or persistent Outbox.

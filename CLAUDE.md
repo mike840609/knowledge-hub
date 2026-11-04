@@ -176,7 +176,7 @@ pass.
   One write has no caller either, outside the share-link grant:
   `IngestTaskResultService.ingest`, reached only from
   `POST /api/task-results/ingest`. Its authority is a Task Knowledge export
-  credential, which names one binding (one Source in the owner's My Space) and
+  credential, which names one binding (the owner's My Space) and
   permits only `task-result:create`; it is not a delegated human identity. Every
   other task-knowledge entry takes a caller, and caller-less helpers under
   `application/internal/` are imported only from `application/`

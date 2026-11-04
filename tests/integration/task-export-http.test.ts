@@ -34,7 +34,7 @@ async function exporter() {
   const seed = await seedMySpaceWithFolderSource(pool);
   const caller = callerFromIdentity(seed.owner);
   const bindings = new ManageExportBindingService(new MariaDbTaskKnowledgeUnitOfWork(pool));
-  const { bindingId, token } = await bindings.create(caller, { workspaceId: seed.workspaceId, sourceId: seed.sourceId, label: "laptop" });
+  const { bindingId, token } = await bindings.create(caller, { workspaceId: seed.workspaceId, label: "laptop" });
   return { ...seed, caller, bindings, bindingId, token };
 }
 
@@ -58,9 +58,9 @@ describe("task ingest over HTTP", () => {
     expect((await send(token, { ...base, taskId: crypto.randomUUID(), artifactRevision: 1 })).status).toBe(401);
   });
 
-  it("answers 403 for a credential whose Source was archived", async () => {
-    const { token, owner, sourceId } = await exporter();
-    await pool.query("UPDATE knowledge_sources SET status = 'ARCHIVED', archived_by = ?, archived_at = CURRENT_TIMESTAMP(6) WHERE id = ?", [owner.id, sourceId]);
+  it("answers 403 for a credential whose My Space was archived", async () => {
+    const { token, owner, workspaceId } = await exporter();
+    await pool.query("UPDATE workspaces SET lifecycle_state = 'ARCHIVED', archived_by = ?, archived_at = CURRENT_TIMESTAMP(6) WHERE id = ?", [owner.id, workspaceId]);
     expect((await send(token, { ...base, taskId: crypto.randomUUID(), artifactRevision: 1 })).status).toBe(403);
   });
 });

@@ -41,7 +41,7 @@ function mapBinding(row: DbRow): ExportBinding {
   return {
     id: asId(row.id),
     ownerUserId: asId(row.owner_user_id),
-    sourceId: asId(row.source_id),
+    workspaceId: asId(row.workspace_id),
     label: String(row.label),
     status: oneOf(row.status, ["ACTIVE", "REVOKED"] as const, "binding status"),
     createdAt: asDate(row.created_at),
@@ -85,9 +85,9 @@ function fromStored(type: StoredType, locator: string): TaskReferenceInput {
 export class MariaDbTaskExportStore implements TaskExportStore {
   constructor(private readonly connection: QueryConnection) {}
 
-  async insertBinding(binding: { id: string; ownerUserId: string; sourceId: string; label: string }): Promise<void> {
-    await this.connection.query("INSERT INTO task_export_bindings (id, owner_user_id, source_id, label) VALUES (?, ?, ?, ?)", [
-      binding.id, binding.ownerUserId, binding.sourceId, binding.label,
+  async insertBinding(binding: { id: string; ownerUserId: string; workspaceId: string; label: string }): Promise<void> {
+    await this.connection.query("INSERT INTO task_export_bindings (id, owner_user_id, workspace_id, label) VALUES (?, ?, ?, ?)", [
+      binding.id, binding.ownerUserId, binding.workspaceId, binding.label,
     ]);
   }
 
@@ -117,17 +117,17 @@ export class MariaDbTaskExportStore implements TaskExportStore {
 
   async listBindings(ownerUserId: string, workspaceId: string): Promise<ExportBindingSummary[]> {
     const rows = await this.connection.query<DbRow[]>(
-      `SELECT b.*, s.name AS source_name,
+      `SELECT b.*,
           EXISTS (SELECT 1 FROM task_export_credentials c WHERE c.binding_id = b.id AND c.status = 'ACTIVE') AS has_active
-        FROM task_export_bindings b JOIN knowledge_sources s ON s.id = b.source_id
-        WHERE b.owner_user_id = ? AND s.workspace_id = ?
+        FROM task_export_bindings b
+        WHERE b.owner_user_id = ? AND b.workspace_id = ?
         ORDER BY b.created_at DESC, b.id DESC`,
       [ownerUserId, workspaceId],
     );
     return rows.map((row) => {
       const binding = mapBinding(row);
       return {
-        bindingId: binding.id, sourceId: binding.sourceId, sourceName: String(row.source_name), label: binding.label,
+        bindingId: binding.id, label: binding.label,
         status: binding.status, hasActiveCredential: Number(row.has_active) === 1, createdAt: binding.createdAt, revokedAt: binding.revokedAt,
       };
     });
@@ -239,9 +239,8 @@ export class MariaDbTaskExportStore implements TaskExportStore {
       `SELECT t.*, b.label AS binding_label, b.status AS binding_status, r.artifact_json
         FROM task_results t
         JOIN task_export_bindings b ON b.id = t.binding_id
-        JOIN knowledge_sources s ON s.id = b.source_id
         JOIN task_result_revisions r ON r.task_result_id = t.id AND r.revision_no = t.latest_revision_no
-        WHERE s.workspace_id = ? AND t.lifecycle = ? AND (? IS NULL OR t.id < ?)
+        WHERE b.workspace_id = ? AND t.lifecycle = ? AND (? IS NULL OR t.id < ?)
         ORDER BY t.id DESC LIMIT ?`,
       [workspaceId, query.lifecycle, query.beforeId, query.beforeId, query.limit],
     );
@@ -255,19 +254,19 @@ export class MariaDbTaskExportStore implements TaskExportStore {
 
   async getTaskScope(taskResultId: string): Promise<TaskScope | null> {
     const rows = await this.connection.query<DbRow[]>(
-      `SELECT t.*, b.id AS b_id, b.owner_user_id AS b_owner_user_id, b.source_id AS b_source_id, b.label AS b_label,
-          b.status AS b_status, b.created_at AS b_created_at, b.revoked_at AS b_revoked_at, s.workspace_id
-        FROM task_results t JOIN task_export_bindings b ON b.id = t.binding_id JOIN knowledge_sources s ON s.id = b.source_id
+      `SELECT t.*, b.id AS b_id, b.owner_user_id AS b_owner_user_id, b.workspace_id AS b_workspace_id, b.label AS b_label,
+          b.status AS b_status, b.created_at AS b_created_at, b.revoked_at AS b_revoked_at
+        FROM task_results t JOIN task_export_bindings b ON b.id = t.binding_id
         WHERE t.id = ?`,
       [taskResultId],
     );
     const row = rows[0];
     if (!row) return null;
     const binding = mapBinding({
-      id: row.b_id, owner_user_id: row.b_owner_user_id, source_id: row.b_source_id, label: row.b_label,
+      id: row.b_id, owner_user_id: row.b_owner_user_id, workspace_id: row.b_workspace_id, label: row.b_label,
       status: row.b_status, created_at: row.b_created_at, revoked_at: row.b_revoked_at,
     });
-    return { task: mapTask(row), binding, workspaceId: asId(row.workspace_id) };
+    return { task: mapTask(row), binding };
   }
 
   async listRevisions(taskResultId: string): Promise<{ revisionNo: number; createdAt: Date }[]> {
@@ -325,20 +324,12 @@ class MariaDbTaskSourceLookup implements TaskSourceLookup {
     const rows = await this.connection.query<DbRow[]>("SELECT id, workspace_id, source_type, status FROM knowledge_sources WHERE id = ?", [sourceId]);
     return rows[0] ? mapSource(rows[0]) : null;
   }
-
-  async lockSharedById(sourceId: string): Promise<TaskSourceState | null> {
-    const rows = await this.connection.query<DbRow[]>(
-      "SELECT id, workspace_id, source_type, status FROM knowledge_sources WHERE id = ? LOCK IN SHARE MODE",
-      [sourceId],
-    );
-    return rows[0] ? mapSource(rows[0]) : null;
-  }
 }
 
 class MariaDbTaskEntryLookup implements TaskEntryLookup {
   constructor(private readonly connection: QueryConnection) {}
 
-  async findActiveEntriesByPath(sourceId: string, rawPath: string): Promise<TaskEntryMatch> {
+  async findActiveEntriesByPath(workspaceId: string, rawPath: string): Promise<TaskEntryMatch> {
     let sourcePath: string;
     try {
       ({ sourcePath } = normalizeImportPath(rawPath));
@@ -348,10 +339,11 @@ class MariaDbTaskEntryLookup implements TaskEntryLookup {
       throw error;
     }
     const rows = await this.connection.query<DbRow[]>(
-      `SELECT e.document_id FROM source_entries e
-        WHERE e.source_id = ? AND BINARY e.source_path = BINARY ? AND e.status = 'ACTIVE' AND e.entry_type = 'DOCUMENT'
+      `SELECT e.document_id FROM source_entries e JOIN knowledge_sources s ON s.id = e.source_id
+        WHERE s.workspace_id = ? AND s.source_type = 'FOLDER_SYNC' AND s.status = 'ACTIVE'
+          AND BINARY e.source_path = BINARY ? AND e.status = 'ACTIVE' AND e.entry_type = 'DOCUMENT'
         ORDER BY e.document_id`,
-      [sourceId, sourcePath],
+      [workspaceId, sourcePath],
     );
     return { kind: "FOUND", candidates: rows.map((row) => ({ documentId: asId(row.document_id) })) };
   }

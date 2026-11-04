@@ -13,14 +13,20 @@ export function newIdentity(name: string): UserIdentity {
 export const tokenHash = (token: string) => createHash("sha256").update(token, "utf8").digest();
 export const newToken = () => randomBytes(32).toString("base64url");
 
-/** A My Space with one ACTIVE FOLDER_SYNC Source, as a binding needs. */
-export async function seedMySpaceWithFolderSource(pool: Pool, name = "Task Owner") {
+/** A My Space with no Source at all. */
+export async function seedMySpace(pool: Pool, name = "Task Owner") {
   const owner = newIdentity(name);
   const uow = new MariaDbUnitOfWork(pool);
   await uow.run((r) => r.users.upsertIdentity(owner));
   const { workspace } = await new PersonalWorkspaceService(uow).ensurePersonalWorkspace(owner.id);
-  const sourceId = await insertFolderSource(pool, workspace.id, owner.id);
-  return { owner, workspaceId: workspace.id, sourceId };
+  return { owner, workspaceId: workspace.id };
+}
+
+/** A My Space with one ACTIVE FOLDER_SYNC Source, for reference resolution. */
+export async function seedMySpaceWithFolderSource(pool: Pool, name = "Task Owner") {
+  const { owner, workspaceId } = await seedMySpace(pool, name);
+  const sourceId = await insertFolderSource(pool, workspaceId, owner.id);
+  return { owner, workspaceId, sourceId };
 }
 
 export async function insertFolderSource(pool: Pool, workspaceId: string, actorId: string, status: "ACTIVE" | "ARCHIVED" = "ACTIVE") {

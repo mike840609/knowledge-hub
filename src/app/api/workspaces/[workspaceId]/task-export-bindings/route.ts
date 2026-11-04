@@ -12,7 +12,7 @@ export async function GET(request: Request, context: Context) {
 /** The token in this response is shown once; only its hash is stored. */
 export async function POST(request: Request, context: Context) {
   return taskExportHttp(request, async (s, caller) => {
-    const { sourceId, label } = await requestFields(request, ["sourceId", "label"]);
-    return s.taskExportBindings.create(caller, { workspaceId: (await context.params).workspaceId, sourceId, label });
+    const { label } = await requestFields(request, ["label"]);
+    return s.taskExportBindings.create(caller, { workspaceId: (await context.params).workspaceId, label });
   }, 201);
 }

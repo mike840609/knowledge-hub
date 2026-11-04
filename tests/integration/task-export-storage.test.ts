@@ -7,7 +7,7 @@ import { IntegrityViolationError } from "@/modules/knowledge/domain/errors";
 import { DatabaseUnavailableError } from "@/modules/task-knowledge/domain/task-errors";
 import type { TaskKnowledgeRepositories } from "@/modules/task-knowledge/ports/unit-of-work";
 import { uuidv7 } from "@/shared/ids/uuidv7";
-import { insertSyncedDocument, newToken, seedMySpaceWithFolderSource, tokenHash } from "./task-knowledge-fixtures";
+import { insertFolderSource, insertSyncedDocument, newToken, seedMySpaceWithFolderSource, tokenHash } from "./task-knowledge-fixtures";
 
 let pool: Pool;
 beforeAll(() => { pool = createDatabasePool(databaseConfig("test")); });
@@ -18,7 +18,7 @@ const run = <T>(work: (r: TaskKnowledgeRepositories) => Promise<T>) => new Maria
 async function binding() {
   const seed = await seedMySpaceWithFolderSource(pool);
   const bindingId = uuidv7();
-  await run((r) => r.taskExports.insertBinding({ id: bindingId, ownerUserId: seed.owner.id, sourceId: seed.sourceId, label: "laptop" }));
+  await run((r) => r.taskExports.insertBinding({ id: bindingId, ownerUserId: seed.owner.id, workspaceId: seed.workspaceId, label: "laptop" }));
   return { ...seed, bindingId };
 }
 
@@ -58,8 +58,10 @@ describe("task export schema", () => {
     await expect(pool.query("UPDATE task_results SET lifecycle = 'DELETED' WHERE id = ?", [id])).rejects.toThrow();
   });
 
-  it("stores no workspace on bindings", async () => {
-    expect((await columns("task_export_bindings")).map((c) => c.COLUMN_NAME)).not.toContain("workspace_id");
+  it("binds to a Workspace, never to a Source", async () => {
+    const names = (await columns("task_export_bindings")).map((c) => c.COLUMN_NAME);
+    expect(names).toContain("workspace_id");
+    expect(names).not.toContain("source_id");
   });
 
   it("compares task ids, labels and locators case-sensitively", async () => {
@@ -79,7 +81,7 @@ describe("task export schema", () => {
         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE 'task\\_%' AND REFERENCED_TABLE_NAME IS NOT NULL ORDER BY TABLE_NAME, COLUMN_NAME`,
     );
     expect(rows.map((r) => `${r.TABLE_NAME}.${r.COLUMN_NAME}->${r.REFERENCED_TABLE_NAME}`).sort()).toEqual([
-      "task_export_bindings.source_id->knowledge_sources",
+      "task_export_bindings.workspace_id->workspaces",
       "task_export_credentials.binding_id->task_export_bindings",
       "task_result_references.task_result_id->task_results",
       "task_result_revisions.task_result_id->task_results",
@@ -201,25 +203,40 @@ describe("task export store", () => {
 
 describe("task knowledge lookups", () => {
   it("finds a synced entry by the path Folder Sync would have normalized, byte-exactly", async () => {
-    const { owner, sourceId } = await seedMySpaceWithFolderSource(pool);
+    const { owner, workspaceId, sourceId } = await seedMySpaceWithFolderSource(pool);
     const documentId = await insertSyncedDocument(pool, sourceId, owner.id, "architecture/auth.md");
     for (const raw of ["architecture/auth.md", "architecture\\auth.md", "./architecture/auth.md", "architecture//auth.md"]) {
-      expect(await run((r) => r.entries.findActiveEntriesByPath(sourceId, raw))).toEqual({ kind: "FOUND", candidates: [{ documentId }] });
+      expect(await run((r) => r.entries.findActiveEntriesByPath(workspaceId, raw))).toEqual({ kind: "FOUND", candidates: [{ documentId }] });
     }
-    expect(await run((r) => r.entries.findActiveEntriesByPath(sourceId, "Architecture/auth.md"))).toEqual({ kind: "FOUND", candidates: [] });
+    expect(await run((r) => r.entries.findActiveEntriesByPath(workspaceId, "Architecture/auth.md"))).toEqual({ kind: "FOUND", candidates: [] });
   });
 
   it("answers INVALID_PATH for a path normalizeImportPath rejects", async () => {
-    const { sourceId } = await seedMySpaceWithFolderSource(pool);
+    const { workspaceId } = await seedMySpaceWithFolderSource(pool);
     for (const raw of [".", "./", "../x.md"]) {
-      expect(await run((r) => r.entries.findActiveEntriesByPath(sourceId, raw))).toEqual({ kind: "INVALID_PATH" });
+      expect(await run((r) => r.entries.findActiveEntriesByPath(workspaceId, raw))).toEqual({ kind: "INVALID_PATH" });
     }
   });
 
-  it("ignores archived entries", async () => {
-    const { owner, sourceId } = await seedMySpaceWithFolderSource(pool);
+  it("ignores archived entries, archived Sources and other Workspaces", async () => {
+    const { owner, workspaceId, sourceId } = await seedMySpaceWithFolderSource(pool);
     await insertSyncedDocument(pool, sourceId, owner.id, "old.md", { entryStatus: "ARCHIVED" });
-    expect(await run((r) => r.entries.findActiveEntriesByPath(sourceId, "old.md"))).toEqual({ kind: "FOUND", candidates: [] });
+    const archivedSource = await insertFolderSource(pool, workspaceId, owner.id, "ARCHIVED");
+    await insertSyncedDocument(pool, archivedSource, owner.id, "shelved.md");
+    const other = await seedMySpaceWithFolderSource(pool);
+    await insertSyncedDocument(pool, other.sourceId, other.owner.id, "theirs.md");
+    for (const raw of ["old.md", "shelved.md", "theirs.md"]) {
+      expect(await run((r) => r.entries.findActiveEntriesByPath(workspaceId, raw))).toEqual({ kind: "FOUND", candidates: [] });
+    }
+  });
+
+  it("returns the same path from every synced folder of the Workspace", async () => {
+    const { owner, workspaceId, sourceId } = await seedMySpaceWithFolderSource(pool);
+    const second = await insertFolderSource(pool, workspaceId, owner.id);
+    const a = await insertSyncedDocument(pool, sourceId, owner.id, "README.md");
+    const b = await insertSyncedDocument(pool, second, owner.id, "README.md");
+    const found = await run((r) => r.entries.findActiveEntriesByPath(workspaceId, "README.md"));
+    expect(found.kind === "FOUND" ? found.candidates.map((c) => c.documentId).sort() : found).toEqual([a, b].sort());
   });
 
   it("reads workspace, source and document state through the local ports", async () => {
@@ -228,7 +245,6 @@ describe("task knowledge lookups", () => {
     expect(await run((r) => r.workspaces.lockSharedById(workspaceId))).toEqual({ workspaceId, kind: "PERSONAL", status: "ACTIVE", ownerUserId: owner.id });
     const source = { sourceId, workspaceId, sourceType: "FOLDER_SYNC", status: "ACTIVE" };
     expect(await run((r) => r.sources.getById(sourceId))).toEqual(source);
-    expect(await run((r) => r.sources.lockSharedById(sourceId))).toEqual(source);
     expect(await run((r) => r.documents.getState(documentId))).toEqual({ documentId, sourceId, status: "ARCHIVED", title: null });
     expect(await run((r) => r.workspaces.lockSharedById(uuidv7()))).toBeNull();
   });

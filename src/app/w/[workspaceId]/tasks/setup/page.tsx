@@ -16,9 +16,6 @@ export default async function TaskExportSetupPage({ params }: { params: Promise<
     if (error instanceof DomainError && error.code === "WORKSPACE_NOT_FOUND") notFound();
     throw error;
   }
-  const sources = (await services.queries.listSources(caller, workspaceId))
-    .filter((source) => source.sourceType === "FOLDER_SYNC" && source.status === "ACTIVE")
-    .map((source) => ({ id: source.id, name: source.name }));
   return (
     <main className="kh-page pb-6">
       <PageHeader
@@ -29,7 +26,6 @@ export default async function TaskExportSetupPage({ params }: { params: Promise<
       />
       <TaskExportSetup
         workspaceId={workspaceId}
-        sources={sources}
         bindings={bindings.map((binding) => ({ ...binding, createdAt: binding.createdAt.toISOString(), revokedAt: binding.revokedAt?.toISOString() ?? null }))}
       />
     </main>

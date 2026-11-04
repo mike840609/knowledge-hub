@@ -85,7 +85,7 @@ export class TaskResultReadService {
       const references: TaskReferenceView[] = [];
       for (const item of stored) {
         if (item.resolution === null) { references.push({ reference: item.reference, state: null, document: null }); continue; }
-        const available = await readTaskReferenceAvailability(r, caller, { boundSourceId: binding.sourceId, reference: item });
+        const available = await readTaskReferenceAvailability(r, caller, { workspaceId, reference: item });
         const document = available === "RESOLVED" && item.resolvedDocumentId ? await r.documents.getState(item.resolvedDocumentId) : null;
         references.push({
           reference: item.reference,
@@ -108,6 +108,6 @@ export class TaskResultReadService {
 export async function ownedTaskScope(r: TaskKnowledgeRepositories, caller: CallerContext, workspaceId: string, taskResultId: string): Promise<TaskScope> {
   assertOwnedPersonal(caller, await r.workspaces.lockSharedById(workspaceId));
   const scope = isUuid(taskResultId) ? await r.taskExports.getTaskScope(taskResultId) : null;
-  if (!scope || scope.workspaceId !== workspaceId || scope.binding.ownerUserId !== caller.identity.id) throw taskResultNotFound();
+  if (!scope || scope.binding.workspaceId !== workspaceId || scope.binding.ownerUserId !== caller.identity.id) throw taskResultNotFound();
   return scope;
 }

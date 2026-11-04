@@ -17,11 +17,13 @@ Success: one command from a configured project yields a new Task Result, visible
 | Summary | Current Claude Code/OpenCode Agent | Hub-hosted LLM |
 | Tooling | Shared Skill + CLI, installed per user; OpenCode command adapter | MCP write server |
 | Target | Owner's My Space only | Team Workspace auto-export |
-| Source binding | One-time Local Project → My Space → FOLDER_SYNC Wiki Source | Per-task selection |
-| Connections | Explicit Wiki references scoped to bound Source | LLM semantic matching |
+| Binding | One-time Local Project → the owner's My Space; no Source is chosen | Per-task Workspace selection |
+| Connections | Explicit Wiki references resolved across the My Space's ACTIVE FOLDER_SYNC Sources | LLM semantic matching |
 | Storage | Independent Task Knowledge asset and revision | Converting to editable Wiki |
 | Reliability | Idempotent API, CLI-owned task identity, confirmed revision sequence, manual retry | Persistent Outbox and daemon |
 | Future | MCP retrieval, automatic Hooks, graph integration | Not required to ship MVP |
+
+**Amendment (2026-11-04, during implementation).** The binding first named one FOLDER_SYNC Source, chosen at setup. The Source served only Wiki path resolution, yet it made export impossible for a user with no synced folder. The binding now names the owner's My Space, and a Wiki path is resolved by exact match across that My Space's ACTIVE FOLDER_SYNC Sources: one match resolves, a path present in several Sources is AMBIGUOUS, none is UNRESOLVED. Resolution never leaves the My Space, so no cross-Workspace guarantee changes. §4, §6 and §7 below are written for the amended binding.
 
 ## 3. Existing system boundaries
 
@@ -37,13 +39,13 @@ The feature is wired in `src/server/composition.ts`, the only composition root, 
 
 ## 4. User flow
 
-1. A browser-authenticated user in an ACTIVE PERSONAL My Space selects an ACTIVE FOLDER_SYNC Wiki Source and creates an Export Binding and a restricted credential.
+1. A browser-authenticated user in an ACTIVE PERSONAL My Space creates an Export Binding for it (a label only) and a restricted credential.
 2. Once per machine, the user installs the CLI from a packed tarball (`npm pack` in `<hub-checkout>/tools/knowledge-hub`, then `npm install -g <tarball>`), so later branch switches in the Hub checkout do not change the installed CLI. They run `knowledge-hub install-agent`, which copies the shared Skill and the OpenCode command into the user-level directories of each tool. They then work in any project, not only the Hub repo.
 3. Once per project, the user runs `knowledge-hub configure` there. The CLI stores, locally and outside the repo, the Hub URL (with `--allow-insecure-localhost` only for a local development server), the binding ID and the credential. Credential input must not appear in shell history, Agent prompts, command arguments or Git. In another worktree of the same project, `knowledge-hub configure --from <otherRoot>` makes that worktree use the same binding on purpose; there is never a silent fallback.
 4. The user completes a task and invokes `/hub-export`.
 5. The Agent writes the summary content (§5, Agent-authored fields) as JSON to the CLI's stdin: `knowledge-hub export --new`. The CLI mints the Task ID, sets revision 1, saves the full artifact in its own state directory, records its hash, and posts HTTPS to Knowledge Hub. The Agent never writes files outside the project and never sets identity fields. It must not invent tests, changes or references.
 6. On a retryable failure the CLI keeps the saved artifact as unconfirmed and prints `knowledge-hub export --retry <taskId>`, which resends it unchanged.
-7. Server derives owner/workspace/source from the restricted credential and verifies current state. The server atomically persists the task, revision and its references, and replies with the result URL and the binding ID.
+7. Server derives owner and Workspace from the restricted credential and verifies current state. The server atomically persists the task, revision and its references, and replies with the result URL and the binding ID.
 
 This MVP does not auto-detect task completion. Only completed tasks can be exported; an incomplete/failed task must not be labeled completed. `/hub-export` must not send full conversation history or hidden reasoning.
 
@@ -95,9 +97,9 @@ Server rules:
 
 **Frozen revisions.** The CLI refuses to send a saved revision whose file no longer matches its recorded hash. The hash lives in the same user-writable state directory, so this catches accidental edits, not deliberate tampering; `REVISION_CONFLICT` and `REVISION_OUT_OF_ORDER` on the server are the real backstop.
 
-## 6. Project Source Binding / security
+## 6. Project Binding / security
 
-**Binding** holds `ownerUserId`, `sourceId`, a non-sensitive `label`, `status` (`ACTIVE` / `REVOKED`), and timestamps. The Source is fixed when the binding is created and never changes; to use another Source, create another binding. Workspace is **not** stored on the binding: it is derived as `Source → Workspace` on every request. Owner is held once on the binding and is the only owner record for its Task Results. Local absolute paths are never sent to Hub.
+**Binding** holds `ownerUserId`, `workspaceId` (the owner's My Space), a non-sensitive `label`, `status` (`ACTIVE` / `REVOKED`), and timestamps. The Workspace is fixed when the binding is created and never changes. Owner is held once on the binding and is the only owner record for its Task Results. The binding names no Source: Task Results never write to a Source, and Wiki references are resolved across the Workspace's synced folders (§7). Local absolute paths are never sent to Hub.
 
 **Credentials:** each binding has at most one active credential, high-entropy (`randomBytes(32)`), scoped only to `task-result:create` for that binding, with no expiry (rotation is the remedy). The server stores its SHA-256 hash, never the plaintext. The token is shown once in the browser-authenticated creation or rotation response, with `Cache-Control: no-store`. **Rotation** issues a new token and revokes the previous one in one transaction; the old token fails on its next use. **Revoking** a binding revokes its credential. Credentials cannot confer generic `document.write` or `source.manage`.
 
@@ -107,17 +109,17 @@ Server rules:
 
 **Archival and revocation.** Task Result lifecycle is `ACTIVE` / `ARCHIVED`, as everywhere in the product; there is no hard delete. The owner may archive and restore a Task Result from My Space; archiving an archived task or restoring an active one is a no-op, as for documents. A new revision into an ARCHIVED task is refused (409, `TASK_ARCHIVED`): a credential cannot change a lifecycle the owner set. An exact replay of a revision already accepted still answers 200, because it changes nothing. Revoking a binding stops new ingestion immediately; existing Task Results remain readable by their owner and show the binding's revoked status.
 
-**Write checks.** Each ingest checks credential status, binding status, Workspace `PERSONAL` and `ACTIVE`, that the binding owner is the Workspace owner, and that the Source is an `ACTIVE` `FOLDER_SYNC` Source of that Workspace. ("Source ownership" in the `SOURCE_MANAGED` / `HUB_MANAGED` sense is unrelated and not consulted: Task Results never write to the Source.)
+**Write checks.** Each ingest checks credential status, binding status, that the binding's Workspace is `PERSONAL` and `ACTIVE`, and that the binding owner is the Workspace owner. No Source is consulted: Task Results never write to one.
 
 **Lock order.** Every task-knowledge writer follows the global order Snapshot → Source → Workspace → deeper, and takes the Workspace row in share mode (`lockSharedById`), never `FOR UPDATE`:
-- **Binding create:** lock the Source in share mode first, and check it is an `ACTIVE` `FOLDER_SYNC` Source of the Workspace on the locked row; then lock the Workspace shared; then insert. Taking the Source before the Workspace keeps the global order even though the binding's foreign key to the Source makes InnoDB take a share lock on that Source row anyway.
-- **Ingest:** hash the token and read credential and binding without a lock, to learn the Source and so the Workspace. Read the Source (non-locking). Lock the Workspace shared and check its kind, status and owner on the locked row. Lock the binding row in share mode and re-read the credential, then check both. Lock the existing `task_results` row `FOR UPDATE`, if there is one, and check its lifecycle and latest revision. Write.
+- **Binding create:** lock the Workspace shared and check its kind, status and owner on the locked row; then insert. The binding's foreign key to the Workspace takes a share lock on that row, which the writer already holds.
+- **Ingest:** hash the token and read credential and binding without a lock, to learn the Workspace. Lock the Workspace shared and check its kind, status and owner on the locked row. Lock the binding row in share mode and re-read the credential, then check both. Lock the existing `task_results` row `FOR UPDATE`, if there is one, and check its lifecycle and latest revision. Resolve references with non-locking reads (§7). Write.
 - **Revoke and rotate:** lock the Workspace shared, then the binding row `FOR UPDATE`, then change binding and credential rows. Rotate refuses a `REVOKED` binding (409 `BINDING_REVOKED`), so a live credential never belongs to a revoked binding. A revoke that commits first is seen by ingest's re-read under the binding lock; a revoke that waits commits after the ingest. In both cases no ingest commits after the revoke has committed.
 - **Archive and restore:** lock the Workspace shared, then the `task_results` row `FOR UPDATE`.
 
-During ingest the Source is read without a lock. Archiving the Source while an ingest is in flight is accepted: Task Results never write to the Source, and the next ingest sees the archived Source and is refused. All transactions run READ COMMITTED on the composition root's pool (its `initSql` sets the level; a pool built any other way would not), so each re-read under a lock sees the latest committed row.
+Reference resolution reads Sources, SourceEntries and Documents without locks; a Folder Sync Apply running at the same time changes only which documents a path matches, which is a snapshot judgement either way. All transactions run READ COMMITTED on the composition root's pool (its `initSql` sets the level; a pool built any other way would not), so each re-read under a lock sees the latest committed row.
 
-**Foreign keys** are limited to rows that never take part in Folder Sync writes, so they add no lock waits against an Apply: credential → binding, binding → Source (covered by binding create's order above), task → binding, revision → task, reference → task. `task_result_references.resolved_document_id` has **no** foreign key: documents are never hard-deleted, and availability is re-checked on every read.
+**Foreign keys** are limited to rows that never take part in Folder Sync writes, so they add no lock waits against an Apply: credential → binding, binding → Workspace (covered by binding create's order above), task → binding, revision → task, reference → task. `task_result_references.resolved_document_id` has **no** foreign key: documents are never hard-deleted, and availability is re-checked on every read.
 
 Never accept caller-provided Owner, Workspace or Source identity. Team or cross-workspace writes are forbidden.
 
@@ -130,7 +132,7 @@ Never accept caller-provided Owner, Workspace or Source identity. Team or cross-
 - 200: exact replay of an accepted revision. Same body.
 - 400: malformed JSON.
 - 401: credential missing, unknown or revoked (including through binding revocation, which revokes it).
-- 403: credential is live, but its Workspace or Source no longer allows the write.
+- 403: credential is live, but its Workspace no longer allows the write.
 - 405: any other method, including `OPTIONS`. The route exports explicit handlers for every other method, so Next.js does not answer `OPTIONS` itself.
 - 409: `REVISION_CONFLICT` (same revision, different content) or `REVISION_OUT_OF_ORDER` (§5), both with `latestRevisionNo`; or `TASK_ARCHIVED`.
 - 413: body over 64 KiB, measured on the bytes actually read, not on `Content-Length`.
@@ -142,7 +144,7 @@ Every response, including 405, is private and uncached (`Cache-Control: private,
 
 **Identity and concurrency.** Task identity is unique by `(bindingId, taskId)`; revision is unique by `(taskResultId, artifactRevision)`. The owner is reached through the binding, so it is not part of the key. Concurrent POSTs cannot produce duplicate tasks or partial revision/reference rows. A new revision retains prior revisions.
 
-**References.** Explicit Wiki resolution uses **only** `(bound sourceId, exact sourcePath)` or a validated Document ID. The sourcePath is normalized exactly as Folder Sync normalized `source_entries.source_path` (`normalizeImportPath`), and compared byte-exactly; this happens in the infrastructure adapter, so the two can never drift. A path that passed the contract's lexical check (§5) but that `normalizeImportPath` still rejects (for example `.` or `./`) is stored as UNRESOLVED; traversal, absolute paths, drive letters and control characters never get this far, because the contract rejects the whole artifact (422). Never use existing Wiki Link title ranking to assert a unique Task reference. Only ACTIVE Source, SourceEntry and Document are eligible. Missing: UNRESOLVED; multiple/ambiguous: AMBIGUOUS; later revoked/archived: UNAVAILABLE. Save the original locator and resolved Document ID. Following a reference always rechecks live authorization/lifecycle. A stored historical ID is not a capability.
+**References.** Explicit Wiki resolution uses **only** an exact sourcePath matched across the binding Workspace's ACTIVE `FOLDER_SYNC` Sources, or a validated Document ID of an ACTIVE document whose ACTIVE Source lies in that Workspace. A path matching documents in more than one Source is AMBIGUOUS. The sourcePath is normalized exactly as Folder Sync normalized `source_entries.source_path` (`normalizeImportPath`), and compared byte-exactly; this happens in the infrastructure adapter, so the two can never drift. A path that passed the contract's lexical check (§5) but that `normalizeImportPath` still rejects (for example `.` or `./`) is stored as UNRESOLVED; traversal, absolute paths, drive letters and control characters never get this far, because the contract rejects the whole artifact (422). Never use existing Wiki Link title ranking to assert a unique Task reference. Only ACTIVE Source, SourceEntry and Document are eligible. Missing: UNRESOLVED; multiple/ambiguous: AMBIGUOUS; later revoked/archived: UNAVAILABLE. Save the original locator and resolved Document ID. Following a reference always rechecks live authorization/lifecycle. A stored historical ID is not a capability.
 
 ## 8. My Space UI
 
@@ -164,7 +166,7 @@ A small Task Results list/detail view within My Space, without a new top-level s
 - Archived task: a new revision is refused until the owner restores it; an exact replay still answers 200.
 - Replay/concurrent upload: unique constraints + transaction enforce idempotency.
 - Revocation concurrent with ingest: the binding lock and the re-read under it decide; no commit after revocation wins.
-- Folder Sync Apply on the bound Source while an ingest runs: both hold the Workspace shared, so neither waits on the other.
+- Folder Sync Apply in the binding's Workspace while an ingest runs: both hold the Workspace shared, so neither waits on the other.
 - Workspace revoked/archived or credential revoked: reject without fallback to another Workspace.
 - Source moved/archived or paths collide: preserve original reference, do not guess.
 - Data policy: reject overly broad content, secret-like data and traversal paths; do not log secrets.

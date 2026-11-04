@@ -23,7 +23,7 @@ const base = JSON.parse(readFileSync(path.join(process.cwd(), "tests/fixtures/ta
 async function exporter() {
   const seed = await seedMySpaceWithFolderSource(pool);
   const caller = callerFromIdentity(seed.owner);
-  const { bindingId, token } = await new ManageExportBindingService(uow()).create(caller, { workspaceId: seed.workspaceId, sourceId: seed.sourceId, label: "laptop" });
+  const { bindingId, token } = await new ManageExportBindingService(uow()).create(caller, { workspaceId: seed.workspaceId, label: "laptop" });
   return { ...seed, caller, bindingId, token };
 }
 
@@ -33,7 +33,7 @@ async function stored(token: string, references: TaskReferenceInput[]) {
   return uow().run((r) => r.taskExports.listReferences(taskResultId, 1));
 }
 
-describe("exact Wiki resolution in the bound Source", () => {
+describe("exact Wiki resolution in the binding's My Space", () => {
   it("resolves an exact path and the variants Folder Sync normalizes to it", async () => {
     const { owner, sourceId, token } = await exporter();
     const documentId = await insertSyncedDocument(pool, sourceId, owner.id, "architecture/auth.md");
@@ -56,12 +56,27 @@ describe("exact Wiki resolution in the bound Source", () => {
     expect(refs.map((ref) => ref.resolution)).toEqual(["UNRESOLVED", "UNRESOLVED"]);
   });
 
-  it("ignores the same path in another Source", async () => {
+  it("resolves across every synced folder of the My Space, and calls a path in two folders ambiguous", async () => {
+    const { owner, workspaceId, sourceId, token } = await exporter();
+    const second = await insertFolderSource(pool, workspaceId, owner.id);
+    const only = await insertSyncedDocument(pool, second, owner.id, "notes/only.md");
+    await insertSyncedDocument(pool, sourceId, owner.id, "README.md");
+    await insertSyncedDocument(pool, second, owner.id, "README.md");
+    const refs = await stored(token, [{ type: "WIKI", path: "notes/only.md" }, { type: "WIKI", path: "README.md" }, { type: "WIKI", documentId: only }]);
+    expect(refs.map((ref) => [ref.resolution, ref.resolvedDocumentId])).toEqual([["RESOLVED", only], ["AMBIGUOUS", null], ["RESOLVED", only]]);
+  });
+
+  it("never resolves into another Workspace or an archived Source", async () => {
     const { owner, workspaceId, token } = await exporter();
-    const otherSource = await insertFolderSource(pool, workspaceId, owner.id);
-    const elsewhere = await insertSyncedDocument(pool, otherSource, owner.id, "shared/x.md");
-    const refs = await stored(token, [{ type: "WIKI", path: "shared/x.md" }, { type: "WIKI", documentId: elsewhere }]);
-    expect(refs.map((ref) => [ref.resolution, ref.resolvedDocumentId])).toEqual([["UNRESOLVED", null], ["UNRESOLVED", null]]);
+    const stranger = await exporter();
+    const foreign = await insertSyncedDocument(pool, stranger.sourceId, stranger.owner.id, "foreign.md");
+    const archivedSource = await insertFolderSource(pool, workspaceId, owner.id, "ARCHIVED");
+    const inArchived = await insertSyncedDocument(pool, archivedSource, owner.id, "old-folder.md");
+    const refs = await stored(token, [
+      { type: "WIKI", path: "foreign.md" }, { type: "WIKI", documentId: foreign },
+      { type: "WIKI", path: "old-folder.md" }, { type: "WIKI", documentId: inArchived },
+    ]);
+    expect(refs.map((ref) => [ref.resolution, ref.resolvedDocumentId])).toEqual([["UNRESOLVED", null], ["UNRESOLVED", null], ["UNRESOLVED", null], ["UNRESOLVED", null]]);
   });
 
   it("does not guess for missing, archived, case-colliding or ambiguous references", async () => {
@@ -110,19 +125,19 @@ describe("exact Wiki resolution in the bound Source", () => {
 
 describe("availability on read", () => {
   it("keeps the resolved id after a move and checks the live document", async () => {
-    const { owner, sourceId, token, caller } = await exporter();
+    const { owner, sourceId, workspaceId, token, caller } = await exporter();
     const documentId = await insertSyncedDocument(pool, sourceId, owner.id, "old/place.md");
     const [ref] = await stored(token, [{ type: "WIKI", path: "old/place.md" }]);
     await pool.query("UPDATE source_entries SET source_path = 'new/place.md' WHERE document_id = ?", [documentId]);
     expect(ref.resolvedDocumentId).toBe(documentId);
-    expect(await uow().run((r) => readTaskReferenceAvailability(r, caller, { boundSourceId: sourceId, reference: ref }))).toBe("RESOLVED");
+    expect(await uow().run((r) => readTaskReferenceAvailability(r, caller, { workspaceId, reference: ref }))).toBe("RESOLVED");
   });
 
   it("answers UNAVAILABLE once the document or Source is archived, or for anyone but the owner", async () => {
-    const { owner, sourceId, token, caller } = await exporter();
+    const { owner, sourceId, workspaceId, token, caller } = await exporter();
     const documentId = await insertSyncedDocument(pool, sourceId, owner.id, "doc.md");
     const [ref] = await stored(token, [{ type: "WIKI", path: "doc.md" }]);
-    const availability = (who = caller) => uow().run((r) => readTaskReferenceAvailability(r, who, { boundSourceId: sourceId, reference: ref }));
+    const availability = (who = caller) => uow().run((r) => readTaskReferenceAvailability(r, who, { workspaceId, reference: ref }));
 
     const stranger = (await exporter()).caller;
     const answer = await availability(stranger);
@@ -138,8 +153,8 @@ describe("availability on read", () => {
   });
 
   it("never makes an unresolved reference available", async () => {
-    const { sourceId, token, caller } = await exporter();
+    const { workspaceId, token, caller } = await exporter();
     const [ref] = await stored(token, [{ type: "WIKI", path: "missing.md" }]);
-    expect(await uow().run((r) => readTaskReferenceAvailability(r, caller, { boundSourceId: sourceId, reference: ref }))).toBe("UNAVAILABLE");
+    expect(await uow().run((r) => readTaskReferenceAvailability(r, caller, { workspaceId, reference: ref }))).toBe("UNAVAILABLE");
   });
 });

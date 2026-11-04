@@ -4,13 +4,14 @@ import type { ReferenceResolution, StoredTaskReference } from "../../ports/task-
 import type { TaskKnowledgeRepositories } from "../../ports/unit-of-work";
 
 /**
- * Exact, bound-Source-only Wiki resolution (design §7). A caller-less helper:
- * only the ingest service imports it. No title ranking, no other Source, no
- * guess — a path either names exactly one ACTIVE document or it does not.
+ * Exact Wiki resolution inside the binding's Workspace (design §7). A
+ * caller-less helper: only application services import it. No title ranking,
+ * no other Workspace, no guess — a path names exactly one ACTIVE document
+ * across the Workspace's synced folders, or several (AMBIGUOUS), or none.
  */
 export async function resolveTaskReferences(
   r: TaskKnowledgeRepositories,
-  boundSourceId: string,
+  workspaceId: string,
   references: readonly TaskReferenceInput[],
 ): Promise<StoredTaskReference[]> {
   const resolved: StoredTaskReference[] = [];
@@ -20,16 +21,16 @@ export async function resolveTaskReferences(
       continue;
     }
     const documentIds = "path" in reference
-      ? await activeDocumentsAtPath(r, boundSourceId, reference.path)
-      : await activeDocumentById(r, boundSourceId, reference.documentId);
+      ? await activeDocumentsAtPath(r, workspaceId, reference.path)
+      : await activeDocumentById(r, workspaceId, reference.documentId);
     const resolution: ReferenceResolution = documentIds.length === 1 ? "RESOLVED" : documentIds.length > 1 ? "AMBIGUOUS" : "UNRESOLVED";
     resolved.push({ ordinal, reference, resolution, resolvedDocumentId: resolution === "RESOLVED" ? documentIds[0] : null });
   }
   return resolved;
 }
 
-async function activeDocumentsAtPath(r: TaskKnowledgeRepositories, sourceId: string, path: string): Promise<string[]> {
-  const match = await r.entries.findActiveEntriesByPath(sourceId, path);
+async function activeDocumentsAtPath(r: TaskKnowledgeRepositories, workspaceId: string, path: string): Promise<string[]> {
+  const match = await r.entries.findActiveEntriesByPath(workspaceId, path);
   if (match.kind === "INVALID_PATH") return [];
   const active: string[] = [];
   for (const { documentId } of match.candidates) {
@@ -38,9 +39,16 @@ async function activeDocumentsAtPath(r: TaskKnowledgeRepositories, sourceId: str
   return active;
 }
 
-async function activeDocumentById(r: TaskKnowledgeRepositories, sourceId: string, documentId: string): Promise<string[]> {
+/** An ACTIVE document whose ACTIVE Source lies in the Workspace. */
+async function liveDocumentInWorkspace(r: TaskKnowledgeRepositories, workspaceId: string, documentId: string): Promise<boolean> {
   const state = await r.documents.getState(documentId);
-  return state?.status === "ACTIVE" && state.sourceId === sourceId ? [documentId] : [];
+  if (state?.status !== "ACTIVE") return false;
+  const source = await r.sources.getById(state.sourceId);
+  return source?.status === "ACTIVE" && source.workspaceId === workspaceId;
+}
+
+async function activeDocumentById(r: TaskKnowledgeRepositories, workspaceId: string, documentId: string): Promise<string[]> {
+  return (await liveDocumentInWorkspace(r, workspaceId, documentId)) ? [documentId] : [];
 }
 
 /**
@@ -51,14 +59,11 @@ async function activeDocumentById(r: TaskKnowledgeRepositories, sourceId: string
 export async function readTaskReferenceAvailability(
   r: TaskKnowledgeRepositories,
   caller: CallerContext,
-  input: { boundSourceId: string; reference: StoredTaskReference },
+  input: { workspaceId: string; reference: StoredTaskReference },
 ): Promise<"RESOLVED" | "UNAVAILABLE"> {
   const documentId = input.reference.resolution === "RESOLVED" ? input.reference.resolvedDocumentId : null;
   if (!documentId) return "UNAVAILABLE";
-  const source = await r.sources.getById(input.boundSourceId);
-  if (!source || source.status !== "ACTIVE") return "UNAVAILABLE";
-  const workspace = await r.workspaces.lockSharedById(source.workspaceId);
+  const workspace = await r.workspaces.lockSharedById(input.workspaceId);
   if (!workspace || workspace.kind !== "PERSONAL" || workspace.ownerUserId !== caller.identity.id) return "UNAVAILABLE";
-  const document = await r.documents.getState(documentId);
-  return document?.status === "ACTIVE" && document.sourceId === input.boundSourceId ? "RESOLVED" : "UNAVAILABLE";
+  return (await liveDocumentInWorkspace(r, input.workspaceId, documentId)) ? "RESOLVED" : "UNAVAILABLE";
 }

@@ -39,28 +39,25 @@ export class IngestTaskResultService {
     });
   }
 
-  /** Lock order (design §6): unlocked reads, Workspace shared, then the binding shared with a re-read under it. */
+  /** Lock order (design §6): unlocked reads, Workspace shared, then the binding shared with a re-read under it. No Source is consulted. */
   private async authorize(r: TaskKnowledgeRepositories, tokenHash: Uint8Array) {
     const credential = await r.taskExports.findCredentialByHash(tokenHash);
     if (!credential || credential.status !== "ACTIVE") throw new CredentialInvalidError();
     const binding = await r.taskExports.getBinding(credential.bindingId);
     if (!binding || binding.status !== "ACTIVE") throw new CredentialInvalidError();
-    const source = await r.sources.getById(binding.sourceId);
-    if (!source) throw new ScopeDeniedError();
-    const workspace = await r.workspaces.lockSharedById(source.workspaceId);
+    const workspace = await r.workspaces.lockSharedById(binding.workspaceId);
     if (!workspace || workspace.kind !== "PERSONAL" || workspace.status !== "ACTIVE" || workspace.ownerUserId !== binding.ownerUserId) throw new ScopeDeniedError();
-    if (source.sourceType !== "FOLDER_SYNC" || source.status !== "ACTIVE") throw new ScopeDeniedError();
     const locked = await r.taskExports.lockBindingShared(binding.id);
     const current = await r.taskExports.findCredentialByHash(tokenHash);
     if (locked?.status !== "ACTIVE" || current?.status !== "ACTIVE" || current.bindingId !== binding.id) throw new CredentialInvalidError();
     if (locked.ownerUserId !== workspace.ownerUserId) throw new ScopeDeniedError();
-    return { bindingId: binding.id, workspaceId: source.workspaceId, sourceId: source.sourceId };
+    return { bindingId: binding.id, workspaceId: binding.workspaceId };
   }
 
   /** The six ordered rules, decided from the locked task row only. */
   private async store(
     r: TaskKnowledgeRepositories,
-    input: { bindingId: string; workspaceId: string; sourceId: string; artifact: TaskArtifactV1; artifactJson: string; contentHash: string },
+    input: { bindingId: string; workspaceId: string; artifact: TaskArtifactV1; artifactJson: string; contentHash: string },
   ): Promise<IngestResult> {
     const { artifact, bindingId } = input;
     const revisionNo = artifact.artifactRevision;
@@ -78,7 +75,7 @@ export class IngestTaskResultService {
     if (task.lifecycle === "ARCHIVED") throw new TaskArchivedError();
     if (revisionNo !== task.latestRevisionNo + 1) throw new RevisionOutOfOrderError(task.latestRevisionNo);
     await r.taskExports.insertRevision({ id: uuidv7(), taskResultId: task.id, revisionNo, artifactJson: input.artifactJson, contentHash: input.contentHash });
-    await r.taskExports.insertReferences(task.id, revisionNo, await resolveTaskReferences(r, input.sourceId, artifact.references ?? []));
+    await r.taskExports.insertReferences(task.id, revisionNo, await resolveTaskReferences(r, input.workspaceId, artifact.references ?? []));
     await r.taskExports.advanceLatestRevision(task.id, revisionNo);
     return answer("CREATED");
   }

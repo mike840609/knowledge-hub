@@ -15,13 +15,13 @@ export const taskKnowledgeExportMigration: Migration = {
     `CREATE TABLE task_export_bindings (
       id UUID NOT NULL,
       owner_user_id UUID NOT NULL,
-      source_id UUID NOT NULL,
+      workspace_id UUID NOT NULL,
       label VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
       status VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'ACTIVE',
       created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
       revoked_at DATETIME(6) NULL,
       PRIMARY KEY (id),
-      CONSTRAINT fk_task_bindings_source FOREIGN KEY (source_id) REFERENCES knowledge_sources(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+      CONSTRAINT fk_task_bindings_workspace FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
       CONSTRAINT ck_task_bindings_label_nonempty CHECK (CHAR_LENGTH(label) > 0),
       CONSTRAINT ck_task_bindings_status CHECK ((status = 'ACTIVE' AND revoked_at IS NULL) OR (status = 'REVOKED' AND revoked_at IS NOT NULL)),
       KEY idx_task_bindings_owner (owner_user_id, created_at, id)

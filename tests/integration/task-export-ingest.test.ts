@@ -32,7 +32,7 @@ function patched(patch: (r: TaskKnowledgeRepositories) => TaskKnowledgeRepositor
 async function exporter() {
   const seed = await seedMySpaceWithFolderSource(pool);
   const caller = callerFromIdentity(seed.owner);
-  const { bindingId, token } = await bindings().create(caller, { workspaceId: seed.workspaceId, sourceId: seed.sourceId, label: "laptop" });
+  const { bindingId, token } = await bindings().create(caller, { workspaceId: seed.workspaceId, label: "laptop" });
   return { ...seed, caller, bindingId, token };
 }
 
@@ -140,7 +140,7 @@ describe("concurrency", () => {
 });
 
 describe("revocation and rotation", () => {
-  it("rejects after revocation, and after the My Space or Source is archived", async () => {
+  it("rejects after revocation and after the My Space is archived, but not for an archived Source", async () => {
     const revoked = await exporter();
     await bindings().revoke(revoked.caller, { workspaceId: revoked.workspaceId, bindingId: revoked.bindingId });
     expect(await rejection(ingest(revoked.token, artifact(crypto.randomUUID(), 1)))).toMatchObject({ code: "CREDENTIAL_INVALID" });
@@ -151,8 +151,8 @@ describe("revocation and rotation", () => {
 
     const source = await exporter();
     await pool.query("UPDATE knowledge_sources SET status = 'ARCHIVED', archived_by = ?, archived_at = CURRENT_TIMESTAMP(6) WHERE id = ?", [source.owner.id, source.sourceId]);
-    expect(await rejection(ingest(source.token, artifact(crypto.randomUUID(), 1)))).toMatchObject({ code: "SCOPE_DENIED" });
-    expect(await counts(source.bindingId)).toMatchObject({ tasks: 0 });
+    // The binding names the My Space; a Source only serves reference resolution.
+    expect(await ingest(source.token, artifact(crypto.randomUUID(), 1))).toMatchObject({ state: "CREATED" });
   });
 
   it("rejects an unknown or empty token", async () => {

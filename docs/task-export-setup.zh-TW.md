@@ -1,8 +1,7 @@
 # 任務匯出設定
 
 把用 Claude Code 或 OpenCode 完成的任務，存成 Knowledge Hub My Space 裡的任務結果。
-匯出只走一個受限的 binding：它只能把任務結果加進你自己 My Space 的一個資料夾同步
-Source；只有在你要求時（`/hub-export`）才會送出。
+匯出只走一個受限的 binding：它只能把任務結果加進你自己的 My Space；只有在你要求時（`/hub-export`）才會送出。
 
 [English](task-export-setup.md)
 
@@ -21,8 +20,8 @@ knowledge-hub help
 
 ## 2. 建立 binding
 
-在 Knowledge Hub 開啟 **My Space → Tasks → Set up export**，選擇任務結果所屬的資料夾
-同步 Source，建立 binding。頁面只會顯示一次密鑰，並附上這個 binding 專用的
+在 Knowledge Hub 開啟 **My Space → Tasks → Set up export**，替 binding 取個標籤（例如所在的機器），
+然後建立。Agent 用路徑寫的 Wiki 引用，只要 My Space 裡恰好有一個已同步資料夾有該路徑，就會連到那一頁。頁面只會顯示一次密鑰，並附上這個 binding 專用的
 `configure` 指令。請立刻複製密鑰，之後不會再顯示。
 
 ## 3. 設定每個專案
@@ -105,7 +104,7 @@ Agent 寫出的內容長這樣：
 |---|---|---|
 | 201 / 200 | 新 revision 已儲存／完全相同的重送 | 0 |
 | 401 | 密鑰不明、已輪替或已撤銷 | 4（`configure --rotate`，或 `--discard`） |
-| 403 | binding 的 Source 或 My Space 已不接受寫入 | 4 |
+| 403 | binding 所屬的 My Space 已不接受寫入 | 4 |
 | 409 | `TASK_ARCHIVED`（先還原再 `--retry`）、`REVISION_CONFLICT`、`REVISION_OUT_OF_ORDER` | 4 |
 | 413 / 422 | 超過 64 KiB／不符內容契約 | 4 |
 | 5xx、逾時 | 沒有可信的回應 | 3（`--retry`） |
