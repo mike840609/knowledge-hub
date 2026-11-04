@@ -19,8 +19,11 @@ import type {
   ReferenceResolution,
   StoredTaskReference,
   TaskExportStore,
+  TaskLifecycle,
+  TaskListRow,
   TaskResultRow,
   TaskRevisionRow,
+  TaskScope,
 } from "@/modules/task-knowledge/ports/task-export-store";
 import type { TaskKnowledgeRepositories } from "@/modules/task-knowledge/ports/unit-of-work";
 import { uuidv7 } from "@/shared/ids/uuidv7";
@@ -229,6 +232,59 @@ export class MariaDbTaskExportStore implements TaskExportStore {
       resolvedDocumentId: asNullableId(row.resolved_document_id),
     }));
   }
+
+  async listTasks(workspaceId: string, query: { lifecycle: TaskLifecycle; beforeId: string | null; limit: number }): Promise<TaskListRow[]> {
+    // ids are UUIDv7, so id order is creation order and a keyset cursor.
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT t.*, b.label AS binding_label, b.status AS binding_status, r.artifact_json
+        FROM task_results t
+        JOIN task_export_bindings b ON b.id = t.binding_id
+        JOIN knowledge_sources s ON s.id = b.source_id
+        JOIN task_result_revisions r ON r.task_result_id = t.id AND r.revision_no = t.latest_revision_no
+        WHERE s.workspace_id = ? AND t.lifecycle = ? AND (? IS NULL OR t.id < ?)
+        ORDER BY t.id DESC LIMIT ?`,
+      [workspaceId, query.lifecycle, query.beforeId, query.beforeId, query.limit],
+    );
+    return rows.map((row) => ({
+      task: mapTask(row),
+      bindingLabel: String(row.binding_label),
+      bindingStatus: oneOf(row.binding_status, ["ACTIVE", "REVOKED"] as const, "binding status"),
+      artifactJson: String(row.artifact_json),
+    }));
+  }
+
+  async getTaskScope(taskResultId: string): Promise<TaskScope | null> {
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT t.*, b.id AS b_id, b.owner_user_id AS b_owner_user_id, b.source_id AS b_source_id, b.label AS b_label,
+          b.status AS b_status, b.created_at AS b_created_at, b.revoked_at AS b_revoked_at, s.workspace_id
+        FROM task_results t JOIN task_export_bindings b ON b.id = t.binding_id JOIN knowledge_sources s ON s.id = b.source_id
+        WHERE t.id = ?`,
+      [taskResultId],
+    );
+    const row = rows[0];
+    if (!row) return null;
+    const binding = mapBinding({
+      id: row.b_id, owner_user_id: row.b_owner_user_id, source_id: row.b_source_id, label: row.b_label,
+      status: row.b_status, created_at: row.b_created_at, revoked_at: row.b_revoked_at,
+    });
+    return { task: mapTask(row), binding, workspaceId: asId(row.workspace_id) };
+  }
+
+  async listRevisions(taskResultId: string): Promise<{ revisionNo: number; createdAt: Date }[]> {
+    const rows = await this.connection.query<DbRow[]>(
+      "SELECT revision_no, created_at FROM task_result_revisions WHERE task_result_id = ? ORDER BY revision_no DESC",
+      [taskResultId],
+    );
+    return rows.map((row) => ({ revisionNo: asNumber(row.revision_no, "revision number"), createdAt: asDate(row.created_at) }));
+  }
+
+  async setTaskLifecycle(taskResultId: string, lifecycle: TaskLifecycle, actorUserId: string): Promise<void> {
+    const archived = lifecycle === "ARCHIVED";
+    await this.connection.query(
+      "UPDATE task_results SET lifecycle = ?, archived_by = ?, archived_at = ?, updated_at = CURRENT_TIMESTAMP(6) WHERE id = ?",
+      [lifecycle, archived ? actorUserId : null, archived ? new Date() : null, taskResultId],
+    );
+  }
 }
 
 const LIFECYCLE = ["ACTIVE", "ARCHIVED"] as const;
@@ -305,10 +361,16 @@ class MariaDbTaskDocumentLookup implements TaskDocumentLookup {
   constructor(private readonly connection: QueryConnection) {}
 
   async getState(documentId: string): Promise<TaskDocumentState | null> {
-    const rows = await this.connection.query<DbRow[]>("SELECT id, source_id, status FROM knowledge_documents WHERE id = ?", [documentId]);
+    const rows = await this.connection.query<DbRow[]>(
+      "SELECT d.id, d.source_id, d.status, r.title FROM knowledge_documents d LEFT JOIN knowledge_revisions r ON r.id = d.current_revision_id WHERE d.id = ?",
+      [documentId],
+    );
     const row = rows[0];
     if (!row) return null;
-    return { documentId: asId(row.id), sourceId: asId(row.source_id), status: oneOf(row.status, LIFECYCLE, "document status") };
+    return {
+      documentId: asId(row.id), sourceId: asId(row.source_id), status: oneOf(row.status, LIFECYCLE, "document status"),
+      title: row.title === null || row.title === undefined ? null : String(row.title),
+    };
   }
 }
 

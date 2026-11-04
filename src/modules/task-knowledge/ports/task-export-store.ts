@@ -57,6 +57,12 @@ export type StoredTaskReference = {
   resolvedDocumentId: string | null;
 };
 
+/** A task with what its list row shows: the binding and the latest revision's artifact. */
+export type TaskListRow = { task: TaskResultRow; bindingLabel: string; bindingStatus: ExportBindingStatus; artifactJson: string };
+
+/** A task with its binding and the Workspace derived through the binding's Source. */
+export type TaskScope = { task: TaskResultRow; binding: ExportBinding; workspaceId: string };
+
 export interface TaskExportStore {
   insertBinding(binding: { id: string; ownerUserId: string; sourceId: string; label: string }): Promise<void>;
   getBinding(bindingId: string): Promise<ExportBinding | null>;
@@ -82,4 +88,11 @@ export interface TaskExportStore {
   insertRevision(revision: { id: string; taskResultId: string; revisionNo: number; artifactJson: string; contentHash: string }): Promise<void>;
   insertReferences(taskResultId: string, revisionNo: number, references: readonly StoredTaskReference[]): Promise<void>;
   listReferences(taskResultId: string, revisionNo: number): Promise<StoredTaskReference[]>;
+
+  /** Tasks whose binding's Source lies in `workspaceId`, newest first, ids below `beforeId` when given. */
+  listTasks(workspaceId: string, query: { lifecycle: TaskLifecycle; beforeId: string | null; limit: number }): Promise<TaskListRow[]>;
+  getTaskScope(taskResultId: string): Promise<TaskScope | null>;
+  /** Newest first. */
+  listRevisions(taskResultId: string): Promise<{ revisionNo: number; createdAt: Date }[]>;
+  setTaskLifecycle(taskResultId: string, lifecycle: TaskLifecycle, actorUserId: string): Promise<void>;
 }

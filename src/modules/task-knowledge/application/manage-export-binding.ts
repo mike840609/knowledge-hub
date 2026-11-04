@@ -13,7 +13,7 @@ const workspaceNotFound = () => new DomainError("WORKSPACE_NOT_FOUND", "Workspac
 const bindingNotFound = () => new DomainError("TASK_EXPORT_BINDING_NOT_FOUND", "Export binding not found.");
 
 /** A binding lives only in the caller's own ACTIVE My Space. */
-function assertOwnedPersonal(caller: CallerContext, workspace: TaskWorkspaceState | null, options: { allowArchived?: boolean } = {}) {
+export function assertOwnedPersonal(caller: CallerContext, workspace: TaskWorkspaceState | null, options: { allowArchived?: boolean } = {}) {
   if (!workspace || workspace.kind !== "PERSONAL" || workspace.ownerUserId !== caller.identity.id) throw workspaceNotFound();
   if (caller.personalWorkspaceOnly !== undefined && caller.personalWorkspaceOnly !== workspace.workspaceId) throw workspaceNotFound();
   if (workspace.status !== "ACTIVE" && !options.allowArchived) throw new DomainError("WORKSPACE_ARCHIVED", "This workspace is archived.");

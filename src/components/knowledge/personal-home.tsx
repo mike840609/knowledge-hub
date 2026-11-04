@@ -230,6 +230,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
             <MenuContent align="end" className="w-72">
               {/* Only what the primary nav does not already offer: Sources, Insights and Knowledge live there. */}
               <MenuItem render={<Link href={`/w/${workspaceId}/agent-context`} />}>Copy for Agent</MenuItem>
+              <MenuItem render={<Link href={`/w/${workspaceId}/tasks`} />}>Tasks from coding agents</MenuItem>
               <ReopenGuidanceMenuItem workspaceId={workspaceId} />
               <MenuItem render={<a href={`/api/workspaces/${workspaceId}/export`} />}>Export Markdown ZIP</MenuItem>
               <p className="px-3 py-2 text-caption text-kh-text-muted">Export includes saved and archived notes. Drafts, history and attachments are excluded.</p>

@@ -17,7 +17,8 @@ export type TaskSourceState = {
   status: "ACTIVE" | "ARCHIVED";
 };
 
-export type TaskDocumentState = { documentId: string; sourceId: string; status: "ACTIVE" | "ARCHIVED" };
+/** `title` is the current revision's title; null before a document has one. */
+export type TaskDocumentState = { documentId: string; sourceId: string; status: "ACTIVE" | "ARCHIVED"; title: string | null };
 
 export type TaskEntryMatch = { kind: "FOUND"; candidates: { documentId: string }[] } | { kind: "INVALID_PATH" };
 

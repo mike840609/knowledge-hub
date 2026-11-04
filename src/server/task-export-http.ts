@@ -9,7 +9,7 @@ const NO_STORE = { "Cache-Control": "private, no-store" };
 
 function taskExportError(error: unknown): { status: number; body: ApiErrorBody } | null {
   if (!(error instanceof DomainError)) return null;
-  if (error.code === "TASK_EXPORT_BINDING_NOT_FOUND") return { status: 404, body: { error: { code: "NOT_FOUND", message: "The requested resource was not found." } } };
+  if (error.code === "TASK_EXPORT_BINDING_NOT_FOUND" || error.code === "TASK_RESULT_NOT_FOUND") return { status: 404, body: { error: { code: "NOT_FOUND", message: "The requested resource was not found." } } };
   if (error.code === "BINDING_REVOKED" || error.code === "TASK_EXPORT_SOURCE_INELIGIBLE") return { status: 409, body: { error: { code: error.code, message: error.message } } };
   return null;
 }
