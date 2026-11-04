@@ -286,6 +286,95 @@ it("resolving under the Open filter keeps the selected row, marked Resolved", as
   expect(item()).toBe("t1");
 });
 
+it("a write to a sibling thread in the pane settles that thread's row, not the selected one", async () => {
+  page = {
+    discussions: [discussion("t1"), discussion("t2", { documentId: "doc-t1", documentTitle: "Doc t1" })],
+    shared: [],
+    nextCursor: null,
+  };
+  threads["doc-t1"] = [thread("t1"), thread("t2")];
+  lookup = discussion("t2", { documentId: "doc-t1", documentTitle: "Doc t1", status: "RESOLVED" });
+  await mount();
+  await click(row("t1"));
+  const sibling = pane()!.querySelector<HTMLElement>('[data-review-thread="t2"]')!;
+  expect(sibling).not.toBeNull();
+  await act(async () => { sibling.querySelector<HTMLButtonElement>('button[aria-label="Resolve"]')!.click(); });
+  await settle();
+  expect(requests).toContain("/api/documents/doc-t1/review-threads/t2/resolution");
+  // The row read back is the sibling's, though the selected discussion is t1.
+  expect(inboxGets()).toContain("threadId=t2");
+  expect(gets.some(url => url.includes("threadId=t1"))).toBe(false);
+  expect(row("t2").textContent).toContain("Resolved");
+  expect(item()).toBe("t1");
+});
+
+it("an owner row the server stops returning is removed with its pane", async () => {
+  page = { discussions: [discussion("t1")], shared: [], nextCursor: null };
+  threads["doc-t1"] = [thread("t1")];
+  await mount();
+  await click(row("t1"));
+  expect(pane()).not.toBeNull();
+  // Hiding the thread or deleting its last visible comment leaves the lookup with nothing.
+  lookup = null;
+  await click(paneButton("Resolve")!);
+  await settle();
+  expect(rows()).toHaveLength(0);
+  expect(pane()).toBeNull();
+  expect(item()).toBeNull();
+  expect(host.textContent).toContain("No discussions yet.");
+});
+
+it("a link row whose lookup comes back empty is kept for the pane's placeholder", async () => {
+  page = { discussions: [discussion("t1", { kind: "FOLLOW", following: true, documentId: "", href: "/s/tok?thread=t1", token: "tok" })], shared: [], nextCursor: null };
+  threads["token:tok"] = [thread("t1")];
+  await mount();
+  await click(row("t1"));
+  expect(pane()?.textContent).toContain("body of t1");
+  // The thread may have lost its link rather than been hidden: the row stays, the pane answers.
+  lookup = null;
+  await click(paneButton("Reply")!);
+  await typeIn(pane()!.querySelector<HTMLTextAreaElement>('textarea[aria-label="Reply"]')!, "After the link died");
+  await click(paneButton("Reply")!);
+  await settle();
+  expect(requests.some(url => url.endsWith("/t1/replies"))).toBe(true);
+  expect(inboxGets()).toContain("threadId=t1");
+  expect(rows().map(element => element.dataset.inboxEntry)).toEqual(["t1"]);
+  expect(pane()).not.toBeNull();
+  expect(item()).toBe("t1");
+});
+
+it("marking an unselected row read under the Unread filter removes it", async () => {
+  window.history.replaceState(null, "", "/w/ws/inbox?unread=1");
+  page = { discussions: [discussion("t1", { unreadCount: 1 }), discussion("t2", { unreadCount: 1 })], shared: [], nextCursor: null };
+  threads["doc-t1"] = [thread("t1")];
+  await mount();
+  expect(rows().map(element => element.dataset.inboxEntry)).toEqual(["t1", "t2"]);
+  await click(row("t1"));
+  expect(rows().map(element => element.dataset.inboxEntry)).toEqual(["t1", "t2"]);
+  await click(host.querySelector('[aria-label="Mark read: Doc t2"]')!);
+  expect(posts.filter(post => post.action === "mark-thread-read").map(post => post.threadId)).toEqual(["t1", "t2"]);
+  // The now-read row no longer matches Unread; the selected row stays as the reader's place.
+  expect(rows().map(element => element.dataset.inboxEntry)).toEqual(["t1"]);
+  expect(row("t1").getAttribute("aria-current")).toBe("true");
+  expect(item()).toBe("t1");
+  expect(markReadButtons()).toHaveLength(0);
+});
+
+it("Mark all read under the Unread filter drops every unselected row and keeps the selected one", async () => {
+  window.history.replaceState(null, "", "/w/ws/inbox?unread=1");
+  page = { discussions: [discussion("t1", { unreadCount: 1 }), discussion("t2", { unreadCount: 2 })], shared: [], nextCursor: null };
+  unreadCount = 3;
+  threads["doc-t1"] = [thread("t1")];
+  await mount();
+  await click(row("t1"));
+  await button("Mark all read");
+  expect(posts).toContainEqual({ action: "mark-all-read" });
+  expect(rows().map(element => element.dataset.inboxEntry)).toEqual(["t1"]);
+  expect(row("t1").getAttribute("aria-current")).toBe("true");
+  expect(item()).toBe("t1");
+  expect(markReadButtons()).toHaveLength(0);
+});
+
 it("a filter change clears a selection it excludes", async () => {
   page = { discussions: [discussion("t1")], shared: [], nextCursor: null };
   await mount();

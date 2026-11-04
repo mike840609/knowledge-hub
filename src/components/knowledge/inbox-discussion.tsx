@@ -30,14 +30,14 @@ export function InboxDiscussion({ entry, onChanged }: { entry: InboxDiscussionVi
       <h2 className="min-w-0 truncate text-body text-kh-text-muted">{entry.documentTitle || "Untitled"}</h2>
       {entry.href && <Link className={buttonClasses({ variant: "secondary", size: "sm" })} href={entry.href} prefetch={follow ? false : undefined}>Open document</Link>}
     </header>
-    {follow ? <FollowedDiscussion entry={entry} onChanged={onChanged} /> : <OwnerDocument entry={entry} onChanged={onChanged ? () => onChanged(entry.threadId) : undefined} />}
+    {follow ? <FollowedDiscussion entry={entry} onChanged={onChanged} /> : <OwnerDocument entry={entry} onChanged={onChanged} />}
   </section>;
 }
 
 type Peek = { title: string; markdown: string; revisionId: string; status: string; sourceStatus: string; linkView: DocumentLinkView | null };
 
 /** The owner's document as the reader shows it, its discussions beside it, the entry's one open. */
-function OwnerDocument({ entry, onChanged }: { entry: InboxDiscussionView; onChanged?: () => void }) {
+function OwnerDocument({ entry, onChanged }: { entry: InboxDiscussionView; onChanged?: (threadId: string) => void }) {
   const [peek, setPeek] = useState<Peek>();
   const [error, setError] = useState<string>();
   useEffect(() => {
@@ -95,15 +95,15 @@ function FollowedDiscussion({ entry, onChanged }: { entry: InboxDiscussionView; 
   if (error) return <p role="alert" className="px-6 text-body-sm">{error}</p>;
   if (!loaded) return <p role="status" className="px-6 text-body-sm text-kh-text-muted">Loading discussion…</p>;
   if (!loaded.thread) return <p className="px-6 text-body-sm text-kh-text-muted">This discussion is no longer available here.</p>;
-  const share = async (path: string, body: object) => { await reviewRequest(`/api/share-review/threads/${path}`, { token, documentId, ...body }); await load(); onChanged?.(entry.threadId); };
+  const share = async (threadId: string, path: string, body: object) => { await reviewRequest(`/api/share-review/threads/${path}`, { token, documentId, ...body }); await load(); onChanged?.(threadId); };
   return <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
     <ReviewThreadList threads={[loaded.thread]} activeThreadId={loaded.thread.id} filter="ALL" onFilterChange={() => {}} writesEnabled={loaded.writesEnabled}
       mentionScope={loaded.writesEnabled && loaded.signedIn ? (documentId ? { token, documentId } : { token }) : undefined}
-      reply={(threadId, body, idempotencyKey, mentions) => share(`${threadId}/replies`, { body, idempotencyKey, ...(mentions.length ? { mentions } : {}) })}
-      follow={(threadId, following) => share(`${threadId}/follow`, { following })}
+      reply={(threadId, body, idempotencyKey, mentions) => share(threadId, `${threadId}/replies`, { body, idempotencyKey, ...(mentions.length ? { mentions } : {}) })}
+      follow={(threadId, following) => share(threadId, `${threadId}/follow`, { following })}
       author={loaded.signedIn ? {
-        edit: (threadId, commentId, body) => share(`${threadId}/comments/${commentId}/body`, { body }),
-        remove: (threadId, commentId) => share(`${threadId}/comments/${commentId}/deletion`, {}),
+        edit: (threadId, commentId, body) => share(threadId, `${threadId}/comments/${commentId}/body`, { body }),
+        remove: (threadId, commentId) => share(threadId, `${threadId}/comments/${commentId}/deletion`, {}),
       } : undefined} />
   </div>;
 }

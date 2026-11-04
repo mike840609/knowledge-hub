@@ -124,6 +124,10 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
   filtersRef.current = filters;
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
+  const discussionsRef = useRef(discussions);
+  discussionsRef.current = discussions;
+  const selectedFallbackRef = useRef(selectedFallback);
+  selectedFallbackRef.current = selectedFallback;
   // A deep link is looked up; once a row on the page is selected this is false again.
   const fromLookup = useRef(initial.item !== null);
   const marking = useRef(new Set<string>());
@@ -211,7 +215,11 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
     setError(null);
     try {
       await reviewRequest("/api/review-notifications/inbox", { action: "mark-thread-read", threadId: discussion.threadId });
-      setDiscussions(previous => previous.map(item => item.threadId === discussion.threadId ? { ...item, unreadCount: 0 } : item));
+      // Under Unread a row the mark settles no longer matches the filter: it leaves the list at once,
+      // unless it is the selected row, which the reader is still looking at.
+      setDiscussions(previous => previous
+        .filter(item => !(item.threadId === discussion.threadId && filtersRef.current.unread && discussion.threadId !== selectedIdRef.current))
+        .map(item => item.threadId === discussion.threadId ? { ...item, unreadCount: 0 } : item));
       setSelectedFallback(previous => previous && previous.threadId === discussion.threadId ? { ...previous, unreadCount: 0 } : previous);
       window.dispatchEvent(new Event("kh:notification-changed"));
     } catch (cause) {
@@ -235,19 +243,29 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
   // A write in the pane settles the row it is about: the one discussion is read unfiltered, replaced
   // in place (and in the fallback) and the list re-sorted, so the row stays even when the write makes
   // it stop matching the active filter. The owner's and a mention's view of one thread merge to one row.
+  // An owner thread the server no longer returns has been hidden or retracted with its last visible
+  // comment: the row goes, and with it the pane if that row was open. A followed or mentioned thread
+  // may instead have lost its link, so its row stays and the pane's placeholder answers.
   const refreshOne = useCallback(async (threadId: string) => {
     try {
       const result = await reviewRequest<InboxPage>(inboxUrl(DEFAULT_FILTERS, { threadId }));
       const found = withDates(result.discussions).find(discussion => discussion.threadId === threadId);
-      // An empty answer is not a removal: a row the write settled stays as the pane left it.
-      if (!found) return;
-      setDiscussions(previous => mergeInboxDiscussions(previous.map(item => item.threadId === threadId ? found : item)));
-      setSelectedFallback(previous => previous && previous.threadId === threadId ? found : previous);
+      if (found) {
+        setDiscussions(previous => mergeInboxDiscussions(previous.map(item => item.threadId === threadId ? found : item)));
+        setSelectedFallback(previous => previous && previous.threadId === threadId ? found : previous);
+        window.dispatchEvent(new Event("kh:notification-changed"));
+        return;
+      }
+      const known = discussionsRef.current.find(item => item.threadId === threadId)
+        ?? (selectedFallbackRef.current?.threadId === threadId ? selectedFallbackRef.current : undefined);
+      if (!known || known.kind !== "OWNER") return;
+      setDiscussions(previous => previous.filter(item => item.threadId !== threadId));
+      if (selectedIdRef.current === threadId) clearSelection();
       window.dispatchEvent(new Event("kh:notification-changed"));
     } catch {
       // The write succeeded; a failed read of its row leaves the row as it was.
     }
-  }, []);
+  }, [clearSelection]);
 
   const loadOlder = async () => {
     if (!next || moreLoading) return;
@@ -275,7 +293,11 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
     setError(null);
     try {
       await reviewRequest("/api/review-notifications/inbox", { action: "mark-all-read" });
-      setDiscussions(previous => previous.map(item => ({ ...item, unreadCount: 0 })));
+      // Under Unread every row the mark settles stops matching the filter; the selected row stays as
+      // the reader's place.
+      setDiscussions(previous => previous
+        .filter(item => !filtersRef.current.unread || item.threadId === selectedIdRef.current)
+        .map(item => ({ ...item, unreadCount: 0 })));
       setSelectedFallback(previous => previous ? { ...previous, unreadCount: 0 } : previous);
       setShared([]);
       window.dispatchEvent(new Event("kh:notification-changed"));

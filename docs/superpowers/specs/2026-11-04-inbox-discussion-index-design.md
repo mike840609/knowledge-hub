@@ -83,8 +83,8 @@ and is a different product.
   pane still calls `/api/documents/:id/peek?brief` and
   `/api/share-review/threads/*` with the entry's token.
 - The split view's width rule (75rem of the page's own box), the 25rem list
-  column, the 48px path line, the pane for an owner's document and for a
-  followed discussion, and the narrow list.
+  column (22rem of rows and its gutters), the 48px path line, the pane for an
+  owner's document and for a followed discussion, and the narrow list.
 - Selection marks a discussion read; the rail's unread badge and `Mark all
   read` stay.
 - A dead link opens nothing; the pane shows its placeholder and makes no
@@ -329,7 +329,8 @@ tabs are `All`, `My documents`, `Following`, `Mentions`; the status control is
 - Narrow: `kh-page`, the header, the explanation, the relationship tabs, the
   status/unread row, the shared section and the list; rows navigate. No page
   count.
-- The 22rem list column and the 75rem split threshold do not change.
+- The 25rem list column (22rem of rows and its gutters) and the 75rem split
+  threshold do not change.
 
 ## Out of this cut
 
