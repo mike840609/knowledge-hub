@@ -14,6 +14,7 @@ import type {
 } from "@/modules/task-knowledge/ports/lookups";
 import type {
   ExportBinding,
+  ExportBindingSummary,
   ExportCredential,
   ReferenceResolution,
   StoredTaskReference,
@@ -109,6 +110,24 @@ export class MariaDbTaskExportStore implements TaskExportStore {
       "UPDATE task_export_bindings SET status = 'REVOKED', revoked_at = CURRENT_TIMESTAMP(6) WHERE id = ? AND status = 'ACTIVE'",
       [bindingId],
     );
+  }
+
+  async listBindings(ownerUserId: string, workspaceId: string): Promise<ExportBindingSummary[]> {
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT b.*, s.name AS source_name,
+          EXISTS (SELECT 1 FROM task_export_credentials c WHERE c.binding_id = b.id AND c.status = 'ACTIVE') AS has_active
+        FROM task_export_bindings b JOIN knowledge_sources s ON s.id = b.source_id
+        WHERE b.owner_user_id = ? AND s.workspace_id = ?
+        ORDER BY b.created_at DESC, b.id DESC`,
+      [ownerUserId, workspaceId],
+    );
+    return rows.map((row) => {
+      const binding = mapBinding(row);
+      return {
+        bindingId: binding.id, sourceId: binding.sourceId, sourceName: String(row.source_name), label: binding.label,
+        status: binding.status, hasActiveCredential: Number(row.has_active) === 1, createdAt: binding.createdAt, revokedAt: binding.revokedAt,
+      };
+    });
   }
 
   async insertCredential(credential: { id: string; bindingId: string; tokenHash: Uint8Array }): Promise<void> {

@@ -15,6 +15,18 @@ export type ExportBinding = {
   revokedAt: Date | null;
 };
 
+/** What the owner sees in a list: never credential material. */
+export type ExportBindingSummary = {
+  bindingId: string;
+  sourceId: string;
+  sourceName: string;
+  label: string;
+  status: ExportBindingStatus;
+  hasActiveCredential: boolean;
+  createdAt: Date;
+  revokedAt: Date | null;
+};
+
 export type ExportCredential = { id: string; bindingId: string; status: ExportCredentialStatus };
 
 export type TaskResultRow = {
@@ -51,6 +63,8 @@ export interface TaskExportStore {
   lockBindingShared(bindingId: string): Promise<ExportBinding | null>;
   lockBindingForUpdate(bindingId: string): Promise<ExportBinding | null>;
   revokeBinding(bindingId: string): Promise<void>;
+  /** The owner's bindings whose Source lies in `workspaceId` (Workspace derived through the Source). */
+  listBindings(ownerUserId: string, workspaceId: string): Promise<ExportBindingSummary[]>;
 
   insertCredential(credential: { id: string; bindingId: string; tokenHash: Uint8Array }): Promise<void>;
   /** Revokes the active credential and inserts the new one; callers run it inside one transaction. */

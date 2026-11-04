@@ -48,6 +48,8 @@ import type { CompanySsoSessionReader } from "@/modules/identity/ports/company-s
 import { companySsoProviderName, companySsoRolloutHubUserIds, identityProviderKind } from "./config";
 import { HubIdentityResolver } from "@/modules/identity/application/hub-identity-resolver";
 import { establishTrustedCaller as establishTrustedCallerWith } from "@/server/trusted-caller";
+import { MariaDbTaskKnowledgeUnitOfWork } from "@/infrastructure/database/mariadb/task-knowledge-transaction";
+import { ManageExportBindingService } from "@/modules/task-knowledge/application/manage-export-binding";
 import { importRuntimeConfig } from "@/server/import-config";
 import { createIdentityProvider } from "@/server/identity-provider-factory";
 import { closeDatabasePool, getDatabasePool } from "./database-pool";
@@ -73,6 +75,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   companySessionReader?: CompanySsoSessionReader;
 } = {}) {
   const unitOfWork = new MariaDbUnitOfWork(databasePool);
+  const taskKnowledgeUnitOfWork = new MariaDbTaskKnowledgeUnitOfWork(databasePool);
   const identityProvider = createIdentityProvider(options);
   const providerKind = identityProviderKind();
   const providerName = companySsoProviderName();
@@ -148,6 +151,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
     cleanup: new CleanupFolderImportsService(unitOfWork),
   };
   return {
+    taskExportBindings: new ManageExportBindingService(taskKnowledgeUnitOfWork),
     personalProfile: new PersonalProfileService(unitOfWork),
     agentContext: new AgentContextService(unitOfWork),
     importScope: new GetImportScopeService(unitOfWork), sourceHealth:new GetSourceHealthService(unitOfWork), folderUpdates:new ListFolderUpdatesService(unitOfWork), syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, personal, personalPreferences, feedbackReports, feedbackIssues, workspaceAdmin, teams, governance, reviewReadAvailable: true, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, savedShares, reviews, sources, workspaces, search, imports };
