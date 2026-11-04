@@ -67,12 +67,23 @@ Non-WIKI references stay external and are rendered as links only when they pass 
 
 **Task identity.** The CLI mints Task IDs; the Agent never does.
 
-**Revision sequence.** For each task the CLI records every saved revision with its canonical hash, the binding it was sent under, and whether the server has **confirmed** it (answered 200 or 201).
-- `export --new` mints a task and saves revision 1. It is refused while this project key has any unconfirmed revision; the CLI prints the `--retry` command instead. A timeout that actually committed therefore leads to `--retry` (answered 200), not to a second Task.
+**Revision sequence.** The CLI keeps its state per project key: each task created under the key, with every saved revision's canonical hash, the binding it was sent under, and its state. Task IDs are looked up only within the key, so a `--from` sibling worktree has its own task list. Losing the state directory is harmless except that old tasks can no longer be revised from this machine (`--task` exits 2).
+
+A saved revision is in one of three states:
+- **unconfirmed:** saved, and not yet answered with 200/201 or a final rejection. This covers network errors, timeouts, 5xx, and the two recoverable rejections: 401 (fix with `configure --rotate`, then `--retry`) and 409 `TASK_ARCHIVED` (restore in My Space, then `--retry`).
+- **confirmed:** the server answered 200 or 201.
+- **rejected:** the server answered any other 4xx. A rejected revision blocks nothing. The CLI prints why, and the next step.
+
+Commands:
+- `export --new` mints a task and saves revision 1. It is refused (exit 2) while this project key has an unconfirmed revision. The refusal prints that task's `title` and `completedAt` and its `--retry` command, so the Agent can tell whether it is the same task (§8, Skill rule). A timeout that actually committed therefore leads to `--retry` (answered 200), not to a second Task.
 - `export --retry <taskId>` resends the task's unconfirmed revision unchanged. If none is unconfirmed, it says so and exits 0.
-- `export --task <taskId>` reads new content and saves revision n+1, where n is the latest confirmed revision. It is refused while the task has an unconfirmed revision, and refused under a different binding than the task's.
+- `export --task <taskId>` reads new content and saves revision n+1, where n is the latest revision the server is known to hold (confirmed locally, or reported in a 409 body). It is refused while the task has an unconfirmed revision, and refused under a different binding than the task's.
+- `export --discard <taskId>` marks the task's unconfirmed revision rejected without sending it. It is the explicit way out when an unconfirmed revision should not be sent at all.
+
+Server rules:
 - The server accepts revision 1 only for a task it does not have, and revision n only when n = latest + 1. An exact replay of any revision it already accepted answers 200. Any other revision number answers 409 `REVISION_OUT_OF_ORDER`. The stored latest revision only moves forward.
 - Same task and revision with different content answers 409 `REVISION_CONFLICT`. With CLI-minted UUIDv4 task IDs and frozen saved revisions this is close to unreachable; it is the server-side backstop.
+- Both 409 revision bodies carry `latestRevisionNo`, the owner's own data behind a valid credential, so `--task` can continue from it.
 
 **Frozen revisions.** The CLI refuses to send a saved revision whose file no longer matches its recorded hash. The hash lives in the same user-writable state directory, so this catches accidental edits, not deliberate tampering; `REVISION_CONFLICT` and `REVISION_OUT_OF_ORDER` on the server are the real backstop.
 
@@ -91,11 +102,14 @@ Non-WIKI references stay external and are rendered as links only when they pass 
 **Write checks.** Each ingest checks credential status, binding status, Workspace `PERSONAL` and `ACTIVE`, that the binding owner is the Workspace owner, and that the Source is an `ACTIVE` `FOLDER_SYNC` Source of that Workspace. ("Source ownership" in the `SOURCE_MANAGED` / `HUB_MANAGED` sense is unrelated and not consulted: Task Results never write to the Source.)
 
 **Lock order.** Every task-knowledge writer follows the global order Snapshot → Source → Workspace → deeper, and takes the Workspace row in share mode (`lockSharedById`), never `FOR UPDATE`:
+- **Binding create:** lock the Source in share mode first, and check it is an `ACTIVE` `FOLDER_SYNC` Source of the Workspace on the locked row; then lock the Workspace shared; then insert. Taking the Source before the Workspace keeps the global order even though the binding's foreign key to the Source makes InnoDB take a share lock on that Source row anyway.
 - **Ingest:** hash the token and read credential and binding without a lock, to learn the Source and so the Workspace. Read the Source (non-locking). Lock the Workspace shared and check its kind, status and owner on the locked row. Lock the binding row in share mode and re-read the credential, then check both. Lock the existing `task_results` row `FOR UPDATE`, if there is one, and check its lifecycle and latest revision. Write.
-- **Revoke and rotate:** lock the Workspace shared, then the binding row `FOR UPDATE`, then change binding and credential rows. A revoke that commits first is seen by ingest's re-read under the binding lock; a revoke that waits commits after the ingest. In both cases no ingest commits after the revoke has committed.
+- **Revoke and rotate:** lock the Workspace shared, then the binding row `FOR UPDATE`, then change binding and credential rows. Rotate refuses a `REVOKED` binding (409 `BINDING_REVOKED`), so a live credential never belongs to a revoked binding. A revoke that commits first is seen by ingest's re-read under the binding lock; a revoke that waits commits after the ingest. In both cases no ingest commits after the revoke has committed.
 - **Archive and restore:** lock the Workspace shared, then the `task_results` row `FOR UPDATE`.
 
-The Source is read without a lock. Archiving the Source while an ingest is in flight is accepted: Task Results never write to the Source, and the next ingest sees the archived Source and is refused. All transactions run READ COMMITTED, so each re-read under a lock sees the latest committed row.
+During ingest the Source is read without a lock. Archiving the Source while an ingest is in flight is accepted: Task Results never write to the Source, and the next ingest sees the archived Source and is refused. All transactions run READ COMMITTED on the composition root's pool (its `initSql` sets the level; a pool built any other way would not), so each re-read under a lock sees the latest committed row.
+
+**Foreign keys** are limited to rows that never take part in Folder Sync writes, so they add no lock waits against an Apply: credential → binding, binding → Source (covered by binding create's order above), task → binding, revision → task, reference → task. `task_result_references.resolved_document_id` has **no** foreign key: documents are never hard-deleted, and availability is re-checked on every read.
 
 Never accept caller-provided Owner, Workspace or Source identity. Team or cross-workspace writes are forbidden.
 
@@ -110,10 +124,10 @@ Never accept caller-provided Owner, Workspace or Source identity. Team or cross-
 - 401: credential missing, unknown or revoked (including through binding revocation, which revokes it).
 - 403: credential is live, but its Workspace or Source no longer allows the write.
 - 405: any other method, including `OPTIONS`. The route exports explicit handlers for every other method, so Next.js does not answer `OPTIONS` itself.
-- 409: `REVISION_CONFLICT` (same revision, different content), `REVISION_OUT_OF_ORDER` (§5), or `TASK_ARCHIVED`.
+- 409: `REVISION_CONFLICT` (same revision, different content) or `REVISION_OUT_OF_ORDER` (§5), both with `latestRevisionNo`; or `TASK_ARCHIVED`.
 - 413: body over 64 KiB, measured on the bytes actually read, not on `Content-Length`.
 - 422: valid JSON that fails the artifact contract, including an unsupported `schemaVersion`.
-- 503: retryable (lock wait timeout, database unavailable).
+- 503: retryable: lock wait timeout or deadlock (both already mapped to `WorkspaceBusyError` by `mapDatabaseError`; the transaction rolled back), or database unavailable.
 
 Every response, including 405, is private and uncached (`Cache-Control: private, no-store`).
 
@@ -125,11 +139,14 @@ Every response, including 405, is private and uncached (`Cache-Control: private,
 
 A small Task Results list/detail view within My Space, without a new top-level sidebar entry. Show title, agent, completedAt, summary, findings, decisions, changes, verification and checks, linked Wiki/external references, lifecycle, binding status, and revision history, with archive and restore actions for the owner. Existing Folder Sync, Document Graph, and Agent Context APIs remain unchanged. Task Result is a distinct Knowledge Asset, not a Wiki Document. All text, including Markdown- or HTML-looking content, renders as inert text.
 
+**Skill rule for a refused `--new`.** When `export --new` exits 2 because an earlier export is unconfirmed, the Agent runs the printed `--retry` command first. After it succeeds, the Agent compares the pending task's printed title and completion time with the task it was asked to export. If they are the same task, it reports the retried URL and stops; it does not run `--new` again. Only for a different task does it run `--new` with the new content.
+
 ## 9. Failures and tests
 
 - Agent has partial context: summarize only supported facts, do not infer passing tests.
 - Export aborted/offline: the saved revision is retained as unconfirmed; retry is explicit (`export --retry`). No background daemon in MVP.
-- Timeout that actually committed, then `/hub-export` again: `--new` is refused and points to `--retry`, which answers 200.
+- Timeout that actually committed, then `/hub-export` again: `--new` is refused and names the pending task; `--retry` answers 200; the Agent stops there for the same task (§8).
+- Revision finally rejected (403, 413, 422, `REVISION_CONFLICT`, `REVISION_OUT_OF_ORDER`): it becomes rejected and blocks nothing; `--task` continues from the server's `latestRevisionNo` where one is given. An unconfirmed revision that should never be sent is dropped with `--discard`.
 - Saved revision edited by hand or by the Agent: the CLI refuses to send it.
 - Changed content for an exported task: `export --task` creates the next revision after the latest confirmed one; prior revisions remain.
 - Revision sent out of order (late retry, skipped revision): 409 `REVISION_OUT_OF_ORDER`; the latest revision never moves backwards.
