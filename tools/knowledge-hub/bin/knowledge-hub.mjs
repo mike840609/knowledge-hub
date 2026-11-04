@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { configure, UsageError } from "../src/configure.mjs";
 import { runExport } from "../src/export.mjs";
+import { installAgent } from "../src/install-agent.mjs";
 
-const BOOLEAN = new Set(["new", "allow-insecure-localhost"]);
+const BOOLEAN = new Set(["new", "allow-insecure-localhost", "claude", "opencode", "force"]);
 
 /** `--name value` and `--flag`; anything else is a usage error. */
 function parse(args) {
@@ -27,13 +28,14 @@ const HELP = `knowledge-hub <command>
   configure --from <otherProjectRoot> [--profile <name>]
   configure --rotate <bindingId>
   export --new | --retry <taskId> | --task <taskId> | --discard <taskId>  [--profile <name>]
-  install-agent`;
+  install-agent [--claude] [--opencode] [--force]`;
 
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   try {
     if (command === "configure") return await configure(parse(rest));
     if (command === "export") return await runExport(parse(rest));
+    if (command === "install-agent") return installAgent(parse(rest));
     console.log(HELP);
     return command === undefined || command === "help" || command === "--help" ? 0 : 2;
   } catch (error) {
