@@ -194,6 +194,16 @@ it("an unknown deep link selects nothing, silently", async () => {
   expect(item()).toBeNull();
 });
 
+it("a deep-linked unread discussion opens in the pane and is marked read once", async () => {
+  window.history.replaceState(null, "", "/w/ws/inbox?item=t2");
+  page = { discussions: [discussion("t1")], shared: [], nextCursor: null };
+  lookup = discussion("t2", { documentTitle: "Doc t2", unreadCount: 1 });
+  await mount();
+  expect(gets.some(url => url.includes("threadId=t2"))).toBe(true);
+  expect(pane()?.textContent).toContain("Doc t2");
+  expect(posts.filter(post => post.action === "mark-thread-read")).toEqual([{ action: "mark-thread-read", threadId: "t2" }]);
+});
+
 it("a filter change clears a selection it excludes", async () => {
   page = { discussions: [discussion("t1")], shared: [], nextCursor: null };
   await mount();

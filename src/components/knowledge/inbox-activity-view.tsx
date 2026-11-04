@@ -286,10 +286,14 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
     event.currentTarget.querySelector<HTMLElement>(`[data-inbox-entry="${target.threadId}"]`)?.focus();
   };
 
-  const selected = split
-    ? discussions.find(discussion => discussion.threadId === selectedId)
-      ?? (selectedFallback && selectedFallback.threadId === selectedId ? selectedFallback : undefined)
-    : undefined;
+  const selectedDiscussion = discussions.find(discussion => discussion.threadId === selectedId)
+    ?? (selectedFallback && selectedFallback.threadId === selectedId ? selectedFallback : undefined);
+  // Opening a discussion marks it read, whether a row was chosen or a deep link opened it in the pane.
+  // `markThread` guards the id, so the select path and this effect never post twice for one thread.
+  useEffect(() => {
+    if (selectedDiscussion && selectedDiscussion.unreadCount > 0) void markThread(selectedDiscussion);
+  }, [selectedDiscussion, markThread]);
+  const selected = split ? selectedDiscussion : undefined;
   const defaultView = kind === "all" && status === "all" && !unread;
   const filtered = kind !== "all" || status !== "all" || unread;
   const empty = unread && kind === "all" && status === "all"
@@ -300,7 +304,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
 
   const header = <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Inbox" actions={
     <div className="flex items-center gap-2">
-      <Button variant="ghost" icon aria-label="Refresh activity" onClick={refresh} disabled={loading || busy}><RefreshCw size={16} /></Button>
+      <Button variant="ghost" icon aria-label="Refresh discussions" onClick={refresh} disabled={loading || busy}><RefreshCw size={16} /></Button>
       <Button variant="secondary" onClick={() => void markAll()} disabled={busy || badge === 0}><CheckCheck size={16} />Mark all read</Button>
     </div>
   } />;
