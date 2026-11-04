@@ -26,7 +26,7 @@ export function syncStatusKind(status: string): StatusKind {
   return "pending";
 }
 
-export function SourceListRow({ workspaceId, item, limits }: { workspaceId: string; item: SourceListItemModel; limits?: FolderImportClientLimits }) {
+export function SourceListRow({ workspaceId, item, limits, showTypeLabel = true }: { workspaceId: string; item: SourceListItemModel; limits?: FolderImportClientLimits; showTypeLabel?: boolean }) {
   const { source, latestRun, latestSuccessfulRun } = item;
   const lastSyncedAt = latestSuccessfulRun?.completedAt ?? (latestRun?.status === "APPLIED" ? latestRun.completedAt : null);
   return (
@@ -44,9 +44,11 @@ export function SourceListRow({ workspaceId, item, limits }: { workspaceId: stri
         className="group kh-focus-ring col-start-2 row-start-1 flex min-w-0 min-h-10 flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-2 py-2 transition-colors hover:bg-kh-bg-hover focus-visible:bg-kh-bg-hover"
       >
         <span className="min-w-0 flex-1 truncate text-body font-medium text-kh-text group-hover:text-kh-link group-hover:underline group-focus-visible:text-kh-link group-focus-visible:underline">{source.name}</span>
-        <span className="shrink-0 text-caption text-kh-text-muted">
-          {sourceTypeLabel(source.sourceType)}
-        </span>
+        {showTypeLabel ? (
+          <span className="shrink-0 text-caption text-kh-text-muted">
+            {sourceTypeLabel(source.sourceType)}
+          </span>
+        ) : null}
         {source.status === "ARCHIVED" ? <Status kind="archived">Archived</Status> : null}
         {source.sourceType !== "HUB" ? (
           <span className="order-last inline-flex w-full flex-wrap items-center gap-1 text-caption text-kh-text-muted sm:order-none sm:w-auto sm:shrink-0">

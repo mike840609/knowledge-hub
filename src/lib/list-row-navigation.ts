@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from "react";
 /** Arrow keys move between primary row targets; fields and secondary controls keep native keys. */
-export function navigateListRows(event: KeyboardEvent<HTMLUListElement>) {
+export function navigateListRows(event: KeyboardEvent<HTMLElement>) {
   if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.nativeEvent.isComposing) return;
   const target = event.target as HTMLElement;
   if (target.closest("input, textarea, select, [contenteditable=true]")) return;
