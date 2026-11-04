@@ -19,7 +19,7 @@ export type TaskDetailView = {
   lifecycle: "ACTIVE" | "ARCHIVED";
   latestRevisionNo: number;
   revisionNo: number;
-  revisions: { revisionNo: number; createdAt: string }[];
+  revisionHistory: { revisionNo: number; createdAt: string }[];
   binding: { label: string; status: "ACTIVE" | "REVOKED" };
   content: {
     agent: string;
@@ -136,7 +136,7 @@ export function TaskDetail({ workspaceId, detail }: { workspaceId: string; detai
       <section className="space-y-2">
         <h2 className="text-body font-semibold">Revisions</h2>
         <ul className="space-y-1 text-body">
-          {detail.revisions.map((revision) => (
+          {detail.revisionHistory.map((revision) => (
             <li key={revision.revisionNo} className="flex items-center gap-2">
               {revision.revisionNo === detail.revisionNo
                 ? <span className="font-medium" aria-current="true">Revision {revision.revisionNo}</span>

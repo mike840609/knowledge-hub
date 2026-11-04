@@ -105,3 +105,17 @@ step. The exit code says what kind of step it is:
 - `knowledge-hub export --discard <task-id>` drops an unconfirmed export locally.
   It removes nothing from Knowledge Hub; prefer `--retry` when the export may
   already be stored.
+
+## What Knowledge Hub answers
+
+`POST /api/task-results/ingest` takes only the export secret, in its own header;
+a browser session or an `Authorization` header is never accepted there.
+
+| HTTP | Meaning | CLI exit |
+|---|---|---|
+| 201 / 200 | New revision stored / exact replay of a stored one | 0 |
+| 401 | Secret unknown, rotated or revoked | 4 (`configure --rotate`, or `--discard`) |
+| 403 | Binding's Source or My Space no longer accepts writes | 4 |
+| 409 | `TASK_ARCHIVED` (restore, then `--retry`), `REVISION_CONFLICT`, `REVISION_OUT_OF_ORDER` | 4 |
+| 413 / 422 | Over 64 KiB / fails the content contract | 4 |
+| 5xx, timeout | No trustworthy answer | 3 (`--retry`) |

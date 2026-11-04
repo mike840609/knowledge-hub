@@ -28,7 +28,7 @@ export default async function TaskResultPage({ params, searchParams }: Props) {
         workspaceId={workspaceId}
         detail={{
           ...detail,
-          revisions: detail.revisions.map((item) => ({ revisionNo: item.revisionNo, createdAt: item.createdAt.toISOString() })),
+          revisionHistory: detail.revisionHistory.map((item) => ({ revisionNo: item.revisionNo, createdAt: item.createdAt.toISOString() })),
         }}
       />
     </main>

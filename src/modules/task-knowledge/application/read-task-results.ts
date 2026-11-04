@@ -39,7 +39,7 @@ export type TaskResultDetail = {
   archivedAt: Date | null;
   latestRevisionNo: number;
   revisionNo: number;
-  revisions: { revisionNo: number; createdAt: Date }[];
+  revisionHistory: { revisionNo: number; createdAt: Date }[];
   binding: { label: string; status: ExportBindingStatus };
   content: TaskContent;
   references: TaskReferenceView[];
@@ -95,7 +95,7 @@ export class TaskResultReadService {
       }
       return {
         taskResultId: task.id, lifecycle: task.lifecycle, archivedAt: task.archivedAt, latestRevisionNo: task.latestRevisionNo, revisionNo,
-        revisions: await r.taskExports.listRevisions(task.id),
+        revisionHistory: await r.taskExports.listRevisions(task.id),
         binding: { label: binding.label, status: binding.status },
         content: content(revision.artifactJson),
         references,

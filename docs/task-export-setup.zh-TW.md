@@ -94,3 +94,17 @@ Agent 寫出的內容長這樣：
 - 只要有較早的匯出尚未確認，`--new` 就會被拒並列出它。請先重試它。
 - `knowledge-hub export --discard <task-id>` 只在本機放棄一筆未確認的匯出，不會從
   Knowledge Hub 刪除任何東西；如果它可能已經存進去，請優先用 `--retry`。
+
+## Knowledge Hub 的回應
+
+`POST /api/task-results/ingest` 只接受放在專用 header 的匯出密鑰；瀏覽器 session 或
+`Authorization` header 在這裡一律不被接受。
+
+| HTTP | 意義 | CLI 結束碼 |
+|---|---|---|
+| 201 / 200 | 新 revision 已儲存／完全相同的重送 | 0 |
+| 401 | 密鑰不明、已輪替或已撤銷 | 4（`configure --rotate`，或 `--discard`） |
+| 403 | binding 的 Source 或 My Space 已不接受寫入 | 4 |
+| 409 | `TASK_ARCHIVED`（先還原再 `--retry`）、`REVISION_CONFLICT`、`REVISION_OUT_OF_ORDER` | 4 |
+| 413 / 422 | 超過 64 KiB／不符內容契約 | 4 |
+| 5xx、逾時 | 沒有可信的回應 | 3（`--retry`） |

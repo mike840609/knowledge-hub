@@ -229,7 +229,7 @@ describe("task knowledge lookups", () => {
     const source = { sourceId, workspaceId, sourceType: "FOLDER_SYNC", status: "ACTIVE" };
     expect(await run((r) => r.sources.getById(sourceId))).toEqual(source);
     expect(await run((r) => r.sources.lockSharedById(sourceId))).toEqual(source);
-    expect(await run((r) => r.documents.getState(documentId))).toEqual({ documentId, sourceId, status: "ARCHIVED" });
+    expect(await run((r) => r.documents.getState(documentId))).toEqual({ documentId, sourceId, status: "ARCHIVED", title: null });
     expect(await run((r) => r.workspaces.lockSharedById(uuidv7()))).toBeNull();
   });
 });

@@ -361,6 +361,7 @@ make test-mermaid-assumptions
 | 知識連結與圖譜 | [規格](docs/superpowers/specs/2026-09-29-personal-workspace-knowledge-graph-design.md) | [計畫](docs/superpowers/plans/2026-09-29-personal-workspace-knowledge-graph.md) | Wikilinks、反向連結、標題錨點與衍生圖譜資料。 |
 | 個人日用功能 | [規格](docs/superpowers/specs/2026-09-29-personal-daily-driver-design.md) | [計畫](docs/superpowers/plans/2026-09-29-personal-daily-driver.md) | Wikilink 保留、自動完成、程式碼區塊與整理。 |
 | 個人工作空間推出 | [規格](docs/superpowers/specs/2026-09-30-personal-workspace-design.md) | [計畫](docs/superpowers/plans/2026-09-30-personal-workspace.md) | 帳號草稿、收藏、版本還原與匯出。 |
+| 任務知識匯出 | [規格](docs/superpowers/specs/2026-11-04-task-knowledge-export-design.md) | [計畫](docs/superpowers/plans/2026-11-04-task-knowledge-export.md) | 在 Claude Code 或 OpenCode 輸入 `/hub-export`，經由一個受限、可撤銷的 binding 把完成的任務存進 My Space；手動、冪等、不用 MCP。設定：[任務匯出設定](docs/task-export-setup.zh-TW.md)。 |
 | Home 續接 | [規格](docs/superpowers/specs/2026-10-19-home-continue-design.md) | [計畫](docs/superpowers/plans/2026-10-19-home-continue.md) | Home 上的草稿、最近文件與收藏。 |
 | 探索與 Copy for Agent | [規格](docs/superpowers/specs/2026-10-04-mvp-discovery-agent-design.md) | [計畫](docs/superpowers/plans/2026-10-04-mvp-discovery-agent.md) | Folder 範圍、搜尋篩選與經檢視的 Markdown bundles。 |
 | 範例知識庫與匯入指南 | [規格](docs/superpowers/specs/2026-10-06-sample-wiki-import-guide-design.md) | [計畫](docs/superpowers/plans/2026-10-06-sample-wiki-import-guide.md) | 內附雙語範例知識庫，以及顯示即時限制的站內匯入指南。 |

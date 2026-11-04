@@ -47,7 +47,7 @@ describe("owner reads", () => {
     const detail = await reads().get(caller, workspaceId, taskResultId);
     expect(detail.content.title).toBe("繁體中文 task — émoji ✅");
     expect(detail.binding).toMatchObject({ label: "laptop", status: "ACTIVE" });
-    expect(detail.revisions.map((revision) => revision.revisionNo)).toEqual([1]);
+    expect(detail.revisionHistory.map((revision) => revision.revisionNo)).toEqual([1]);
     expect(detail.references.map((ref) => [ref.state, ref.document?.documentId ?? null])).toEqual([
       ["RESOLVED", documentId], ["UNRESOLVED", null], [null, null],
     ]);
@@ -74,7 +74,7 @@ describe("owner reads", () => {
     expect((await reads().get(caller, workspaceId, taskResultId)).content.title).toBe("second");
     const first = await reads().get(caller, workspaceId, taskResultId, { revisionNo: 1 });
     expect([first.revisionNo, first.content.title]).toEqual([1, "first"]);
-    expect(first.revisions.map((revision) => revision.revisionNo)).toEqual([2, 1]);
+    expect(first.revisionHistory.map((revision) => revision.revisionNo)).toEqual([2, 1]);
     expect(await codeOf(reads().get(caller, workspaceId, taskResultId, { revisionNo: 9 }))).toBe("TASK_RESULT_NOT_FOUND");
   });
 });
