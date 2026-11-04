@@ -154,6 +154,22 @@ describe("configure", () => {
     }
   });
 
+  it("an unconfirmed export from one project blocks --new from another, listing its --retry", async () => {
+    const other = realpathSync(mkdtempSync(path.join(tmpdir(), "kh-other-")));
+    try {
+      await configure();
+      hub.replies.push("timeout");
+      const pending = await exportNew();
+      expect(pending.code).toBe(3);
+      const blocked = await run(["export", "--new"], { stdin: content({ title: "Different work" }), cwd: other });
+      expect(blocked.code).toBe(2);
+      expect(blocked.out).toContain(`knowledge-hub export --retry ${taskIdOf(pending.out)}`);
+      expect(hub.received).toHaveLength(1);
+    } finally {
+      rmSync(other, { recursive: true, force: true });
+    }
+  });
+
   it("refuses an export before configure, naming configure", async () => {
     const result = await exportNew();
     expect(result.code).toBe(2);

@@ -98,7 +98,7 @@ describe("exact Wiki resolution in the binding's My Space", () => {
     ]);
   });
 
-  it("resolves a Document ID only when it is an ACTIVE document of the bound Source", async () => {
+  it("resolves a Document ID only when it is an ACTIVE document under an ACTIVE Source of the binding Workspace", async () => {
     const { owner, sourceId, token } = await exporter();
     const active = await insertSyncedDocument(pool, sourceId, owner.id, "a.md");
     const archived = await insertSyncedDocument(pool, sourceId, owner.id, "b.md", { documentStatus: "ARCHIVED" });
