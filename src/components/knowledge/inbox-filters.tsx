@@ -56,6 +56,7 @@ export function InboxFilters({
       <SelectMenu
         id="inbox-status"
         aria-label="Status"
+        className="w-32"
         value={status}
         onValueChange={value => onStatusChange(value)}
         options={STATUSES}
