@@ -61,34 +61,36 @@ Reference types:
 - **COMMIT:** opaque identifier, bounded length and charset.
 - **PR_URL:** `https:` scheme only, no userinfo, no control characters, bounded length.
 
-Non-WIKI references stay external and are rendered as links only when they pass the scheme rule above. No full source contents, raw terminal logs or environment variables. MVP limit: 64 KiB artifact, 32 references, bounded string fields; reject unsafe, unknown and oversized data without silent truncation.
+Non-WIKI references stay external and are rendered as links only when they pass the scheme rule above. No full source contents, raw terminal logs or environment variables. MVP limit: 64 KiB artifact, 32 references, bounded string fields; reject (never strip) unsafe, unknown and oversized data, without silent truncation.
 
 **Forbidden content.** The parsers reject secret-named fields. In addition, the CLI refuses content that contains its own configured export token, or any of a small set of high-signal secret patterns (a PEM private-key header, an AWS access key ID `AKIA…`, GitHub tokens `ghp_…`/`github_pat_…`), and reports only which rule matched, never the value. This is a safety net, not a guarantee that every secret is detected.
 
 **Task identity.** The CLI mints Task IDs; the Agent never does.
 
-**Revision sequence.** The CLI keeps its state per project key: each task created under the key, with every saved revision's canonical hash, the binding it was sent under, and its state. Task IDs are looked up only within the key, so a `--from` sibling worktree has its own task list. Losing the state directory is harmless except that old tasks can no longer be revised from this machine (`--task` exits 2).
+**Revision sequence.** The CLI keeps its state per project key: each task created under the key, with every saved revision's canonical hash, the binding it was sent under, its state, and the outcome of its last send. Task IDs are looked up only within the key, so a `--from` sibling worktree has its own task list. Losing the state directory is harmless except that old tasks can no longer be revised from this machine (`--task` exits 2).
 
 A saved revision is in one of three states:
 - **unconfirmed:** saved, and not yet answered with 200/201 or a final rejection. This covers network errors, timeouts, 5xx, and the two recoverable rejections: 401 (fix with `configure --rotate`, then `--retry`) and 409 `TASK_ARCHIVED` (restore in My Space, then `--retry`).
-- **confirmed:** the server answered 200 or 201.
-- **rejected:** the server answered any other 4xx. A rejected revision blocks nothing. The CLI prints why, and the next step.
+- **confirmed:** the server answered 200 or 201 with the configured `bindingId`. On success the CLI prints the Task URL, the **Task ID**, and the `export --task <taskId>` command for a later update, because neither the URL nor My Space shows the CLI's Task ID.
+- **rejected:** the server answered any other 4xx, or answered 200/201 with a different `bindingId` (the **response `bindingId` mismatch**: the revision is stored under the server's binding, which the CLI records). A rejected revision blocks nothing. The CLI prints why, and the next step.
 
 Commands:
 - `export --new` mints a task and saves revision 1. It is refused (exit 2) while this project key has an unconfirmed revision. The refusal lists every task with an unconfirmed revision, each with its `title`, `completedAt`, `summary` opening and `--retry` command, so the Agent can tell whether one of them is the same work (§8, Skill rule). A timeout that actually committed therefore leads to `--retry` (answered 200), not to a second Task.
 - `export --retry <taskId>` resends the task's unconfirmed revision unchanged. If none is unconfirmed, it says so and exits 0.
 - `export --task <taskId>` reads new content and saves revision n+1, where n is the latest revision the server is known to hold: the larger of the latest confirmed revision and the latest number reported in a 409 body, with "none known" counting as 0. If revision n+1 already exists locally as rejected, its number is reused and its record replaced; a confirmed revision is never replaced. It is refused while the task has an unconfirmed revision, and refused (the **recorded-binding refusal**) when the current configuration names a different binding than the one the task was sent under.
-- `export --discard <taskId>` marks the task's unconfirmed revision rejected without sending it. It is the explicit way out when an unconfirmed revision should not or cannot be sent: its binding was revoked, the key now uses another binding, or the task was archived on purpose. A revision whose last send timed out may already be stored on the server; the CLI says so and recommends `--retry` first to find out. Discarding never removes anything from Hub.
+- `export --discard <taskId>` marks the task's unconfirmed revision rejected without sending it. It is the explicit way out when an unconfirmed revision should not or cannot be sent: its binding was revoked, the key now uses another binding, or the task was archived on purpose. A revision whose last send ended without an answer the CLI could trust (network error, timeout or 5xx, which a proxy may return after the server committed) may already be stored on the server; the CLI says so and recommends `--retry` first to find out. Discarding never removes anything from Hub.
 
 Every message that leaves a revision unconfirmed names the way forward and, where the forward path may not exist, `--discard` as the alternative:
 - 401: "`configure --rotate <bindingId>` then `--retry`; if the binding was revoked, `--discard <taskId>`".
 - 409 `TASK_ARCHIVED`: "restore it in My Space then `--retry`; if you archived it on purpose, `--discard <taskId>`".
 - Recorded-binding refusal (exit 2): names both binding IDs and "`--discard <taskId>`, or reconfigure this key to the recorded binding".
-- **Response `bindingId` mismatch** (the server answered 200/201 for a binding other than the configured one): names both IDs, says the revision is stored under the server's binding, and offers `configure --rotate <configuredBindingId>` to fix the configuration, then `--discard <taskId>` to clear the local record.
+
+
+The response `bindingId` mismatch is not in this list because it already rejected the revision: its message names both IDs, says the revision is stored under the server's binding, and offers `configure --rotate <configuredBindingId>` to fix the token configured for this key. Nothing is left to retry or discard, so a later automatic `--retry` cannot store the task a second time.
 
 Server rules:
 - The server accepts revision 1 only for a task it does not have, and revision n only when n = latest + 1. An exact replay of any revision it already accepted answers 200. Any other revision number answers 409 `REVISION_OUT_OF_ORDER`. The stored latest revision only moves forward.
-- Same task and revision with different content answers 409 `REVISION_CONFLICT`. With CLI-minted UUIDv4 task IDs and frozen saved revisions this is close to unreachable; it is the server-side backstop.
+- Same task and revision with different content answers 409 `REVISION_CONFLICT`. It arises in ordinary use when a revision whose send timed out had in fact committed, was then discarded, and its number was reused for new content; the 409's `latestRevisionNo` lets the next `--task` move past it. A late retry of an already stored revision answers 200 or `REVISION_CONFLICT`, never `REVISION_OUT_OF_ORDER`, which only means a skipped number (n > latest + 1).
 - Both 409 revision bodies carry `latestRevisionNo`, the owner's own data behind a valid credential, so `--task` can continue from it. It is 0 when the task does not exist.
 
 **Frozen revisions.** The CLI refuses to send a saved revision whose file no longer matches its recorded hash. The hash lives in the same user-writable state directory, so this catches accidental edits, not deliberate tampering; `REVISION_CONFLICT` and `REVISION_OUT_OF_ORDER` on the server are the real backstop.
@@ -133,7 +135,8 @@ Never accept caller-provided Owner, Workspace or Source identity. Team or cross-
 - 409: `REVISION_CONFLICT` (same revision, different content) or `REVISION_OUT_OF_ORDER` (§5), both with `latestRevisionNo`; or `TASK_ARCHIVED`.
 - 413: body over 64 KiB, measured on the bytes actually read, not on `Content-Length`.
 - 422: valid JSON that fails the artifact contract, including an unsupported `schemaVersion`.
-- 503: retryable: lock wait timeout or deadlock (both already mapped to `WorkspaceBusyError` by `mapDatabaseError`; the transaction rolled back), or database unavailable.
+- 500: any other unexpected error; nothing is reported as success. The CLI treats it as retryable, which is safe because ingest is idempotent.
+- 503: retryable: lock wait timeout or deadlock (both already mapped to `WorkspaceBusyError` by `mapDatabaseError`; the transaction rolled back), or no database connection could be obtained (the pool's connection-acquire failure, detected in the route before any write).
 
 Every response, including 405, is private and uncached (`Cache-Control: private, no-store`).
 
@@ -156,8 +159,8 @@ A small Task Results list/detail view within My Space, without a new top-level s
 - Timeout that actually committed, then `/hub-export` again: `--new` is refused and names the pending task; `--retry` answers 200; the Agent stops there for the same task (§8).
 - Revision finally rejected (403, 413, 422, `REVISION_CONFLICT`, `REVISION_OUT_OF_ORDER`): it becomes rejected and blocks nothing; `--task` continues from the server's `latestRevisionNo` where one is given. An unconfirmed revision that should never be sent (revoked binding, key moved to another binding, task archived on purpose) is dropped with `--discard`, which every such message names; the Agent discards only on the user's request.
 - Saved revision edited by hand or by the Agent: the CLI refuses to send it.
-- Changed content for an exported task: `export --task` creates the next revision after the latest confirmed one; prior revisions remain.
-- Revision sent out of order (late retry, skipped revision): 409 `REVISION_OUT_OF_ORDER`; the latest revision never moves backwards.
+- Changed content for an exported task: `export --task <taskId>`, with the Task ID the CLI printed on success, creates the next revision after the latest one the server is known to hold (§5); prior revisions remain.
+- Skipped revision number: 409 `REVISION_OUT_OF_ORDER`; a late retry of a stored revision answers 200 or `REVISION_CONFLICT`; the latest revision never moves backwards.
 - Archived task: a new revision is refused until the owner restores it; an exact replay still answers 200.
 - Replay/concurrent upload: unique constraints + transaction enforce idempotency.
 - Revocation concurrent with ingest: the binding lock and the re-read under it decide; no commit after revocation wins.
