@@ -125,6 +125,15 @@ describe("followForMention", () => {
     expect(await state(t.threadId, f.alice)).toEqual({ link: f.linkId, following: 1, seenAt: mentioned });
   });
 
+  it("leaves an unfollowed thread stopped when the mention predates the add", async () => {
+    const f = await fixture(); const t = await f.startThread(); const other = await f.newLink();
+    await f.uow.run(async r => { await r.reviewFollows.follow({ threadId: t.threadId, userId: f.alice, shareLinkId: other, at: seen }); await r.reviewFollows.unfollow(t.threadId, f.alice, seen); });
+    await f.uow.run(r => followForMention(r.reviewFollows, {
+      threadId: t.threadId, userId: f.alice, shareLinkId: f.linkId, at: mentioned, currentLinkValid: never, reFollowWhenStopped: false,
+    }));
+    expect(await state(t.threadId, f.alice)).toEqual({ link: other, following: 0, seenAt: seen });
+  });
+
   it("leaves an active follow on a valid link unchanged", async () => {
     const f = await fixture(); const t = await f.startThread(); const other = await f.newLink();
     await f.uow.run(r => r.reviewFollows.follow({ threadId: t.threadId, userId: f.alice, shareLinkId: other, at: seen }));
@@ -422,7 +431,7 @@ describe("mention candidates", () => {
     const tag = randomUUID().slice(0, 8);
     await pool.query("UPDATE users SET name_en=? WHERE id=?", [`Alice ${tag}`, f.alice]);
     const { candidates } = await f.service.searchMentionCandidates(f.reader, { query: `  alice ${tag} `, token: f.token });
-    expect(candidates).toEqual([{ id: f.alice, name: "Alice", nameEn: `Alice ${tag}`, empId: await empOf(f.alice) }]);
+    expect(candidates).toEqual([{ id: f.alice, name: "Alice", nameEn: `Alice ${tag}`, empId: await empOf(f.alice), needsApproval: false, addsRecipient: false }]);
   });
 
   it("does not offer the caller or the Workspace owner, who could not be mentioned anyway", async () => {

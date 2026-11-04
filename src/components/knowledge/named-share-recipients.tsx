@@ -6,23 +6,30 @@ import { GovernanceError, governanceFailure, governanceRequest, type GovernanceF
 import { RecipientPicker, type Recipient } from "./recipient-picker";
 
 type Named = { userId: string; name: string; nameEn: string | null; empId: string };
+type Proposal = Named & { id: string; orgCode: string; proposedByName: string | null };
 
 const personText = (person: Named) => [person.name, person.empId, person.nameEn].filter(Boolean).join(" · ");
 
 /**
- * Who a named share names (`onCount` must be stable, it is a dependency of the load): the people now, a way to add more, and a way to take one away. Each
- * change is its own request, so what is listed is what the server holds after it answers.
+ * Who a named share names (`onCount` must be stable, it is a dependency of the load): who a recipient proposed, to approve or
+ * decline, the people now, a way to add more, and a way to take one away. Each change is its own request, so what is listed is
+ * what the server holds after it answers.
  */
 export function NamedShareRecipients({ linkId, onCount }: { linkId: string; onCount: (linkId: string, count: number) => void }) {
   const [people, setPeople] = useState<Named[] | null>(null);
+  const [proposals, setProposals] = useState<Proposal[]>([]);
   const [pending, setPending] = useState<Recipient[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<GovernanceFailure | null>(null);
   const url = `/api/share-links/${linkId}/recipients`;
 
   const load = useCallback(async () => {
-    const { recipients } = await governanceRequest<{ recipients: Named[] }>(url);
+    const [{ recipients }, proposed] = await Promise.all([
+      governanceRequest<{ recipients: Named[] }>(url),
+      governanceRequest<{ proposals: Proposal[] }>(`/api/share-links/${linkId}/proposals`),
+    ]);
     setPeople(recipients);
+    setProposals(proposed.proposals);
     onCount(linkId, recipients.length);
   }, [url, linkId, onCount]);
 
@@ -45,8 +52,38 @@ export function NamedShareRecipients({ linkId, onCount }: { linkId: string; onCo
     }
   };
 
+  // A decision settles Inbox entries (the owner's request, the others' notices): the badge counts again, as the Inbox's own decision makes it.
+  const decide = (proposalId: string, decision: "approve" | "decline") => change(async () => {
+    await governanceRequest(`/api/share-links/${linkId}/proposals/${proposalId}/${decision}`, "POST");
+    window.dispatchEvent(new Event("kh:notification-changed"));
+  });
+
   return (
     <div className="space-y-3 border-t border-kh-border pt-3">
+      {proposals.length > 0 ? (
+        <div className="space-y-1">
+          <p className="text-caption font-medium text-kh-text-muted">Pending approval</p>
+          <ul aria-label="Pending approval" className="divide-y divide-kh-border">
+            {proposals.map((proposal) => (
+              <li key={proposal.id} className="flex items-center gap-3 py-1">
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-baseline gap-2">
+                    <span className="min-w-0 flex-1 truncate text-body-sm text-kh-text">{personText(proposal)}</span>
+                    <span className="shrink-0 text-caption text-kh-text-muted">{proposal.orgCode}</span>
+                  </span>
+                  <span className="block truncate text-caption text-kh-text-muted">proposed by {proposal.proposedByName ?? "someone"}</span>
+                </span>
+                <Button variant="secondary" size="sm" type="button" disabled={busy} aria-label={`Approve adding ${proposal.name}`} onClick={() => void decide(proposal.id, "approve")}>
+                  Approve
+                </Button>
+                <Button variant="ghost" size="sm" type="button" disabled={busy} aria-label={`Decline adding ${proposal.name}`} onClick={() => void decide(proposal.id, "decline")}>
+                  Decline
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {people === null ? null : people.length === 0 ? (
         <p className="text-body-sm text-kh-text-muted">No one yet — only you can open it.</p>
       ) : (
@@ -63,7 +100,7 @@ export function NamedShareRecipients({ linkId, onCount }: { linkId: string; onCo
       )}
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          <RecipientPicker value={pending} onChange={setPending} disabled={busy} exclude={(people ?? []).map((person) => person.userId)} label="Add people to this link" />
+          <RecipientPicker value={pending} onChange={setPending} disabled={busy} exclude={[...(people ?? []).map((person) => person.userId), ...proposals.map((proposal) => proposal.userId)]} label="Add people to this link" />
         </div>
         <Button
           variant="secondary"

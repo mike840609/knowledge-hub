@@ -145,9 +145,13 @@ pass.
   opens only for a signed-in recipient its owner listed, or for the owner. A NAMED
   link never expires, is never read caller-less (`/s/:token` answers it as a dead
   link does), and is read in the Hub at `/w/<ws>/shares/:token`, reached through
-  `/s/:token/open`. It grants nothing beyond what a link grants, and a mention
-  through it reaches only its recipients
-  (`docs/superpowers/specs/2026-11-03-named-recipient-share-design.md`).
+  `/s/:token/open`. It grants nothing beyond what a link grants. A mention
+  through it reaches its recipients; a mention of anyone else is a proposal that
+  grants nothing and tells that person only the proposer's name and the title,
+  until the owner adds them; the owner's own mention through it adds the person
+  as a recipient
+  (`docs/superpowers/specs/2026-11-03-named-recipient-share-design.md`,
+  `docs/superpowers/specs/2026-11-03-named-share-mention-proposals-design.md`).
   Review access never grants Workspace membership, search, tree, history,
   MCP, Markdown edits or revision writes. Review responses include only
   validated current-revision selected-text fragments; hidden bodies and

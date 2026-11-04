@@ -2,16 +2,18 @@ import { createHash } from "node:crypto";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { DomainError } from "@/shared/domain/errors";
 import { isUuid, uuidv7 } from "@/shared/ids/uuidv7";
-import { isShareToken, ShareLinkNotFoundError } from "../domain/document-share-link";
+import { isShareToken, MAX_NAMED_SHARE_RECIPIENTS, ShareLinkNotFoundError } from "../domain/document-share-link";
 import { REVIEW_LIMITS, isRetractedThread, projectOwnerThread, projectReviewerThread, projectReviewComment, validateReviewBody, validateReviewIdempotencyKey, type ReviewThread, type ReviewComment, type ReviewCommentView, type ReviewAnchor, type ReviewStatus, type ReviewVisibility, type ReviewThreadView, type OwnerReviewThreadView, type CreateReviewThreadInput, type CreateOwnerReviewThreadInput, type ReplyReviewInput, type ReplyOwnerReviewInput } from "../domain/document-review";
 import { MENTION_LIMIT, MENTION_PREFIX, normalizeMentions, splitMentions, type MentionedPerson, type ReviewMention } from "../domain/review-mention";
 import { followForMention } from "./follow-for-mention";
+import { addNamedRecipients } from "./named-recipients";
 import { createReviewAnchorRelocator, validateReviewAnchor } from "../domain/review-anchor";
-import { projectShareCommentNotification, EXCERPT_LIMIT, SHARED_PREFIX, type ShareCommentNotificationView } from "../domain/share-comment-event";
+import { projectShareCommentNotification, EXCERPT_LIMIT, PROPOSAL_PREFIX, SHARED_PREFIX, type ShareCommentNotificationView } from "../domain/share-comment-event";
+import type { ProposalParty, ShareProposal } from "../domain/share-proposal";
 import { orderFollowedDiscussions, summarizeFollowedThread, type FollowedDiscussionView } from "../domain/review-follow";
 import type { DocumentShareLink } from "../domain/document-share-link";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
-import { judgeNamedShares, namedShareTitle } from "./internal/named-share-judgement";
+import { judgeNamedShares, namedShareTitle, openNamedTarget, type NamedShareTarget } from "./internal/named-share-judgement";
 import { audienceAdmits, documentReachesFolder, linkOpensFor, openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
 import { hubSharePath, shareDiscussionHref } from "@/lib/share-paths";
 
@@ -22,8 +24,14 @@ const FOLLOW_PREFIX = "follow:";
 const FOLLOW_LIMIT = 100;
 /** The mentions a write carries: validated ids and, for the owner, the link they hand over. `hashed` joins the request hash only when someone is named. */
 type MentionRequest = { ids: string[]; linkId: string | null; hashed: Record<string, unknown> };
+/** What a checked mention writes once its comment is in: the link handed over, and on a NAMED link the people the owner adds or a recipient proposes. */
+type MentionPlan = { link: DocumentShareLink; add: string[]; propose: string[] };
 /** A followed discussion on a folder link names its document, which that link's page needs (`?d=`); a document link's needs none. */
+const ownsLink = (link: DocumentShareLink, caller: CallerContext) => link.createdBy.toLowerCase() === caller.identity.id.toLowerCase();
 const folderDocument = (link: DocumentShareLink, documentId: string) => link.target.kind === "FOLDER" ? { documentId } : {};
+const PROPOSAL_PARTIES: readonly string[] = ["OWNER", "PROPOSED", "PROPOSER"] satisfies ProposalParty[];
+/** One party's view of one proposal, judged now: `target` is null when the link no longer opens for that party. */
+type JudgedProposal = { party: ProposalParty; proposal: ShareProposal; link: DocumentShareLink | undefined; target: NamedShareTarget | null; createdAt: Date; readAt: Date | null };
 const newestFirst = (views: ShareCommentNotificationView[]) => views.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id));
 export class DocumentReviewService {
   constructor(private readonly uow:KnowledgeUnitOfWork, private readonly clock:()=>Date=()=>new Date(), private readonly writesEnabled:()=>boolean=()=>false) {}
@@ -69,6 +77,7 @@ export class DocumentReviewService {
         ...(await this.followViews(r, caller.identity.id)).filter(view => view.readAt === null),
         ...(await this.mentionViews(r, await this.unreadMentions(r, caller.identity.id), caller.identity.id)).filter(view => view.readAt === null),
         ...await this.sharedViews(r, caller, true),
+        ...await this.proposalViews(r, caller, true),
       ]),
     }));
   }
@@ -79,7 +88,8 @@ export class DocumentReviewService {
       const follows = (await this.followedThreads(r, caller.identity.id)).filter(({ summary }) => !("unavailable" in summary) && !!summary.latestReply && summary.unread > 0).length;
       const mentions = (await this.judgedMentions(r, await this.unreadMentions(r, caller.identity.id), caller.identity.id)).filter(judged => "comment" in judged).length;
       const named = (await this.judgedShares(r, caller.identity.id, true)).filter(share => share.target).length;
-      return { count: owner + follows + mentions + named };
+      const proposals = (await this.judgedProposals(r, caller.identity.id)).filter(judged => judged.readAt === null).length;
+      return { count: owner + follows + mentions + named + proposals };
     });
   }
   /** Lightweight counts for My shares. No comment bodies or full revisions are loaded. */
@@ -92,20 +102,33 @@ export class DocumentReviewService {
       const size = 50;
       const events = await r.shareCommentEvents.listRecentByRecipient(caller.identity.id, before, size + 1);
       const page = events.slice(0, size);
-      // Follows and mentions are not paged: at most FOLLOW_LIMIT each, all on the first page (specs 2026-10-22, 2026-10-29, deviation).
+      // Follows, mentions, named shares and proposals are not paged: at most FOLLOW_LIMIT each, all on the first page (specs 2026-10-22, 2026-10-29, deviation).
       const follows = before ? [] : await this.followViews(r, caller.identity.id);
       const mentions = before ? [] : await this.mentionViews(r, await r.reviewMentions.listRecentByRecipient(caller.identity.id, FOLLOW_LIMIT), caller.identity.id);
       const named = before ? [] : await this.sharedViews(r, caller, false);
+      const proposals = before ? [] : await this.proposalViews(r, caller, false);
       return {
-        notifications: newestFirst([...await this.notificationViews(r, page), ...follows, ...mentions, ...named]),
+        notifications: newestFirst([...await this.notificationViews(r, page), ...follows, ...mentions, ...named, ...proposals]),
         nextCursor: events.length > size && page.length
           ? { createdAt: page[page.length - 1].createdAt.toISOString(), id: page[page.length - 1].id }
           : null,
       };
     });
   }
-  /** An owner event by its id, a followed discussion by `follow:<threadId>`, a mention by `mention:<commentId>`, or a named share by `shared:<linkId>`; only the caller's own rows change. */
+  /**
+   * An owner event by its id, a followed discussion by `follow:<threadId>`, a mention by `mention:<commentId>`, a named share
+   * by `shared:<linkId>`, or one party's proposal entry by `proposal:<party>:<proposalId>`; only the caller's own rows change.
+   */
   async markEventRead(caller: CallerContext, eventId: string) {
+    if (eventId.startsWith(PROPOSAL_PREFIX)) {
+      const [party, proposalId] = eventId.slice(PROPOSAL_PREFIX.length).split(":");
+      if (!PROPOSAL_PARTIES.includes(party) || !isUuid(proposalId ?? "")) return;
+      await this.uow.run(async r => {
+        const proposal = await r.shareProposals.findById(proposalId);
+        if (proposal && await this.isProposalParty(r, proposal, party as ProposalParty, caller.identity.id)) await r.shareProposals.markRead(proposal.id, party as ProposalParty, this.clock());
+      });
+      return;
+    }
     if (eventId.startsWith(SHARED_PREFIX)) {
       const linkId = eventId.slice(SHARED_PREFIX.length);
       // The row is the caller's own by (link, user); anyone else's id matches nothing. A malformed id would fail the UUID column.
@@ -128,6 +151,7 @@ export class DocumentReviewService {
       await r.reviewFollows.markAllSeen(caller.identity.id, this.clock());
       await r.reviewMentions.markAllRead(caller.identity.id, this.clock());
       await r.shareLinks.markAllRecipientRead(caller.identity.id, this.clock());
+      await r.shareProposals.markAllRead(caller.identity.id, this.clock());
     });
   }
   /** The owner has looked at one discussion: its notices are read, the rest of the document's are not. */
@@ -159,14 +183,23 @@ export class DocumentReviewService {
       if (!query) return { candidates: [] };
       // The writer and the Workspace owner are never recorded as mentioned (`normalizeMentions`), so they are not offered.
       const skip = new Set([caller.identity.id, s.workspace.personalOwnerUserId]);
-      const named = s.link?.audience === "NAMED" ? await this.recipientsMatching(r, s.link, query) : null;
-      const found = (named ?? await r.users.searchExisting(query, MENTION_LIMIT + skip.size)).filter(u => !skip.has(u.id)).slice(0, MENTION_LIMIT);
-      return { candidates: found.map(u => ({ id: u.id, name: u.name, nameEn: u.nameEn, empId: u.emp_id })) };
+      // On a NAMED link its recipients come first; anyone else a recipient names becomes a proposal the owner decides.
+      const named = s.link?.audience === "NAMED" ? await this.recipientsMatching(r, s.link, query) : [];
+      const recipientIds = new Set(named.map(u => u.id));
+      const others = (await r.users.searchExisting(query, MENTION_LIMIT + skip.size)).filter(u => !recipientIds.has(u.id));
+      const found = [...named, ...others].filter(u => !skip.has(u.id)).slice(0, MENTION_LIMIT);
+      // A recipient's mention of a non-recipient proposes them; the owner's adds them to the link (mention proposals spec, "Write path").
+      const isOwner = s.workspace.personalOwnerUserId === caller.identity.id;
+      const proposes = s.link?.audience === "NAMED" && !isOwner;
+      const adds = s.link?.audience === "NAMED" && isOwner;
+      const candidates = found.map(u => ({ id: u.id, name: u.name, nameEn: u.nameEn, empId: u.emp_id, needsApproval: proposes && !recipientIds.has(u.id), addsRecipient: adds && !recipientIds.has(u.id) }));
+      // Through a link, what it opens: an owner's mention adding someone to a folder link opens them the whole folder.
+      return s.link ? { candidates, targetKind: s.link.target.kind } : { candidates };
     });
   }
   /**
    * A NAMED link's recipients matching the query as `searchExisting` matches (name, emp_id or name_en, ignoring
-   * case), in its order. The link's list is the whole directory here: nobody else is offered.
+   * case), in its order.
    */
   private async recipientsMatching(r: KnowledgeRepositories, link: DocumentShareLink, query: string) {
     const recipients = await r.shareLinks.listRecipients(link.id);
@@ -177,23 +210,21 @@ export class DocumentReviewService {
   }
   /**
    * The links an owner may hand over when mentioning on their document: those that open it now, a link of the
-   * document itself or of a folder above it. Reads only. A NAMED link is listed only when every person in
-   * `mentionedUserIds` is its recipient; without that list it cannot be judged, so it is not listed.
+   * document itself or of a folder above it. Reads only. A NAMED link is listed whoever is mentioned: handing it
+   * over adds the people it does not name yet (mention proposals spec, "Write path"), so its audience goes with it.
    */
-  async mentionLinksForOwner(caller: CallerContext, input: { documentId: string; mentionedUserIds?: string[] }) {
+  async mentionLinksForOwner(caller: CallerContext, input: { documentId: string }) {
     if (!isUuid(input.documentId)) throw new ShareLinkNotFoundError();
     return this.uow.run(async r => {
       const s = await this.ownerScope(r, caller, input.documentId, false);
       this.enabled(); this.active(s);
-      const mentioned = input.mentionedUserIds === undefined ? null : normalizeMentions(input.mentionedUserIds, { writerId: caller.identity.id, ownerId: s.workspace.personalOwnerUserId ?? null });
       const chain = (await r.tree.listChainsByDocumentIds([s.document.id], s.document.sourceId)).get(s.document.id) ?? [];
       const folderIds = chain.slice(1).filter(node => node.nodeType === "FOLDER").map(node => node.id);
       const candidates = [...await r.shareLinks.listByDocument(s.document.id)];
       for (const folderId of folderIds) candidates.push(...await r.shareLinks.listByFolder(folderId));
-      const links: Array<{ id: string; label: string | null }> = [];
+      const links: Array<{ id: string; label: string | null; audience: DocumentShareLink["audience"]; targetKind: DocumentShareLink["target"]["kind"] }> = [];
       for (const link of candidates) {
-        if (link.audience === "NAMED" && (mentioned === null || !await this.admitsAll(r, link, mentioned))) continue;
-        if (await this.linkValid(r, link, s.document.id, caller.identity.id)) links.push({ id: link.id, label: link.label });
+        if (await this.linkValid(r, link, s.document.id, caller.identity.id)) links.push({ id: link.id, label: link.label, audience: link.audience, targetKind: link.target.kind });
       }
       return { links };
     });
@@ -371,15 +402,23 @@ export class DocumentReviewService {
       if (unread.length < FOLLOW_LIMIT) return unread.filter(mention => !dead.some(gone => gone.mention.commentId === mention.commentId));
     }
   }
-  /** Mentions as Inbox entries, one per comment. A dead one names nothing and is never unread. */
+  /**
+   * Mentions as Inbox entries, one per comment. A dead one names nothing and is never unread. A dead one through a link
+   * with a PENDING or DECLINED proposal of this user is not listed: that proposal's entry stands for it.
+   */
   private async mentionViews(r: KnowledgeRepositories, mentions: readonly ReviewMention[], userId: string): Promise<ShareCommentNotificationView[]> {
     const views: ShareCommentNotificationView[] = [];
     const titles = new Map<string, string>();
     const authorNames = new Map<string, string | undefined>();
     const hrefOf = this.discussionHrefs(r, userId);
-    for (const judged of await this.judgedMentions(r, mentions, userId)) {
+    const judgedMentions = await this.judgedMentions(r, mentions, userId);
+    const proposed = judgedMentions.some(judged => !("comment" in judged))
+      ? new Set((await r.shareProposals.listForProposed(userId, FOLLOW_LIMIT)).filter(proposal => proposal.status !== "APPROVED").map(proposal => proposal.shareLinkId.toLowerCase()))
+      : new Set<string>();
+    for (const judged of judgedMentions) {
       const { mention } = judged;
       const base = { id: `${MENTION_PREFIX}${mention.commentId}`, workspaceId: "", documentId: "", sourceId: "", commentId: mention.commentId, createdAt: mention.createdAt };
+      if (!("comment" in judged) && proposed.has(mention.shareLinkId.toLowerCase())) continue;
       if (!("comment" in judged)) { views.push({ ...base, kind: "MENTION", commentId: "", threadId: "", documentTitle: "", authorName: undefined, excerpt: "", readAt: mention.createdAt, threadStatus: "OPEN", linkAvailable: false }); continue; }
       const { thread, comment, link } = judged;
       if (!titles.has(thread.documentId)) titles.set(thread.documentId, (await r.revisions.findCurrent(thread.documentId))?.title ?? "");
@@ -410,6 +449,71 @@ export class DocumentReviewService {
       });
     }
     return views;
+  }
+  /**
+   * The caller's proposal entries, each judged now: the owner's on every proposal of their links, the proposed person's
+   * while PENDING or once DECLINED (an approved one is their `SHARED_WITH_YOU`), the proposer's once decided. The link is
+   * judged for the owner and the proposer as themselves, and for the proposed person, whom it does not name, as its owner
+   * sees it: does it open at all. A link that no longer opens names nothing and is never unread. The owner's request is
+   * unread until read or decided; a decision is news again for the other two (the repository clears their read on deciding).
+   * ponytail: at most FOLLOW_LIMIT rows per party, a few reads each; paging once proposals are many.
+   */
+  private async judgedProposals(r: KnowledgeRepositories, userId: string): Promise<JudgedProposal[]> {
+    // Most readers are party to none: one indexed existence read replaces the three list reads (and their links) below.
+    if (!await r.shareProposals.hasAnyInvolving(userId)) return [];
+    const rows: Array<{ party: ProposalParty; proposal: ShareProposal }> = [
+      ...(await r.shareProposals.listForOwner(userId, FOLLOW_LIMIT)).map(proposal => ({ party: "OWNER" as const, proposal })),
+      ...(await r.shareProposals.listForProposed(userId, FOLLOW_LIMIT)).filter(proposal => proposal.status !== "APPROVED").map(proposal => ({ party: "PROPOSED" as const, proposal })),
+      ...(await r.shareProposals.listForProposer(userId, FOLLOW_LIMIT)).map(proposal => ({ party: "PROPOSER" as const, proposal })),
+    ];
+    if (rows.length === 0) return [];
+    const links = new Map((await r.shareLinks.findByIds([...new Set(rows.map(({ proposal }) => proposal.shareLinkId))])).map(link => [link.id.toLowerCase(), link]));
+    const targets = new Map<string, NamedShareTarget | null>();
+    const now = this.clock();
+    const judged: JudgedProposal[] = [];
+    for (const { party, proposal } of rows) {
+      const link = links.get(proposal.shareLinkId.toLowerCase());
+      const viewer = party === "PROPOSER" ? proposal.proposedBy : link?.createdBy;
+      const key = `${proposal.shareLinkId}:${viewer}`;
+      if (link && viewer && !targets.has(key)) targets.set(key, await openNamedTarget(r, link, viewer, now));
+      const target = targets.get(key) ?? null;
+      const createdAt = party === "OWNER" || proposal.status === "PENDING" ? proposal.createdAt : proposal.decidedAt ?? proposal.createdAt;
+      const read = party === "OWNER" ? proposal.ownerReadAt ?? (proposal.status === "PENDING" ? null : proposal.decidedAt)
+        : party === "PROPOSED" ? proposal.proposedReadAt : proposal.proposerReadAt;
+      judged.push({ party, proposal, link, target, createdAt, readAt: target ? read : read ?? createdAt });
+    }
+    return judged;
+  }
+  /** Proposals as Inbox entries, one per party (see `judgedProposals`); `unreadOnly` leaves out read ones. Never the comment. */
+  private async proposalViews(r: KnowledgeRepositories, caller: CallerContext, unreadOnly: boolean): Promise<ShareCommentNotificationView[]> {
+    const names = new Map<string, string | undefined>();
+    const nameOf = async (id: string) => {
+      if (!names.has(id)) names.set(id, (await r.users.findById(id))?.name);
+      return names.get(id);
+    };
+    const views: ShareCommentNotificationView[] = [];
+    for (const { party, proposal, link, target, createdAt, readAt } of await this.judgedProposals(r, caller.identity.id)) {
+      if (unreadOnly && readAt !== null) continue;
+      const kind = party === "OWNER" ? "PROPOSAL_REQUEST" as const : proposal.status === "PENDING" ? "PROPOSAL_PENDING" as const : "PROPOSAL_DECIDED" as const;
+      const base = {
+        id: `${PROPOSAL_PREFIX}${party}:${proposal.id}`, workspaceId: "", documentId: "", sourceId: "", threadId: "", commentId: "", excerpt: "",
+        createdAt, readAt, threadStatus: "OPEN" as const, kind, proposalId: proposal.id,
+      };
+      // A dead entry names nothing, its status included (spec, "Inbox"); its kind still says which party's it is.
+      if (!target || !link) { views.push({ ...base, documentTitle: "", authorName: undefined, linkAvailable: false }); continue; }
+      views.push({
+        ...base, proposalStatus: proposal.status, documentTitle: await namedShareTitle(r, caller, target), targetKind: link.target.kind, linkAvailable: true,
+        authorName: kind === "PROPOSAL_DECIDED" ? undefined : await nameOf(proposal.proposedBy),
+        ...(party === "PROPOSED" ? {} : { personName: await nameOf(proposal.userId) }),
+        ...(party === "OWNER" ? { shareLinkId: link.id } : {}),
+      });
+    }
+    return views;
+  }
+  /** Whether `userId` is this party of the proposal: the link's owner, the proposed person, or the proposer. */
+  private async isProposalParty(r: KnowledgeRepositories, proposal: ShareProposal, party: ProposalParty, userId: string): Promise<boolean> {
+    const partyId = party === "OWNER" ? (await r.shareLinks.findById(proposal.shareLinkId))?.createdBy : party === "PROPOSED" ? proposal.userId : proposal.proposedBy;
+    return partyId?.toLowerCase() === userId.toLowerCase();
   }
   /**
    * Every named document a folder link reaches now. The link, folder, Source, Workspace and
@@ -585,7 +689,7 @@ export class DocumentReviewService {
   /** The owner's own discussion, on a passage of their own document. No link is involved, so none is recorded. */
   async createForOwner(caller:CallerContext,input:CreateOwnerReviewThreadInput) {
     const request=this.creation(input);
-    return this.uow.run(async r => { const s=await this.ownerScope(r,caller,input.documentId); return this.create(r,caller,s,null,request,input,async()=>(await this.views(r,s.document.id,true,caller.identity.id))); });
+    return this.uow.run(async r => { await this.lockHandedLink(r,caller,input); const s=await this.ownerScope(r,caller,input.documentId); return this.create(r,caller,s,null,request,input,async()=>(await this.views(r,s.document.id,true,caller.identity.id))); });
   }
   private creation(input:Pick<CreateReviewThreadInput,"expectedRevisionId"|"anchor"|"body"|"idempotencyKey">) {
     const body=validateReviewBody(input.body),key=validateReviewIdempotencyKey(input.idempotencyKey);
@@ -601,7 +705,7 @@ export class DocumentReviewService {
     if(!revision || revision.id!==request.expectedRevisionId) fail("STALE_DOCUMENT_REVISION","Refresh the document before selecting a passage.");
     const anchor=validateReviewAnchor(revision.markdown,request.anchor);
     await this.capacity(r,s.document.id,caller.identity.id); await this.quota(r,caller.identity.id,s.document.id);
-    const carriedLinkId=await this.mentionLink(r,s,originShareLinkId,mentions,caller.identity.id);
+    const plan=await this.mentionLink(r,caller,s,originShareLinkId,mentions);
     const now=this.clock(); const thread:ReviewThread={id:uuidv7(),documentId:s.document.id,createdRevisionId:revision.id,createdBy:caller.identity.id,creationIdempotencyKey:key,creationRequestHash:requestHash,originShareLinkId,anchor,status:"OPEN",visibility:"VISIBLE",hiddenBy:null,hiddenAt:null,hiddenReason:null,resolvedBy:null,resolvedAt:null,createdAt:now,updatedAt:now};
     const firstComment=this.comment(thread.id,caller.identity.id,body,key,requestHash);
     if (revision.history?.state === "WORKING") await r.revisions.markCheckpoint(revision.id,"COMMENT");
@@ -609,11 +713,21 @@ export class DocumentReviewService {
     await r.reviewComments.insert(firstComment); await this.charge(r,caller.identity.id,s.document.id);
     await this.notifyOwner(r,caller,s,originShareLinkId,firstComment);
     await this.followOnWrite(r,caller,s,originShareLinkId,thread.id);
-    await this.mentionOnWrite(r,s,carriedLinkId,firstComment,mentions.ids);
+    await this.mentionOnWrite(r,caller,s,plan,firstComment,mentions.ids);
     return (await views()).find(t=>t.id===thread.id)!;
   }
   async replyForLink(caller:CallerContext,input:ReplyReviewInput) { return this.uow.run(async r=> {const s=await this.linkScope(r,input.token,true,input.documentId,caller.identity.id); return this.reply(r,caller,s,s.link.id,input);}); }
-  async replyForOwner(caller:CallerContext,input:ReplyOwnerReviewInput) {return this.uow.run(async r=>{const s=await this.ownerScope(r,caller,input.documentId);return this.reply(r,caller,s,null,input);});}
+  async replyForOwner(caller:CallerContext,input:ReplyOwnerReviewInput) {return this.uow.run(async r=>{await this.lockHandedLink(r,caller,input);const s=await this.ownerScope(r,caller,input.documentId);return this.reply(r,caller,s,null,input);});}
+  /**
+   * An owner write handing over a link locks it before the Source and Workspace, in the order every link write
+   * takes them, so it cannot deadlock against a recipient writing through that link. `mentionLink` judges it.
+   * Only the caller's own link is locked: anyone else's is read, never locked, and refused as before.
+   */
+  private async lockHandedLink(r:KnowledgeRepositories,caller:CallerContext,input:{mentionLinkId?:unknown}) {
+    if(typeof input.mentionLinkId!=="string" || !isUuid(input.mentionLinkId)) return;
+    const id=input.mentionLinkId.toLowerCase(),link=(await r.shareLinks.findByIds([id]))[0];
+    if(link && ownsLink(link,caller)) await r.shareLinks.lockById(id);
+  }
   private comment(threadId:string,userId:string,body:string,key:string,requestHash:string):ReviewComment {return {id:uuidv7(),threadId,authorUserId:userId,body,idempotencyKey:key,requestHash,createdAt:this.clock(),editedAt:null,deletedAt:null,visibility:"VISIBLE",hiddenBy:null,hiddenAt:null,hiddenReason:null};}
   /** A comment written through a link is news to the owner, unless the owner wrote it (share-comment-notify spec). */
   private async notifyOwner(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>,originShareLinkId:string|null,comment:ReviewComment) {
@@ -636,33 +750,59 @@ export class DocumentReviewService {
     return {ids,linkId,hashed};
   }
   /**
-   * Every check a mention needs, before anything is written: each person exists, the link handed to them
-   * belongs to this document and opens now, and a NAMED link names each of them (named-recipient share spec,
-   * "Discussions and mentions"). Returns that link's id, or null when nobody is named.
+   * Every check a mention needs, before anything is written: each person exists, and the link handed to them
+   * belongs to this document and opens now. On a NAMED link the people it does not name are added when the
+   * Workspace owner writes, and proposed to the owner when a recipient writes; either way the link stays within
+   * its limit, or the write is refused (mention proposals spec, "Write path"). The link is locked, as approve and
+   * decline lock it, before anyone on it is counted. Returns the plan, or null when nobody is named.
    */
-  private async mentionLink(r:KnowledgeRepositories,s:Awaited<ReturnType<DocumentReviewService["scope"]>>&{link?:DocumentShareLink},originShareLinkId:string|null,mentions:MentionRequest,writerId:string):Promise<string|null> {
+  private async mentionLink(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>&{link?:DocumentShareLink},originShareLinkId:string|null,mentions:MentionRequest):Promise<MentionPlan|null> {
     if(!mentions.ids.length) return null;
     if((await r.users.findByIds(mentions.ids)).length!==mentions.ids.length) fail("INVALID_REQUEST","Mention only people who have signed in here.");
-    const link=originShareLinkId!==null?s.link:mentions.linkId===null?undefined:(await r.shareLinks.findByIds([mentions.linkId]))[0];
-    if(!link || (originShareLinkId===null && !await this.linkValid(r,link,s.document.id,writerId))) fail("INVALID_REQUEST","Mention someone through a live share link of this document.");
-    if(!await this.admitsAll(r,link,mentions.ids)) fail("MENTION_NOT_RECIPIENT","Mention only people this document is shared with.");
-    return link.id;
+    // A link write's own link is locked by its scope; an owner's own handed link by `lockHandedLink`, re-read here.
+    const link=originShareLinkId!==null?s.link:await this.handedLink(r,caller,mentions.linkId);
+    if(!link || (originShareLinkId===null && !await this.linkValid(r,link,s.document.id,caller.identity.id))) fail("INVALID_REQUEST","Mention someone through a live share link of this document.");
+    const plan:MentionPlan={link,add:[],propose:[]};
+    if(link.audience!=="NAMED") return plan;
+    const named=new Set((await r.shareLinks.listRecipients(link.id)).map(recipient=>recipient.userId));
+    const outsiders=mentions.ids.filter(id=>!named.has(id) && id!==link.createdBy.toLowerCase());
+    const full=()=>fail("INVALID_REQUEST",`A link can name at most ${MAX_NAMED_SHARE_RECIPIENTS} recipients.`);
+    if(s.workspace.personalOwnerUserId===caller.identity.id) {
+      if(named.size+outsiders.length>MAX_NAMED_SHARE_RECIPIENTS) full();
+      return {...plan,add:outsiders};
+    }
+    // A person with a row of any status is not proposed again: a decline is final for proposals.
+    const proposed=new Set((await r.shareProposals.listByLink(link.id)).map(proposal=>proposal.userId));
+    const propose=outsiders.filter(id=>!proposed.has(id));
+    // Only a new proposal is counted: Manage adds may already have taken recipients and pending past the limit.
+    if(propose.length && named.size+await r.shareProposals.countPending(link.id)+propose.length>MAX_NAMED_SHARE_RECIPIENTS) full();
+    return {...plan,propose};
   }
-  /** Whether everyone named is in the link's audience; a LINK admits anyone. */
-  private async admitsAll(r:KnowledgeRepositories,link:DocumentShareLink,userIds:readonly string[]) {
-    for(const userId of userIds) if(!await audienceAdmits(r,link,userId)) return false;
-    return true;
+  /** The link an owner write hands over: re-read under the lock `lockHandedLink` took when it is the caller's, else read unlocked. */
+  private async handedLink(r:KnowledgeRepositories,caller:CallerContext,linkId:string|null) {
+    if(linkId===null || !isUuid(linkId)) return undefined;
+    const link=(await r.shareLinks.findByIds([linkId]))[0];
+    return link && ownsLink(link,caller)?(await r.shareLinks.lockById(linkId)) ?? undefined:link;
   }
-  /** The people a comment names get a mention carrying the link, and follow the discussion through it (spec 2026-10-29 § Writing a mention). */
-  private async mentionOnWrite(r:KnowledgeRepositories,s:Awaited<ReturnType<DocumentReviewService["scope"]>>,carriedLinkId:string|null,comment:ReviewComment,mentions:string[]) {
-    if(carriedLinkId===null || !mentions.length) return;
-    await r.reviewMentions.insertMany(mentions.map(mentionedUserId=>({commentId:comment.id,mentionedUserId,shareLinkId:carriedLinkId,createdAt:comment.createdAt,readAt:null})));
+  /**
+   * The people a comment names get a mention carrying the link (spec 2026-10-29 § Writing a mention). On a NAMED
+   * link the owner's mention first adds whom it names; a recipient's proposes them. Only someone the link admits
+   * follows the discussion: a proposed person's mention stays dead until the owner adds them.
+   */
+  private async mentionOnWrite(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>,plan:MentionPlan|null,comment:ReviewComment,mentions:string[]) {
+    if(plan===null) return;
+    if(plan.add.length) await addNamedRecipients(r,caller,plan.link,s.workspace.id,plan.add,this.clock());
+    await r.reviewMentions.insertMany(mentions.map(mentionedUserId=>({commentId:comment.id,mentionedUserId,shareLinkId:plan.link.id,createdAt:comment.createdAt,readAt:null})));
+    for(const userId of plan.propose) await r.shareProposals.insertIfAbsent({id:uuidv7(),shareLinkId:plan.link.id,userId,proposedBy:caller.identity.id,commentId:comment.id,createdAt:comment.createdAt});
     // Judged for the person followed: their current follow may sit on a NAMED link they were removed from.
     const currentLinkValid=(userId:string)=>async(linkId:string)=>{
       const link=(await r.shareLinks.findByIds([linkId]))[0];
       return !!link && this.linkValid(r,link,s.document.id,userId);
     };
-    for(const userId of mentions) await followForMention(r.reviewFollows,{threadId:comment.threadId,userId,shareLinkId:carriedLinkId,at:this.clock(),currentLinkValid:currentLinkValid(userId)});
+    for(const userId of mentions) {
+      if(!await audienceAdmits(r,plan.link,userId)) continue;
+      await followForMention(r.reviewFollows,{threadId:comment.threadId,userId,shareLinkId:plan.link.id,at:this.clock(),currentLinkValid:currentLinkValid(userId)});
+    }
   }
   private async reply(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>&{link?:DocumentShareLink},originShareLinkId:string|null,input:{threadId:string;body:string;idempotencyKey:string;mentions?:unknown;mentionLinkId?:unknown}) {
     const body=validateReviewBody(input.body),key=validateReviewIdempotencyKey(input.idempotencyKey),mentions=this.mentionRequest(caller,s,originShareLinkId,input),requestHash=hash({threadId:input.threadId,body,...mentions.hashed});
@@ -674,11 +814,11 @@ export class DocumentReviewService {
     if(thread.status!=="OPEN") fail("REVIEW_THREAD_CLOSED","Reopen the discussion before replying.");
     if(await r.reviewComments.countByThread(thread.id)>REVIEW_LIMITS.replies) fail("CAPACITY_EXCEEDED","The discussion reply limit was reached.");
     await this.quota(r,caller.identity.id,s.document.id);
-    const carriedLinkId=await this.mentionLink(r,s,originShareLinkId,mentions,caller.identity.id);
+    const plan=await this.mentionLink(r,caller,s,originShareLinkId,mentions);
     const comment=this.comment(thread.id,caller.identity.id,body,key,requestHash);await r.reviewComments.insert(comment);await this.charge(r,caller.identity.id,s.document.id);
     await this.notifyOwner(r,caller,s,originShareLinkId,comment);
     await this.followOnWrite(r,caller,s,originShareLinkId,thread.id);
-    await this.mentionOnWrite(r,s,carriedLinkId,comment,mentions.ids);
+    await this.mentionOnWrite(r,caller,s,plan,comment,mentions.ids);
     return projectReviewComment(comment,caller.identity.id);
   }
   async editForLink(caller:CallerContext,input:{token:string;documentId?:string;threadId:string;commentId:string;body:string}) { return this.uow.run(async r=>this.edit(r,caller,await this.linkScope(r,input.token,true,input.documentId,caller.identity.id),input)); }

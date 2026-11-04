@@ -15,4 +15,10 @@ describe("unreadHomeNotices", () => {
     const result = await unreadHomeNotices({ listUnreadForOwner: async () => { throw new Error("db down"); } } as never, caller);
     expect(result).toEqual([]);
   });
+
+  it("leaves proposals to the Inbox, which can decide them", async () => {
+    const proposal = { ...view, id: "p1", kind: "PROPOSAL_REQUEST" as const, workspaceId: "", documentId: "", sourceId: "", threadId: "", commentId: "", excerpt: "" };
+    const result = await unreadHomeNotices({ listUnreadForOwner: async () => ({ notifications: [view, proposal] }) } as never, caller);
+    expect(result.map(item => item.id)).toEqual(["n1"]);
+  });
 });
