@@ -47,6 +47,11 @@ describe("the primary rail's Tasks row (task knowledge export design, Amendment 
     expect(tasksLink()!.textContent).toContain("Tasks");
   });
 
+  it("carries the Bot icon: results from coding agents, not a to-do list", () => {
+    act(() => root.render(createElement(PrimaryNav, { workspaceId: "w1" })));
+    expect(tasksLink()!.querySelector("svg.lucide-bot")).not.toBeNull();
+  });
+
   it("is current on the list and on a task's own page", () => {
     for (const pathname of ["/w/w1/tasks", "/w/w1/tasks/t1", "/w/w1/tasks/setup"]) {
       state.pathname = pathname;
