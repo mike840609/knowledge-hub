@@ -1,6 +1,6 @@
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { hashExportToken } from "../domain/export-credential";
-import { canonicalTaskHash, canonicalTaskJson, parseTaskArtifact, type TaskArtifactV1 } from "../domain/task-artifact";
+import { canonicalTaskHash, canonicalTaskJson, decodeTaskArtifactBody, parseTaskArtifact, type TaskArtifactV1 } from "../domain/task-artifact";
 import {
   CredentialInvalidError,
   RevisionConflictError,
@@ -27,15 +27,14 @@ export type IngestResult = {
 export class IngestTaskResultService {
   constructor(private readonly unitOfWork: TaskKnowledgeUnitOfWork) {}
 
-  async ingest(rawToken: string, rawBody: unknown): Promise<IngestResult> {
-    const artifact = parseTaskArtifact(rawBody);
+  /** The credential is judged before the body is decoded, so a stranger learns nothing about the contract (design §7, Order). */
+  async ingest(rawToken: string, body: Uint8Array): Promise<IngestResult> {
     if (typeof rawToken !== "string" || rawToken.length === 0) throw new CredentialInvalidError();
     const tokenHash = hashExportToken(rawToken);
-    const artifactJson = canonicalTaskJson(artifact);
-    const contentHash = canonicalTaskHash(artifact);
     return this.unitOfWork.run(async (r) => {
       const scope = await this.authorize(r, tokenHash);
-      return this.store(r, { ...scope, artifact, artifactJson, contentHash });
+      const artifact = parseTaskArtifact(decodeTaskArtifactBody(body));
+      return this.store(r, { ...scope, artifact, artifactJson: canonicalTaskJson(artifact), contentHash: canonicalTaskHash(artifact) });
     });
   }
 

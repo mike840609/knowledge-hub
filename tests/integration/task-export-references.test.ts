@@ -29,7 +29,7 @@ async function exporter() {
 
 /** Ingests one artifact carrying `references` and returns what was stored for it. */
 async function stored(token: string, references: TaskReferenceInput[]) {
-  const { taskResultId } = await new IngestTaskResultService(uow()).ingest(token, { ...base, taskId: crypto.randomUUID(), artifactRevision: 1, references });
+  const { taskResultId } = await new IngestTaskResultService(uow()).ingest(token, new TextEncoder().encode(JSON.stringify({ ...base, taskId: crypto.randomUUID(), artifactRevision: 1, references })));
   return uow().run((r) => r.taskExports.listReferences(taskResultId, 1));
 }
 

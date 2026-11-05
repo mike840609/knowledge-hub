@@ -61,7 +61,7 @@ describe("POST /api/task-results/ingest", () => {
     await expectPrivate(first);
     const replay = await route.POST(post());
     expect(replay.status).toBe(200);
-    expect(injected.ingest).toHaveBeenCalledWith(TOKEN, { schemaVersion: 1, summary: "PRIVATE-CONTENT" });
+    expect(injected.ingest).toHaveBeenCalledWith(TOKEN, new TextEncoder().encode(BODY)); // decoded only after the credential (design, Order)
   });
 
   it.each([
@@ -93,8 +93,9 @@ describe("POST /api/task-results/ingest", () => {
   });
 
   it("answers 400 for malformed JSON and 422 for a contract failure", async () => {
-    expect((await route.POST(post("{not json"))).status).toBe(400);
     const { TaskArtifactError } = await import("@/modules/task-knowledge/domain/task-errors");
+    injected.ingest.mockRejectedValueOnce(new TaskArtifactError("MALFORMED_JSON", "body is not valid UTF-8 JSON"));
+    expect((await route.POST(post("{not json"))).status).toBe(400);
     injected.ingest.mockRejectedValue(new TaskArtifactError("UNSUPPORTED_SCHEMA_VERSION", "schemaVersion: only 1 is supported"));
     const response = await route.POST(post());
     expect(response.status).toBe(422);

@@ -18,7 +18,7 @@ beforeAll(() => { pool = createDatabasePool(databaseConfig("test")); });
 afterAll(async () => { await pool.end(); });
 
 const uow = () => new MariaDbTaskKnowledgeUnitOfWork(pool);
-const ingest = (token: string, body: unknown, unitOfWork: TaskKnowledgeUnitOfWork = uow()) => new IngestTaskResultService(unitOfWork).ingest(token, body);
+const ingest = (token: string, body: unknown, unitOfWork: TaskKnowledgeUnitOfWork = uow()) => new IngestTaskResultService(unitOfWork).ingest(token, typeof body === "string" ? new TextEncoder().encode(body) : new TextEncoder().encode(JSON.stringify(body)));
 const bindings = () => new ManageExportBindingService(uow());
 const base = JSON.parse(readFileSync(path.join(process.cwd(), "tests/fixtures/task-artifact/artifact/valid.json"), "utf8"));
 const artifact = (taskId: string, artifactRevision: number, summary = `Revision ${artifactRevision}.`) => ({ ...base, taskId, artifactRevision, summary });
@@ -260,10 +260,16 @@ describe("failures", () => {
     expect(await counts(bindingId)).toEqual({ tasks: 0, revisions: 0, refs: 0 });
   });
 
-  it("rejects an invalid artifact before touching the database", async () => {
-    let touched = false;
-    const spy: TaskKnowledgeUnitOfWork = { run: async () => { touched = true; throw new Error("should not run"); } };
-    expect(await rejection(ingest("khx_any", { ...base, schemaVersion: 2 }, spy))).toMatchObject({ code: "UNSUPPORTED_SCHEMA_VERSION" });
-    expect(touched).toBe(false);
+  it("judges the credential before the body: a stranger learns nothing about the contract", async () => {
+    for (const body of [{ ...base, schemaVersion: 2 }, { ...base, references: [{ type: "constructor" }] }, "{not json"]) {
+      expect(await rejection(ingest("khx_unknown", body))).toMatchObject({ code: "CREDENTIAL_INVALID" });
+    }
+  });
+
+  it("answers a live credential's malformed or invalid body, and writes nothing", async () => {
+    const { token, bindingId } = await exporter();
+    expect(await rejection(ingest(token, "{not json"))).toMatchObject({ code: "MALFORMED_JSON" });
+    expect(await rejection(ingest(token, { ...base, schemaVersion: 2 }))).toMatchObject({ code: "UNSUPPORTED_SCHEMA_VERSION" });
+    expect(await counts(bindingId)).toEqual({ tasks: 0, revisions: 0, refs: 0 });
   });
 });

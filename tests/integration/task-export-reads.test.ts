@@ -26,7 +26,7 @@ async function exporter() {
   const caller = callerFromIdentity(seed.owner);
   const bindings = new ManageExportBindingService(uow());
   const { bindingId, token } = await bindings.create(caller, { workspaceId: seed.workspaceId, label: "laptop" });
-  const ingest = (body: Record<string, unknown>) => new IngestTaskResultService(uow()).ingest(token, { ...base, ...body });
+  const ingest = (body: Record<string, unknown>) => new IngestTaskResultService(uow()).ingest(token, new TextEncoder().encode(JSON.stringify({ ...base, ...body })));
   return { ...seed, caller, bindings, bindingId, token, ingest };
 }
 

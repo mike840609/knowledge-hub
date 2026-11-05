@@ -1,7 +1,7 @@
 // Request-bound private routes must bypass Next auto-mode Request proxies.
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
-import { decodeTaskArtifactBody, MAX_ARTIFACT_BYTES } from "@/modules/task-knowledge/domain/task-artifact";
+import { MAX_ARTIFACT_BYTES } from "@/modules/task-knowledge/domain/task-artifact";
 import {
   CredentialInvalidError,
   RevisionConflictError,
@@ -74,8 +74,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const token = request.headers.get(TOKEN_HEADER);
     if (!token) throw new CredentialInvalidError();
-    const body = decodeTaskArtifactBody(await readLimited(request));
-    const result = await taskIngestService().ingest(token, body);
+    const result = await taskIngestService().ingest(token, await readLimited(request));
     return NextResponse.json(
       { taskResultId: result.taskResultId, revisionNo: result.revisionNo, bindingId: result.bindingId, url: `/w/${result.workspaceId}/tasks/${result.taskResultId}` },
       { status: result.state === "CREATED" ? 201 : 200, headers: HEADERS },

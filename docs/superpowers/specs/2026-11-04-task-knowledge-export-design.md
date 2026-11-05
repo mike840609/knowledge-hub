@@ -151,6 +151,8 @@ Never accept caller-provided Owner, Workspace or Source identity. Team or cross-
 - 500: any other unexpected error; nothing is reported as success. The CLI treats it as retryable, which is safe because ingest is idempotent.
 - 503: retryable: lock wait timeout or deadlock (both already mapped to `WorkspaceBusyError` by `mapDatabaseError`; the transaction rolled back), or no database connection could be obtained: the task-knowledge unit of work catches a failure of `pool.getConnection()` (which the existing unit of work leaves outside `mapDatabaseError`) and throws a named `DatabaseUnavailableError`, which the route maps to 503. Nothing has been written at that point.
 
+**Order.** The size limit comes first, because the route must stop reading (413). The credential is judged next (401, 403), and only a caller holding a live one gets 400 or 422: a stranger learns nothing about the contract, and nothing it sends reaches the parser (pre-merge review, 2026-11-05).
+
 Every response, including 405, is private and uncached (`Cache-Control: private, no-store`).
 
 **Identity and concurrency.** Task identity is unique by `(bindingId, taskId)`; revision is unique by `(taskResultId, artifactRevision)`. The owner is reached through the binding, so it is not part of the key. Concurrent POSTs cannot produce duplicate tasks or partial revision/reference rows. A new revision retains prior revisions.
