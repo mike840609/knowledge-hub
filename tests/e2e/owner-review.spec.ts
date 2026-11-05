@@ -298,7 +298,7 @@ test("the owner's page keeps one left edge for its title and its article, with d
   const rail = page.getByRole("complementary", { name: "Document comments" });
   const edges = () => page.evaluate(() => {
     const textLeft = (element: Element) => { const range = document.createRange(); range.selectNodeContents(element); return Math.round(range.getClientRects()[0].left); };
-    return { title: Math.round(document.querySelector<HTMLElement>('[role="region"][aria-label="Document content"] input[aria-label="Title"]')!.getBoundingClientRect().left), article: textLeft(document.querySelector("[data-review-document] p")!) };
+    return { title: Math.round(document.querySelector<HTMLElement>('[role="region"][aria-label="Document content"] [aria-label="Title"]')!.getBoundingClientRect().left), article: textLeft(document.querySelector("[data-review-document] p")!) };
   });
   await expect(rail).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();

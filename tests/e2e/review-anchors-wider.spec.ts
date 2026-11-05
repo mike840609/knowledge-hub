@@ -138,7 +138,7 @@ test("the owner starts a discussion on their own document, and a reader of its l
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
   // A document nobody has said anything about offers nothing until something is selected.
-  await expect(page.getByRole("button", { name: /^(Open|Hide) discussions/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^(Show|Hide) comments/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Comment on selection" })).toHaveCount(0);
 
   // What cannot take a comment says so beside the selection, where the control would be.

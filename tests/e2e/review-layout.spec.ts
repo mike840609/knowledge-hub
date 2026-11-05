@@ -233,7 +233,7 @@ test("opening and closing the rail moves nothing under the pointer where the win
   await page.setViewportSize({ width: 1600, height: 900 });
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
   const article = page.locator("[data-review-document]").filter({ visible: true });
-  const entry = page.getByRole("button", { name: /^(Open|Hide) discussions/ });
+  const entry = page.getByRole("button", { name: /^(Show|Hide) comments/ });
   const save = page.getByRole("button", { name: "Save share", exact: true });
   const where = async () => ({ article: (await article.boundingBox())!.x, entry: (await entry.boundingBox())!.x, save: (await save.boundingBox())!.x });
   const before = await where();
@@ -524,7 +524,7 @@ test("the shared rail's heading is one row, as the owner's is: its name and filt
   await page.setViewportSize({ width: 390, height: 844 });
   await openReviewDiscussions(page);
   const drawer = page.getByRole("dialog", { name: "Comments" });
-  await expect(drawer.getByRole("button", { name: "Close comments", exact: true })).toHaveCount(0);
+  await expect(drawer.locator(".kh-review-rail-only").getByRole("button", { name: "Close comments", exact: true })).toHaveCount(0);
   await expect(drawer.locator("h2").filter({ hasText: /^Comments$/ }).filter({ visible: true })).toHaveCount(1);
   const [drawerFilter, drawerRefresh] = [await place(drawer.getByRole("button", { name: "Filter comments" })), await place(drawer.getByRole("button", { name: "Refresh comments" }))];
   expect(Math.abs(drawerFilter.middle - drawerRefresh.middle)).toBeLessThan(6);
