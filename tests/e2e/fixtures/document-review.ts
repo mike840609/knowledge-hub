@@ -29,7 +29,7 @@ export async function selectPassage(page: Page, text = "😀 bold") {
 }
 
 export async function openReviewDiscussions(page: Page) {
-  const entry = page.getByRole("button", { name: /^(Open|Hide) discussions/, includeHidden: true });
+  const entry = page.getByRole("button", { name: /^(Show|Hide) comments/, includeHidden: true });
   await expect(entry).toBeVisible();
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
   if (await entry.getAttribute("aria-expanded") === "false") await entry.click();

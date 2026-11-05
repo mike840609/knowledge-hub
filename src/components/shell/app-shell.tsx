@@ -90,6 +90,9 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
     <ToastProvider>
     <TooltipProvider delay={500} closeDelay={0}>
     <div className="flex h-screen overflow-hidden flex-col bg-kh-bg-subtle text-kh-text supports-[height:100dvh]:h-dvh">
+      {/* The explorer can hold dozens of rows; without this, a keyboard reader tabs through all of
+          them before reaching the document. It is the first stop and only appears when focused. */}
+      <a href="#kh-workspace-main" className="kh-skip-link">Skip to content</a>
       <Topbar model={model} onMenuClick={openNav} />
       {accessNotice && <p role="status" className="border-b border-kh-border bg-kh-bg p-3 text-body">You no longer have access to this workspace.<button aria-label="Dismiss access notice" className="ml-3 underline" onClick={() => setAccessNotice(false)}>Dismiss</button></p>}
       {!authorization.confirmed && !authorization.revoked && <p role="alert" className="bg-kh-bg p-3 text-body text-kh-danger">Unable to confirm workspace access. Changes are paused. <button className="underline" onClick={() => void authorization.refresh()}>Retry</button></p>}
@@ -112,7 +115,7 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
           <div className="min-h-0 flex-1 overflow-y-auto"><PrimaryNav workspaceId={model.workspace.id} compact={navCollapsed} /></div>
           <div className="shrink-0 border-t border-kh-border p-2"><UserMenu identityName={model.identityName} identityEmpId={model.identityEmpId} workspaceId={model.workspace.id} compact={navCollapsed}/></div>
         </aside>
-        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-kh-bg has-[[data-document-pane]]:overflow-hidden">{authorization.revoked ? <p role="status">Workspace access changed. Returning to My Space…</p> : children}</main>
+        <main id="kh-workspace-main" tabIndex={-1} className="relative min-h-0 min-w-0 flex-1 overflow-y-auto bg-kh-bg outline-none has-[[data-document-pane]]:overflow-hidden">{authorization.revoked ? <p role="status">Workspace access changed. Returning to My Space…</p> : children}</main>
       </div>
       <Drawer side="left" open={navOpen} onOpenChange={setNavOpen} title="Menu">
         <div className="flex h-full min-h-0 flex-col" onClick={(event) => {

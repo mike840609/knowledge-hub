@@ -3,14 +3,13 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MessagesSquare } from "lucide-react";
-import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { Timestamp } from "@/components/ui/timestamp";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Illustration } from "./illustration";
-import { SharesNavigation } from "./shares-navigation";
+import { SharesHeader } from "./shares-navigation";
 import { applyAndSearch, LiveSearch } from "@/components/search/live-search-submit";
 import { navigateListRows } from "@/lib/list-row-navigation";
 import type { DiscussionFilter, FollowedDiscussionView } from "@/modules/knowledge/domain/review-follow";
@@ -37,8 +36,7 @@ export function FollowedDiscussionsView({ workspaceId, items, filter, unread, fi
     finally { pending.current = false; setBusy(null); }
   }
   return <main className="kh-page pb-6">
-    <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" description="Discussions you follow on shared articles. Following never extends a link's access."/>
-    <SharesNavigation workspaceId={workspaceId} active="discussions" discussionsUnread={unread}/>
+    <SharesHeader workspaceId={workspaceId} active="discussions" discussionsUnread={unread} description="Discussions you follow on shared articles. Following never extends a link's access."/>
     <form ref={filterForm} action={`/w/${workspaceId}/shares`} method="get" aria-label="Filter discussions" className="mt-4 flex flex-wrap items-center gap-2">
       <Input type="hidden" name="tab" value="discussions"/>
       <label className="sr-only" htmlFor="discussions-status">Discussion status</label>

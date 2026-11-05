@@ -74,6 +74,8 @@ for (const scenario of [
       await document.scrollIntoViewIfNeeded();
       await prefetched;
       await document.click();
+      // The explorer closes on navigation; a link under its backdrop would not navigate.
+      await expect(page.locator("[role=dialog]")).toHaveCount(0, ROUND_TRIP);
     } else {
       await content.getByRole("link", { name: withOutlineTitle, exact: true }).click();
     }
@@ -94,9 +96,15 @@ for (const scenario of [
     await expect(content).not.toHaveAttribute("aria-busy", "true");
     await test.info().attach("loaded", { body: await page.screenshot(), contentType: "image/png" });
 
-    // Returning to a document without an outline must also keep its position.
-    await content.getByRole("link", { name: plainTitle, exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`${start}$`));
+    // Returning to a document without an outline must also keep its position. A tap inside the
+    // editable article places the caret on mobile instead of following the link, so return by
+    // address there; this test is about the loading column, not the editor's tap behaviour.
+    if (scenario.width < 640) {
+      await page.goto(new URL(start, page.url()).toString(), { waitUntil: "domcontentloaded" });
+    } else {
+      await content.getByRole("link", { name: plainTitle, exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`${start}$`), ROUND_TRIP);
+    }
     await expect(content.locator("article:visible")).toBeVisible(ROUND_TRIP);
     const returned = await readingColumn().boundingBox();
     expect(Math.abs(returned!.x - before!.x)).toBeLessThanOrEqual(1);

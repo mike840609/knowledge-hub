@@ -95,7 +95,7 @@ test('closing the rail keeps the first block in sight where it was', async ({ pa
   await settle(page);
   const paneTop = await page.locator('.kh-document-pane').evaluate(pane => pane.getBoundingClientRect().top);
   const sight = await firstInSight(page, paneTop);
-  await press(page, page.getByRole('button', { name: 'Collapse discussions' }));
+  await press(page, page.getByRole('button', { name: 'Close comments' }));
   await expect(page.locator('.kh-review-document')).not.toHaveAttribute('data-review-open', '');
   await settle(page);
   expect(Math.abs(await blockTop(page, sight.index) - sight.top)).toBeLessThan(2);
@@ -111,7 +111,7 @@ async function openSharedPage(page: Page, width: number) {
   await expect(page.locator('.kh-review-document')).toHaveAttribute('data-review-ready', '');
 }
 const PINNED_BAR = 57;
-const openDiscussions = (page: Page) => page.getByRole('button', { name: /^Open discussions/ });
+const openDiscussions = (page: Page) => page.getByRole('button', { name: /^Show comments/ });
 
 for (const width of [1280, 1600])
   test(`on a shared page at ${width}px, commenting on a selection keeps the passage in place`, async ({ page }) => {

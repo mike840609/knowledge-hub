@@ -41,7 +41,7 @@ test("rename also selects the heading in Markdown mode", async ({ page }) => {
   const result = await response.json();
   const url = `/w/${workspace}/knowledge/${result.sourceId}/${result.documentId}`;
   await surface(page, url);
-  await page.getByRole("button", { name: "Markdown" }).click();
+  await page.getByRole("button", { name: "Markdown source" }).click();
   await page.getByRole("button", { name: "Rename document" }).click();
   await page.keyboard.insertText("New heading");
   await saved(page);
@@ -313,10 +313,10 @@ test("inline: composition does not submit partial input", async ({ page }) => {
 test("inline: Markdown changes survive switching back to the rendered editor", async ({ page }) => {
   const { url } = await note(page);
   await surface(page, url);
-  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await page.getByRole("button", { name: "Markdown source", exact: true }).click();
   await page.getByRole("textbox", { name: "Markdown", exact: true }).fill("## A section\n\nSource edit.");
   await saved(page);
-  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await page.getByRole("button", { name: "Markdown source", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Source edit.");
   await page.reload();
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Source edit.");

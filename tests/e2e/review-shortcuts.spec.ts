@@ -50,7 +50,7 @@ test("D leaves discussions unchanged; explicit buttons open and close them", asy
   expect((await request.post(`${viewer}/api/share-review/threads`, { headers: { Origin: viewer }, data: { token, expectedRevisionId: doc.revisionId, anchor, body: "Reader question", idempotencyKey: crypto.randomUUID() } })).status()).toBe(201);
 
   await page.goto(`${viewer}${doc.links[0].path}`);
-  const entry = page.getByRole("button", { name: /^(Open|Hide) discussions/ });
+  const entry = page.getByRole("button", { name: /^(Show|Hide) comments/ });
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
   await expect(entry).not.toHaveAttribute("aria-keyshortcuts");
   // The reader's own discussion is not waiting for them, so it starts closed; D changes nothing.
@@ -73,7 +73,7 @@ test("D leaves discussions unchanged; explicit buttons open and close them", asy
   // A pane below the rail's 48rem threshold, where the owner's discussions wait to be asked for rather than open on arrival.
   await page.setViewportSize({ width: 720, height: 800 });
   await page.goto(doc.href);
-  const owner = page.getByRole("button", { name: /^(Open|Hide) discussions/ });
+  const owner = page.getByRole("button", { name: /^(Show|Hide) comments/ });
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
   await expect(owner).not.toHaveAttribute("aria-keyshortcuts");
   await expect(owner).toHaveAttribute("aria-expanded", "false");

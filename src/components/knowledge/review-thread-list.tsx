@@ -23,10 +23,10 @@ const SUBMIT_SHORTCUT = "Meta+Enter Control+Enter";
 
 export async function reviewRequest<T>(url: string, body?: unknown): Promise<T> {
   const response = await fetch(url, { method: body === undefined ? "GET" : "POST", credentials: "same-origin", cache: "no-store", referrerPolicy: "origin", redirect: "error", headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  if (!response.headers.get("content-type")?.includes("application/json")) throw new Error("Discussion service returned an unexpected response. Refresh and try again.");
+  if (!response.headers.get("content-type")?.includes("application/json")) throw new Error("Comment service returned an unexpected response. Refresh and try again.");
   const result = await response.json();
   if (!response.ok) {
-    const error = new Error(response.status === 401 ? "Sign in to add a comment. Company sign-in is currently unavailable here." : response.status === 503 ? "Discussions are unavailable. You can still read the document." : response.status === 404 ? "This discussion or share link is no longer available." : result.error?.message ?? result.message ?? "The discussion could not be updated.");
+    const error = new Error(response.status === 401 ? "Sign in to add a comment. Company sign-in is currently unavailable here." : response.status === 503 ? "Comments are unavailable. You can still read the document." : response.status === 404 ? "This comment or share link is no longer available." : result.error?.message ?? result.message ?? "The comment could not be updated.");
     throw error;
   }
   return result as T;
@@ -86,7 +86,7 @@ const FILTER_NAMES: Record<ReviewFilter, string> = { ALL: "All comments", OPEN: 
 
 /** Which discussions are listed. The list draws it above itself unless a panel takes it for its heading. */
 export function ReviewFilterMenu({ value, onChange }: { value: ReviewFilter; onChange: (value: ReviewFilter) => void }) {
-  return <MenuRoot><MenuTrigger className={buttonClasses({ variant: "ghost" })} aria-label="Filter discussions">{FILTER_NAMES[value]}<ChevronDown className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent><MenuRadioGroup value={value} onValueChange={next => onChange(next as ReviewFilter)}>{(Object.keys(FILTER_NAMES) as ReviewFilter[]).map(option => <MenuRadioItem key={option} value={option}>{FILTER_NAMES[option]}</MenuRadioItem>)}</MenuRadioGroup></MenuContent></MenuRoot>;
+  return <MenuRoot><MenuTrigger className={buttonClasses({ variant: "ghost" })} aria-label="Filter comments">{FILTER_NAMES[value]}<ChevronDown className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent><MenuRadioGroup value={value} onValueChange={next => onChange(next as ReviewFilter)}>{(Object.keys(FILTER_NAMES) as ReviewFilter[]).map(option => <MenuRadioItem key={option} value={option}>{FILTER_NAMES[option]}</MenuRadioItem>)}</MenuRadioGroup></MenuContent></MenuRoot>;
 }
 
 /** The first discussion after the active one, in passage order and round again, that `matches`; never the active one itself. */
@@ -167,7 +167,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
   async function act(threadId: string, action: "resolution" | "visibility", value: string, commentId?: string, confirmed = false) {
     if (action === "visibility" && value === "HIDDEN" && !confirmed) { setPendingHide({ threadId, commentId }); return; }
     setBusy(true); setError(undefined);
-    try { await moderate?.(threadId, action, value, commentId); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not update discussion."); } finally { setBusy(false); setPendingHide(undefined); }
+    try { await moderate?.(threadId, action, value, commentId); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not update comment."); } finally { setBusy(false); setPendingHide(undefined); }
   }
   const visible = useMemo(() => {
     const filtered = threads.filter(thread => filter === "ALL" || thread.status === filter);
@@ -198,10 +198,10 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
     <ConfirmDialog open={!!pendingDelete} onOpenChange={open => { if (!open) setPendingDelete(undefined); }} title="Delete comment?" description="Your comment will be removed for everyone. This cannot be undone." confirmLabel="Delete comment" onConfirm={() => { if (pendingDelete) void remove(pendingDelete); }} />
     {threads.length > 0 && !onFilterChange && <ReviewFilterMenu value={filter} onChange={setFilter} />}
     {error && <p role="alert" className="text-body-sm">{error}</p>}
-    {visible.length === 0 && !draft && <p className="py-6 text-body-sm text-kh-text-muted">{threads.length === 0 ? (writesEnabled ? "No comments yet. Select text in the document to start a discussion." : "No comments yet.") : filter === "OPEN" && threads.every(thread => thread.status === "RESOLVED") ? "Every discussion is resolved." : "No comments here."}</p>}
+    {visible.length === 0 && !draft && <p className="py-6 text-body-sm text-kh-text-muted">{threads.length === 0 ? (writesEnabled ? "No comments yet. Select text in the document to start a comment." : "No comments yet.") : filter === "OPEN" && threads.every(thread => thread.status === "RESOLVED") ? "Every comment is resolved." : "No comments here."}</p>}
     <div ref={railRef} data-review-rail={railMarkdown !== undefined ? "" : undefined} data-positioned={layout ? "" : undefined} className="kh-review-thread-list" style={layout ? { "--review-list-height": `${layout.height}px` } as CSSProperties : undefined}>
     {/* The box is placed before its field mounts: the field takes focus on mounting, and focused at the rail's top it scrolls the page away from the passage. */}
-    {draft && <section data-review-draft={DRAFT_ID} aria-label="New comment" style={layout ? { "--review-thread-top": `${layout.positions[DRAFT_ID] ?? 0}px` } as CSSProperties : undefined}>{layout?.positions[DRAFT_ID] !== undefined && draft.composer}</section>}
+    {draft && <section data-review-draft={DRAFT_ID} aria-label="New comment" style={layout ? { "--review-thread-top": `${layout.positions[DRAFT_ID] ?? 0}px` } as CSSProperties : undefined} className={layout?.positions[DRAFT_ID] !== undefined ? "kh-pop-in" : undefined}>{layout?.positions[DRAFT_ID] !== undefined && draft.composer}</section>}
     {groups.flatMap(group => {
       // The passage being read and the first group start expanded; the rest open on demand.
       const expanded = expandedGroups[group.key] ?? (group.key === firstGroupKey || group.threads.some(item => item.id === activeThreadId));
@@ -210,13 +210,13 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
       const active = activeThreadId === thread.id;
       const compact = !!onActivate && !active;
       const canReply = thread.status === "OPEN" && owner?.visibility !== "HIDDEN" && writesEnabled;
-      return <section key={thread.id} data-review-thread={thread.id} data-active={active ? "" : undefined} tabIndex={-1} aria-label="Discussion thread" aria-current={active ? "true" : undefined} onFocus={event => {
+      return <section key={thread.id} data-review-thread={thread.id} data-active={active ? "" : undefined} tabIndex={-1} aria-label="Comment thread" aria-current={active ? "true" : undefined} onFocus={event => {
         // A pointer focuses on mousedown. Moving the card then would move the button
         // out from under mouseup and swallow its click. Keyboard focus can activate now.
         if (event.target.matches(":focus-visible") && (event.target === event.currentTarget || event.target.closest("blockquote"))) onActivate?.(thread.id);
       }} onClick={() => onActivate?.(thread.id)} style={layout ? { "--review-thread-top": `${layout.positions[thread.id] ?? 0}px` } as CSSProperties : undefined} className={`rounded-md border kh-focus-ring focus:border-kh-primary p-3 ${active ? "border-kh-primary bg-kh-bg-selected" : "border-kh-border bg-kh-bg"}`}>
         {(thread.status === "RESOLVED" || owner?.visibility === "HIDDEN" || thread.currentAnchor.match === "OUTDATED") && <p className="mb-2 text-caption text-kh-text-muted">{[thread.status === "RESOLVED" ? "Resolved" : "", owner?.visibility === "HIDDEN" ? "Hidden from reviewers" : "", thread.currentAnchor.match === "OUTDATED" ? "Passage outdated" : ""].filter(Boolean).join(" · ")}</p>}
-        {thread.currentAnchor.anchor && <blockquote className="mb-3 border-l border-kh-border pl-3 text-body-sm text-kh-text-muted"><button type="button" disabled={!focusAnchor} className={`${compact ? "line-clamp-2" : ""} break-words text-left kh-focus-ring hover:text-kh-text ${thread.currentAnchor.anchor.blockKind === "code" ? "whitespace-pre-wrap font-mono" : ""}`} onClick={() => {
+        {thread.currentAnchor.anchor && <blockquote className="mb-3 border-l border-kh-border pl-3 text-body-sm text-kh-text-secondary"><button type="button" disabled={!focusAnchor} className={`${compact ? "line-clamp-2" : ""} break-words text-left kh-focus-ring hover:text-kh-text ${thread.currentAnchor.anchor.blockKind === "code" ? "whitespace-pre-wrap font-mono" : ""}`} onClick={() => {
           const locate = () => focusAnchor?.(thread.currentAnchor.anchor!);
           const navigation = new CustomEvent("review-focus-passage", { cancelable: true, detail: locate });
           if (document.dispatchEvent(navigation)) requestAnimationFrame(() => requestAnimationFrame(locate));
@@ -273,7 +273,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
       });
       const first = group.threads[0];
       const cover = first.comments[0];
-      return [<section key={group.key} data-review-thread={first.id} data-stacked="" aria-label={`${group.threads.length} discussions on this passage`} style={layout ? { "--review-thread-top": `${layout.positions[first.id] ?? 0}px` } as CSSProperties : undefined} className="rounded-md border border-kh-border bg-kh-bg p-3">
+      return [<section key={group.key} data-review-thread={first.id} data-stacked="" aria-label={`${group.threads.length} comments on this passage`} style={layout ? { "--review-thread-top": `${layout.positions[first.id] ?? 0}px` } as CSSProperties : undefined} className="rounded-md border border-kh-border bg-kh-bg p-3">
         {first.currentAnchor.anchor && <blockquote className="mb-3 border-l border-kh-border pl-3 text-body-sm text-kh-text-muted"><span className="line-clamp-2 break-words">{first.currentAnchor.anchor.exact}</span></blockquote>}
         {cover && !cover.deleted && <div className="mb-2 flex gap-2 text-body-sm">
           <Avatar name={cover.authorName} />

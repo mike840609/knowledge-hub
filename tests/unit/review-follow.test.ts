@@ -18,7 +18,7 @@ const summarize = (comments: ReviewComment[], overrides: { seenAt?: Date; linkVa
 describe("a followed discussion's replies, as the follower's Inbox reads them", () => {
   it("counts replies by others after the follower last saw it, and names the latest", () => {
     const result = summarize([comment("a", "reader", 0), comment("b", "owner", 2), comment("c", "other", 3)]);
-    expect(result).toMatchObject({ unread: 2, latestReply: { id: "c" }, latest: { id: "c" } });
+    expect(result).toMatchObject({ unread: 2, latestReply: { id: "c" }, latest: { id: "c" }, commentCount: 3 });
   });
   it("never counts the follower's own words, but still names the latest", () => {
     expect(summarize([comment("a", "reader", 0), comment("b", "reader", 5)])).toMatchObject({ unread: 0, latestReply: null, latest: { id: "b" } });
@@ -38,7 +38,7 @@ describe("a followed discussion's replies, as the follower's Inbox reads them", 
   });
   it("skips hidden and deleted replies", () => {
     const result = summarize([comment("a", "reader", 0), comment("b", "owner", 2), comment("c", "owner", 3, { visibility: "HIDDEN" }), comment("d", "other", 4, { deletedAt: at(5) })]);
-    expect(result).toMatchObject({ unread: 1, latestReply: { id: "b" }, latest: { id: "b" } });
+    expect(result).toMatchObject({ unread: 1, latestReply: { id: "b" }, latest: { id: "b" }, commentCount: 2 });
   });
   it("lists nothing for a hidden or retracted discussion", () => {
     expect(summarize([comment("a", "reader", 0), comment("b", "owner", 2)], { thread: { visibility: "HIDDEN" } })).toBeNull();

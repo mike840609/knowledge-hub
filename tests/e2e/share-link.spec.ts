@@ -99,7 +99,7 @@ test.describe("document share link", () => {
       const source = await showMarkdown(editorForm);
       await source.fill("second shared body");
       await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
-      await editorForm.getByRole("button", { name: "Markdown", exact: true }).click();
+      await editorForm.getByRole("button", { name: "Markdown source", exact: true }).click();
       await expect(page.locator("article").first().getByText("second shared body")).toBeVisible(ROUND_TRIP);
       expect(await (await reader.get(path!)).text()).toContain("second shared body");
 

@@ -19,7 +19,17 @@ export const SESSION_UTC_SQL = "SET SESSION time_zone = '+00:00'";
 
 export const SESSION_INIT_SQL: string[] = [SESSION_ISOLATION_SQL, SESSION_UTC_SQL];
 
+/**
+ * mariadb 3.5 converts DATETIME to and from Date in the Node process's own zone
+ * and ignores `timezone` for it, so outside UTC every CURRENT_TIMESTAMP default
+ * read back shifted by the local offset. Production's Node already runs in UTC;
+ * this makes a developer's machine, tests and scripts do the same.
+ * ponytail: process-wide; a typeCast plus Date-parameter conversion would scope it to the driver if anything else ever needs local time.
+ */
+export const PROCESS_TIME_ZONE = "UTC";
+
 export function createDatabasePool(config: DatabaseConfig): Pool {
+  process.env.TZ = PROCESS_TIME_ZONE;
   if (config.ssl && config.ssl.rejectUnauthorized === false) {
     console.warn("KM_DB_SSL=trust disables database certificate verification; use verify unless the endpoint cannot present a valid certificate.");
   }

@@ -29,7 +29,7 @@ import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewRequest, t
  * The owner replies, resolves and hides, and starts a discussion as a reader of a link does: by
  * selecting a passage (docs/superpowers/specs/2026-10-13-review-anchors-and-owner-threads-design.md).
  */
-export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = false, contentPending = false, prepareComment, commentAvailable = false, thread, children }: { /** A discussion to open on arrival in place of `?thread=`, with its passage scrolled into view. The Inbox passes it, and marks the entry read itself. */ thread?: string; prepareComment?: (capture: CaptureReviewAnchor) => PreparedReviewComment; commentAvailable?: boolean; documentId: string; revisionId: string; markdown: string; readOnly?: boolean; contentPending?: boolean; children: ReactNode }) {
+export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = false, contentPending = false, prepareComment, commentAvailable = false, thread, onChanged, children }: { /** A discussion to open on arrival in place of `?thread=`, with its passage scrolled into view. The Inbox passes it, and marks the entry read itself. */ thread?: string; /** Called after a successful write and this panel's own reload with the discussion that changed, so a host list can settle that row. */ onChanged?: (threadId: string) => void; prepareComment?: (capture: CaptureReviewAnchor) => PreparedReviewComment; commentAvailable?: boolean; documentId: string; revisionId: string; markdown: string; readOnly?: boolean; contentPending?: boolean; children: ReactNode }) {
   const [result, setResult] = useState<{ threads: OwnerReviewThreadView[]; writesEnabled: boolean; revisionId: string; callerUserId: string }>();
   const [error, setError] = useState<string>();
   const [activeThreadId, setActiveThreadId] = useState<string>();
@@ -52,6 +52,8 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const [saveError, setSaveError] = useState<string>();
   const requestVersion = useRef(0);
   const returnPassage = useRef<(() => void) | null>(null);
+  // The drawer's CTA closes the drawer to free the text; focus follows it back to the article, not the entry button.
+  const focusArticleAfterClose = useRef(false);
   const domVersion = useReviewDomVersion();
   const canRequest = !!prepareComment && !!result?.writesEnabled && !readOnly && !revisionChanged && commentAvailable;
   const canRequestSelection = canRequest && selection.ready && !selection.chosen;
@@ -82,7 +84,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   // Updating is a read *again*: the first read renders nothing extra while the document is still settling in.
   const [refreshing, setRefreshing] = useState(false);
   const loaded = useRef(false);
-  const load = useCallback(async () => { if (loaded.current) setRefreshing(true); try { setResult(await reviewRequest(base)); loaded.current = true; setError(undefined); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not load discussions."); } finally { setRefreshing(false); } }, [base]);
+  const load = useCallback(async () => { if (loaded.current) setRefreshing(true); try { setResult(await reviewRequest(base)); loaded.current = true; setError(undefined); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not load comments."); } finally { setRefreshing(false); } }, [base]);
   useEffect(() => { if (contentPending && !prepareComment) selection.clear(); }, [contentPending, prepareComment, selection.clear]);
   // Looking at a discussion marks its notices read; opening the panel marks nothing (spec 2026-10-22).
   // The Inbox marks the entry it opened on; any other discussion looked at here is marked as on the reader.
@@ -191,7 +193,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
       if (!revision || savingDocument || saveError) throw new Error("Wait for the document to finish saving before commenting.");
       const created = await reviewRequest<{ id: string }>(base, { expectedRevisionId: revision, anchor: selection.chosen, body, idempotencyKey, ...(mentions.length ? { mentions, mentionLinkId } : {}) });
       selection.clear(); setPrepared(undefined); setCommentRevision(undefined);
-      setFilter(current => current === "RESOLVED" ? "OPEN" : current); setActiveThreadId(created.id); await load();
+      setFilter(current => current === "RESOLVED" ? "OPEN" : current); setActiveThreadId(created.id); await load(); onChanged?.(created.id);
     }} />;
   // Beside its passage where the discussions are a rail; at the top of the drawer, which covers the passage, where they are not.
   const draft = composer && inline && (!revisionChanged || !!prepared) ? { anchor: selection.chosen!, composer } : undefined;
@@ -227,33 +229,40 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
         }} />}
         <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={located} />
       </div>
-      <aside id="owner-document-discussions" className="kh-review-panel" aria-label="Document discussions" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && reviewRailInline()) { if (selection.chosen) cancelComment(); else changeOpen(false); } }}>
-        <ReviewPanelShell open={open} inline={inline} onOpenChange={changeOpen} returnFocus={() => { if (returnPassage.current) { const restore = returnPassage.current; returnPassage.current = null; restore(); } else entryRef?.current?.focus({ preventScroll: true }); }}><div>
+      <aside id="owner-document-discussions" className="kh-review-panel" aria-label="Document comments" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && reviewRailInline()) { if (selection.chosen) cancelComment(); else changeOpen(false); } }}>
+        <ReviewPanelShell open={open} inline={inline} onOpenChange={changeOpen} returnFocus={() => {
+          if (focusArticleAfterClose.current) {
+            focusArticleAfterClose.current = false;
+            readingRef.current?.querySelector<HTMLElement>("[data-review-document]")?.focus({ preventScroll: true });
+            return;
+          }
+          if (returnPassage.current) { const restore = returnPassage.current; returnPassage.current = null; restore(); } else entryRef?.current?.focus({ preventScroll: true });
+        }}><div>
           <div className="kh-review-toolbar">
             {/* One row: what this is and which of it is listed, then what acts on it. As a drawer the
                 drawer names itself and closes itself, so the name and the cross are the rail's alone.
                 A cross, not a panel glyph: Details, just above, is the panel glyph. */}
             <div className="flex items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-1"><h2 className="kh-review-rail-only text-body font-medium">Comments</h2>{count > 0 && <ReviewFilterMenu value={filter} onChange={setFilter} />}</div>
-              <div className="flex shrink-0 items-center gap-1">{unreadCount > 0 && <Tooltip label="Mark all read"><Button type="button" variant="ghost" icon aria-label="Mark all read" onClick={() => void markRead()}><CheckCheck className="size-4" aria-hidden="true" /></Button></Tooltip>}{refresh}<span className="kh-review-rail-only"><Tooltip label="Hide comments"><Button type="button" variant="ghost" icon aria-label="Collapse discussions" onClick={() => changeOpen(false)}><X className="size-4" aria-hidden="true" /></Button></Tooltip></span></div>
+              <div className="flex shrink-0 items-center gap-1">{unreadCount > 0 && <Tooltip label="Mark all read"><Button type="button" variant="ghost" icon aria-label="Mark all read" onClick={() => void markRead()}><CheckCheck className="size-4" aria-hidden="true" /></Button></Tooltip>}{refresh}<span className="kh-review-rail-only"><Tooltip label="Close comments"><Button type="button" variant="ghost" icon aria-label="Close comments" onClick={() => changeOpen(false)}><X className="size-4" aria-hidden="true" /></Button></Tooltip></span></div>
             </div>
             {result && result.threads.length > 0 && <ReviewNextButtons threads={result.threads} activeThreadId={activeThreadId} onActivate={setActiveThreadId} filter={filter} onFilterChange={setFilter} unreadThreadIds={unreadThreadIds} />}
             {error && <p role="alert" className="mt-3 text-body-sm">{error}</p>}
             {refreshing && result && <p role="status" className="mt-3 text-caption text-kh-text-muted">Updating…</p>}
             {selection.refusal && <p role="status" className="mt-3 text-body-sm">{selection.refusal}</p>}
             {revisionChanged && !prepared && <p role="status" className="mt-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage.</p>}
-            {canComment && !selection.chosen && <div className="mt-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={() => { if (prepareComment) requestComment(() => selection.capture()); else selection.capture(); }} ><MessageSquarePlus className="size-4" aria-hidden="true" />Comment on selected text</Button>{!selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
+            {canComment && !selection.chosen && <div className="mt-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={() => { if (!inline) { focusArticleAfterClose.current = true; changeOpen(false); return; } if (prepareComment) requestComment(() => selection.capture()); else selection.capture(); }} ><MessageSquarePlus className="size-4" aria-hidden="true" />{inline ? "Comment on selected text" : "Close comments and select text"}</Button>{inline && !selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
           </div>
           {composer && !draft && <div className="mt-3">{composer}</div>}
           {result && <div className="mt-3"><ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={prepared?.markdown ?? (revisionChanged || contentPending ? undefined : markdown)} activeThreadId={activeThreadId} onActivate={setActiveThreadId} unreadThreadIds={unreadThreadIds}
             focusAnchor={revisionChanged || contentPending ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }}
             threads={result.threads} writesEnabled={result.writesEnabled && !readOnly} canResolve={!readOnly}
-            mentionScope={mentionScope} reply={async (threadId, body, idempotencyKey, mentions, mentionLinkId) => { await reviewRequest(`${base}/${threadId}/replies`, { body, idempotencyKey, ...(mentions.length ? { mentions, mentionLinkId } : {}) }); if (unreadThreadIds.has(threadId)) void markRead(threadId); await load(); }}
+            mentionScope={mentionScope} reply={async (threadId, body, idempotencyKey, mentions, mentionLinkId) => { await reviewRequest(`${base}/${threadId}/replies`, { body, idempotencyKey, ...(mentions.length ? { mentions, mentionLinkId } : {}) }); if (unreadThreadIds.has(threadId)) void markRead(threadId); await load(); onChanged?.(threadId); }}
             author={{
-              edit: async (threadId, commentId, body) => { await reviewRequest(`${base}/${threadId}/comments/${commentId}/body`, { body }); await load(); },
-              remove: async (threadId, commentId) => { await reviewRequest(`${base}/${threadId}/comments/${commentId}/deletion`, {}); await load(); },
+              edit: async (threadId, commentId, body) => { await reviewRequest(`${base}/${threadId}/comments/${commentId}/body`, { body }); await load(); onChanged?.(threadId); },
+              remove: async (threadId, commentId) => { await reviewRequest(`${base}/${threadId}/comments/${commentId}/deletion`, {}); await load(); onChanged?.(threadId); },
             }}
-            moderate={async (threadId, action, value, commentId) => { const path = commentId ? `${base}/${threadId}/comments/${commentId}/visibility` : `${base}/${threadId}/${action}`; await reviewRequest(path, action === "resolution" ? { status: value } : { visibility: value }); await load(); }} /></div>}
+            moderate={async (threadId, action, value, commentId) => { const path = commentId ? `${base}/${threadId}/comments/${commentId}/visibility` : `${base}/${threadId}/${action}`; await reviewRequest(path, action === "resolution" ? { status: value } : { visibility: value }); await load(); onChanged?.(threadId); }} /></div>}
         </div></ReviewPanelShell>
       </aside>
     </div>

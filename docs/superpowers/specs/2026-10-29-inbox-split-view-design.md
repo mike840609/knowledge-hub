@@ -1,6 +1,6 @@
 # Inbox: a list and the discussion beside it
 
-Status: agreed with the user on 2026-10-29 (nothing selected on arrival; no `j`/`k` in this cut; the pane reads the whole document's discussions).
+Status: agreed with the user on 2026-10-29 (nothing selected on arrival; no `j`/`k` in this cut; the pane reads the whole document's discussions). The list, tabs, event-id selection and page count are superseded on 2026-11-04 by `2026-11-04-inbox-discussion-index-design.md`; the split layout stays.
 
 ## Intent
 

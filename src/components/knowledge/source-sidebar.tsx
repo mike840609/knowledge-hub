@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, ChevronsLeft, Plus, ListFilter, Star } from "lucide-react";
+import { ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, ChevronsLeft, Plus, ListFilter, Star } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { favoritesInPlace, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
@@ -326,7 +326,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
         {shortcutMetadata.error ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Shortcuts could not be loaded. <button className="kh-focus-ring underline" onClick={shortcutMetadata.retry}>Retry</button></p> : null}
         {!needle && favoriteKeys.length > 0 ? <section aria-label="Favorites" className="pb-1">
           <h3><button type="button" aria-expanded={favoritesOpen} onClick={() => setFavoritesOpen((open) => !open)} className="kh-control kh-interactive-row flex kh-rail-row w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
-            {favoritesOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
+            <ChevronRight size={14} aria-hidden="true" className={`transition-transform duration-120 ease-out ${favoritesOpen ? "rotate-90" : ""}`} />
             <span>Favorites</span>
           </button></h3>
           {favoritesOpen ? <ul className="mt-0.5 space-y-0.5">
@@ -343,7 +343,6 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
         ) : null}
         {matches.map(({ source: candidate, tree }) => {
           const open = Boolean(needle) || (expanded[candidate.id] ?? candidate.id === source?.id);
-          const Icon = open ? ChevronDown : ChevronRight;
           const readOnly = candidate.ownership === "SOURCE_MANAGED";
           const isNotes = candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE";
           return (
@@ -353,7 +352,11 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                   {/* One slot, Notion-style: the source's mark at rest, its chevron on hover (where hover exists) or keyboard focus. */}
                   <span className="relative size-3.5 shrink-0 text-kh-text-muted" aria-hidden="true">
                     {readOnly ? <LockKeyhole size={14} data-read-only-cue="" className="absolute inset-0 group-focus-visible:invisible [@media(hover:hover)_and_(pointer:fine)]:group-hover:invisible" /> : null}
-                    <Icon size={14} data-expand-cue="" className="invisible absolute inset-0 group-focus-visible:visible [@media(hover:hover)_and_(pointer:fine)]:group-hover:visible" />
+                    <ChevronRight
+                      size={14}
+                      data-expand-cue=""
+                      className={`invisible absolute inset-0 transition-transform duration-120 ease-out group-focus-visible:visible [@media(hover:hover)_and_(pointer:fine)]:group-hover:visible ${open ? "rotate-90" : ""}`}
+                    />
                   </span>
                   <span className="truncate">{candidate.name}</span>
                   {candidate.status === "ARCHIVED" ? <Status kind="archived" className="ml-auto text-caption font-normal text-kh-text-muted">Archived</Status> : null}

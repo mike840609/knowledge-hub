@@ -17,7 +17,7 @@ test("a reader mentions someone new on the shared page; the mention and the next
   const token = doc.links[0].path.split("/").pop()!;
   const viewer = phase3Origin("viewer"), mentioned = phase3Origin("groupAdmin");
   // Start the mentioned person's Inbox empty, so its badge counts this test's entry alone.
-  expect((await request.post(`${mentioned}/api/review-notifications/activity`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
+  expect((await request.post(`${mentioned}/api/review-notifications/inbox`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
 
   // The reader writes the mention with the keyboard.
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -76,9 +76,12 @@ test("a reader mentions someone new on the shared page; the mention and the next
   await page.goto(`${mentioned}/w/${workspaceId}/inbox`);
   await expect(page.getByRole("link", { name: "Inbox, 1 unread", exact: true })).toBeVisible();
   const followed = page.getByRole("list", { name: "Inbox discussions" }).locator(`a[href="/s/${token}?thread=${threadId}"]`).filter({ hasText: "Owner answer" });
-  await expect(followed).toContainText("Discussion you follow");
+  // A mention that is also followed keeps the stronger relationship on its one row, and the thread is under `Following`.
+  await expect(followed).toContainText("Mentioned you");
+  await page.getByRole("tab", { name: "Following", exact: true }).click();
+  await expect(page.getByRole("list", { name: "Inbox discussions" }).locator(`a[href="/s/${token}?thread=${threadId}"]`)).toContainText("Owner answer");
   // Leave this person's Inbox as it was found for a repeated run.
-  expect((await request.post(`${mentioned}/api/review-notifications/activity`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
+  expect((await request.post(`${mentioned}/api/review-notifications/inbox`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
 });
 
 test("an owner with no live share link is told to create one before mentioning", async ({ page, request }) => {
@@ -105,7 +108,7 @@ test("a mentioned person who stopped following clears the mention by opening its
   const doc = await createReviewDocument(request);
   const token = doc.links[0].path.split("/").pop()!;
   const viewer = phase3Origin("viewer"), mentioned = phase3Origin("groupAdmin");
-  expect((await request.post(`${mentioned}/api/review-notifications/activity`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
+  expect((await request.post(`${mentioned}/api/review-notifications/inbox`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
   const { candidates } = await (await request.get(`${viewer}/api/review-mentions/candidates?query=groupAdmin&token=${token}`, { headers: { Origin: viewer } })).json();
   const body = "Unfollowed but still @Phase3 groupAdmin";
   const created = await request.post(`${viewer}/api/share-review/threads`, { headers: { Origin: viewer }, data: { token, expectedRevisionId: doc.revisionId, anchor: ANCHOR, body, idempotencyKey: crypto.randomUUID(), mentions: [candidates[0].id] } });
@@ -185,7 +188,7 @@ test("a mention written after CJK text is recorded and reaches the person", asyn
   const doc = await createReviewDocument(request);
   const token = doc.links[0].path.split("/").pop()!;
   const viewer = phase3Origin("viewer"), mentioned = phase3Origin("groupAdmin");
-  expect((await request.post(`${mentioned}/api/review-notifications/activity`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
+  expect((await request.post(`${mentioned}/api/review-notifications/inbox`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${viewer}${doc.links[0].path}`);
   await openReviewDiscussions(page);
@@ -213,12 +216,12 @@ test("a mention written after CJK text is recorded and reaches the person", asyn
     .toEqual([expect.objectContaining({ kind: "MENTION", excerpt: body, authorName: "Phase3 viewer", linkAvailable: true })]);
 });
 
-// Spec 2026-11-02: a dead mention is a placeholder in Activity, with no link and none of the words.
+// Spec 2026-11-04: a dead mention has no row in the discussion index (Shares > Discussions keeps it).
 test("a revoked link leaves a mention naming nothing", async ({ page, request }) => {
   const doc = await createReviewDocument(request);
   const token = doc.links[0].path.split("/").pop()!;
   const owner = phase3Origin("reviewOwner"), viewer = phase3Origin("viewer"), mentioned = phase3Origin("groupAdmin");
-  expect((await request.post(`${mentioned}/api/review-notifications/activity`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
+  expect((await request.post(`${mentioned}/api/review-notifications/inbox`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
   const { candidates } = await (await request.get(`${viewer}/api/review-mentions/candidates?query=groupAdmin&token=${token}`, { headers: { Origin: viewer } })).json();
   const body = "請@Phase3 groupAdmin 你看";
   const created = await request.post(`${viewer}/api/share-review/threads`, { headers: { Origin: viewer }, data: { token, expectedRevisionId: doc.revisionId, anchor: ANCHOR, body, idempotencyKey: crypto.randomUUID(), mentions: [candidates[0].id] } });
@@ -226,22 +229,29 @@ test("a revoked link leaves a mention naming nothing", async ({ page, request })
   const query = await (await request.post(`${viewer}/api/share-review/threads/query`, { headers: { Origin: viewer }, data: { token } })).json();
   const thread = query.threads.find((candidate: { comments: Array<{ body: string }> }) => candidate.comments[0].body === body);
   const commentId: string = thread.comments[0].id;
-  expect((await request.post(`${owner}/api/share-links/${doc.links[0].id}/revoke`)).ok()).toBe(true);
+  // The link dies, so there is nothing to review: the index drops the row rather than leaving a dead entry.
+  const peek = await (await request.get(`${owner}/api/documents/${doc.documentId}/peek?brief`)).json();
+  const workspaceId = await personalWorkspaceId(request, mentioned);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  // While the link opens, the mention is one index row for its document: the absence below is a removal,
+  // not a list that never rendered.
+  const deadRow = () => page.getByRole("list", { name: "Inbox discussions" }).getByRole("listitem").filter({ hasText: peek.title });
+  await page.goto(`${mentioned}/w/${workspaceId}/inbox`);
+  await expect(page.getByRole("heading", { name: "Inbox", level: 1 })).toBeVisible();
+  await expect(deadRow()).toHaveCount(1);
+  await expect(deadRow()).toContainText("請@Phase3 groupAdmin");
 
+  expect((await request.post(`${owner}/api/share-links/${doc.links[0].id}/revoke`)).ok()).toBe(true);
   const unread = await (await request.get(`${mentioned}/api/review-notifications/unread`, { headers: { Origin: mentioned } })).json();
   // A dead entry has no thread id; its id is still `mention:<commentId>`.
   expect(unread.notifications.filter((notice: { id: string }) => notice.id === `mention:${commentId}`)).toEqual([]);
 
-  const workspaceId = await personalWorkspaceId(request, mentioned);
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto(`${mentioned}/w/${workspaceId}/inbox`);
-  await page.getByRole("tab", { name: "All activity" }).click();
-  const dead = page.getByRole("list", { name: "Activity history" })
-    .getByRole("listitem")
-    .filter({ hasText: "A shared discussion" })
-    .filter({ hasText: "This link is no longer available." })
-    .first();
-  await expect(dead).toBeVisible();
-  await expect(dead.getByRole("link")).toHaveCount(0);
-  await expect(dead).not.toContainText("請@Phase3 groupAdmin");
+  const listed = page.waitForResponse(response => new URL(response.url()).pathname === "/api/review-notifications/inbox" && response.request().method() === "GET");
+  await page.reload();
+  expect((await listed).ok()).toBe(true);
+  // The list has rendered (its loading status is gone) before the absence is trusted.
+  await expect(page.getByText("Loading comments")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Inbox", level: 1 })).toBeVisible();
+  await expect(deadRow()).toHaveCount(0);
+  await expect(page.getByText(body, { exact: true })).toHaveCount(0);
 });

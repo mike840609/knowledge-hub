@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ComponentProps, type ComponentType, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ComponentType, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { DocumentDetailClient } from "./document-inspector";
 import { OwnerReviewPanel } from "./owner-review-panel";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { FileCode2, Pencil } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
+import { readStored, writeStored } from "@/components/shell/use-persisted-state";
 import { governanceFailure, governanceRequest, GovernanceError } from "@/components/workspaces/governance-error";
 import { DocumentAutosave, type DocumentContent, type SavedRevision } from "@/lib/document-autosave";
 import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } from "@/lib/document-draft";
@@ -76,7 +77,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   const [CodePreview, setCodePreview] = useState<ComponentType<{ code: string; language: string }>>();
   const renderCode = useCallback((code: string, language: string) => CodePreview ? <CodePreview code={code} language={language} /> : <pre><code>{code}</code></pre>, [CodePreview]);
   const sourceTextarea = useRef<HTMLTextAreaElement>(null);
-  const titleInput = useRef<HTMLInputElement>(null);
+  const titleInput = useRef<HTMLTextAreaElement>(null);
   const [Editor, setEditor] = useState<ComponentType<RenderedEditorProps>>();
   const [recovery, setRecovery] = useState<"current" | "stale" | null>(null);
   const [recoveryMetadata, setRecoveryMetadata] = useState<"ready" | "loading" | "unavailable">("ready");
@@ -338,6 +339,27 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   const editable = loaded && authorization.current;
   const status = !loaded ? "loading" : recovery ? "recovery" : !resolved.title ? "invalid" : error ? "error" : writer?.status === "saving" ? "saving" : dirty ? "pending" : "saved";
   const attention = recovery ? "Recovered changes" : !resolved.title ? "Add a title" : error ? "Not saved" : undefined;
+  // The page is the editor: a first visit says so once, then the hint stays out of the way.
+  const [showEditHint, setShowEditHint] = useState(false);
+  useEffect(() => {
+    if (editable && !readStored("local", "kh:edit-hint-seen")) setShowEditHint(true);
+  }, [editable]);
+  const dismissEditHint = useCallback(() => {
+    setShowEditHint(false);
+    writeStored("local", "kh:edit-hint-seen", "1");
+  }, []);
+  // The title wraps on a phone instead of clipping at the edge; a textarea does not grow on its own.
+  const resizeTitle = useCallback(() => {
+    const element = titleInput.current;
+    if (!element) return;
+    element.style.height = "auto";
+    element.style.height = `${element.scrollHeight}px`;
+  }, []);
+  useLayoutEffect(resizeTitle, [content.title, resolved.source, resizeTitle]);
+  useEffect(() => {
+    window.addEventListener("resize", resizeTitle);
+    return () => window.removeEventListener("resize", resizeTitle);
+  }, [resizeTitle]);
   const serverRevisions = detail.inspectorData.revisions;
   const revisions = [...serverRevisions.filter(item => !localRevisions.some(local => local.id === item.id)), ...localRevisions]
     .filter(item => item.history?.state !== "WORKING" || item.id === savedRevision);
@@ -373,13 +395,13 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   }
   const Article = "article";
   // With the page's actions in the pinned line rather than on a row of its own above the title.
-  const markdownToggle = <Button type="button" variant="ghost" aria-pressed={source || failed} data-pressed={source || failed} disabled={!loaded || failed} className="max-sm:px-2 data-[pressed=true]:bg-kh-bg-hover data-[pressed=true]:text-kh-text" onClick={() => {
+  const markdownToggle = <Button type="button" variant="ghost" aria-label="Markdown source" aria-pressed={source || failed} data-pressed={source || failed} disabled={!loaded || failed} className="max-sm:px-2 data-[pressed=true]:bg-kh-bg-hover data-[pressed=true]:text-kh-text" onClick={() => {
     flushEditor();
     if (!source) sourceRef.current = true;
     setSource(value => !value);
   }}>
     <FileCode2 className="h-4 w-4 sm:hidden" aria-hidden="true" />
-    <span className="max-sm:sr-only">Markdown</span>
+    <span className="max-sm:sr-only">Markdown source</span>
   </Button>;
   const article = <>
     {recovery && <p role="status" className="mb-3 text-body-sm">
@@ -402,7 +424,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     }}>Download my changes</Button>}
     {(error || recovery) && resolved.title ? <p className="mb-3 text-caption text-kh-text-muted">Keep the .kh-recovery.md filename ending when uploading this draft to restore it accurately.</p> : null}
     {failed && <p role="status" className="mb-3 text-body-sm">Rendered editing is unavailable. You can continue in Markdown.</p>}
-    <div ref={pressArea} onPointerDownCapture={() => { if (!ready) standInPressed.current = true; }} onCompositionStart={() => { composing.current = true; writer?.pause(true); }} onCompositionEnd={() => {
+    <div ref={pressArea} onPointerDownCapture={() => { dismissEditHint(); if (!ready) standInPressed.current = true; }} onFocusCapture={dismissEditHint} onCompositionStart={() => { composing.current = true; writer?.pause(true); }} onCompositionEnd={() => {
       composing.current = false;
       flushEditor();
       writer?.pause(!editable || !!recovery || !resolve(queue.current!.current).title);
@@ -418,7 +440,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       }
     }}>
       {!ready && !source && !failed && !recovery ? standIn : null}
-      <Article data-review-document={ready && !source && !failed ? "" : undefined} hidden={source || failed || !ready}>
+      <Article tabIndex={-1} data-review-document={ready && !source && !failed ? "" : undefined} hidden={source || failed || !ready}>
         {loaded && Editor && !failed && <Editor reviewMarkdown={ready && !source && !recovery ? content.markdown : undefined} renderCode={renderCode} links={links} workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId}
           markdown={content.markdown} editable={editable && !source} onReady={(instance, openedWith) => {
             editor.current = instance;
@@ -444,10 +466,12 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     inspectorData={{ ...detail.inspectorData, revisions, selectedRevisionNo: revisions.find(item => item.id === savedRevision)?.revisionNo ?? detail.inspectorData.selectedRevisionNo }}
     breadcrumb={[...detail.breadcrumb.slice(0, -1), { label: displayTitle }]} outline={outline}
     contentOwnsTitle={markdownOpensWithHeading(content.markdown)}
+    editHint={showEditHint ? "Click anywhere in the text to edit." : undefined}
     editorActions={<><AutosaveIndicator state={status} attention={attention} /><Button type="button" variant="ghost" aria-label="Rename document" title="Rename document" disabled={!editable || !!recovery || (!ready && !source && !failed)} onClick={focusTitle}><Pencil className="h-4 w-4" aria-hidden="true" /></Button>{markdownToggle}</>}
-    titleControl={resolved.source !== "H1" ? <input ref={titleInput} aria-label="Title" value={content.title} disabled={!editable} maxLength={512}
+    titleControl={resolved.source !== "H1" ? <textarea ref={titleInput} aria-label="Title" value={content.title} disabled={!editable} maxLength={512} rows={1}
       onChange={event => change({ ...queue.current!.current, title: event.target.value })}
-      className="mt-2 block w-full border-0 bg-transparent p-0 text-page-title font-semibold tracking-tight text-kh-text outline-none"
+      onKeyDown={event => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.blur(); } }}
+      className="mt-2 block w-full resize-none overflow-hidden break-words border-0 bg-transparent p-0 text-page-title font-semibold tracking-tight text-kh-text outline-none"
       onCompositionStart={() => { composing.current = true; writer?.pause(true); }}
       onCompositionEnd={() => { composing.current = false; writer?.pause(!editable || !!recovery || !resolve(queue.current!.current).title); }} /> : undefined}>
     <div className="kh-reading-column py-6">

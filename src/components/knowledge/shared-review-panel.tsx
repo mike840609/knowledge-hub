@@ -31,6 +31,8 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
   const [activeThreadId, setActiveThreadId] = useState<string>();
   const entryRef = useRef<HTMLButtonElement>(null);
   const readingRef = useRef<HTMLDivElement>(null);
+  // The drawer's CTA closes the drawer to free the text; focus follows it back to the article, not the entry button.
+  const focusArticleAfterClose = useRef(false);
   // Every way the rail opens and closes holds the reader's place.
   const [open, setOpen] = useReviewRailOpen(readingRef);
   const inline = useReviewRailInline();
@@ -92,7 +94,7 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
   const load = useCallback(async () => {
     setError(undefined);
     if (shown.current) setRefreshing(true);
-    try { setResult(await reviewRequest<DiscussionResult>("/api/share-review/threads/query", scope)); setArrived(undefined); } catch (failure) { if (!shown.current) setResult(undefined); setError(failure instanceof Error ? failure.message : "Discussions are unavailable."); } finally { setRefreshing(false); }
+    try { setResult(await reviewRequest<DiscussionResult>("/api/share-review/threads/query", scope)); setArrived(undefined); } catch (failure) { if (!shown.current) setResult(undefined); setError(failure instanceof Error ? failure.message : "Comments are unavailable."); } finally { setRefreshing(false); }
   }, [scope]);
   const allResolved = !!result && result.threads.length > 0 && result.threads.every(thread => thread.status === "RESOLVED");
   useEffect(() => { void load(); }, [load]);
@@ -145,8 +147,8 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
         {brand}
         {/* -me-3 takes back the last button's padding, so its label ends on the column's edge as the brand starts on it. */}
         <div className={wide ? "-me-3 ml-auto flex shrink-0 items-center gap-1" : "-me-3 flex min-w-0 items-center justify-end gap-1"}>
-          <span aria-live="polite">{arrived && <Button type="button" variant="soft" onClick={showArrived} className="max-sm:px-2"><span className="max-sm:hidden">{arrived.count === 1 ? "1 new comment" : `${arrived.count} new comments`}</span><span className="sm:hidden">{arrived.count} new</span></Button>}</span>
-          <Button ref={entryRef} type="button" variant="ghost" aria-label={`${open ? "Hide discussions" : "Open discussions"}${result ? `, ${result.threads.length} comments` : ""}${allResolved ? ", all resolved" : ""}`} aria-expanded={open} aria-controls="shared-document-discussions" onPointerDown={event => event.preventDefault()} onClick={toggle} className="max-sm:gap-1 max-sm:px-2">
+          <span aria-live="polite">{arrived && <Button type="button" variant="soft" onClick={showArrived} className="kh-pop-in max-sm:px-2"><span className="max-sm:hidden">{arrived.count === 1 ? "1 new comment" : `${arrived.count} new comments`}</span><span className="sm:hidden">{arrived.count} new</span></Button>}</span>
+          <Button ref={entryRef} type="button" variant="ghost" aria-label={`${open ? "Hide comments" : "Show comments"}${result ? `, ${result.threads.length} comments` : ""}${allResolved ? ", all resolved" : ""}`} aria-expanded={open} aria-controls="shared-document-discussions" onPointerDown={event => event.preventDefault()} onClick={toggle} className="max-sm:gap-1 max-sm:px-2">
             <MessageSquare className="size-4" aria-hidden="true" />
             <span className="max-sm:sr-only">Comments{allResolved ? ` · ${result.threads.length} resolved` : result && result.threads.length > 0 ? ` (${result.threads.length})` : ""}</span>
             {result && result.threads.length > 0 && !allResolved ? <span className="tabular-nums sm:hidden">{result.threads.length}</span> : null}
@@ -157,7 +159,7 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
     </div>
     {!open && (error || revisionChanged) && <div className="kh-reading-column py-3">
       {error && <p role="status" className="text-body-sm">{error} <Button type="button" variant="ghost" aria-label="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" />Retry</Button></p>}
-      {revisionChanged && <p role="status" className="text-body-sm">Document changed. Refresh this page before selecting or locating a passage. You can still reply to existing discussions.</p>}
+      {revisionChanged && <p role="status" className="text-body-sm">Document changed. Refresh this page before selecting or locating a passage. You can still reply to existing comments.</p>}
     </div>}
     <div className="kh-review-document" data-review-ready={result || error ? "" : undefined} data-review-open={open ? "" : undefined} data-review-inline={inline ? "" : undefined}>
       <div ref={readingRef} className="kh-review-reading">
@@ -166,25 +168,32 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
         {anonymous && !revisionChanged && <ReviewSelectionBubble place={selection.place} ready={selection.ready} signInHref={signInHref} onComment={() => undefined} />}
         <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={revisionChanged ? undefined : result?.threads} />
       </div>
-      <aside id="shared-document-discussions" className="kh-review-panel" aria-label="Document discussions" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && reviewRailInline()) changeOpen(false); }}>
-    <ReviewPanelShell open={open} inline={inline} onOpenChange={changeOpen} returnFocus={() => entryRef.current?.focus({ preventScroll: true })}><div>
+      <aside id="shared-document-discussions" className="kh-review-panel" aria-label="Document comments" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && reviewRailInline()) changeOpen(false); }}>
+    <ReviewPanelShell open={open} inline={inline} onOpenChange={changeOpen} returnFocus={() => {
+      if (focusArticleAfterClose.current) {
+        focusArticleAfterClose.current = false;
+        readingRef.current?.querySelector<HTMLElement>("[data-review-document]")?.focus({ preventScroll: true });
+        return;
+      }
+      entryRef.current?.focus({ preventScroll: true });
+    }}><div>
       <div className="kh-review-toolbar">
       {/* One row, as the owner's rail has: what this is and which of it is listed, then what acts
           on it. As a drawer the drawer names itself and closes itself, so the name and the cross
           are the rail's alone. */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1"><h2 className="kh-review-rail-only text-body font-medium">Comments</h2>{result && result.threads.length > 0 && <ReviewFilterMenu value={filter} onChange={setFilter} />}</div>
-        <div className="flex shrink-0 items-center gap-1"><Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" disabled={refreshing} onClick={() => void load()}><RefreshCw className={`size-4 ${refreshing ? "motion-safe:animate-spin" : ""}`} aria-hidden="true" /></Button></Tooltip><span className="kh-review-rail-only"><Tooltip label="Hide comments"><Button type="button" variant="ghost" icon aria-label="Collapse discussions" onClick={() => changeOpen(false)}><X className="size-4" aria-hidden="true" /></Button></Tooltip></span></div>
+        <div className="flex shrink-0 items-center gap-1"><Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" disabled={refreshing} onClick={() => void load()}><RefreshCw className={`size-4 ${refreshing ? "motion-safe:animate-spin" : ""}`} aria-hidden="true" /></Button></Tooltip><span className="kh-review-rail-only"><Tooltip label="Close comments"><Button type="button" variant="ghost" icon aria-label="Close comments" onClick={() => changeOpen(false)}><X className="size-4" aria-hidden="true" /></Button></Tooltip></span></div>
       </div>
       {result && result.threads.length > 0 && <ReviewNextButtons threads={result.threads} activeThreadId={activeThreadId} onActivate={setActiveThreadId} filter={filter} onFilterChange={setFilter} />}
       {error && <p role="status" className="mt-3 text-body-sm">{error}</p>}
-      {!result && !error && <p role="status" className="mt-3 text-body-sm text-kh-text-muted">Loading discussions…</p>}
+      {!result && !error && <p role="status" className="mt-3 text-body-sm text-kh-text-muted">Loading comments…</p>}
       {refreshing && <p role="status" className="mt-3 text-caption text-kh-text-muted">Updating…</p>}
       {selection.refusal && <p role="status" className="mt-3 text-body-sm">{selection.refusal}</p>}
       {result && <div className="mt-3">
-        {revisionChanged && <p role="status" className="mb-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage. You can still reply to existing discussions.</p>}
+        {revisionChanged && <p role="status" className="mb-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage. You can still reply to existing comments.</p>}
         {/* The one thing a reader does here that an owner does not, on a row of its own. */}
-        {canComment && <div className="mb-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={selection.capture}><MessageSquarePlus className="size-4" aria-hidden="true" />Comment on selected text</Button>{!selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
+        {canComment && <div className="mb-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={() => { if (!inline) { focusArticleAfterClose.current = true; changeOpen(false); return; } selection.capture(); }}><MessageSquarePlus className="size-4" aria-hidden="true" />{inline ? "Comment on selected text" : "Close comments and select text"}</Button>{inline && !selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
         {!result.writesEnabled && <p className="mb-3 text-body-sm text-kh-text-muted">{result.callerUserId === null ? "Sign in to add a comment." : "Adding comments is currently disabled."}</p>}
         {anonymous && <div className="mb-3"><a href={signInHref} className={buttonClasses({ variant: "soft" })}><LogIn className="size-4" aria-hidden="true" />Sign in to comment</a></div>}
       </div>}

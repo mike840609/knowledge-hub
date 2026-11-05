@@ -211,6 +211,17 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   details[open] > summary::before {
     transform: rotate(90deg);
   }
+  /* The marker turns over one beat, so the body arrives on the same beat instead of being there
+     before the turn finishes. Laid out at once — find-in-page and the scrollbar never see a growing
+     box — and only its ink fades in, which is all an in-flow change needs. Document content is
+     exempt: an article can open with an open <details>, and nothing in the page should fade before
+     the reader acts. */
+  details[open] > *:not(summary) {
+    animation: kh-fade-in theme("transitionDuration.120") theme("transitionTimingFunction.out");
+  }
+  article details[open] > *:not(summary) {
+    animation: none;
+  }
 
   /* A checkbox is the native input, drawn: `sm` radius (inline chrome), the control boundary while empty,
      the primary fill and a check in `on-primary` once ticked. Checked state, keys and the label's click
@@ -411,12 +422,24 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   }
 
   /* The `[[` list of documents. It is placed by the editor from the caret's coordinates (`left`/`top`),
-     over the page rather than inside the scroller the editor sits in, so nothing clips it. */
+     over the page rather than inside the scroller the editor sits in, so nothing clips it.
+     It enters and leaves like the selection toolbar above: the popup only toggles `data-show`, so
+     both directions ride one discrete `display` transition. */
   .kh-wikilink-suggest {
     @apply fixed z-50 w-80 max-w-[calc(100vw-1rem)] rounded-lg border border-kh-border bg-kh-bg-raised p-1 shadow-popover;
+    @apply transition-[opacity,transform,display] duration-120 ease-out [transition-behavior:allow-discrete];
+  }
+  @starting-style {
+    .kh-wikilink-suggest {
+      opacity: 0;
+      transform: scale(0.98);
+    }
   }
   .kh-wikilink-suggest[data-show="false"] {
-    @apply hidden;
+    /* Click-through while the discrete exit is still on screen, so a stray click cannot pick a row. */
+    @apply hidden pointer-events-none;
+    opacity: 0;
+    transform: scale(0.98);
   }
 
   /* A pinned bar's lower edge: the content scrolling under it fades into the bar instead of meeting a rule.
@@ -514,6 +537,45 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   border-left-color: transparent;
   animation: kh-peek-expand theme("transitionDuration.160") theme("transitionTimingFunction.out");
 }
+
+/* A toast is an overlay too (§9): it rises into the corner rather than appearing there, and leaves
+   faster than it arrives. Unmounting waits for the exit animation (`toast.tsx`), so the reduced-motion
+   rule below shortens the wait along with the motion. */
+@keyframes kh-toast-enter {
+  from { opacity: 0; transform: translateY(4px); }
+}
+@keyframes kh-toast-leave {
+  to { opacity: 0; transform: translateY(4px); }
+}
+.kh-toast { animation: kh-toast-enter theme("transitionDuration.160") theme("transitionTimingFunction.out"); }
+.kh-toast[data-leaving] {
+  animation: kh-toast-leave theme("transitionDuration.120") theme("transitionTimingFunction.out") forwards;
+}
+
+/* The last surfaces that still snapped into place: the editor's `/` list, block actions, the
+   block grip, a table's floating controls, the save notice, and the review selection bubble.
+   They are called up by a keystroke, a selection or a completed action, so they take the same
+   short pop as every other overlay (§9). The grip follows the pointer while it is placed and the
+   selection bubble is already positioned by an inline transform, so those two only fade rather
+   than moving under the hand. The drop lines are feedback, not surfaces, and get the fade alone.
+   None of these is visible at first paint, so no entrance runs before the reader acts. */
+@keyframes kh-pop-in {
+  from { opacity: 0; transform: scale(0.98); }
+}
+@keyframes kh-fade-in {
+  from { opacity: 0; }
+}
+.kh-pop-in { animation: kh-pop-in theme("transitionDuration.120") theme("transitionTimingFunction.out"); }
+/* Where a scale would fight the element's own placement (a surface already offset by a transform,
+   or one pinned to a moving anchor), the surface takes the fade alone. */
+.kh-fade-in { animation: kh-fade-in theme("transitionDuration.120") theme("transitionTimingFunction.out"); }
+.kh-slash-menu:not([hidden]),
+.kh-block-move-menu:not([hidden]),
+.kh-table-actions:not([hidden]) { animation: kh-pop-in theme("transitionDuration.120") theme("transitionTimingFunction.out"); }
+.kh-block-gutter:not([hidden]),
+.kh-selection-bubble { animation: kh-fade-in theme("transitionDuration.120") theme("transitionTimingFunction.out"); }
+.kh-tree-drop-line:not([hidden]),
+.kh-block-drop-line:not([hidden]) { animation: kh-fade-in theme("transitionDuration.120") theme("transitionTimingFunction.out"); }
 
 /* One global opt-out, so no component has to remember motion-reduce. */
 @media (prefers-reduced-motion: reduce) {
@@ -619,7 +681,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   /* A control that belongs to one row and appears when that row is reached.
      It stays visible while its own menu is open, or the menu would hang off a
      trigger that had vanished from under the pointer. */
-  .kh-row-action { opacity: 0; }
+  .kh-row-action { opacity: 0; transition: opacity 120ms ease-out; }
   .group:hover .kh-row-action,
   .group:focus-within .kh-row-action,
   .kh-row-action[data-popup-open],
@@ -686,11 +748,15 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-review-document { --review-rail: drawer; width: 100%; max-width: theme("maxWidth.reading"); margin-inline: auto; }
 .kh-review-reading { position: relative; min-width: 0; width: 100%; }
 /* The passage markers sit in the article's right margin (28px wide, 4px in), so only that side is
-   widened. The left stays the reading column's, or the article starts 8px inside the bar, the
-   byline and the footer it sits between. */
-.kh-share-page .kh-review-reading > article { padding-inline-end: 32px; }
-/* In the workspace the margin is made only for an article that has a marker to put in it. */
-.kh-document-pane .kh-review-reading:has([data-review-marker]) > article { padding-inline-end: 32px; }
+   widened. On touch the marker's hit area grows to 40px around the same pill, which needs 8px more
+   of margin; the left stays the reading column's. */
+.kh-share-page .kh-review-reading article[data-review-document] { padding-inline-end: 40px; }
+/* In the workspace the margin is made only for an article that has a marker to put in it. The
+   article sits inside the editor's press area, so it is a descendant, not a direct child. */
+.kh-document-pane .kh-review-reading:has([data-review-marker]) article[data-review-document] { padding-inline-end: 40px; }
+@media (pointer: coarse) {
+  [data-review-marker]::before { content: ""; position: absolute; inset: -8px; border-radius: 999px; }
+}
 /* A paragraph's comment button stands in the reading column's 24px right padding, beside the
    article and outside it: no margin is made for it, with or without a marker. It shows for the
    paragraph under the pointer, on its own hover and focus, and always where nothing hovers. Beside
@@ -881,6 +947,14 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   top: var(--review-thread-top);
   width: 100%;
   margin-top: 0;
+}
+/* A reply, a loaded font or the active thread changing the order moves the cards; the rail says
+   where they went instead of teleporting them. Absolute siblings, so only the cards repaint. The
+   new comment is not one of them: it is placed and focused at the same moment, and gliding it in
+   from the rail's top would leave the field focused there, scrolling the reader away from the
+   passage. It pops where it belongs instead. */
+.kh-review-document[data-review-inline] .kh-review-thread-list[data-positioned] > [data-review-thread] {
+  transition: top 120ms ease-out;
 }
 /* A collapsed passage group reads as two cards: the same soft shadow as a popover, plus one
    hairline card edge peeking out behind it. Single threads stay flat. */

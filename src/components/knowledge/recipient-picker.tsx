@@ -151,7 +151,7 @@ export function RecipientPicker({
           onBlur={() => setDismissed(true)}
         />
         {open ? (
-          <ul ref={listRef} id={listId} role="listbox" aria-label="People matching your search" aria-busy={!answered} className={`absolute inset-x-0 z-30 ${above ? "bottom-full mb-1" : "top-full mt-1"} max-h-[12rem] overflow-y-auto rounded-md border border-kh-border bg-kh-bg p-1 shadow-popover`}>
+          <ul ref={listRef} id={listId} role="listbox" aria-label="People matching your search" aria-busy={!answered} className={`kh-pop-in absolute inset-x-0 z-30 ${above ? "bottom-full mb-1" : "top-full mt-1"} max-h-[12rem] overflow-y-auto rounded-md border border-kh-border bg-kh-bg p-1 shadow-popover`}>
             {people.map((person, index) => (
               <li
                 key={person.id}
@@ -170,7 +170,7 @@ export function RecipientPicker({
             ))}
           </ul>
         ) : hint ? (
-          <p className="absolute inset-x-0 top-full z-30 mt-1 rounded-md border border-kh-border bg-kh-bg px-2 py-1 text-body-sm text-kh-text-muted shadow-popover">{hint}</p>
+          <p className="kh-pop-in absolute inset-x-0 top-full z-30 mt-1 rounded-md border border-kh-border bg-kh-bg px-2 py-1 text-body-sm text-kh-text-muted shadow-popover">{hint}</p>
         ) : null}
       </div>
     </div>

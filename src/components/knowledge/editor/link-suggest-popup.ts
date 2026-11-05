@@ -96,6 +96,11 @@ export function createSuggestPopup(): SuggestPopup {
     render(view, onPick) {
       list.replaceChildren();
       list.hidden = view.suggestions.length === 0;
+      // The source earns its column only when it distinguishes rows: one source for every result, or
+      // every title unique, makes it repetition. Duplicate titles keep it as the tie-breaker.
+      const sources = new Set(view.suggestions.map((suggestion) => suggestion.target.sourceName));
+      const titles = new Set(view.suggestions.map((suggestion) => suggestion.target.title));
+      const showSource = sources.size > 1 || titles.size < view.suggestions.length;
       view.suggestions.forEach((suggestion, index) => {
         const row = document.createElement("li");
         row.id = optionId(index);
@@ -105,10 +110,13 @@ export function createSuggestPopup(): SuggestPopup {
         const title = document.createElement("span");
         title.className = `min-w-0 flex-1 truncate text-body font-medium ${index === view.active ? "text-kh-selected-text" : "text-kh-text"}`;
         title.textContent = suggestion.target.title;
-        const source = document.createElement("span");
-        source.className = "max-w-[40%] shrink-0 truncate text-caption text-kh-text-muted";
-        source.textContent = suggestion.target.sourceName;
-        row.append(title, source);
+        row.append(title);
+        if (showSource) {
+          const source = document.createElement("span");
+          source.className = "max-w-[40%] shrink-0 truncate text-caption text-kh-text-muted";
+          source.textContent = suggestion.target.sourceName;
+          row.append(source);
+        }
         // `mousedown`, not `click`: it is what arrives before the editor could lose its selection
         // (the list's own `mousedown`, above, is what keeps it).
         row.addEventListener("mousedown", (event) => {
