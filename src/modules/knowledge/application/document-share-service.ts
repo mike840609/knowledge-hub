@@ -442,6 +442,7 @@ export class DocumentShareService {
     const { linkId, view } = await this.unitOfWork.run(async (repositories): Promise<{ linkId: string; view: SharedView }> => {
       const link = await repositories.shareLinks.findByToken(token);
       if (!link) throw new ShareLinkNotFoundError();
+      if (link.target.kind === "SOURCE") throw new ShareLinkNotFoundError();
       if (link.target.kind === "FOLDER") return { linkId: link.id, view: await readSharedFolder(repositories, link, link.target.folderNodeId, documentId, now, viewerId) };
       if (documentId !== undefined) throw new ShareLinkNotFoundError();
       const document = await repositories.documents.findById(link.target.documentId);
@@ -487,6 +488,7 @@ export class DocumentShareService {
         await requireOpenLink(repositories, link, document, now, viewerId);
         return { kind: "DOCUMENT", documentId: document.id, audience: link.audience };
       }
+      if (link.target.kind === "SOURCE") throw new ShareLinkNotFoundError();
       const folder = await repositories.tree.findById(link.target.folderNodeId);
       if (!folder || folder.nodeType !== "FOLDER") throw new ShareLinkNotFoundError();
       await requireOpenLink(repositories, link, folder, now, viewerId);
@@ -530,6 +532,10 @@ async function requireExistingUsers(repositories: KnowledgeRepositories, ids: re
 
 /** Whether the link opens now for its owner, judged as a reader's link is: revoked, archived or out of reach does not. */
 async function linkOpensForOwner(repositories: KnowledgeRepositories, link: DocumentShareLink, now: Date, ownerId: string): Promise<boolean> {
+  if (link.target.kind === "SOURCE") {
+    const source = await repositories.sourcePolicy.findById(link.target.sourceId);
+    return !!source && !!await openShareLinkTarget(repositories, link, { sourceId: source.id, status: source.status }, now, ownerId);
+  }
   const target = link.target.kind === "DOCUMENT"
     ? await repositories.documents.findById(link.target.documentId)
     : await repositories.tree.findById(link.target.folderNodeId);
@@ -732,7 +738,9 @@ async function lockOwnedFolderScope(repositories: KnowledgeRepositories, caller:
 function lockLinkTargetScope(repositories: KnowledgeRepositories, caller: CallerContext, target: ShareLinkTarget) {
   return target.kind === "DOCUMENT"
     ? lockOwnedScope(repositories, caller, target.documentId)
-    : lockOwnedFolderScope(repositories, caller, target.folderNodeId);
+    : target.kind === "FOLDER"
+      ? lockOwnedFolderScope(repositories, caller, target.folderNodeId)
+      : lockOwnedSourceScope(repositories, caller, target.sourceId);
 }
 
 function requireFolder(node: { nodeType: "FOLDER" | "DOCUMENT" }): void {
@@ -740,7 +748,7 @@ function requireFolder(node: { nodeType: "FOLDER" | "DOCUMENT" }): void {
 }
 
 function targetPayload(target: ShareLinkTarget) {
-  return target.kind === "DOCUMENT" ? { documentId: target.documentId } : { folderNodeId: target.folderNodeId };
+  return target.kind === "DOCUMENT" ? { documentId: target.documentId } : target.kind === "FOLDER" ? { folderNodeId: target.folderNodeId } : { sourceId: target.sourceId };
 }
 
 function toView(link: DocumentShareLink, now: Date, totals: { totalViews: number; lastViewedAt: Date | null } | undefined, recipientCount: number | null): ShareLinkView {

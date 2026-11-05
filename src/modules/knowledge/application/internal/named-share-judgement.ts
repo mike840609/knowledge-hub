@@ -13,6 +13,7 @@ export async function openNamedTarget(r: KnowledgeRepositories, link: DocumentSh
     const document = await r.documents.findById(link.target.documentId);
     return document && await openShareLinkTarget(r, link, document, now, userId) ? { documentId: document.id } : null;
   }
+  if (link.target.kind === "SOURCE") return null;
   const folder = await r.tree.findById(link.target.folderNodeId);
   return folder?.nodeType === "FOLDER" && await openShareLinkTarget(r, link, folder, now, userId) ? { folderName: folder.name ?? "" } : null;
 }

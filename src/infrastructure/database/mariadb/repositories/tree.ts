@@ -228,22 +228,22 @@ export class MariaDbTreeRepository implements TreeRepository {
     for (let start = 0; start < documentIds.length; start += DOCUMENT_ID_CHUNK) {
       const batch = documentIds.slice(start, start + DOCUMENT_ID_CHUNK);
       const rows = await this.connection.query<DbRow[]>(
-        `WITH RECURSIVE chains (root, id, parent_id, node_type, status, depth) AS (
-           SELECT n.document_id, n.id, n.parent_id, n.node_type, n.status, 0
+        `WITH RECURSIVE chains (root, id, parent_id, source_id, node_type, status, depth) AS (
+           SELECT n.document_id, n.id, n.parent_id, n.source_id, n.node_type, n.status, 0
            FROM knowledge_tree_nodes n
            WHERE n.document_id IN (${placeholders(batch.length)}) AND n.source_id = ?
            UNION ALL
-           SELECT chains.root, parent.id, parent.parent_id, parent.node_type, parent.status, chains.depth + 1
+           SELECT chains.root, parent.id, parent.parent_id, parent.source_id, parent.node_type, parent.status, chains.depth + 1
            FROM knowledge_tree_nodes parent JOIN chains ON parent.id = chains.parent_id
            WHERE parent.source_id = ? AND chains.depth < ?
          )
-         SELECT root, id, parent_id, node_type, status FROM chains ORDER BY root, depth`,
+         SELECT root, id, parent_id, source_id, node_type, status FROM chains ORDER BY root, depth`,
         [...batch, sourceId, sourceId, MAX_CHAIN_LENGTH - 1],
       );
       for (const row of rows) {
         const root = String(row.root);
         const chain = chains.get(root) ?? [];
-        chain.push({ id: String(row.id), parentId: row.parent_id === null ? null : String(row.parent_id), nodeType: String(row.node_type) as TreeChainNode["nodeType"], status: String(row.status) as TreeChainNode["status"] });
+        chain.push({ id: String(row.id), sourceId: String(row.source_id), parentId: row.parent_id === null ? null : String(row.parent_id), nodeType: String(row.node_type) as TreeChainNode["nodeType"], status: String(row.status) as TreeChainNode["status"] });
         chains.set(root, chain);
       }
     }
@@ -252,18 +252,19 @@ export class MariaDbTreeRepository implements TreeRepository {
 
   async listChain(nodeId: string): Promise<TreeChainNode[]> {
     const rows = await this.connection.query<DbRow[]>(
-      `WITH RECURSIVE chain (id, parent_id, node_type, status, depth) AS (
-         SELECT id, parent_id, node_type, status, 0 FROM knowledge_tree_nodes WHERE id = ?
+      `WITH RECURSIVE chain (id, parent_id, source_id, node_type, status, depth) AS (
+         SELECT id, parent_id, source_id, node_type, status, 0 FROM knowledge_tree_nodes WHERE id = ?
          UNION ALL
-         SELECT parent.id, parent.parent_id, parent.node_type, parent.status, chain.depth + 1
+         SELECT parent.id, parent.parent_id, parent.source_id, parent.node_type, parent.status, chain.depth + 1
          FROM knowledge_tree_nodes parent JOIN chain ON parent.id = chain.parent_id
          WHERE chain.depth < ?
        )
-       SELECT id, parent_id, node_type, status FROM chain ORDER BY depth LIMIT ?`,
+       SELECT id, parent_id, source_id, node_type, status FROM chain ORDER BY depth LIMIT ?`,
       [nodeId, MAX_CHAIN_LENGTH - 1, MAX_CHAIN_LENGTH],
     );
     return rows.map((row) => ({
       id: String(row.id),
+      sourceId: String(row.source_id),
       parentId: row.parent_id === null ? null : String(row.parent_id),
       nodeType: String(row.node_type) as TreeChainNode["nodeType"],
       status: String(row.status) as TreeChainNode["status"],

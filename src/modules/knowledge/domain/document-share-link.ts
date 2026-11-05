@@ -30,10 +30,11 @@ export const MAX_NAMED_SHARE_RECIPIENTS = 50;
 /** LINK: any holder of the token, expiring. NAMED: only listed recipients, no expiry. */
 export type ShareAudience = "LINK" | "NAMED";
 
-/** What a link opens: one document, or a My Space folder's live subtree. */
+/** What a link opens: one document, a My Space folder's live subtree, or a whole Source. */
 export type ShareLinkTarget =
   | { kind: "DOCUMENT"; documentId: string }
-  | { kind: "FOLDER"; folderNodeId: string };
+  | { kind: "FOLDER"; folderNodeId: string }
+  | { kind: "SOURCE"; sourceId: string };
 
 export type DocumentShareLink = {
   id: string;
@@ -148,6 +149,7 @@ export function evaluateShareLinkValidity(
 /** One tree node on the path from a document up to the root, as the repository reads it. */
 export type TreeChainNode = {
   id: string;
+  sourceId: string;
   parentId: string | null;
   nodeType: "FOLDER" | "DOCUMENT";
   status: LifecycleStatus;
@@ -170,10 +172,31 @@ export function isReachableThroughFolder(chain: readonly TreeChainNode[], folder
   return false;
 }
 
+/**
+ * Whether a document stays inside a shared Source right now. `chain[0]` is the
+ * document's own node, then its parents upward. Every node must be ACTIVE, carry
+ * the link's `sourceId`, and not repeat an id; the chain must also terminate at a
+ * Source root (the last node's `parentId` is `null`), the anchor a folder link
+ * gets from its folder id. Without it a chain truncated by `listChain`'s depth
+ * cap — or a data defect — would still pass. A top-level document has a chain of
+ * one whose only node has `parentId = null`.
+ */
+export function isReachableThroughSource(chain: readonly TreeChainNode[], sourceId: string): boolean {
+  if (chain.length === 0) return false;
+  if (chain[0].nodeType !== "DOCUMENT") return false;
+  if (chain[chain.length - 1].parentId !== null) return false;
+  const seen = new Set<string>();
+  for (const node of chain) {
+    if (node.status !== "ACTIVE" || node.sourceId !== sourceId || seen.has(node.id)) return false;
+    seen.add(node.id);
+  }
+  return true;
+}
+
 export type ShareLinkCreationInput = {
   callerId: string;
-  /** The link's target: a document's state, or the shared folder node's (defaults to DOCUMENT). */
-  targetKind?: "DOCUMENT" | "FOLDER";
+  /** The link's target: a document's state, the shared folder node's, or the shared Source's (defaults to DOCUMENT). */
+  targetKind?: "DOCUMENT" | "FOLDER" | "SOURCE";
   documentStatus: LifecycleStatus;
   sourceStatus: LifecycleStatus;
   workspace: {
@@ -192,13 +215,13 @@ export type ShareLinkCreationInput = {
  * ownership answers who may write.
  */
 export function assertShareLinkCreation(input: ShareLinkCreationInput): { expiresInDays: ShareLinkExpiryDays; label: string | null } {
-  if (input.documentStatus !== "ACTIVE") throw new DocumentArchivedError(input.targetKind === "FOLDER" ? "The shared folder is archived." : undefined);
+  if (input.documentStatus !== "ACTIVE") throw new DocumentArchivedError(input.targetKind === "FOLDER" ? "The shared folder is archived." : input.targetKind === "SOURCE" ? "The shared source is archived." : undefined);
   if (input.sourceStatus !== "ACTIVE") throw new SourceArchivedError();
   if (input.workspace.workspaceType !== "PERSONAL") throw new ShareLinkNotPersonalError();
   // Someone else's My Space is not a document this caller may learn about.
   if (input.workspace.personalOwnerUserId !== input.callerId) throw new DocumentNotFoundError();
   if (input.workspace.lifecycleState !== "ACTIVE") throw new WorkspaceArchivedError();
-  if (input.activeLinkCount >= MAX_ACTIVE_SHARE_LINKS_PER_DOCUMENT) throw new ShareLinkLimitReachedError(`${input.targetKind === "FOLDER" ? "A folder" : "A document"} can have at most ${MAX_ACTIVE_SHARE_LINKS_PER_DOCUMENT} active share links.`);
+  if (input.activeLinkCount >= MAX_ACTIVE_SHARE_LINKS_PER_DOCUMENT) throw new ShareLinkLimitReachedError(`${input.targetKind === "FOLDER" ? "A folder" : input.targetKind === "SOURCE" ? "A source" : "A document"} can have at most ${MAX_ACTIVE_SHARE_LINKS_PER_DOCUMENT} active share links.`);
   return { expiresInDays: normalizeExpiry(input.expiresInDays), label: normalizeLabel(input.label) };
 }
 

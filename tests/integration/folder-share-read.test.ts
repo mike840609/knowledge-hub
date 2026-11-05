@@ -117,6 +117,7 @@ describe("TreeRepository.listChain", () => {
     expect(chain.map((node) => node.id)).toEqual([f.devSetup.treeNodeId, f.engineeringId, f.folderNodeId]);
     for (let index = 0; index < chain.length - 1; index += 1) expect(chain[index].parentId).toBe(chain[index + 1].id);
     expect(chain.at(-1)?.parentId).toBeNull();
+    expect(chain.map((node) => node.sourceId)).toEqual([f.sourceId, f.sourceId, f.sourceId]);
     expect(chain.map((node) => [node.nodeType, node.status])).toEqual([["DOCUMENT", "ACTIVE"], ["FOLDER", "ACTIVE"], ["FOLDER", "ACTIVE"]]);
   });
 

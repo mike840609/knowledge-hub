@@ -709,6 +709,7 @@ export class DocumentReviewService {
 
   /** Whether the link opens now on this document for this viewer: the same judgement `linkScope` makes, without refusing. */
   private async linkValid(r: KnowledgeRepositories, link: DocumentShareLink, documentId: string, viewerId: string | null): Promise<boolean> {
+    if (link.target.kind === "SOURCE") return false;
     if (link.target.kind === "DOCUMENT" && link.target.documentId !== documentId) return false;
     try {
       await this.targetScope(r, link, link.target.kind === "FOLDER" ? documentId : undefined, false, viewerId);
@@ -824,6 +825,7 @@ export class DocumentReviewService {
       if(!await this.opens(r,scope,link,scope.document.status,viewerId)) throw new ShareLinkNotFoundError();
       return scope;
     }
+    if(link.target.kind==="SOURCE") throw new ShareLinkNotFoundError();
     if(documentId===undefined) throw new ShareLinkNotFoundError();
     // Judged before any lock: a document outside the folder's Source or outside its live subtree is
     // refused as missing, and nothing of it is locked. The locked recheck below stays, so a move

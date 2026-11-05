@@ -3,10 +3,12 @@ import type { WorkspaceRole } from "@/modules/workspaces/domain/workspace-member
 import {
   evaluateShareLinkValidity,
   isReachableThroughFolder,
+  isReachableThroughSource,
   type DocumentShareLink,
   type TreeChainNode,
 } from "../../domain/document-share-link";
 import type { KnowledgeTreeNode } from "../../domain/tree-node";
+import type { SourcePolicy } from "../../domain/source-policy";
 import type { KnowledgeRepositories } from "../../ports/unit-of-work";
 
 type LifecycleStatus = "ACTIVE" | "ARCHIVED";
@@ -146,4 +148,42 @@ export async function reachableChain(
   if (!node) return null;
   const chain = await repositories.tree.listChain(node.id);
   return documentReachesFolder(folder, document, chain) ? chain : null;
+}
+
+/** The document half of Source reachability that needs no tree read: ACTIVE in the Source. */
+function documentBelongsToSource(
+  source: Pick<SourcePolicy, "id" | "status">,
+  document: { sourceId: string; status: LifecycleStatus },
+): boolean {
+  return source.status === "ACTIVE" && document.status === "ACTIVE" && document.sourceId === source.id;
+}
+
+/**
+ * Whether a document is reachable through a Source right now (source share spec §2): ACTIVE in the
+ * Source, and its chain — `chain[0]` the document's node, then its parents upward — reaching a
+ * Source root through ACTIVE nodes all in that Source. The document and chain are the caller's reads.
+ */
+export function documentReachesSource(
+  source: Pick<SourcePolicy, "id" | "status">,
+  document: { sourceId: string; status: LifecycleStatus },
+  chain: readonly TreeChainNode[] | undefined,
+): boolean {
+  return documentBelongsToSource(source, document) && chain !== undefined && isReachableThroughSource(chain, source.id);
+}
+
+/**
+ * The document half of Source reachability, with the chain read here. Returns that chain (the
+ * document's node, then its parents upward), or null. Whether the link itself opens is the caller's
+ * judgement; this is the other half of it. Reads no content.
+ */
+export async function reachableChainForSource(
+  repositories: KnowledgeRepositories,
+  source: Pick<SourcePolicy, "id" | "status">,
+  document: { id: string; sourceId: string; status: LifecycleStatus },
+): Promise<TreeChainNode[] | null> {
+  if (!documentBelongsToSource(source, document)) return null;
+  const node = await repositories.tree.findByDocumentId(document.id);
+  if (!node) return null;
+  const chain = await repositories.tree.listChain(node.id);
+  return documentReachesSource(source, document, chain) ? chain : null;
 }

@@ -7,6 +7,7 @@ export type NamedRecipient = { userId: string; addedAt: Date };
 export type ReceivedShareLink = { link: DocumentShareLink; addedAt: Date; readAt: Date | null };
 
 export type OpenFolderLink = { folderNodeId: string; name: string };
+export type OpenSourceLink = { sourceId: string; name: string };
 
 export interface DocumentShareLinkRepository {
   listForWorkspace(workspaceId: string, callerId: string, query: ShareManagementQuery, now: Date, limit: number, offset: number): Promise<ManagedShareLink[]>;
@@ -27,6 +28,14 @@ export interface DocumentShareLinkRepository {
   /** Newest first, including revoked and expired links. */
   listByFolder(folderNodeId: string): Promise<DocumentShareLink[]>;
   countActiveByFolder(folderNodeId: string, now: Date): Promise<number>;
+  /** Newest first, including revoked and expired links. */
+  listBySource(sourceId: string): Promise<DocumentShareLink[]>;
+  countActiveBySource(sourceId: string, now: Date): Promise<number>;
+  /**
+   * The Sources of this My Space with at least one link that opens now: unrevoked, unexpired, the Source
+   * ACTIVE in an ACTIVE Workspace, the creator its owner and still a member. By name, then id.
+   */
+  listOpenSourceLinks(workspaceId: string, ownerId: string, now: Date): Promise<OpenSourceLink[]>;
   /** Only an unrevoked link is revoked; revocation is final (spec §5.4). */
   revoke(id: string, revokedBy: string, revokedAt: Date): Promise<void>;
   viewTotals(linkIds: readonly string[]): Promise<Map<string, ShareLinkViewTotals>>;

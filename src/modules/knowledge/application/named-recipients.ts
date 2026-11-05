@@ -98,6 +98,7 @@ async function linkOpensOnDocument(
 ): Promise<boolean> {
   const document = await documentFor(documentId);
   if (!document) return false;
+  if (link.target.kind === "SOURCE") return false;
   if (link.target.kind === "DOCUMENT") return link.target.documentId === documentId && !!await openShareLinkTarget(r, link, document, now, userId);
   const folder = await r.tree.findById(link.target.folderNodeId);
   return !!folder && !!await reachableChain(r, folder, document) && !!await openShareLinkTarget(r, link, folder, now, userId);

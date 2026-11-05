@@ -64,8 +64,8 @@ function repositories(nodes: readonly TreeViewNode[], markdown: string) {
       findById: vi.fn(async (id: string) => (id === folderId ? folderNode : null)),
       findByDocumentId: vi.fn(async (id: string) => (id === documentId ? documentNode : null)),
       listChain: vi.fn(async () => [
-        { id: documentNodeId, parentId: folderId, nodeType: "DOCUMENT" as const, status: "ACTIVE" as const },
-        { id: folderId, parentId: null, nodeType: "FOLDER" as const, status: "ACTIVE" as const },
+        { id: documentNodeId, sourceId, parentId: folderId, nodeType: "DOCUMENT" as const, status: "ACTIVE" as const },
+        { id: folderId, sourceId, parentId: null, nodeType: "FOLDER" as const, status: "ACTIVE" as const },
       ]),
       listSubtree: vi.fn(async () => [...nodes]),
     },
