@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { SharedReviewPanel } from "@/components/knowledge/shared-review-panel";
 import { SharedReading, SharedSkipLink, SHARED_CONTENT_ID } from "@/components/knowledge/shared-reading";
 import { hubSharePath, sharedDocumentParam } from "@/lib/share-paths";
-import type { SharedView } from "@/modules/knowledge/application/document-share-service";
+import type { SharedFolderView, SharedView } from "@/modules/knowledge/application/document-share-service";
 import { SHARED_PREFIX } from "@/modules/knowledge/domain/share-comment-event";
 import { applicationServices } from "@/server/composition";
 import { getSharedForViewer } from "@/server/share-read";
@@ -41,10 +41,10 @@ export async function generateMetadata(props: HubSharePageProps): Promise<Metada
   return { title: shared ? sharedTitle(shared) : "Link not available", robots: { index: false, follow: false } };
 }
 
-/** The document being read, else the folder's name, as `/s/<token>` titles it. */
+/** The document being read, else the shared root's name, as `/s/<token>` titles it. */
 function sharedTitle(shared: SharedView): string {
   if (shared.kind === "DOCUMENT") return shared.title;
-  return shared.document ? shared.document.title : shared.folderName;
+  return shared.document ? shared.document.title : shared.rootName;
 }
 
 /**
@@ -59,18 +59,21 @@ export default async function HubSharePage(props: HubSharePageProps) {
   if (ownPath) redirect(ownPath);
   if (!shared) notFound();
   if (shared.linkId) await markRead(shared.linkId);
-  if (shared.kind === "FOLDER") {
-    const documentId = shared.document?.documentId;
-    return <SharedFolderPage token={token} folder={shared} platformEntry={null} pagePath={pagePath} signInHref={documentId ? `${pagePath}?d=${documentId}` : pagePath} />;
+  if (shared.kind === "DOCUMENT") {
+    return (
+      <div className="kh-share-page min-h-full bg-kh-bg">
+        <SharedSkipLink />
+        <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={pagePath}>
+          <SharedReading document={shared} contentId={SHARED_CONTENT_ID} />
+        </SharedReviewPanel>
+      </div>
+    );
   }
-  return (
-    <div className="kh-share-page min-h-full bg-kh-bg">
-      <SharedSkipLink />
-      <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={pagePath}>
-        <SharedReading document={shared} contentId={SHARED_CONTENT_ID} />
-      </SharedReviewPanel>
-    </div>
-  );
+  // A Source link renders the tree page too, but not until Task 4 (source share spec §4).
+  if (shared.kind === "SOURCE") notFound();
+  const folder = shared as SharedFolderView;
+  const documentId = folder.document?.documentId;
+  return <SharedFolderPage token={token} folder={folder} platformEntry={null} pagePath={pagePath} signInHref={documentId ? `${pagePath}?d=${documentId}` : pagePath} />;
 }
 
 /** Reading a named share clears its Inbox entry. Only the caller's own recipient row changes; the owner has none. */

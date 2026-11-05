@@ -30,8 +30,8 @@ export function SharedFolderPage({ token, folder, platformEntry, signInHref, pag
   // tree's fixed rail inside it rather than over the shell's own navigation.
   const Root = platformEntry === null ? "div" : "main";
   const rootClass = `kh-share-page kh-share-folder bg-kh-bg ${platformEntry === null ? "min-h-full [contain:layout]" : "min-h-screen"}`;
-  const crumbs = document ? [folder.folderName, ...document.path.map((ancestor) => ancestor.name), document.title] : [folder.folderName];
-  const tree = <SharedFolderTree token={token} nodes={folder.tree} currentDocumentId={document?.documentId ?? null} folderName={folder.folderName} pagePath={pagePath} />;
+  const crumbs = document ? [folder.rootName, ...document.path.map((ancestor) => ancestor.name), document.title] : [folder.rootName];
+  const tree = <SharedFolderTree token={token} nodes={folder.tree} currentDocumentId={document?.documentId ?? null} folderName={folder.rootName} pagePath={pagePath} />;
   const lead = (
     <>
       <SharedFolderTreeButton />
@@ -73,7 +73,7 @@ export function SharedFolderPage({ token, folder, platformEntry, signInHref, pag
         </SharedFolderTreeScope>
         <div className="kh-share-folder-body">
           <div className="kh-reading-column py-6">
-            <h1 id={SHARED_CONTENT_ID} tabIndex={-1} className="scroll-mt-14 text-page-title font-semibold tracking-tight text-kh-text">{folder.folderName}</h1>
+            <h1 id={SHARED_CONTENT_ID} tabIndex={-1} className="scroll-mt-14 text-page-title font-semibold tracking-tight text-kh-text">{folder.rootName}</h1>
             <SharedByline sharedByName={folder.sharedByName} expiresAt={folder.expiresAt} />
             <p className="mt-6 text-body text-kh-text-muted">This folder has no documents yet.</p>
           </div>

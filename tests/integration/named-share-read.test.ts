@@ -143,7 +143,7 @@ describe("a NAMED folder link", () => {
     const { folderLink, recipient, owner, inside } = await setup();
     for (const viewerId of [recipient, owner.id]) {
       const view = await service().readShared(folderLink.token, { viewerId, documentId: inside.documentId });
-      expect(view).toMatchObject({ kind: "FOLDER", folderName: "Shared", audience: "NAMED", document: { documentId: inside.documentId, title: "Inside" } });
+      expect(view).toMatchObject({ kind: "FOLDER", rootName: "Shared", audience: "NAMED", document: { documentId: inside.documentId, title: "Inside" } });
       expect(await service().readSharedTarget(folderLink.token, { viewerId, documentId: inside.documentId })).toEqual({ kind: "FOLDER", documentId: inside.documentId, audience: "NAMED" });
     }
   });

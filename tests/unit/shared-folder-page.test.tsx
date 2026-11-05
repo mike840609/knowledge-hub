@@ -28,7 +28,7 @@ const ids = {
 };
 const folderView = (document: SharedFolderView["document"]): SharedFolderView => ({
   kind: "FOLDER",
-  folderName: "Onboarding",
+  rootName: "Onboarding",
   sharedByName: "Mike",
   expiresAt: new Date("2026-11-27T00:00:00Z"),
   tree: [

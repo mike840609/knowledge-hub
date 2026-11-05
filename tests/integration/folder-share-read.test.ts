@@ -100,7 +100,7 @@ async function sharedFolder() {
 
 function asFolder(view: SharedView): SharedFolderView {
   if (view.kind !== "FOLDER") throw new Error(`expected a folder view, got ${view.kind}`);
-  return view;
+  return view as SharedFolderView;
 }
 
 async function viewCount(linkId: string): Promise<number> {
@@ -149,7 +149,7 @@ describe("DocumentShareService.readShared on a folder link (folder share spec §
   it("lands on the first document depth-first and lists the ACTIVE subtree in order, without Markdown", async () => {
     const f = await sharedFolder();
     const view = asFolder(await service().readShared(f.token));
-    expect(view).toMatchObject({ kind: "FOLDER", folderName: "Shared", sharedByName: "Folder Reader Owner", expiresAt: f.link.expiresAt });
+    expect(view).toMatchObject({ kind: "FOLDER", rootName: "Shared", sharedByName: "Folder Reader Owner", expiresAt: f.link.expiresAt });
     expect(view.tree.map((node) => [node.name, node.kind, node.parentId])).toEqual([
       ["Welcome", "DOCUMENT", null],
       ["Engineering", "FOLDER", null],
@@ -286,7 +286,7 @@ describe("DocumentShareService.readShared on a folder link (folder share spec §
     const token = tokenOf((await service().createForFolder(space.caller, { folderNodeId })).path);
     await space.hub.moveTreeNode(space.caller, { nodeId: only.treeNodeId, newParentId: null, newPosition: 0 });
     await expect(service().readShared(token)).resolves.toEqual({
-      kind: "FOLDER", folderName: "Empty", tree: [], document: null, sharedByName: "Empty Folder Owner", expiresAt: expect.any(Date), audience: "LINK",
+      kind: "FOLDER", rootName: "Empty", tree: [], document: null, sharedByName: "Empty Folder Owner", expiresAt: expect.any(Date), audience: "LINK",
     });
     await expect(service().readSharedTarget(token)).resolves.toEqual({ kind: "FOLDER", documentId: null, audience: "LINK" });
   });

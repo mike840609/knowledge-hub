@@ -35,7 +35,7 @@ import { SharedFolderPage } from "@/app/s/[token]/shared-folder-page";
 const ids = { welcome: "0192f3a4-0000-7000-8000-000000000001", setup: "0192f3a4-0000-7000-8000-000000000002" };
 const view = (documentId: string, title: string, path: { id: string; name: string }[]): SharedFolderView => ({
   kind: "FOLDER",
-  folderName: "Onboarding",
+  rootName: "Onboarding",
   sharedByName: "Mike",
   expiresAt: new Date("2026-11-27T00:00:00Z"),
   tree: [
