@@ -178,8 +178,12 @@ export function isReachableThroughSource(
 ```
 
 `chain[0]` must be the `DOCUMENT` node; every node must be `ACTIVE`, carry
-`sourceId`, and not repeat an id. A top-level document has a chain of one and is
-reachable. `documentReachesSource(source, document, chain)` mirrors
+`sourceId`, and not repeat an id. **The chain must also terminate at a Source
+root**: the last node's `parentId` is `null`. This is the anchor that
+`isReachableThroughFolder` gets from the folder id; without it, a chain
+truncated by `listChain`'s 1,000-node cap (or a data defect) would still pass.
+A top-level document has a chain of one whose only node has `parentId = null`
+and is reachable. `documentReachesSource(source, document, chain)` mirrors
 `documentReachesFolder`; `reachableChainForSource` mirrors `reachableChain` and
 returns the chain or null. Both live in `internal/folder-link-reach.ts` (the
 file may be renamed to `share-link-reach.ts`; builder's call).
@@ -206,6 +210,12 @@ if (link.target.kind === "SOURCE") {
 - build the forest with a new `sharedForest(sourceNodes)` that reuses
   `isShownInSharedTree` and depth-first sibling order. Top-level nodes keep
   `parentId: null`; an archived node and everything under it are absent;
+- **cap the forest at the depth the chain can prove.** `listSubtree` already
+  stops at a depth that keeps every folder node shown within `listChain`'s
+  reach; `listBySource` has no such cap. Apply the same cap to the Source
+  forest (counting a top-level node as depth 0), and drop anything deeper. A
+  rail that shows a document the reachability check must then refuse is a bug,
+  not a feature;
 - `view = { kind: "SOURCE", rootName: source.name, tree, sharedByName,
   expiresAt, audience }`;
 - the landing document is the first `DOCUMENT` in that depth-first forest;
@@ -238,6 +248,12 @@ export type SharedView =
 prefers; the important part is one tree view with a root kind, not two copies.
 `SharedTreeNode.parentId` means "null for a direct child of the shared root",
 which is true for both a folder and a Source.
+
+*My call from the builder check:* no paging or lazy folder expansion in this
+cut, matching the folder share. The whole forest is returned on every page
+load. Ceiling: if a Source reaches thousands of nodes, page the tree or load
+subfolders on expand; the depth cap above only keeps the rail provable, not
+cheap.
 
 `readSharedTarget` gains the Source branch: load the Source, judge the link,
 return `{ kind: "SOURCE", documentId }` for a reachable requested document,
@@ -301,6 +317,12 @@ Touch points, all already folder-aware:
 - `mentionLinksForOwner` also lists `shareLinks.listBySource(document.sourceId)`,
   so an owner mentioning someone on a document can hand over the Source link.
 - `named-recipients.linkOpensOnDocument` gains the Source branch.
+- `internal/named-share-judgement.ts` `openNamedTarget` gains the Source
+  branch: a live NAMED Source link opens `{ sourceName }`, and
+  `namedShareTitle` returns that name. `SavedShareService.listNamedForRecipient`
+  therefore lists it under "Shared with you" with the Source name and the Hub
+  reader href (`/w/:workspaceId/shares/:token`), landing on the first document;
+  the Inbox `SHARED_WITH_YOU` entry uses the same title.
 - Proposal and mention typing: `targetKind` becomes
   `"DOCUMENT" | "FOLDER" | "SOURCE"`; the mention picker's label says
   "(whole source)".
@@ -382,6 +404,10 @@ Workspace; its kind mapping adds SOURCE.
   marks a folder with a Share2 icon as today and marks a Source with the same
   icon beside its name; the label is "Shared". A link expiring while the tab is
   open is re-read on focus/visibility as today.
+- **Sources page.** The Sources list (`SourceListRow`) and `SourceDetail` show
+  the same "Shared" marker, using the same client hook (a small client marker
+  component where the parent is a server component). No server read-model field
+  is added: the endpoint the hook already calls is the one source of truth.
 
 **My shares.**
 
@@ -483,6 +509,24 @@ cost of A is smaller than the permanent tree complexity of B.
 
 A `share_scope` abstraction over folders and Sources is A with an extra layer
 and a new join for every read. It buys nothing at this size; rejected.
+
+## Builder check: calls made
+
+A fresh builder read this design against the code and raised four questions.
+All four were settled here; none needs the user.
+
+1. **Source tree size.** No paging or lazy expansion in this cut, matching the
+   folder share; the forest is returned whole. The same depth cap `listSubtree`
+   uses keeps the rail to nodes the chain check can prove.
+2. **Reachability anchor.** `isReachableThroughSource` requires the chain to end
+   at a node with `parentId = null`, so a chain truncated by `listChain`'s cap
+   cannot pass.
+3. **Source marker.** The Sources list and Source detail show the "Shared"
+   marker too, through the same client hook; no server read-model field.
+4. **NAMED Source links.** They are titled with the Source name and open the
+   Hub reader (`/w/:workspaceId/shares/:token`), landing on the first document,
+   through `openNamedTarget`, `namedShareTitle` and
+   `listNamedForRecipient`.
 
 ## Left to the builder
 
