@@ -74,6 +74,8 @@ for (const scenario of [
       await document.scrollIntoViewIfNeeded();
       await prefetched;
       await document.click();
+      // The explorer closes on navigation; a link under its backdrop would not navigate.
+      await expect(page.locator("[role=dialog]")).toHaveCount(0, ROUND_TRIP);
     } else {
       await content.getByRole("link", { name: withOutlineTitle, exact: true }).click();
     }
@@ -96,7 +98,7 @@ for (const scenario of [
 
     // Returning to a document without an outline must also keep its position.
     await content.getByRole("link", { name: plainTitle, exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`${start}$`));
+    await expect(page).toHaveURL(new RegExp(`${start}$`), ROUND_TRIP);
     await expect(content.locator("article:visible")).toBeVisible(ROUND_TRIP);
     const returned = await readingColumn().boundingBox();
     expect(Math.abs(returned!.x - before!.x)).toBeLessThanOrEqual(1);
