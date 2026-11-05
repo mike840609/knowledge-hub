@@ -17,7 +17,7 @@ const CLI_KEYS = ["schemaVersion", "taskId", "artifactRevision"];
 const LIST_KEYS = ["findings", "decisions", "changes"];
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const ANY_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const ISO_INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
+const ISO_INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,9})?(Z|[+-](\d{2}):(\d{2}))$/;
 const COMMIT_ID = /^[0-9A-Za-z._-]{1,128}$/;
 const CONTROL = /[\u0000-\u001f\u007f]/;
 
@@ -57,7 +57,9 @@ function completedAt(raw) {
   if (!match) throw new ContractError("completedAt", "must be an ISO 8601 date-time with a time zone");
   const [year, month, day, hour, minute, second] = match.slice(1, 7).map(Number);
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
-  if (date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day || hour >= 24 || minute >= 60 || second >= 60) {
+  const [offsetHour, offsetMinute] = [Number(match[9] ?? 0), Number(match[10] ?? 0)];
+  if (date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day || hour >= 24 || minute >= 60 || second >= 60
+    || offsetHour >= 24 || offsetMinute >= 60) {
     throw new ContractError("completedAt", "is not a real date-time");
   }
 }
@@ -106,8 +108,9 @@ function reference(raw, index) {
     if (!ANY_UUID.test(stringAt(raw, "documentId", field))) throw new ContractError(`${field}.documentId`, "must be a document ID");
     return;
   }
-  const keys = { CODE_FILE: ["type", "path"], COMMIT: ["type", "id"], PR_URL: ["type", "url"] }[raw.type];
-  if (typeof raw.type !== "string" || !keys) throw new ContractError(`${field}.type`, "unknown reference type");
+  const KEYS = { CODE_FILE: ["type", "path"], COMMIT: ["type", "id"], PR_URL: ["type", "url"] };
+  const keys = typeof raw.type === "string" && Object.hasOwn(KEYS, raw.type) ? KEYS[raw.type] : undefined;
+  if (!keys) throw new ContractError(`${field}.type`, "unknown reference type");
   onlyKeys(raw, keys, field);
   if (raw.type === "CODE_FILE") return relativePath(stringAt(raw, "path", field), `${field}.path`);
   if (raw.type === "COMMIT") {

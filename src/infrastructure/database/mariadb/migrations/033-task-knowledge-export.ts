@@ -3,7 +3,7 @@ import type { Migration } from "./types";
 /**
  * Task Knowledge Export (2026-11-04 design §6). Foreign keys only to rows that
  * never take part in Folder Sync writes: credential → binding, binding →
- * Source, task → binding, revision → task, reference → task. The resolved
+ * Workspace (the owner's My Space, Amendment 1), task → binding, revision → task, reference → task. The resolved
  * document id has none: documents are never hard-deleted and availability is
  * re-checked on every read. Workspace and owner are derived through the
  * binding, never stored on task rows.

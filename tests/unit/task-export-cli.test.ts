@@ -357,6 +357,16 @@ describe("conformance with the server contract", () => {
       expect([file, cliAccepts(validateArtifact, raw)]).toEqual([file, serverAccepts(parseTaskArtifact, raw)]);
     }
   });
+
+  it("refuses every invalid content fixture by naming a field, not by crashing", async () => {
+    // @ts-expect-error -- the CLI is plain JavaScript with no type declarations
+    const { validateContent } = await import("../../tools/knowledge-hub/src/artifact.mjs");
+    for (const file of cases("content/invalid")) {
+      let name = "accepted";
+      try { validateContent(JSON.parse(fixture(file))); } catch (error) { name = (error as Error).name; }
+      expect([file, name]).toEqual([file, "ContractError"]);
+    }
+  });
 });
 
 describe("unconfirmed revisions", () => {

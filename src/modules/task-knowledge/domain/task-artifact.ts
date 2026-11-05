@@ -47,7 +47,7 @@ const CONTENT_KEYS = [
 const CLI_KEYS = ["schemaVersion", "taskId", "artifactRevision"] as const;
 const LIST_KEYS = ["findings", "decisions", "changes"] as const;
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-const ISO_INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
+const ISO_INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,9})?(Z|[+-](\d{2}):(\d{2}))$/;
 
 const invalid = (field: string, reason: string) => new TaskArtifactError("INVALID_ARTIFACT", `${field}: ${reason}`);
 
@@ -80,7 +80,9 @@ function completedAt(raw: unknown): string {
   if (!match) throw invalid(field, "must be an ISO 8601 date-time with a time zone");
   const [year, month, day, hour, minute, second] = match.slice(1, 7).map(Number);
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
-  const real = date.getUTCMonth() === month - 1 && date.getUTCDate() === day && hour < 24 && minute < 60 && second < 60;
+  const [offsetHour, offsetMinute] = [Number(match[9] ?? 0), Number(match[10] ?? 0)];
+  const real = date.getUTCMonth() === month - 1 && date.getUTCDate() === day && hour < 24 && minute < 60 && second < 60
+    && offsetHour < 24 && offsetMinute < 60;
   if (!real) throw invalid(field, "is not a real date-time");
   return raw as string;
 }

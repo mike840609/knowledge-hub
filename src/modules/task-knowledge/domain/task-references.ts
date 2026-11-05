@@ -85,7 +85,7 @@ export function parseTaskReference(raw: unknown, index: number): TaskReferenceIn
     if (!isUuid(documentId)) throw invalid(`${field}.documentId`, "must be a document ID");
     return { type, documentId };
   }
-  if (typeof type !== "string" || !(type in REFERENCE_KEYS)) throw invalid(`${field}.type`, "unknown reference type");
+  if (typeof type !== "string" || !Object.hasOwn(REFERENCE_KEYS, type)) throw invalid(`${field}.type`, "unknown reference type");
   assertKeys(record, REFERENCE_KEYS[type], field);
   if (type === "CODE_FILE") return { type, path: validateCodeFilePath(stringField(record, "path", field), `${field}.path`) };
   if (type === "COMMIT") return { type, id: validateCommitId(stringField(record, "id", field), `${field}.id`) };
