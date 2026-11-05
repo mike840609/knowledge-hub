@@ -36,22 +36,34 @@ describe("the Task export setup page", () => {
     expect(container.textContent).toContain("rotating a token stops the machine that uses it");
   });
 
-  it("puts the token on the setup line and tells the reader to treat the line as a secret", async () => {
+  it("shows one setup line with the token in it, and no separate token field", async () => {
     await issueToken();
     const line = container.querySelector("pre")!.textContent!;
+    expect(line.startsWith("npm install -g ")).toBe(true);
     expect(line).toContain("knowledge-hub configure --hub-url");
     expect(line).toContain("--binding-id b1 --token khx_secret");
     expect(line).not.toContain("hidden prompt");
+    expect(container.querySelector('input[aria-label="Export token"]')).toBeNull();
     expect(container.textContent).toContain("Treat this line as a secret");
   });
 
-  it("says so when the clipboard refuses, and leaves the token selected to copy by hand", async () => {
+  it("copies exactly the setup line from the code block's own button", async () => {
+    await issueToken();
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const line = container.querySelector("pre")!.textContent!;
+    const copy = container.querySelector<HTMLButtonElement>('button[aria-label="Copy code"]')!;
+    await act(async () => { copy.click(); });
+    expect(writeText).toHaveBeenCalledWith(line);
+    expect(container.textContent).toContain("Copied");
+  });
+
+  it("says so when the clipboard refuses, leaving the line on the page to copy by hand", async () => {
     await issueToken();
     vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn(async () => { throw new Error("denied"); }) } });
-    const copy = [...container.querySelectorAll("button")].find((b) => b.textContent === "Copy")!;
+    const copy = container.querySelector<HTMLButtonElement>('button[aria-label="Copy code"]')!;
     await act(async () => { copy.click(); });
-    expect(copy.textContent).toBe("Copy failed");
-    const input = container.querySelector<HTMLInputElement>('input[aria-label="Export token"]')!;
-    expect(document.activeElement).toBe(input);
+    expect(container.textContent).toContain("Could not copy");
+    expect(container.querySelector("pre")!.textContent).toContain("--token khx_secret");
   });
 });

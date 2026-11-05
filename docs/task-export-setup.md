@@ -48,9 +48,9 @@ nothing to configure per project.
 - **A second binding on one machine:** add `--profile <name>` to `configure` and to every
   `export`.
 - **Rotating the secret:** rotate it on the setup page, which shows a new setup
-  line; running it replaces the stored secret. Or run
-  `knowledge-hub configure --rotate <binding-id>` and paste the new secret at the
-  prompt (or add `--token <secret>`).
+  line; running it replaces the stored secret. (`knowledge-hub configure --rotate
+  <binding-id>` also works: paste the value after `--token` in that line at the
+  prompt.)
 
 A Wiki reference the Agent writes as a path links to the page when exactly one
 synced folder in My Space has that path.

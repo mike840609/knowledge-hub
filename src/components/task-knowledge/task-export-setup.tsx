@@ -1,7 +1,8 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { CopyCodeButton } from "@/components/knowledge/copy-code-button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,36 +32,16 @@ async function send(path: string, method: string, body?: unknown): Promise<unkno
 
 function Commands({ bindingId, token }: Issued) {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
-  const [copy, setCopy] = useState<"idle" | "copied" | "failed">("idle");
-  const tokenInput = useRef<HTMLInputElement>(null);
   const local = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin) ? " --allow-insecure-localhost" : "";
-  const commands = [
-    "# once per machine; this line contains the token",
-    `npm install -g ${origin}/cli/knowledge-hub.tgz && knowledge-hub install-agent && knowledge-hub configure --hub-url ${origin} --binding-id ${bindingId} --token ${token}${local}`,
-  ].join("\n");
+  const line = `npm install -g ${origin}/cli/knowledge-hub.tgz && knowledge-hub install-agent && knowledge-hub configure --hub-url ${origin} --binding-id ${bindingId} --token ${token}${local}`;
   return (
     <div className="space-y-3 rounded-md border border-kh-border p-4" role="status">
       <p className="text-body font-medium">Copy the setup line now. It carries the token and is shown only once.</p>
-      <p className="text-caption text-kh-text-muted">Treat this line as a secret: run it only on your own machine, and rotate the token if it was pasted anywhere else.</p>
-      <div className="flex gap-2">
-        <Input ref={tokenInput} readOnly value={token} aria-label="Export token" className="font-mono" onFocus={(event) => event.currentTarget.select()} />
-        <Button
-          variant="secondary"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(token);
-              setCopy("copied");
-            } catch {
-              // Left selected so it can be copied by hand.
-              setCopy("failed");
-              tokenInput.current?.focus();
-            }
-          }}
-        >
-          {copy === "copied" ? "Copied" : copy === "failed" ? "Copy failed" : "Copy"}
-        </Button>
+      <p className="text-caption text-kh-text-muted">Run it once per machine. Treat this line as a secret: run it only on your own machine, and rotate the token if it was pasted anywhere else.</p>
+      <div data-code-block className="relative">
+        <pre className="overflow-x-auto rounded-md bg-kh-bg-subtle p-3 pr-12 text-body-sm">{line}</pre>
+        <CopyCodeButton />
       </div>
-      <pre className="overflow-x-auto rounded-md bg-kh-bg-subtle p-3 text-body-sm">{commands}</pre>
     </div>
   );
 }

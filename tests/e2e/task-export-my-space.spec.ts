@@ -26,11 +26,11 @@ test("task results in My Space: export, browse, version, archive and restore, al
   await page.getByRole("link", { name: "Set up export" }).click();
   await page.getByLabel("Label").fill("e2e laptop");
   await page.getByRole("button", { name: "Create binding" }).click();
-  const token = await page.getByLabel("Export token").inputValue();
-
+  
   // One setup line, once per machine, installing the CLI this Hub serves and carrying the token.
   const origin = new URL(page.url()).origin;
   const setupLine = await page.locator("pre").innerText();
+  const token = /--token (\S+)/.exec(setupLine)![1];
   expect(setupLine).toContain(`npm install -g ${origin}/cli/knowledge-hub.tgz && knowledge-hub install-agent && knowledge-hub configure --hub-url ${origin} --binding-id `);
   expect(setupLine).toContain(`--token ${token}`); // one paste configures (Amendment 4)
   expect(setupLine).toContain("--allow-insecure-localhost");

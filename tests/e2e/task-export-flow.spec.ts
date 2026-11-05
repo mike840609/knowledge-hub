@@ -65,8 +65,9 @@ test("manual task export from the CLI, through timeout, revisions, archive, rota
   await page.goto(`/w/${ws}/tasks/setup`);
   await page.getByLabel("Label").fill(label);
   await page.getByRole("button", { name: "Create binding" }).click();
-  const token = await page.getByLabel("Export token").inputValue();
-  const bindingId = /--binding-id (\S+)/.exec(await page.locator("pre").innerText())![1];
+  const setupLine = await page.locator("pre").innerText();
+  const token = /--token (\S+)/.exec(setupLine)![1];
+  const bindingId = /--binding-id (\S+)/.exec(setupLine)![1];
 
   const proxy = await delayingProxy(baseURL!);
   const home = mkdtempSync(path.join(tmpdir(), "kh-flow-home-"));
@@ -114,7 +115,7 @@ test("manual task export from the CLI, through timeout, revisions, archive, rota
     // Rotation invalidates the old token; configure --rotate picks up the new one.
     await page.goto(`/w/${ws}/tasks/setup`);
     await bindingRow(page, label).getByRole("button", { name: "Rotate token" }).click();
-    const rotated = await page.getByLabel("Export token").inputValue();
+    const rotated = /--token (\S+)/.exec(await page.locator("pre").innerText())![1];
     expect(rotated).not.toBe(token);
     const stale = await run(["export", "--task", taskId], content("Fix guide redirect (rev 4)"));
     expect(stale.code).toBe(4);

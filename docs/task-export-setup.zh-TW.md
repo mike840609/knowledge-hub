@@ -33,7 +33,7 @@ npm install -g https://km.example.com/cli/knowledge-hub.tgz && knowledge-hub ins
   不要為此輪替這個 binding 的密鑰：輪替會讓仍使用舊密鑰的機器停止運作。兩台機器都會匯出到同一個 My Space。
 - **同一台機器上的第二個 binding：** 在 `configure` 與每次 `export` 加上 `--profile <name>`。
 - **輪替密鑰：** 在設定頁輪替，頁面會顯示新的設定指令，執行它就會取代已存的密鑰。
-  也可以執行 `knowledge-hub configure --rotate <binding-id>`，在提示貼上新密鑰（或加 `--token <secret>`）。
+  （也可以執行 `knowledge-hub configure --rotate <binding-id>`，在提示貼上該指令中 `--token` 後面的值。）
 
 Agent 用路徑寫的 Wiki 引用，只要 My Space 裡恰好有一個已同步資料夾有該路徑，就會連到那一頁。
 
