@@ -47,9 +47,9 @@ describe("the primary rail's Tasks row (task knowledge export design, Amendment 
     expect(tasksLink()!.textContent).toContain("Tasks");
   });
 
-  it("carries the Bot icon: results from coding agents, not a to-do list", () => {
+  it("carries the terminal icon: results from coding agents run in a terminal, not a to-do list", () => {
     act(() => root.render(createElement(PrimaryNav, { workspaceId: "w1" })));
-    expect(tasksLink()!.querySelector("svg.lucide-bot")).not.toBeNull();
+    expect(tasksLink()!.querySelector("svg.lucide-square-terminal")).not.toBeNull();
   });
 
   it("is current on the list and on a task's own page", () => {
