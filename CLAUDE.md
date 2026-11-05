@@ -186,6 +186,11 @@ pass.
   `application/internal/` are imported only from `application/`
   (`tests/unit/task-export-single-exception.test.ts`;
   `docs/superpowers/specs/2026-11-04-task-knowledge-export-design.md` §3).
+  That route and `GET /cli/knowledge-hub.tgz` are exempt from the site password
+  and Google sign-in, each by exact pathname only (`src/lib/auth-paths.ts`,
+  `src/lib/site-password.ts`). The tarball serves no content: only the CLI and
+  its Skill, the same bytes for everyone, because `npm install` sends no session
+  (design, Amendment 2).
 - **`org_code` does not decide access.** It answers which company org a user
   belongs to; workspace membership answers what they can open. Cross-org
   membership is legal and same-org membership is not automatic.

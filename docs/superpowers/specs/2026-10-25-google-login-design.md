@@ -162,6 +162,8 @@ is additive and only runs when `KM_IDENTITY_PROVIDER === "google"`:
   - static assets already excluded by the matcher;
   - `POST /api/task-results/ingest`, by exact pathname only: it authenticates by its own export
     credential, see `2026-11-04-task-knowledge-export-design.md` §7.
+  - `GET /cli/knowledge-hub.tgz`, by exact pathname only: the CLI tarball, which `npm install`
+    fetches without a session and which holds no data or credential (same design, Amendment 2).
 - `/s/<token>/open` is **protected**: it calls `establishTrustedCaller`, so a signed-out visitor
   is redirected to `/login?returnTo=/s/<token>/open`. The share-page link and its tests stay
   unchanged.
