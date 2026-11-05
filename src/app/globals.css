@@ -947,8 +947,13 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   top: var(--review-thread-top);
   width: 100%;
   margin-top: 0;
-  /* A reply, a loaded font or the active thread changing the order moves the cards; the rail says
-     where they went instead of teleporting them. Absolute siblings, so only the cards repaint. */
+}
+/* A reply, a loaded font or the active thread changing the order moves the cards; the rail says
+   where they went instead of teleporting them. Absolute siblings, so only the cards repaint. The
+   new comment is not one of them: it is placed and focused at the same moment, and gliding it in
+   from the rail's top would leave the field focused there, scrolling the reader away from the
+   passage. It pops where it belongs instead. */
+.kh-review-document[data-review-inline] .kh-review-thread-list[data-positioned] > [data-review-thread] {
   transition: top 120ms ease-out;
 }
 /* A collapsed passage group reads as two cards: the same soft shadow as a popover, plus one
