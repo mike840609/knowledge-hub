@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { notificationHref, notificationLine } from "@/components/knowledge/notification-href";
+import { notificationHref, notificationLine, notificationTitle } from "@/components/knowledge/notification-href";
 import { shareDiscussionHref } from "@/lib/share-paths";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
 
@@ -7,6 +7,9 @@ const view = (overrides: Partial<ShareCommentNotificationView> = {}): ShareComme
   id: "e", workspaceId: "w", documentId: "d", sourceId: "s", documentTitle: "Doc", threadId: "t", commentId: "c",
   authorName: "Ann", excerpt: "Looks good", createdAt: new Date(0), readAt: null, threadStatus: "OPEN", ...overrides,
 });
+const shared = (overrides: Partial<ShareCommentNotificationView> = {}): ShareCommentNotificationView =>
+  view({ kind: "SHARED_WITH_YOU", workspaceId: "", documentId: "", sourceId: "", documentTitle: "Quarterly plan", authorName: "Dana", excerpt: "", href: "/w/me/shares/tok", linkAvailable: true, ...overrides });
+const deadShared = () => shared({ linkAvailable: false, href: undefined, documentTitle: "", authorName: undefined });
 
 describe("where an Inbox entry leads, and what it says", () => {
   it("an owner's notice opens the document in its Workspace at the discussion", () => {
@@ -34,6 +37,23 @@ describe("where an Inbox entry leads, and what it says", () => {
   });
   it("an author without a name is someone", () => {
     expect(notificationLine(view({ authorName: undefined }))).toBe("Someone: Looks good");
+  });
+  it("a named share says who shared it, opens the reader, and never repeats the title", () => {
+    expect(notificationTitle(shared())).toBe("Quarterly plan");
+    expect(notificationHref(shared())).toBe("/w/me/shares/tok");
+    expect(notificationLine(shared())).toBe("Dana shared this with you");
+    expect(notificationLine(shared({ authorName: undefined }))).toBe("Someone shared this with you");
+    expect(notificationLine(shared({ documentTitle: "" }))).toBe("Dana shared this with you");
+  });
+  it("a dead named share names a shared document and says it is gone", () => {
+    expect(notificationTitle(deadShared())).toBe("A shared document");
+    expect(notificationHref(deadShared())).toBeNull();
+    expect(notificationLine(deadShared())).toBe("This link is no longer available.");
+  });
+  it("no line uses the title's old double angle brackets", () => {
+    const lines = [shared(), shared({ authorName: undefined }), deadShared(), view(), view({ kind: "FOLLOW", linkAvailable: false })]
+      .map(notificationLine);
+    for (const line of lines) expect(line).not.toContain("《");
   });
 });
 

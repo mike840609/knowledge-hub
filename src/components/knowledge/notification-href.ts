@@ -55,7 +55,7 @@ const deadEntry = (entry: Pick<Entry, "kind" | "linkAvailable">) => (isLinkEntry
 export function notificationLine(entry: Entry): string {
   if (deadEntry(entry)) return "This link is no longer available.";
   if (isProposalEntry(entry.kind)) return proposalLine(entry);
-  if (isSharedEntry(entry.kind)) return `${entry.authorName ?? "Someone"} shared 《${entry.documentTitle}》 with you`;
+  if (isSharedEntry(entry.kind)) return `${entry.authorName ?? "Someone"} shared this with you`;
   const said = `${entry.authorName ?? "Someone"}: ${entry.excerpt}`;
   return (entry.replyCount ?? 0) > 1 ? `${entry.replyCount} new replies · ${said}` : said;
 }

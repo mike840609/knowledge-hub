@@ -12,6 +12,8 @@ import { projectShareCommentNotification, EXCERPT_LIMIT, PROPOSAL_PREFIX, SHARED
 import type { ProposalParty, ShareProposal } from "../domain/share-proposal";
 import { orderFollowedDiscussions, summarizeFollowedThread, type FollowedDiscussionView } from "../domain/review-follow";
 import type { DocumentShareLink } from "../domain/document-share-link";
+import { filterInboxDiscussions, mergeInboxDiscussions, sortInboxDiscussions, type InboxCursor, type InboxDiscussionView, type InboxKindFilter, type InboxPage, type InboxStatusFilter } from "../domain/inbox-discussion";
+import type { InboxOwnerSummary } from "../ports/share-comment-event-repository";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
 import { judgeNamedShares, namedShareTitle, openNamedTarget, type NamedShareTarget } from "./internal/named-share-judgement";
 import { audienceAdmits, documentReachesFolder, linkOpensFor, openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
@@ -22,6 +24,12 @@ function canonicalAnchor(a:ReviewAnchor) { if(!a || typeof a!=="object") fail("I
 const hash = (payload:unknown) => createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 const FOLLOW_PREFIX = "follow:";
 const FOLLOW_LIMIT = 100;
+/** The Inbox index's owner page. Follows and mentions stay the bounded first-page set (`FOLLOW_LIMIT`). */
+const INBOX_PAGE_SIZE = 50;
+/** The row's muted quote line (spec 2026-11-04 § The list). */
+const QUOTE_LIMIT = 120;
+const excerpt = (body: string) => [...body].slice(0, EXCERPT_LIMIT).join("");
+const quoteOf = (exact: string) => [...exact].slice(0, QUOTE_LIMIT).join("");
 /** The mentions a write carries: validated ids and, for the owner, the link they hand over. `hashed` joins the request hash only when someone is named. */
 type MentionRequest = { ids: string[]; linkId: string | null; hashed: Record<string, unknown> };
 /** What a checked mention writes once its comment is in: the link handed over, and on a NAMED link the people the owner adds or a recipient proposes. */
@@ -96,7 +104,7 @@ export class DocumentReviewService {
   async listUnreadShareCountsForOwner(caller: CallerContext) {
     return this.uow.run(r => r.shareCommentEvents.listUnreadCountsByRecipient(caller.identity.id));
   }
-  /** A bounded, cursor-paged cross-document activity feed, including already-read comments. */
+  /** Retained as an internal/test read only; the product's activity route is retired in favor of `listInbox`. */
   async listActivityForOwner(caller: CallerContext, before?: { createdAt: Date; id: string }) {
     return this.uow.run(async r => {
       const size = 50;
@@ -114,6 +122,149 @@ export class DocumentReviewService {
           : null,
       };
     });
+  }
+  /**
+   * The Inbox index: one row per discussion, from the caller's owner notices, follows and mentions.
+   * Owner rows page by `(latestAt, threadId)`; follows and mentions are the bounded first-page set.
+   * A `threadId` narrows every source to that one discussion, for a deep link off the loaded page.
+   */
+  async listInbox(caller: CallerContext, input: { kind: InboxKindFilter; status: InboxStatusFilter; unread: boolean; before?: InboxCursor; threadId?: string }): Promise<InboxPage> {
+    // thread_id is a MariaDB UUID column: a malformed id would fail the query rather than match nothing.
+    if (input.threadId !== undefined && !isUuid(input.threadId)) return { discussions: [], shared: [], nextCursor: null };
+    return this.uow.run(async r => {
+      const ownerRows = input.kind === "follow" ? [] : await r.shareCommentEvents.listDiscussionSummaries({
+        recipientUserId: caller.identity.id,
+        status: input.status === "all" ? undefined : input.status === "open" ? "OPEN" : "RESOLVED",
+        unreadOnly: input.unread,
+        mentionedOnly: input.kind === "mention",
+        ...(input.threadId ? { threadIds: [input.threadId] } : {}),
+        // A deep-link lookup is not a page: the cursor must not hide the discussion it names.
+        ...(input.before && !input.threadId ? { before: input.before } : {}),
+        limit: INBOX_PAGE_SIZE + 1,
+      });
+      const views = await this.ownerDiscussionViews(r, ownerRows.slice(0, INBOX_PAGE_SIZE), caller.identity.id);
+      // Follows and mentions are not paged; a later page is owner rows only.
+      if (input.kind !== "owner" && (!input.before || input.threadId !== undefined)) {
+        views.push(...await this.followDiscussionViews(r, caller.identity.id, input.threadId));
+        views.push(...await this.mentionDiscussionViews(r, caller.identity.id, input.threadId));
+      }
+      const discussions = filterInboxDiscussions(sortInboxDiscussions(mergeInboxDiscussions(views)), input);
+      const shared = !input.threadId && !input.before && input.kind === "all" && input.status === "all" && !input.unread
+        ? await this.sharedViews(r, caller, true)
+        : [];
+      // Proposals are notices, not discussions: they are not filtered by the discussion tabs and
+      // sit on the first page only. The page keeps the unread or owner-decidable ones.
+      const proposals = !input.threadId && !input.before ? await this.proposalViews(r, caller, false) : [];
+      const lastOwner = ownerRows[INBOX_PAGE_SIZE - 1];
+      const nextCursor = ownerRows.length > INBOX_PAGE_SIZE && lastOwner
+        ? { latestAt: lastOwner.latestAt.toISOString(), threadId: lastOwner.threadId }
+        : null;
+      return { discussions, shared, proposals, nextCursor };
+    });
+  }
+  /** The owner's discussions as index rows: the summary names the thread, the visible comments name its line. */
+  private async ownerDiscussionViews(r: KnowledgeRepositories, rows: readonly InboxOwnerSummary[], userId: string): Promise<InboxDiscussionView[]> {
+    if (rows.length === 0) return [];
+    const comments = await r.reviewComments.listByThreads(rows.map(row => row.threadId));
+    const byThread = new Map<string, ReviewComment[]>();
+    for (const comment of comments) {
+      const list = byThread.get(comment.threadId);
+      if (list) list.push(comment); else byThread.set(comment.threadId, [comment]);
+    }
+    const authors = new Map((await r.users.findByIds([...new Set(comments.map(comment => comment.authorUserId))])).map(user => [user.id, user.name]));
+    const personal = await r.workspaces.findPersonalByOwnerUserId(userId);
+    return rows.map(row => {
+      const standing = (byThread.get(row.threadId) ?? []).filter(comment => !comment.deletedAt && comment.visibility === "VISIBLE");
+      const latest = [...standing].reverse().find(comment => comment.authorUserId !== userId) ?? standing[0];
+      return {
+        threadId: row.threadId, kind: "OWNER" as const, documentId: row.documentId, sourceId: row.sourceId,
+        documentTitle: row.documentTitle, quote: quoteOf(row.quote),
+        href: personal ? `/w/${personal.id}/knowledge/${row.sourceId}/${row.documentId}?thread=${row.threadId}` : "",
+        latest: latest
+          ? { authorName: authors.get(latest.authorUserId), excerpt: excerpt(latest.body), createdAt: latest.createdAt }
+          : { excerpt: "", createdAt: row.latestAt },
+        latestAt: row.latestAt, commentCount: standing.length, unreadCount: row.unreadCount,
+        status: row.status, following: false, mentioned: row.mentioned,
+      };
+    });
+  }
+  /** Live followed discussions as index rows; a dead follow is not listed here (Shares > Discussions keeps it). */
+  private async followDiscussionViews(r: KnowledgeRepositories, userId: string, threadId?: string): Promise<InboxDiscussionView[]> {
+    const views: InboxDiscussionView[] = [];
+    const hrefOf = this.discussionHrefs(r, userId);
+    const identities = new Map<string, { title: string; sourceId: string }>();
+    const authorNames = new Map<string, string | undefined>();
+    for (const { thread, link, summary } of await this.followedThreads(r, userId)) {
+      if (threadId !== undefined && thread.id !== threadId) continue;
+      if ("unavailable" in summary || !link) continue;
+      const href = await hrefOf(link, thread.id, thread.documentId);
+      // A named link read by someone with no personal Workspace has nowhere to open: it is not an index row.
+      if (!href) continue;
+      const identity = await this.documentIdentity(r, thread.documentId, identities);
+      const line = summary.latest.authorUserId === userId ? summary.latestReply ?? summary.latest : summary.latest;
+      if (!authorNames.has(line.authorUserId)) authorNames.set(line.authorUserId, (await r.users.findById(line.authorUserId))?.name);
+      views.push({
+        threadId: thread.id, kind: "FOLLOW", documentId: thread.documentId, sourceId: identity.sourceId,
+        documentTitle: identity.title, quote: quoteOf(thread.anchor.exact), href, token: link.token,
+        latest: { authorName: authorNames.get(line.authorUserId), excerpt: excerpt(line.body), createdAt: line.createdAt },
+        latestAt: summary.latest.createdAt, commentCount: summary.commentCount, unreadCount: summary.unread,
+        status: thread.status, following: true, mentioned: false,
+      });
+    }
+    return views;
+  }
+  /** Live mentions grouped by discussion: the newest live mention is the relationship, its thread's comments are the row. */
+  private async mentionDiscussionViews(r: KnowledgeRepositories, userId: string, threadId?: string): Promise<InboxDiscussionView[]> {
+    const groups = new Map<string, { thread: ReviewThread; link: DocumentShareLink; comments: ReviewComment[]; mentionAt: Date; unread: number }>();
+    for (const judged of await this.judgedMentions(r, await r.reviewMentions.listRecentByRecipient(userId, FOLLOW_LIMIT), userId)) {
+      if (!("comment" in judged)) continue;
+      if (threadId !== undefined && judged.thread.id !== threadId) continue;
+      const group = groups.get(judged.thread.id);
+      const unread = judged.mention.readAt === null ? 1 : 0;
+      if (!group) {
+        groups.set(judged.thread.id, { thread: judged.thread, link: judged.link, comments: judged.comments, mentionAt: judged.mention.createdAt, unread });
+        continue;
+      }
+      group.unread += unread;
+      // The newest live mention hands over the row's link and token.
+      if (judged.mention.createdAt > group.mentionAt) {
+        group.mentionAt = judged.mention.createdAt; group.link = judged.link;
+      }
+    }
+    const views: InboxDiscussionView[] = [];
+    const hrefOf = this.discussionHrefs(r, userId);
+    const identities = new Map<string, { title: string; sourceId: string }>();
+    const authorNames = new Map<string, string | undefined>();
+    for (const { thread, link, comments, unread } of groups.values()) {
+      const href = await hrefOf(link, thread.id, thread.documentId);
+      if (!href) continue;
+      const standing = comments.filter(comment => !comment.deletedAt && comment.visibility === "VISIBLE");
+      const latest = [...standing].reverse().find(comment => comment.authorUserId !== userId) ?? standing[0];
+      const identity = await this.documentIdentity(r, thread.documentId, identities);
+      if (latest && !authorNames.has(latest.authorUserId)) authorNames.set(latest.authorUserId, (await r.users.findById(latest.authorUserId))?.name);
+      views.push({
+        threadId: thread.id, kind: "MENTION", documentId: thread.documentId, sourceId: identity.sourceId,
+        documentTitle: identity.title, quote: quoteOf(thread.anchor.exact), href, token: link.token,
+        latest: latest
+          ? { authorName: authorNames.get(latest.authorUserId), excerpt: excerpt(latest.body), createdAt: latest.createdAt }
+          : { excerpt: "", createdAt: thread.updatedAt },
+        latestAt: standing.at(-1)?.createdAt ?? thread.updatedAt, commentCount: standing.length, unreadCount: unread,
+        status: thread.status, following: false, mentioned: true,
+      });
+    }
+    return views;
+  }
+  /** A document's title and Source, read once per page. */
+  private async documentIdentity(r: KnowledgeRepositories, documentId: string, cache: Map<string, { title: string; sourceId: string }>) {
+    let identity = cache.get(documentId);
+    if (!identity) {
+      identity = {
+        title: (await r.revisions.findCurrent(documentId))?.title ?? "",
+        sourceId: (await r.documents.findById(documentId))?.sourceId ?? "",
+      };
+      cache.set(documentId, identity);
+    }
+    return identity;
   }
   /**
    * An owner event by its id, a followed discussion by `follow:<threadId>`, a mention by `mention:<commentId>`, a named share
@@ -159,6 +310,27 @@ export class DocumentReviewService {
     await this.uow.run(async r => {
       await this.ownerScope(r, caller, documentId, false);
       await r.shareCommentEvents.markThreadRead(caller.identity.id, documentId, threadId, this.clock());
+    });
+  }
+  /**
+   * The reader has opened one discussion in the Inbox: their owner notices, follow and mentions for
+   * that thread are read, in whatever relationship they hold it. An unknown thread, a malformed id
+   * or someone with no relationship is a no-op, not an error that reveals whether it exists.
+   */
+  async markDiscussionRead(caller: CallerContext, threadId: string): Promise<void> {
+    if (!isUuid(threadId)) return;
+    const now = this.clock();
+    await this.uow.run(async r => {
+      const thread = await r.reviewThreads.findById(threadId);
+      if (!thread) return;
+      try {
+        await this.ownerScope(r, caller, thread.documentId, false);
+        await r.shareCommentEvents.markThreadRead(caller.identity.id, thread.documentId, threadId, now);
+      } catch (error) {
+        if (!(error instanceof ShareLinkNotFoundError)) throw error;
+      }
+      await r.reviewFollows.markSeen(threadId, caller.identity.id, now);
+      await r.reviewMentions.markThreadRead(caller.identity.id, threadId, now);
     });
   }
   /** A signed-in reader on a live link follows, or stops following, one of its discussions. Adds no words, so writes need not be enabled. */
@@ -372,7 +544,7 @@ export class DocumentReviewService {
     for (const comment of await r.reviewComments.listByThreads(threadIds)) commentsByThread.set(comment.threadId, [...(commentsByThread.get(comment.threadId) ?? []), comment]);
     const links = new Map((await r.shareLinks.findByIds([...new Set(mentions.map(mention => mention.shareLinkId))])).map(link => [link.id.toLowerCase(), link]));
     const opens = new Map<string, boolean>();
-    const judged: Array<{ mention: ReviewMention } | { mention: ReviewMention; thread: ReviewThread; comment: ReviewComment; link: DocumentShareLink }> = [];
+    const judged: Array<{ mention: ReviewMention } | { mention: ReviewMention; thread: ReviewThread; comment: ReviewComment; link: DocumentShareLink; comments: ReviewComment[] }> = [];
     for (const mention of mentions) {
       const found = named.get(mention.commentId);
       const thread = found ? threadsById.get(found.threadId) ?? null : null;
@@ -383,7 +555,7 @@ export class DocumentReviewService {
       // One judgement per link and document: a folder link reaches each document by its own chain.
       const key = `${mention.shareLinkId}:${thread.documentId}`;
       if (link && !opens.has(key)) opens.set(key, await this.linkValid(r, link, thread.documentId, userId));
-      judged.push(link && opens.get(key) ? { mention, thread, comment, link } : { mention });
+      judged.push(link && opens.get(key) ? { mention, thread, comment, link, comments } : { mention });
     }
     return judged;
   }

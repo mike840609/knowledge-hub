@@ -97,7 +97,7 @@ test.describe("named-recipient share, end to end", () => {
 
     // A's Inbox says so, and the entry opens the share in the Hub.
     await page.goto(`${reader}/w/${readerWorkspace}/inbox`);
-    const line = page.getByText(`Phase3 reviewOwner shared 《${title}》 with you`, { exact: true });
+    const line = page.getByText("Phase3 reviewOwner shared this with you", { exact: true });
     await expect(line).toBeVisible(ROUND_TRIP);
     const hubUrl = `${reader}/w/${readerWorkspace}/shares/${token}`;
     await page.goto(`${reader}/s/${token}/open`);
@@ -145,7 +145,7 @@ test.describe("named-recipient share, end to end", () => {
     expect(gone.status()).toBe(404);
     await page.goto(`${reader}/w/${readerWorkspace}/inbox`);
     await expect(page.getByRole("heading", { name: "Inbox", level: 1 })).toBeVisible(ROUND_TRIP);
-    await expect(page.getByText(`shared 《${title}》 with you`)).toHaveCount(0);
+    await expect(page.getByText("shared this with you")).toHaveCount(0);
     await page.goto(`${owner}/w/${ownerWorkspace}/knowledge/${doc.sourceId}/${doc.documentId}`);
     await openReviewDiscussions(page);
     await expect(page.getByRole("region", { name: "Discussion thread" }).filter({ hasText: "Reader remark @Phase3 viewer" })).toBeVisible(ROUND_TRIP);
@@ -201,7 +201,7 @@ test.describe("named-recipient share, end to end", () => {
 
     // The outsider is now a recipient: the share is in their Inbox, opens in the Hub and shows the comment.
     await page.goto(`${outsider}/w/${outsiderWorkspace}/inbox`);
-    await expect(page.getByText(`Phase3 reviewOwner shared 《${title}》 with you`, { exact: true })).toBeVisible(ROUND_TRIP);
+    await expect(page.getByText("Phase3 reviewOwner shared this with you", { exact: true })).toBeVisible(ROUND_TRIP);
     await page.goto(`${outsider}/s/${token}/open`);
     await expect(page).toHaveURL(`${outsider}/w/${outsiderWorkspace}/shares/${token}`, ROUND_TRIP);
     await openReviewDiscussions(page);

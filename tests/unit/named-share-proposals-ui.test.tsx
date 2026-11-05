@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
 import { isLinkEntry, notificationHref, notificationLabel, notificationLine, notificationTitle } from "@/components/knowledge/notification-href";
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+  usePathname: () => "/w/me/inbox",
+}));
 const { InboxActivityView } = await import("@/components/knowledge/inbox-activity-view");
 const { NamedShareRecipients } = await import("@/components/knowledge/named-share-recipients");
 
@@ -90,9 +93,10 @@ const buttons = (name: string) => [...host.querySelectorAll("button")].filter(b 
 describe("the Inbox", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", async (url: string, init: RequestInit = {}) => {
-      if (url.startsWith("/api/review-notifications/activity")) {
+      if (url.startsWith("/api/review-notifications/unread-count")) return json({ count: notifications.filter(item => item.readAt === null).length });
+      if (url.startsWith("/api/review-notifications/inbox")) {
         if (init.method === "POST") { posts.push(`mark-read ${JSON.parse(String(init.body)).eventId}`); return json({ ok: true }); }
-        return json({ notifications, nextCursor: null });
+        return json({ discussions: [], shared: [], proposals: notifications, nextCursor: null });
       }
       if (url.startsWith("/api/share-links/") && init.method === "POST") {
         posts.push(url);
@@ -118,8 +122,7 @@ describe("the Inbox", () => {
     await act(async () => { release(); await hold; });
     await act(async () => {});
     expect(posts).toEqual([`/api/share-links/link-1/proposals/${PROPOSAL}/approve`]);
-    // The refreshed entry is decided: its status, no buttons.
-    await act(async () => { host.querySelector<HTMLElement>('[role="tab"]:nth-child(2)')!.click(); });
+    // The entry keeps the decision beside the reader, with no buttons.
     expect(host.textContent).toContain("Approved");
     expect(buttons("Approve")).toHaveLength(0);
   });
@@ -134,9 +137,11 @@ describe("the Inbox", () => {
 
   it("a refused decision shows the server's message and keeps both buttons", async () => {
     notifications = [entry()];
-    vi.stubGlobal("fetch", async (url: string) => url.startsWith("/api/share-links/")
-      ? json({ error: { code: "NOT_FOUND", message: "That proposal is gone." } }, 404)
-      : json({ notifications, nextCursor: null }));
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.startsWith("/api/share-links/")) return json({ error: { code: "NOT_FOUND", message: "That proposal is gone." } }, 404);
+      if (url.startsWith("/api/review-notifications/unread-count")) return json({ count: 1 });
+      return json({ discussions: [], shared: [], proposals: notifications, nextCursor: null });
+    });
     await mount();
     await act(async () => { buttons("Approve")[0].click(); });
     await act(async () => {});
@@ -153,8 +158,9 @@ describe("the Inbox", () => {
         notifications = [entry({ proposalStatus: "DECLINED", readAt: new Date(0) })];
         return json({ error: { code: "NOT_FOUND", message: "That proposal is gone." } }, 404);
       }
+      if (url.startsWith("/api/review-notifications/unread-count")) return json({ count: 1 });
       if (init.method !== "POST") reads++;
-      return json({ notifications, nextCursor: null });
+      return json({ discussions: [], shared: [], proposals: notifications, nextCursor: null });
     });
     await mount();
     expect(reads).toBe(1);
