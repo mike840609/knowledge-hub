@@ -13,9 +13,17 @@ const keyDir = (key) => path.join(userDirs().state, sha256(key).slice(0, 32));
 const taskDir = (key, taskId) => path.join(keyDir(key), taskId);
 const revisionFile = (key, taskId, n) => path.join(taskDir(key, taskId), `rev-${n}.json`);
 
+/** Saved state the user must repair: never content the Agent should rewrite. */
+export class StateError extends Error {}
+
 export function readMeta(key, taskId) {
   const file = path.join(taskDir(key, taskId), "meta.json");
-  return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : null;
+  if (!existsSync(file)) return null;
+  try {
+    return JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    throw new StateError(`Saved export state is unreadable: ${path.dirname(file)}. Move that folder aside, then run the command again.`);
+  }
 }
 
 export function writeMeta(key, meta) {

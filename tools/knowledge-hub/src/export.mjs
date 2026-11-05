@@ -3,13 +3,17 @@ import { MAX_ARTIFACT_BYTES, validateArtifact, validateContent } from "./artifac
 import { UsageError } from "./configure.mjs";
 import { checkHubUrl, configKey, readConfig, readCredential } from "./project-config.mjs";
 import { secretRule } from "./secret-scan.mjs";
-import { knownLatest, listMetas, readMeta, readRevision, saveRevision, sha256, unconfirmedRevision, writeMeta } from "./state.mjs";
+import { knownLatest, listMetas, readMeta, readRevision, saveRevision, sha256, StateError, unconfirmedRevision, writeMeta } from "./state.mjs";
 
 // Exit codes: 0 success; 2 refused locally, nothing sent; 3 retryable as is;
 // 4 will not succeed without a user action.
 export const EXIT = { OK: 0, REFUSED: 2, RETRYABLE: 3, ACTION: 4 };
 
 class Refusal extends Error {}
+
+const TASK_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+/** Server text reaches the terminal without control characters: a hostile answer cannot drive it. */
+const printable = (value) => String(value).replace(/[\u0000-\u001f\u007f-\u009f]/g, "?");
 
 // The 4xx codes the ingest route answers with; any other 4xx came from something else at that address.
 const HUB_ERROR_CODES = new Set([
@@ -145,12 +149,12 @@ async function send(key, project, meta, revisionNo) {
       revision.bindingId = body.bindingId;
       meta.bindingId = body.bindingId;
       save({ state: "rejected", lastOutcome: status });
-      console.error(`Knowledge Hub stored this revision under binding ${body.bindingId}, but export is configured with binding ${project.bindingId}. Task ID: ${id}`);
+      console.error(`Knowledge Hub stored this revision under binding ${printable(body.bindingId)}, but export is configured with binding ${project.bindingId}. Task ID: ${id}`);
       console.error(`The stored token belongs to the other binding. Fix it with: knowledge-hub configure --rotate ${project.bindingId}`);
       return EXIT.ACTION;
     }
     save({ state: "confirmed", lastOutcome: status });
-    console.log(`Saved to Knowledge Hub: ${project.hubUrl}${body.url}`);
+    console.log(`Saved to Knowledge Hub: ${project.hubUrl}${printable(body.url)}`);
     console.log(`Task ID: ${id}`);
     console.log(`To update this export later: ${taskCommand(id)}`);
     return EXIT.OK;
@@ -179,7 +183,7 @@ async function send(key, project, meta, revisionNo) {
     return EXIT.ACTION;
   }
   save({ state: "rejected", lastOutcome: status });
-  console.error(`Knowledge Hub rejected revision ${revisionNo} (${status} ${code}${message ? `: ${message}` : ""}). Task ID: ${id}`);
+  console.error(`Knowledge Hub rejected revision ${revisionNo} (${status} ${printable(code)}${message ? `: ${printable(message)}` : ""}). Task ID: ${id}`);
   if (status === 409) console.error(`To send this content as the next revision, pipe it again to: ${taskCommand(id)}`);
   else console.error("The revision was rejected and blocks nothing.");
   return EXIT.ACTION;
@@ -200,6 +204,7 @@ async function exportNew(flags) {
 }
 
 function knownTask(key, taskId) {
+  if (taskId !== undefined && !TASK_ID.test(taskId)) throw new UsageError(`${printable(taskId)} is not a Task ID.`);
   const meta = taskId ? readMeta(key, taskId) : null;
   if (!meta) throw new Refusal(`Task ${taskId ?? "(none)"} is not known in the saved exports on this machine.`);
   return meta;
@@ -255,6 +260,10 @@ export async function runExport(flags) {
     if (error instanceof Refusal || error instanceof UsageError) {
       console.error(error.message);
       return EXIT.REFUSED;
+    }
+    if (error instanceof StateError) {
+      console.error(error.message);
+      return EXIT.ACTION;
     }
     throw error;
   }

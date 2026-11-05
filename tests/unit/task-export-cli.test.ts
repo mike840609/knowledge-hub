@@ -600,3 +600,37 @@ describe("response codes", () => {
     expect((await exportNew()).code).toBe(3);
   });
 });
+
+describe("hostile or damaged input (pre-merge review)", () => {
+  beforeEach(async () => { await configure(); });
+
+  it("prints no terminal control characters a server put in its answer", async () => {
+    hub.replies.push({ status: 201, body: { taskResultId: "tr", revisionNo: 1, bindingId: B1, url: "/w/w1/tasks/tr\u001b]0;pwned\u0007\u001b[2J" } });
+    const accepted = await exportNew();
+    expect(accepted.code).toBe(0);
+    hub.replies.push(error(422, "INVALID_ARTIFACT", { message: "bad\u001b[31m red\u009b" }));
+    const rejected = await run(["export", "--task", taskIdOf(accepted.out)], { stdin: content({ title: "Second" }) });
+    for (const out of [accepted.out, rejected.out]) expect(out).not.toMatch(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/);
+  });
+
+  it.each(["--retry", "--task", "--discard"])("refuses %s with something that is not a Task ID, reading nothing", async (flag) => {
+    const outside = path.join(home, "outside");
+    mkdirSync(outside);
+    writeFileSync(path.join(outside, "meta.json"), "{}");
+    const result = await run(["export", flag, "../../../../outside"], { stdin: content() });
+    expect(result.code).toBe(2);
+    expect(result.out).toContain("not a Task ID");
+    expect(hub.received).toHaveLength(0);
+  });
+
+  it("names unreadable saved state as the user's to fix, not as bad content", async () => {
+    const first = await exportNew();
+    const metas = filesUnder(home).filter((file) => file.endsWith("meta.json"));
+    writeFileSync(metas[0], "{ not json");
+    const result = await exportNew();
+    expect(result.code).toBe(4);
+    expect(result.out).toContain(path.dirname(metas[0]));
+    expect(result.out).not.toContain("SyntaxError");
+    expect(first.code).toBe(0);
+  });
+});
