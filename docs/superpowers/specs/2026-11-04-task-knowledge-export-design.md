@@ -34,6 +34,8 @@ Success: one command from a configured project yields a new Task Result, visible
 
 §4, §5, §6 and §8 below are written for this setup.
 
+**Amendment 3 (2026-11-05): Tasks in the primary navigation.** The MVP kept Task Results off the sidebar, reachable from Home's actions menu, because how often anyone would open them was unknown. The owner now expects to export from coding agents routinely, so the list is a daily destination and three clicks behind a menu is the wrong cost. My Space's primary navigation gains a `Tasks` row (personal Workspaces only, like Inbox, Home, Shares and Insights), and Home's actions menu drops its link, since that menu offers only what the navigation does not. Nothing else changes: the row is navigation, not authorization, and the pages keep their own owner checks. It does not settle the Phase 9 question (§10) of whether Task Results are Knowledge or Agent Memory.
+
 ## 3. Existing system boundaries
 
 The existing `sources` module owns folder snapshots, SourceEntry mappings, and revisions. Keep Folder Sync's immutable snapshot/Preview/Confirm/Apply contract and SOURCE_MANAGED read-only policy unchanged. The existing My Space has an owner and lifecycle; the existing graph supports DOCUMENT and UNRESOLVED nodes, not Task nodes. Use MariaDB and Next.js; no GPU, LLM service, embeddings, Graph DB or CodeGraph required.
@@ -157,7 +159,7 @@ Every response, including 405, is private and uncached (`Cache-Control: private,
 
 ## 8. My Space UI
 
-A small Task Results list/detail view within My Space, without a new top-level sidebar entry. Show title, agent, completedAt, summary, findings, decisions, changes, verification and checks, linked Wiki/external references, lifecycle, binding status, and revision history, with archive and restore actions for the owner. Existing Folder Sync, Document Graph, and Agent Context APIs remain unchanged. Task Result is a distinct Knowledge Asset, not a Wiki Document. All text, including Markdown- or HTML-looking content, renders as inert text.
+A small Task Results list/detail view within My Space, reached from a `Tasks` row in My Space's primary navigation (Amendment 3). Show title, agent, completedAt, summary, findings, decisions, changes, verification and checks, linked Wiki/external references, lifecycle, binding status, and revision history, with archive and restore actions for the owner. Existing Folder Sync, Document Graph, and Agent Context APIs remain unchanged. Task Result is a distinct Knowledge Asset, not a Wiki Document. All text, including Markdown- or HTML-looking content, renders as inert text.
 
 **Skill rule for a refused `--new`.** When `export --new` exits 2 because earlier exports are unconfirmed, the Agent runs each printed `--retry` command. If a `--retry` fails, it reports the CLI's message and next step to the user and stops. After the retries succeed, the Agent judges whether one of the listed tasks describes the same work as the task it was asked to export. It judges by meaning (what was done, in which area, with what outcome), not by equal titles or times, which differ between two summaries of one task. If it is the same work, it reports the retried URL and stops; it does not run `--new` again. Only for clearly different work does it run `--new` with the new content. When unsure, it asks the user.
 

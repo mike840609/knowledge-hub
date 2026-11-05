@@ -14,6 +14,8 @@
 
 **Amendment 2 (2026-11-05):** setup is once per machine (spec Amendment 2). Where a task below keys CLI config or state by project root, or uses `configure --from` or a Hub checkout with `npm pack`, read: config and state keyed by profile, no `--from`, and `npm install -g <hub>/cli/knowledge-hub.tgz` from the tarball `scripts/pack-cli.mjs` packs before dev and build. `completedAt` is optional in Agent content; the CLI sets the current time.
 
+**Amendment 3 (2026-11-05):** Tasks is a primary-navigation row in My Space (spec Amendment 3). Where a task below says *no* sidebar entry or a Home link, read: a `Tasks` row in `primary-nav.tsx`, and no Home actions link.
+
 ## Global Constraints
 
 - **Trigger:** manual `/hub-export` only; no Stop/Idle Hook, background daemon or persistent Outbox.
