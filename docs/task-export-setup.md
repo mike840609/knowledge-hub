@@ -36,7 +36,10 @@ npm install -g https://km.example.com/cli/knowledge-hub.tgz && knowledge-hub ins
 That is all: every project and worktree on this machine can now export. There is
 nothing to configure per project.
 
-- **A second binding:** add `--profile <name>` to `configure` and to every
+- **Another machine:** create another binding for it on the setup page and run
+  its line there. Do not rotate this one's secret for it: rotating stops the
+  machine that uses the old secret. Both machines export to the same My Space.
+- **A second binding on one machine:** add `--profile <name>` to `configure` and to every
   `export`.
 - **Rotating the secret:** rotate it on the setup page, then run
   `knowledge-hub configure --rotate <binding-id>` and paste the new one.

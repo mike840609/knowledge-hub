@@ -26,7 +26,9 @@ npm install -g https://km.example.com/cli/knowledge-hub.tgz && knowledge-hub ins
 
 這樣就完成了：這台機器上的每個專案與 worktree 都能匯出，不必逐一設定專案。
 
-- **第二個 binding：** 在 `configure` 與每次 `export` 加上 `--profile <name>`。
+- **另一台機器：** 在設定頁替它另建一個 binding，並在那台機器執行它的設定指令。
+  不要為此輪替這個 binding 的密鑰：輪替會讓仍使用舊密鑰的機器停止運作。兩台機器都會匯出到同一個 My Space。
+- **同一台機器上的第二個 binding：** 在 `configure` 與每次 `export` 加上 `--profile <name>`。
 - **輪替密鑰：** 先在設定頁輪替，再執行
   `knowledge-hub configure --rotate <binding-id>` 貼上新密鑰。再執行一次同樣的
   `configure` 也會詢問密鑰並取代已存的那份。

@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
@@ -31,7 +31,8 @@ async function send(path: string, method: string, body?: unknown): Promise<unkno
 
 function Commands({ bindingId, token }: Issued) {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
-  const [copied, setCopied] = useState(false);
+  const [copy, setCopy] = useState<"idle" | "copied" | "failed">("idle");
+  const tokenInput = useRef<HTMLInputElement>(null);
   const local = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin) ? " --allow-insecure-localhost" : "";
   const commands = [
     "# once per machine; paste the token at the hidden prompt",
@@ -41,15 +42,21 @@ function Commands({ bindingId, token }: Issued) {
     <div className="space-y-3 rounded-md border border-kh-border p-4" role="status">
       <p className="text-body font-medium">Copy this token now. It is shown only once.</p>
       <div className="flex gap-2">
-        <Input readOnly value={token} aria-label="Export token" className="font-mono" onFocus={(event) => event.currentTarget.select()} />
+        <Input ref={tokenInput} readOnly value={token} aria-label="Export token" className="font-mono" onFocus={(event) => event.currentTarget.select()} />
         <Button
           variant="secondary"
           onClick={async () => {
-            await navigator.clipboard.writeText(token);
-            setCopied(true);
+            try {
+              await navigator.clipboard.writeText(token);
+              setCopy("copied");
+            } catch {
+              // Left selected so it can be copied by hand.
+              setCopy("failed");
+              tokenInput.current?.focus();
+            }
           }}
         >
-          {copied ? "Copied" : "Copy"}
+          {copy === "copied" ? "Copied" : copy === "failed" ? "Copy failed" : "Copy"}
         </Button>
       </div>
       <pre className="overflow-x-auto rounded-md bg-kh-bg-subtle p-3 text-body-sm">{commands}</pre>
@@ -100,6 +107,7 @@ export function TaskExportSetup({ workspaceId, bindings }: { workspaceId: string
             <Input id="task-export-label" value={label} maxLength={200} required placeholder="work laptop" onChange={(event) => setLabel(event.target.value)} />
           </div>
           <Button type="submit" disabled={busy}>Create binding</Button>
+          <p className="text-caption text-kh-text-muted">One binding per machine. For another machine, create another binding; rotating a token stops the machine that uses it.</p>
         </form>
       {bindings.length > 0 ? (
         <ul className="divide-y divide-kh-border rounded-md border border-kh-border">
