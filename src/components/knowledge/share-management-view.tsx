@@ -1,5 +1,5 @@
 "use client";
-import { SharesNavigation } from "./shares-navigation";
+import { SharesHeader } from "./shares-navigation";
 import { Illustration } from "@/components/knowledge/illustration";
 
 
@@ -13,7 +13,6 @@ import { Copy, Folder, MoreHorizontal, Search } from "lucide-react";
 import { MenuRoot, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
 import { buttonClasses } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
-import { PageHeader } from "@/components/shell/page-header";
 import { Input } from "@/components/ui/input";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -106,8 +105,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
     else { setDetails(item.id); setManualCopy({ id: item.id }); setError({ code: "COPY_FAILED", message: "Clipboard unavailable. The link is selected; copy it manually." }); }
   }
   return <main className="kh-page pb-6">
-    <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" description="Manage links to your documents and folders. An active link opens the latest saved content: for anyone holding it, or, for a link to specific people, only for them after signing in." />
-    <SharesNavigation workspaceId={workspaceId} active="mine" discussionsUnread={discussionsUnread} />
+    <SharesHeader workspaceId={workspaceId} active="mine" discussionsUnread={discussionsUnread} description="Manage links to your documents and folders. An active link opens the latest saved content: for anyone holding it, or, for a link to specific people, only for them after signing in." />
     <form ref={filterForm} action={`/w/${workspaceId}/shares`} method="get" className="mt-4 flex flex-wrap items-center gap-2" aria-label="Filter shares">
       <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-auto">
         <label htmlFor="shares-query" className="sr-only">Find shares</label>

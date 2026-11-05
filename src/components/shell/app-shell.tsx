@@ -115,7 +115,7 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
           <div className="min-h-0 flex-1 overflow-y-auto"><PrimaryNav workspaceId={model.workspace.id} compact={navCollapsed} /></div>
           <div className="shrink-0 border-t border-kh-border p-2"><UserMenu identityName={model.identityName} identityEmpId={model.identityEmpId} workspaceId={model.workspace.id} compact={navCollapsed}/></div>
         </aside>
-        <main id="kh-workspace-main" tabIndex={-1} className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-kh-bg outline-none has-[[data-document-pane]]:overflow-hidden">{authorization.revoked ? <p role="status">Workspace access changed. Returning to My Space…</p> : children}</main>
+        <main id="kh-workspace-main" tabIndex={-1} className="relative min-h-0 min-w-0 flex-1 overflow-y-auto bg-kh-bg outline-none has-[[data-document-pane]]:overflow-hidden">{authorization.revoked ? <p role="status">Workspace access changed. Returning to My Space…</p> : children}</main>
       </div>
       <Drawer side="left" open={navOpen} onOpenChange={setNavOpen} title="Menu">
         <div className="flex h-full min-h-0 flex-col" onClick={(event) => {

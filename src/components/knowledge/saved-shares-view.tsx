@@ -3,14 +3,13 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bookmark, Folder, Search } from "lucide-react";
-import { PageHeader } from "@/components/shell/page-header";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { Timestamp } from "@/components/ui/timestamp";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Illustration } from "@/components/knowledge/illustration";
-import { SharesNavigation } from "./shares-navigation";
+import { SharesHeader } from "./shares-navigation";
 import { applyAndSearch, LiveSearch } from "@/components/search/live-search-submit";
 import { navigateListRows } from "@/lib/list-row-navigation";
 import type { NamedShareView, SavedShareList } from "@/modules/knowledge/domain/saved-share";
@@ -34,8 +33,7 @@ export function SavedSharesView({ workspaceId,model,filterError,discussionsUnrea
     finally{pending.current=false;setBusy(null);}
   }
   return <main className="kh-page pb-6">
-    <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" description="Keep articles shared with you within reach. Saving a link does not extend its access or add it to your workspace favorites."/>
-    <SharesNavigation workspaceId={workspaceId} active="saved" discussionsUnread={discussionsUnread}/>
+    <SharesHeader workspaceId={workspaceId} active="saved" discussionsUnread={discussionsUnread} description="Keep articles shared with you within reach. Saving a link does not extend its access or add it to your workspace favorites."/>
     {/* Named shares sit above the whole list, so a search, a status or a later page shows only saved shares. */}
     {sharedWithYou.length>0&&!model.query.q&&model.query.status==="all"&&model.query.page===1&&<section aria-label="Shared with you" className="mt-4">
       <h2 className="text-body font-medium text-kh-text">Shared with you</h2>

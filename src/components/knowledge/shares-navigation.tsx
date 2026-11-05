@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageHeader } from "@/components/shell/page-header";
 import { tabClasses, tabListClasses } from "@/components/ui/tab";
 
 export function SharesNavigation({ workspaceId, active, discussionsUnread = 0 }: { workspaceId: string; active: "mine" | "saved" | "discussions"; discussionsUnread?: number }) {
@@ -17,5 +18,17 @@ export function SharesNavigation({ workspaceId, active, discussionsUnread = 0 }:
         </Link>
       ))}
     </nav>
+  );
+}
+
+/** The page's title, its section tabs, then what this section holds: the tabs never depend on the
+ * length of the sentence below them. */
+export function SharesHeader({ workspaceId, active, discussionsUnread = 0, description }: { workspaceId: string; active: "mine" | "saved" | "discussions"; discussionsUnread?: number; description: string }) {
+  return (
+    <>
+      <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" />
+      <SharesNavigation workspaceId={workspaceId} active={active} discussionsUnread={discussionsUnread} />
+      <p className="mt-3 text-body-sm text-kh-text-muted">{description}</p>
+    </>
   );
 }
