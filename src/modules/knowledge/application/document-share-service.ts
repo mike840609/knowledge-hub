@@ -97,14 +97,16 @@ export type SharedTreeView = {
   expiresAt: Date | null;
 };
 
-/** A folder link's view: the tree view with its root kind fixed. Kept as an alias so folder consumers stay typed. */
+/** A folder link's view: the tree view with its root kind fixed. */
 export type SharedFolderView = SharedTreeView & { kind: "FOLDER" };
+/** A Source link's view: the tree view with its root kind fixed. */
+export type SharedSourceView = SharedTreeView & { kind: "SOURCE" };
 
 /**
  * `linkId` is on a NAMED read only, whose reader is a signed-in recipient or the owner: the Hub marks
  * their Inbox entry (`shared:<linkId>`) read with it. A LINK read serves anyone and names no link.
  */
-export type SharedView = (({ kind: "DOCUMENT" } & SharedDocumentView) | SharedTreeView) & { audience: ShareAudience; linkId?: string };
+export type SharedView = ({ kind: "DOCUMENT" } & SharedDocumentView | SharedFolderView | SharedSourceView) & { audience: ShareAudience; linkId?: string };
 
 /**
  * The deepest a shared tree lists, counting a top-level node (a folder's direct child, or a Source's
@@ -682,7 +684,7 @@ async function readSharedSource(
   documentId: string | undefined,
   now: Date,
   viewerId: string | null,
-): Promise<SharedTreeView & { audience: ShareAudience }> {
+): Promise<SharedSourceView & { audience: ShareAudience }> {
   const source = await repositories.sourcePolicy.findById(sourceId);
   if (!source) throw new ShareLinkNotFoundError();
   const { workspaceId } = await requireOpenLink(repositories, link, { sourceId: source.id, status: source.status }, now, viewerId);

@@ -3,7 +3,7 @@ import { SharedReviewPanel } from "@/components/knowledge/shared-review-panel";
 import { SharedFooter, SharedReading, SharedSkipLink, SHARED_CONTENT_ID } from "@/components/knowledge/shared-reading";
 import { buttonClasses } from "@/components/ui/button";
 import type { Metadata } from "next";
-import type { SharedFolderView, SharedView } from "@/modules/knowledge/application/document-share-service";
+import type { SharedView } from "@/modules/knowledge/application/document-share-service";
 import { notFound } from "next/navigation";
 import { sharedDocumentParam } from "@/lib/share-paths";
 import { getShared } from "@/server/share-read";
@@ -68,28 +68,26 @@ function platformEntry(returnTo: string): string {
 export default async function SharedPage(props: SharedPageProps) {
   const { token, shared } = await readPage(props);
   if (!shared) notFound();
-  // A document link renders the reading column directly.
-  if (shared.kind === "DOCUMENT") {
-    // A full browser navigation to the protected origin lets the company Gateway initiate SSO.
-    // The public /s/* routes are exempt from that login challenge.
-    const entry = platformEntry(`/s/${token}/open`);
-    return (
-      <main className="kh-share-page min-h-screen bg-kh-bg">
-        <SharedSkipLink />
-        {/* One pinned bar, then the title: the brand, Comments, Save and Open share a row. Save and Open show one word each (their full names stay for assistive technology), and on a phone only their icons. */}
-        <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={signInHref(`/s/${token}`)}
-          brand={<span className="shrink-0 text-body font-semibold text-kh-text">Knowledge Hub</span>}
-          actions={<><SaveShareButton token={token} /><span aria-hidden="true" className="mx-1 h-4 w-px bg-kh-border max-sm:hidden" /><a href={entry} className={buttonClasses({ variant: "ghost" })}><ExternalLink className="size-4" aria-hidden="true" /><span className="max-sm:sr-only">Open<span className="sr-only"> in Knowledge Hub</span></span></a></>}>
-          <SharedReading document={shared} contentId={SHARED_CONTENT_ID} />
-        </SharedReviewPanel>
-        <SharedFooter platformEntry={entry} />
-      </main>
-    );
-  }
   // A Source link renders the tree page too, but not until Task 4 (source share spec §4).
   if (shared.kind === "SOURCE") notFound();
-  const folder = shared as SharedFolderView;
-  const documentId = folder.document?.documentId;
-  const named = documentId ? `?d=${documentId}` : "";
-  return <SharedFolderPage token={token} folder={folder} platformEntry={platformEntry(`/s/${token}/open${named}`)} signInHref={signInHref(`/s/${token}${named}`)} />;
+  if (shared.kind === "FOLDER") {
+    const documentId = shared.document?.documentId;
+    const named = documentId ? `?d=${documentId}` : "";
+    return <SharedFolderPage token={token} folder={shared} platformEntry={platformEntry(`/s/${token}/open${named}`)} signInHref={signInHref(`/s/${token}${named}`)} />;
+  }
+  // A full browser navigation to the protected origin lets the company Gateway initiate SSO.
+  // The public /s/* routes are exempt from that login challenge.
+  const entry = platformEntry(`/s/${token}/open`);
+  return (
+    <main className="kh-share-page min-h-screen bg-kh-bg">
+      <SharedSkipLink />
+      {/* One pinned bar, then the title: the brand, Comments, Save and Open share a row. Save and Open show one word each (their full names stay for assistive technology), and on a phone only their icons. */}
+      <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={signInHref(`/s/${token}`)}
+        brand={<span className="shrink-0 text-body font-semibold text-kh-text">Knowledge Hub</span>}
+        actions={<><SaveShareButton token={token} /><span aria-hidden="true" className="mx-1 h-4 w-px bg-kh-border max-sm:hidden" /><a href={entry} className={buttonClasses({ variant: "ghost" })}><ExternalLink className="size-4" aria-hidden="true" /><span className="max-sm:sr-only">Open<span className="sr-only"> in Knowledge Hub</span></span></a></>}>
+        <SharedReading document={shared} contentId={SHARED_CONTENT_ID} />
+      </SharedReviewPanel>
+      <SharedFooter platformEntry={entry} />
+    </main>
+  );
 }

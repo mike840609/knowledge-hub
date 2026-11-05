@@ -43,7 +43,7 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
     const rows = await this.connection.query<DbRow[]>(
       `SET STATEMENT max_statement_time=5 FOR SELECT scoped.*
        FROM (
-         SELECT l.*, (SELECT COUNT(*) FROM document_share_link_recipients rc WHERE rc.share_link_id = l.id) AS recipient_count, s.id AS source_id, COALESCE(r.title, f.name) AS title, s.name AS source_name, ${state} AS link_status
+         SELECT l.*, (SELECT COUNT(*) FROM document_share_link_recipients rc WHERE rc.share_link_id = l.id) AS recipient_count, s.id AS owner_source_id, COALESCE(r.title, f.name) AS title, s.name AS source_name, ${state} AS link_status
          FROM document_share_links l
          LEFT JOIN knowledge_documents d ON d.id = l.document_id
          LEFT JOIN knowledge_tree_nodes f ON f.id = l.folder_node_id AND f.node_type = 'FOLDER'
@@ -62,7 +62,7 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
     const totals = await this.viewTotals(rows.map(row => String(row.id)));
     return rows.map((row): ManagedShareLink => {
       const base = {
-        id: String(row.id), sourceId: String(row.source_id), title: String(row.title), sourceName: String(row.source_name),
+        id: String(row.id), sourceId: String(row.owner_source_id), title: String(row.title), sourceName: String(row.source_name),
         label: row.label === null ? null : String(row.label), path: shareLinkPath(String(row.token)), status: String(row.link_status) as ShareManagementStatus,
         createdAt: asDate(row.created_at), expiresAt: asNullableDate(row.expires_at), revokedAt: asNullableDate(row.revoked_at), totalViews: totals.get(String(row.id))?.totalViews ?? 0, lastViewedAt: totals.get(String(row.id))?.lastViewedAt ?? null,
         audience: String(row.audience) as ShareAudience,
