@@ -13,8 +13,10 @@ test("task results in My Space: export, browse, version, archive and restore, al
   // A row in My Space's primary navigation (design, Amendment 3); Home's menu no longer repeats it.
   await page.goto(`/w/${ws}/home`);
   await page.getByRole("button", { name: "Home actions" }).click();
+  await expect(page.getByRole("menuitem", { name: "Copy for Agent" })).toBeVisible(); // the menu is drawn, so the absence below means something
   await expect(page.getByRole("menuitem", { name: "Tasks from coding agents" })).toHaveCount(0);
-  await page.goto(`/w/${ws}/home`); // a fresh page: no menu or its inert backdrop left over
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
   const tasksRow = page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Tasks", exact: true });
   await tasksRow.click();
   await expect(page).toHaveURL(new RegExp(`/w/${ws}/tasks$`));
