@@ -404,7 +404,6 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     <span className="max-sm:sr-only">Markdown source</span>
   </Button>;
   const article = <>
-    {showEditHint && <p className="mb-2 text-caption text-kh-text-muted">Click anywhere in the text to edit.</p>}
     {recovery && <p role="status" className="mb-3 text-body-sm">
       {recovery === "stale" ? "This document changed while you were away. Your recovered text is kept here; download it before loading the latest version." : "Your unsaved changes were recovered."}
       {recovery === "current" && <Button variant="link" onClick={() => setRecovery(null)}>Resume saving</Button>}
@@ -467,6 +466,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     inspectorData={{ ...detail.inspectorData, revisions, selectedRevisionNo: revisions.find(item => item.id === savedRevision)?.revisionNo ?? detail.inspectorData.selectedRevisionNo }}
     breadcrumb={[...detail.breadcrumb.slice(0, -1), { label: displayTitle }]} outline={outline}
     contentOwnsTitle={markdownOpensWithHeading(content.markdown)}
+    editHint={showEditHint ? "Click anywhere in the text to edit." : undefined}
     editorActions={<><AutosaveIndicator state={status} attention={attention} /><Button type="button" variant="ghost" aria-label="Rename document" title="Rename document" disabled={!editable || !!recovery || (!ready && !source && !failed)} onClick={focusTitle}><Pencil className="h-4 w-4" aria-hidden="true" /></Button>{markdownToggle}</>}
     titleControl={resolved.source !== "H1" ? <textarea ref={titleInput} aria-label="Title" value={content.title} disabled={!editable} maxLength={512} rows={1}
       onChange={event => change({ ...queue.current!.current, title: event.target.value })}

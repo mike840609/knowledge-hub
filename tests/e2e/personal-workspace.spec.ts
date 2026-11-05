@@ -66,7 +66,7 @@ test("a new-note draft survives closing its tab and can be resumed from Home", {
   const nav = await (await page.request.get("/api/workspaces")).json(); const workspaceId = nav.items[0].id;
   await page.goto(`/w/${workspaceId}/knowledge/new`);
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(wait);
-  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await page.getByRole("button", { name: /^Markdown( source)?$/ }).click();
   await page.getByRole("textbox", { name: "Markdown", exact: true }).fill("# New persistent note\n\nClose and resume");
   await expect(page.getByText("Draft saved to your account", { exact: true })).toBeVisible(wait);
   await page.close();
@@ -76,7 +76,7 @@ test("a new-note draft survives closing its tab and can be resumed from Home", {
   await expect(draft).toHaveAttribute("href", `/w/${workspaceId}/knowledge/new`);
   await draft.click();
   await expect(next.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(wait);
-  await next.getByRole("button", { name: "Markdown", exact: true }).click();
+  await next.getByRole("button", { name: /^Markdown( source)?$/ }).click();
   await expect(next.getByRole("textbox", { name: "Markdown", exact: true })).toHaveValue("# New persistent note\n\nClose and resume");
   await next.getByRole("button", { name: "Create document", exact: true }).click();
   await expect(next).toHaveURL(/\/knowledge\/[^/]+\/[^/]+$/, wait);

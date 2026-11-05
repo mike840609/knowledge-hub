@@ -43,7 +43,7 @@ test("a document opens rendered, and its Markdown is shown untouched", async ({ 
   // Opening rewrites nothing, not even the * list the editor would write as -.
   await expect(source).toHaveValue(markdown);
 
-  await composer(page).getByRole("button", { name: "Markdown", exact: true }).click();
+  await composer(page).getByRole("button", { name: /^Markdown( source)?$/ }).click();
   await expect(surface).toBeVisible();
   await expect(surface.locator("strong")).toHaveText("bold");
 });
@@ -161,7 +161,7 @@ test("the bulleted-list button wraps a paragraph into a list and lifts it back o
   let source = await showMarkdown(composer(page));
   await expect(source).toHaveValue("- item\n");
 
-  await composer(page).getByRole("button", { name: "Markdown", exact: true }).click();
+  await composer(page).getByRole("button", { name: /^Markdown( source)?$/ }).click();
   await surface.locator("li p").selectText();
   await toolbar.getByRole("button", { name: "Bulleted list" }).click();
   await expect(surface.getByRole("listitem")).toHaveCount(0);
@@ -174,7 +174,7 @@ test("changes made in the Markdown show when switching back", async ({ page }) =
   const surface = await openEditor(page, url);
   const source = await showMarkdown(composer(page));
   await source.fill("# Changed heading\n\nnew body\n");
-  await composer(page).getByRole("button", { name: "Markdown", exact: true }).click();
+  await composer(page).getByRole("button", { name: /^Markdown( source)?$/ }).click();
   await expect(surface.getByRole("heading", { level: 1 })).toHaveText("Changed heading");
   await expect(surface).toContainText("new body");
 });
@@ -195,7 +195,7 @@ test("Markdown the editor makes nothing of stays in the source, with the reason 
   const source = await showMarkdown(composer(page));
   // A lone link reference definition: the editor has no node for it, so it would come out empty.
   await source.fill("[a]: https://example.com\n");
-  const toggle = composer(page).getByRole("button", { name: "Markdown", exact: true });
+  const toggle = composer(page).getByRole("button", { name: /^Markdown( source)?$/ });
   await toggle.click();
   await expect(composer(page).getByRole("status").filter({ hasText: "Rendered editing is unavailable. You can continue in Markdown." })).toBeVisible();
   await expect(source).toBeVisible();
@@ -207,7 +207,7 @@ test("Markdown accepts edits while rendered editor code is still loading", async
   const url = await createNote(page, unique("Wait For Editor"), "body\n");
   const release = await holdEditorCode(page);
   await page.goto(`${url}/edit`, HELD);
-  const toggle = composer(page).getByRole("button", { name: "Markdown", exact: true });
+  const toggle = composer(page).getByRole("button", { name: /^Markdown( source)?$/ });
   await expect(toggle).toBeEnabled(ROUND_TRIP);
   await toggle.click();
   const source = composer(page).getByLabel("Markdown", { exact: true });
@@ -225,7 +225,7 @@ test("the editor arriving does not take the caret from a field the person moved 
   const url = await createNote(page, unique("Keep Focus"), "body\n");
   const release = await holdEditorCode(page);
   await page.goto(`${url}/edit`, HELD);
-  const toggle = composer(page).getByRole("button", { name: "Markdown", exact: true });
+  const toggle = composer(page).getByRole("button", { name: /^Markdown( source)?$/ });
   await expect(toggle).toBeEnabled(ROUND_TRIP);
   await toggle.click();
   const titleField = composer(page).getByLabel("Title", { exact: true });

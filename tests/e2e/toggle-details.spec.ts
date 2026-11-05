@@ -13,13 +13,13 @@ test("a paragraph becomes a toggle, flips open, and folds in the reader", async 
   const source = await showMarkdown(composer(page));
   await expect.poll(() => source.inputValue(), ROUND_TRIP).toContain("<summary>Fold me</summary>");
   await expect.poll(() => source.inputValue(), ROUND_TRIP).toContain("<details open>");
-  await composer(page).getByRole("button", { name: "Markdown", exact: true }).click();
+  await composer(page).getByRole("button", { name: /^Markdown( source)?$/ }).click();
   await expect(surface).toBeVisible();
   await surface.focus();
   await page.keyboard.press("Alt+Enter");
   const folded = await showMarkdown(composer(page));
   await expect.poll(() => folded.inputValue(), ROUND_TRIP).toContain("<details>");
-  await composer(page).getByRole("button", { name: "Markdown", exact: true }).click();
+  await composer(page).getByRole("button", { name: /^Markdown( source)?$/ }).click();
   await surface.focus();
   await page.keyboard.press("Alt+Enter");
   const reopened = await showMarkdown(composer(page));

@@ -32,6 +32,7 @@ export function DocumentHeader({
   pinned = false,
   titleControl,
   editorActions,
+  editHint,
   readOnlyReason,
   favorite,
   onToggleFavorite,
@@ -44,6 +45,8 @@ export function DocumentHeader({
   beforeTitle?: ReactNode;
   /** The editor's own: its save status and the Markdown toggle, before Share. */
   editorActions?: ReactNode;
+  /** A first-visit cue that the text itself is the editor; kept in the metadata row, not the article. */
+  editHint?: ReactNode;
   readOnlyReason?: ReactNode;
   /** Whether this page is in the reader's favorites; absent where favoriting is not offered. */
   favorite?: boolean;
@@ -191,6 +194,7 @@ export function DocumentHeader({
             ) : null}
             {status === "ARCHIVED" ? <Badge variant="warning">Archived</Badge> : null}
             <time dateTime={new Date(updatedAt).toISOString()} title={formatDateTime(updatedAt, zone)}>Updated {relative}</time>
+            {editHint ? <span>{editHint}</span> : null}
             {linkSummary ? (
               // The padding makes a 24px target (WCAG 2.5.8) and the negative
               // margins give it back, so a document with links is not a row taller
