@@ -32,6 +32,7 @@ export function DocumentHeader({
   pinned = false,
   titleControl,
   editorActions,
+  editHint,
   readOnlyReason,
   favorite,
   onToggleFavorite,
@@ -44,6 +45,8 @@ export function DocumentHeader({
   beforeTitle?: ReactNode;
   /** The editor's own: its save status and the Markdown toggle, before Share. */
   editorActions?: ReactNode;
+  /** A first-visit cue that the text itself is the editor; kept in the metadata row, not the article. */
+  editHint?: ReactNode;
   readOnlyReason?: ReactNode;
   /** Whether this page is in the reader's favorites; absent where favoriting is not offered. */
   favorite?: boolean;
@@ -120,7 +123,7 @@ export function DocumentHeader({
               <button
                 ref={review.buttonRef}
                 type="button"
-                aria-label={`${review.entry.open ? "Hide discussions" : "Open discussions"}, ${review.entry.count} comments, ${review.entry.awaiting} open`}
+                aria-label={`${review.entry.open ? "Hide comments" : "Show comments"}, ${review.entry.count} comments, ${review.entry.awaiting} open`}
                 aria-expanded={review.entry.open}
                 aria-controls="owner-document-discussions"
                 onPointerDown={(event) => event.preventDefault()}
@@ -177,7 +180,7 @@ export function DocumentHeader({
         <div className="kh-reading-column pb-3">
           {beforeTitle}
           {titleControl ?? (contentOwnsTitle ? null : (
-            <h1 className="mt-2 truncate text-page-title font-semibold tracking-tight text-kh-text" title={title}>{title}</h1>
+            <h1 className="mt-2 break-words text-page-title font-semibold tracking-tight text-kh-text" title={title}>{title}</h1>
           ))}
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">
             {readOnlyReason}
@@ -191,6 +194,7 @@ export function DocumentHeader({
             ) : null}
             {status === "ARCHIVED" ? <Badge variant="warning">Archived</Badge> : null}
             <time dateTime={new Date(updatedAt).toISOString()} title={formatDateTime(updatedAt, zone)}>Updated {relative}</time>
+            {editHint ? <span>{editHint}</span> : null}
             {linkSummary ? (
               // The padding makes a 24px target (WCAG 2.5.8) and the negative
               // margins give it back, so a document with links is not a row taller

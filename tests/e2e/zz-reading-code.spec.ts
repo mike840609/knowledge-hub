@@ -239,7 +239,7 @@ test.describe("code in the composer", () => {
     const note = await createNote(page, unique("Composer code"), MARKDOWN);
     await page.goto(`/w/${note.url.split("/")[2]}/knowledge/new`);
     await (await showMarkdown(page.locator("main"))).fill(MARKDOWN);
-    await page.getByRole("button", { name: "Markdown", exact: true }).click();
+    await page.getByRole("button", { name: /^Markdown( source)?$/ }).click();
     const surface = page.locator("main").getByRole("textbox", { name: "Content" });
     await expect(surface).toBeEditable(ROUND_TRIP);
     await expect(surface.locator("pre")).toHaveCount(3);

@@ -103,8 +103,8 @@ test.describe("folder share link", () => {
 
       // Out of the folder, a link is its text and carries nothing, not even the title.
       const article = reader.locator("article").first();
-      // The article stays the reading column's direct child: its 32px end padding is the comment-marker gutter.
-      await expect(article).toHaveCSS("padding-right", "32px");
+      // The article stays the reading column's direct child: its 40px end padding is the comment-marker gutter.
+      await expect(article).toHaveCSS("padding-right", "40px");
       await expect(article.getByText(names.outside, { exact: true })).toBeVisible();
       await expect(article.locator("span", { hasText: new RegExp(`^${names.outside}$`) })).not.toHaveAttribute("title", /.*/);
       await expect(article.getByRole("link", { name: names.outside })).toHaveCount(0);
@@ -120,7 +120,7 @@ test.describe("folder share link", () => {
       // The bar: comments, save and open are there for a reader who is not signed in.
       await expect(reader.getByRole("button", { name: "Save share", exact: true })).toBeVisible();
       await expect(reader.getByRole("link", { name: "Open in Knowledge Hub" })).toBeVisible();
-      await expect(reader.getByRole("button", { name: /^(Open|Hide) discussions/ })).toBeVisible();
+      await expect(reader.getByRole("button", { name: /^(Show|Hide) comments/ })).toBeVisible();
 
       // Hostile URLs read as an unknown token reads.
       const unknown = await notAvailable(reader, `${base}/s/${crypto.randomUUID()}`);

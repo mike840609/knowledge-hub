@@ -61,7 +61,7 @@ test("owner Inbox is a discussion index, one row per discussion, settled and fil
   await rows.first().getByRole("link").click();
   await expect(page).toHaveURL(new RegExp(`[?&]item=${thread.id}(&|$)`));
   const selected = page.getByRole("region", { name: "Selected discussion" });
-  const card = selected.getByRole("region", { name: "Discussion thread" });
+  const card = selected.getByRole("region", { name: "Comment thread" });
   await expect(card.getByText("Inbox verification comment", { exact: true })).toBeVisible(LOADED);
   await expect(card.getByText("A second reader comment", { exact: true })).toBeVisible(LOADED);
   await card.getByRole("button", { name: "Reply", exact: true }).click();
@@ -84,7 +84,7 @@ test("owner Inbox is a discussion index, one row per discussion, settled and fil
   // The document stays one click away, on its own discussion.
   await selected.getByRole("link", { name: "Open document" }).click();
   await expect(page).toHaveURL(new RegExp(`thread=${thread.id}`));
-  const opened = page.getByRole("region", { name: "Discussion thread" });
+  const opened = page.getByRole("region", { name: "Comment thread" });
   await expect(opened.getByText("Inbox verification comment", { exact: true })).toBeVisible(LOADED);
   await expect(opened.getByText("Answered from the Inbox", { exact: true })).toBeVisible(LOADED);
 

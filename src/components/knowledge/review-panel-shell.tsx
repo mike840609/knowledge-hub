@@ -53,6 +53,6 @@ export function ReviewPanelShell({ children, open, inline: wide, onOpenChange, r
   }
   return <>
     <div className={wide ? "h-full [&>div]:h-full" : "hidden"}>{children}</div>
-    <Drawer open={open && !wide} onOpenChange={onOpenChange} onOpenChangeComplete={afterTransition} finalFocus={false} title="Comments" label="Close discussions">{children}</Drawer>
+    <Drawer open={open && !wide} onOpenChange={onOpenChange} onOpenChangeComplete={afterTransition} finalFocus={false} title="Comments" label="Close comments">{children}</Drawer>
   </>;
 }

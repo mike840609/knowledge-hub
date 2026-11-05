@@ -22,7 +22,7 @@ test("a share-page comment notifies the owner; opening the panel keeps it, looki
   await expect(page.getByText("1 new", { exact: true })).toBeVisible();
   await openReviewDiscussions(page);
   // Opening the panel marks nothing: the owner has not looked at the discussion yet (spec 2026-10-22).
-  const card = page.getByRole("region", { name: "Discussion thread" }).filter({ hasText: "Holder observation" });
+  const card = page.getByRole("region", { name: "Comment thread" }).filter({ hasText: "Holder observation" });
   await expect(card.getByText("Unread", { exact: true })).toHaveCount(1);
   expect(await unread()).toHaveLength(1);
   await card.click();
@@ -46,7 +46,7 @@ test("home lists the unread discussion and jumps to its thread; a bogus thread i
   await expect(row).toContainText("Holder observation");
   await row.click();
   await expect(page).toHaveURL(new RegExp(`thread=${thread.id}`));
-  await expect(page.getByRole("region", { name: "Discussion thread" }).getByText("Holder observation", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Comment thread" }).getByText("Holder observation", { exact: true })).toBeVisible();
   await page.goto(`${doc.href}?thread=bogus`);
   await openReviewDiscussions(page);
   await expect(page.locator("[data-review-document]")).toContainText("bold");

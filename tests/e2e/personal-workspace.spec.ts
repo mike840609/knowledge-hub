@@ -25,12 +25,12 @@ test("personal rollout: disabled teams, drafts across browsers, organize, export
   expect(draft.ok()).toBe(true);
   await page.goto(href);
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(wait);
-  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await page.getByRole("button", { name: "Markdown source", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Markdown", exact: true })).toHaveValue("Persistent draft body", wait);
   const other = await browser.newContext(); const resumed = await other.newPage();
   await resumed.goto(`${new URL(page.url()).origin}${href}`);
   await expect(resumed.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(wait);
-  await resumed.getByRole("button", { name: "Markdown", exact: true }).click();
+  await resumed.getByRole("button", { name: "Markdown source", exact: true }).click();
   await expect(resumed.getByRole("textbox", { name: "Markdown", exact: true })).toHaveValue("Persistent draft body");
   await resumed.getByRole("button", { name: "Resume saving", exact: true }).click();
   const savedDocument = resumed.waitForResponse(response => response.url().endsWith(`/api/documents/${doc.documentId}`) && response.request().method() === "PATCH", wait);
@@ -66,7 +66,7 @@ test("a new-note draft survives closing its tab and can be resumed from Home", {
   const nav = await (await page.request.get("/api/workspaces")).json(); const workspaceId = nav.items[0].id;
   await page.goto(`/w/${workspaceId}/knowledge/new`);
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(wait);
-  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await page.getByRole("button", { name: /^Markdown( source)?$/ }).click();
   await page.getByRole("textbox", { name: "Markdown", exact: true }).fill("# New persistent note\n\nClose and resume");
   await expect(page.getByText("Draft saved to your account", { exact: true })).toBeVisible(wait);
   await page.close();
@@ -76,7 +76,7 @@ test("a new-note draft survives closing its tab and can be resumed from Home", {
   await expect(draft).toHaveAttribute("href", `/w/${workspaceId}/knowledge/new`);
   await draft.click();
   await expect(next.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(wait);
-  await next.getByRole("button", { name: "Markdown", exact: true }).click();
+  await next.getByRole("button", { name: /^Markdown( source)?$/ }).click();
   await expect(next.getByRole("textbox", { name: "Markdown", exact: true })).toHaveValue("# New persistent note\n\nClose and resume");
   await next.getByRole("button", { name: "Create document", exact: true }).click();
   await expect(next).toHaveURL(/\/knowledge\/[^/]+\/[^/]+$/, wait);

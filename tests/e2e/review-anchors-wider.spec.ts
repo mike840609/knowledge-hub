@@ -138,7 +138,7 @@ test("the owner starts a discussion on their own document, and a reader of its l
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
   // A document nobody has said anything about offers nothing until something is selected.
-  await expect(page.getByRole("button", { name: /^(Open|Hide) discussions/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^(Show|Hide) comments/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Comment on selection" })).toHaveCount(0);
 
   // What cannot take a comment says so beside the selection, where the control would be.
@@ -151,12 +151,12 @@ test("the owner starts a discussion on their own document, and a reader of its l
   await comment(page, "A note to my readers");
   expect((await posted).status()).toBe(201);
   // The discussions are open on it, and the header has their control now.
-  await expect(page.getByRole("button", { name: /^Hide discussions, 1 comments, 1 open/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Hide comments, 1 comments, 1 open/ })).toBeVisible();
   await expect(page.locator("[data-review-marker]")).toHaveCount(1);
 
   // What the owner said themselves does not await them: on coming back the rail is shut.
   await page.reload();
-  await expect(page.getByRole("button", { name: /^Open discussions, 1 comments, 1 open/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Show comments, 1 comments, 1 open/ })).toBeVisible();
 
   // It is the document's, not a link's: every link reads it, by the owner's name, and may answer.
   await page.goto(`${phase3Origin("viewer")}${doc.links[1].path}`);
@@ -172,7 +172,7 @@ test("the owner starts a discussion on their own document, and a reader of its l
   // Now a reader has answered, and it does: the rail is open when the owner comes back.
   await page.goto(doc.href);
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Hide discussions, 1 comments, 1 open/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Hide comments, 1 comments, 1 open/ })).toBeVisible();
 });
 
 test("only the owner starts one that way: not another person, not another site, not on an archived document", async ({ request }) => {

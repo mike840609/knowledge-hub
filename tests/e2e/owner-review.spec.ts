@@ -20,9 +20,9 @@ test("owner replies, resolves, reopens and hides first comment without changing 
   await page.getByRole("button", { name: "Resolve", exact: true }).click(); await expect(page.getByRole("textbox", { name: "Reply", exact: true })).toHaveCount(0);
   // Resolved, it leaves the list of what is open; it is under Resolved, and can be opened again from there.
   await expect(page.getByText("Owner response", { exact: true }).filter({ visible: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Filter discussions" }).filter({ visible: true }).click(); await page.getByRole("menuitemradio", { name: "Resolved", exact: true }).click();
+  await page.getByRole("button", { name: "Filter comments" }).filter({ visible: true }).click(); await page.getByRole("menuitemradio", { name: "Resolved", exact: true }).click();
   await page.getByRole("button", { name: "Reopen", exact: true }).click();
-  await page.getByRole("button", { name: "Filter discussions" }).filter({ visible: true }).click(); await page.getByRole("menuitemradio", { name: "Open", exact: true }).click(); await expect(page.getByRole("button", { name: "Reply", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Filter comments" }).filter({ visible: true }).click(); await page.getByRole("menuitemradio", { name: "Open", exact: true }).click(); await expect(page.getByRole("button", { name: "Reply", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Comment options", exact: true }).click();
   await page.getByRole("menuitem", { name: "Hide thread", exact: true }).click(); await page.getByRole("button", { name: "Confirm hide", exact: true }).click(); await expect(page.getByText("Hidden from reviewers", { exact: false }).filter({ visible: true })).toBeVisible();
   const response = await request.post(`${phase3Origin("viewer")}/api/share-review/threads/query`, { headers: { Origin: phase3Origin("viewer") }, data: { token: doc.links[1].path.split("/").pop() } });
@@ -76,7 +76,7 @@ test("a discussion that awaits the owner is open beside its passage when the doc
   const doc = await documentWithDiscussion(request);
   await page.setViewportSize({ width: 1680, height: 900 });
   await page.goto(doc.href);
-  const rail = page.getByRole("complementary", { name: "Document discussions" });
+  const rail = page.getByRole("complementary", { name: "Document comments" });
   const outlineRail = page.getByRole("complementary", { name: "On this page" });
   const marker = page.getByRole("button", { name: "1 comment on passage: Paragraph 8" });
 
@@ -106,14 +106,14 @@ test("a discussion that awaits the owner is open beside its passage when the doc
 
   // The rail's own controls are one row: its name, refresh, collapse.
   const rowOf = async (name: string) => { const box = (await rail.getByRole("button", { name }).boundingBox())!; return box.y + box.height / 2; };
-  expect(Math.abs(await rowOf("Refresh comments") - await rowOf("Collapse discussions"))).toBeLessThan(2);
-  expect(Math.abs(await rowOf("Filter discussions") - await rowOf("Collapse discussions"))).toBeLessThan(2);
+  expect(Math.abs(await rowOf("Refresh comments") - await rowOf("Close comments"))).toBeLessThan(2);
+  expect(Math.abs(await rowOf("Filter comments") - await rowOf("Close comments"))).toBeLessThan(2);
 
-  await page.getByRole("button", { name: "Collapse discussions" }).click();
+  await page.getByRole("button", { name: "Close comments" }).click();
   await expect(rail).toBeHidden();
   await expect(outlineRail).toBeVisible();
   // The way back in is in the document's header, beside Edit — so it costs the article no room,
-  const entry = page.getByRole("button", { name: "Open discussions, 1 comments" });
+  const entry = page.getByRole("button", { name: "Show comments, 1 comments" });
   await expect(entry).toBeVisible();
   const [entryBox, editBox] = [(await entry.boundingBox())!, (await page.getByRole("button", { name: "Details", exact: true }).boundingBox())!];
   expect(Math.abs(entryBox.y + entryBox.height / 2 - (editBox.y + editBox.height / 2))).toBeLessThan(2);
@@ -130,7 +130,7 @@ test("a discussion that awaits the owner is open beside its passage when the doc
   await entry.click();
   await expect(rail).toBeVisible();
   // The mark on the passage is another.
-  await page.getByRole("button", { name: "Collapse discussions" }).click();
+  await page.getByRole("button", { name: "Close comments" }).click();
   await page.getByRole("region", { name: "Document content" }).evaluate((pane) => pane.scrollTo(0, 0));
   await marker.click();
   await expect(rail).toBeVisible();
@@ -143,7 +143,7 @@ test("a pane wide enough for outline, article and discussions keeps all three si
   await page.goto(doc.href);
   const pane = page.getByRole("region", { name: "Document content" });
   expect(await pane.evaluate((element) => element.clientWidth)).toBeGreaterThanOrEqual(1408);
-  const rail = page.getByRole("complementary", { name: "Document discussions" });
+  const rail = page.getByRole("complementary", { name: "Document comments" });
   const outlineRail = page.getByRole("complementary", { name: "On this page" });
   const article = page.locator("[data-review-document]");
   await expect(rail).toBeVisible();
@@ -169,7 +169,7 @@ test("a pane wide enough for outline, article and discussions keeps all three si
   // Past 1500px of pane the rail fits right of the column where it stands: closing moves nothing.
   const articleX = async () => Math.round((await article.boundingBox())!.x);
   const open = await articleX();
-  await page.getByRole("button", { name: "Collapse discussions" }).click();
+  await page.getByRole("button", { name: "Close comments" }).click();
   await expect(rail).toBeHidden();
   await expect(outlineRail).toBeVisible();
   await page.waitForTimeout(250);
@@ -202,7 +202,7 @@ test("the discussions arriving do not move the article", async ({ page, request 
   await expect(page.locator("[data-review-document] p").first()).toBeVisible();
   const before = await top();
   release();
-  await expect(page.getByRole("button", { name: "Open discussions, 1 comments" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show comments, 1 comments" })).toBeVisible();
   expect(await top()).toBe(before);
 });
 
@@ -210,13 +210,13 @@ test("once the owner has closed the discussions they stay closed, until someone 
   const doc = await documentWithDiscussion(request);
   await page.setViewportSize({ width: 1680, height: 900 });
   await page.goto(doc.href);
-  const rail = page.getByRole("complementary", { name: "Document discussions" });
+  const rail = page.getByRole("complementary", { name: "Document comments" });
   await expect(rail).toBeVisible();
-  await page.getByRole("button", { name: "Collapse discussions" }).click();
+  await page.getByRole("button", { name: "Close comments" }).click();
   await expect(rail).toBeHidden();
 
   await page.reload();
-  await expect(page.getByRole("button", { name: "Open discussions, 1 comments" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show comments, 1 comments" })).toBeVisible();
   await expect(rail).toBeHidden();
 
   const viewer = phase3Origin("viewer");
@@ -244,24 +244,24 @@ test("the owner is shown what is still open; what is resolved is one choice away
 
   await page.setViewportSize({ width: 1680, height: 900 });
   await page.goto(doc.href);
-  const rail = page.getByRole("complementary", { name: "Document discussions" });
+  const rail = page.getByRole("complementary", { name: "Document comments" });
   const cards = rail.locator("[data-review-thread]").filter({ visible: true });
   await expect(rail).toBeVisible();
   // The header says what the list shows: one is open. Both are in its name.
-  const entry = page.getByRole("button", { name: "Hide discussions, 2 comments, 1 open", exact: true });
+  const entry = page.getByRole("button", { name: "Hide comments, 2 comments, 1 open", exact: true });
   await expect(entry).toBeVisible();
   // One open; the link comments' notices stay unread until a discussion is looked at (spec 2026-10-22).
   await expect(entry).toHaveText(/^1(\d+ new)?$/);
-  await expect(rail.getByRole("button", { name: "Filter discussions" })).toHaveText("Open");
+  await expect(rail.getByRole("button", { name: "Filter comments" })).toHaveText("Open");
   await expect(cards).toHaveCount(1);
   await expect(cards).toContainText("Still to be answered");
 
-  await rail.getByRole("button", { name: "Filter discussions" }).click();
+  await rail.getByRole("button", { name: "Filter comments" }).click();
   await page.getByRole("menuitemradio", { name: "All comments", exact: true }).click();
   await expect(cards).toHaveCount(2);
 
   // A mark on a passage whose discussion is resolved still leads to it.
-  await rail.getByRole("button", { name: "Filter discussions" }).click();
+  await rail.getByRole("button", { name: "Filter comments" }).click();
   await page.getByRole("menuitemradio", { name: "Open", exact: true }).click();
   await expect(cards).toHaveCount(1);
   await page.getByRole("button", { name: "1 comment on passage: Paragraph 8" }).click();
@@ -279,15 +279,15 @@ test("discussions that are all resolved do not open by themselves", async ({ pag
   await page.setViewportSize({ width: 1680, height: 900 });
   await page.goto(doc.href);
   // Nothing awaits the owner, so the control carries no number.
-  const entry = page.getByRole("button", { name: "Open discussions, 1 comments, 0 open", exact: true });
+  const entry = page.getByRole("button", { name: "Show comments, 1 comments, 0 open", exact: true });
   await expect(entry).toBeVisible();
   await expect(entry).toHaveText("");
-  const rail = page.getByRole("complementary", { name: "Document discussions" });
+  const rail = page.getByRole("complementary", { name: "Document comments" });
   await expect(rail).toBeHidden();
   await expect(page.getByRole("complementary", { name: "On this page" })).toBeVisible();
   // Asked for, they are all there: with nothing open, an empty list would say there was nothing at all.
   await openReviewDiscussions(page);
-  await expect(rail.getByRole("button", { name: "Filter discussions" })).toHaveText("All comments");
+  await expect(rail.getByRole("button", { name: "Filter comments" })).toHaveText("All comments");
   await expect(rail.locator("[data-review-thread]").filter({ visible: true })).toHaveCount(1);
 });
 
@@ -295,16 +295,16 @@ test("the owner's page keeps one left edge for its title and its article, with d
   const doc = await documentWithDiscussion(request);
   await page.setViewportSize({ width: 1680, height: 900 });
   await page.goto(doc.href);
-  const rail = page.getByRole("complementary", { name: "Document discussions" });
+  const rail = page.getByRole("complementary", { name: "Document comments" });
   const edges = () => page.evaluate(() => {
     const textLeft = (element: Element) => { const range = document.createRange(); range.selectNodeContents(element); return Math.round(range.getClientRects()[0].left); };
-    return { title: Math.round(document.querySelector<HTMLElement>('[role="region"][aria-label="Document content"] input[aria-label="Title"]')!.getBoundingClientRect().left), article: textLeft(document.querySelector("[data-review-document] p")!) };
+    return { title: Math.round(document.querySelector<HTMLElement>('[role="region"][aria-label="Document content"] [aria-label="Title"]')!.getBoundingClientRect().left), article: textLeft(document.querySelector("[data-review-document] p")!) };
   });
   await expect(rail).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();
   const open = await edges();
   expect(open.article).toBe(open.title);
-  await page.getByRole("button", { name: "Collapse discussions" }).click();
+  await page.getByRole("button", { name: "Close comments" }).click();
   await expect(rail).toBeHidden();
   const closed = await edges();
   expect(closed.article).toBe(closed.title);
@@ -317,13 +317,13 @@ test("where the pane has no room for a rail, the owner's discussions open over t
   await page.goto(doc.href);
   // A drawer would cover the article the owner came to read, so here it waits to be asked for.
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
-  await expect(page.getByRole("button", { name: "Open discussions, 1 comments" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show comments, 1 comments" })).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await openReviewDiscussions(page);
   const drawer = page.getByRole("dialog", { name: "Comments" });
   await expect(drawer).toBeVisible();
   await expect(drawer).toContainText("A reviewer's remark");
-  await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeHidden();
+  await expect(page.getByRole("complementary", { name: "Document comments" })).toBeHidden();
 });
 
 test("a document nobody has commented on shows the owner no way into discussions, and no margin for marks", async ({ page, request }) => {
@@ -352,16 +352,16 @@ test("opening and closing the owner's discussions moves nothing under the pointe
     await page.setViewportSize({ width, height: 900 });
     await page.goto(doc.href);
     await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();
-    const rail = page.getByRole("complementary", { name: "Document discussions" });
+    const rail = page.getByRole("complementary", { name: "Document comments" });
     await expect(rail).toBeVisible();
-    await page.getByRole("button", { name: "Collapse discussions" }).click();
+    await page.getByRole("button", { name: "Close comments" }).click();
     await expect(rail).toBeHidden();
     // Settled: the same place twice, a slide's length apart. A slide can still be under way here (the rail
     // opened by itself on arrival), and one reading taken mid-slide is not where the column rests.
     const settled = async () => { const first = await where(); await page.waitForTimeout(250); return JSON.stringify(first) === JSON.stringify(await where()) ? first : null; };
     let closed: Awaited<ReturnType<typeof where>> | null = null;
     await expect.poll(async () => (closed = await settled()) !== null).toBe(true);
-    await page.getByRole("button", { name: /^Open discussions/ }).click();
+    await page.getByRole("button", { name: /^Show comments/ }).click();
     await expect(rail).toBeVisible();
     // The column slides when it must; let a slide finish before measuring where it ended.
     await expect.poll(where).toEqual(closed);
