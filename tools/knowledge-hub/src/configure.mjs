@@ -11,7 +11,7 @@ async function readAllStdin() {
   return text;
 }
 
-/** A hidden prompt on a terminal; otherwise the whole of stdin. Never argv. */
+/** A hidden prompt on a terminal; otherwise the whole of stdin. */
 async function readToken(prompt) {
   if (!process.stdin.isTTY) return (await readAllStdin()).trim();
   const rl = createInterface({ input: process.stdin, output: process.stderr, terminal: true });
@@ -31,6 +31,11 @@ async function ask(question) {
   return answer.trim();
 }
 
+/** `--token` when the setup line carries it (spec Amendment 4); otherwise the hidden prompt or stdin. */
+async function tokenFrom(flags, prompt) {
+  return flags.token !== undefined ? flags.token.trim() : readToken(prompt);
+}
+
 function storeCredential(bindingId, token) {
   if (!token) throw new UsageError("No token was entered.");
   writeCredential(bindingId, token);
@@ -38,10 +43,9 @@ function storeCredential(bindingId, token) {
 }
 
 export async function configure(flags) {
-  if (flags.token !== undefined) throw new UsageError("A token is never accepted as an argument; it is read from a hidden prompt or stdin.");
   if (flags.rotate) {
     if (!UUID.test(flags.rotate)) throw new UsageError("--rotate needs a binding ID.");
-    storeCredential(flags.rotate, await readToken(`New export token for binding ${flags.rotate}: `));
+    storeCredential(flags.rotate, await tokenFrom(flags, `New export token for binding ${flags.rotate}: `));
     console.log(`Credential for binding ${flags.rotate} replaced; ${keysUsingBinding(flags.rotate).length} profile(s) use it.`);
     return 0;
   }
@@ -53,9 +57,9 @@ export async function configure(flags) {
   if (problem) throw new UsageError(problem);
   const bindingId = flags["binding-id"] ?? (await ask("Binding ID"));
   if (!UUID.test(bindingId)) throw new UsageError("The binding ID is not a valid ID.");
-  // Always asks: after a rotation this same command must take the new token.
+  // Always takes a token: after a rotation this same command must take the new one.
   const replaced = readCredential(bindingId) !== null;
-  storeCredential(bindingId, await readToken(`Export token for binding ${bindingId}: `));
+  storeCredential(bindingId, await tokenFrom(flags, `Export token for binding ${bindingId}: `));
   if (replaced) console.log(`Replaced the stored credential for binding ${bindingId}.`);
   writeConfig(key, { hubUrl, bindingId, allowInsecureLocalhost });
   console.log(`Configured${flags.profile ? ` profile ${flags.profile}` : ""} to export with binding ${bindingId}, from every project on this machine.`);

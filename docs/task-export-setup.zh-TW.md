@@ -8,30 +8,32 @@
 ## 1. 建立 binding
 
 在 Knowledge Hub 開啟 **My Space → Tasks → Set up export**，替 binding 取個標籤（例如所在的機器），
-然後建立。頁面只會顯示一次密鑰，並附上這個 binding 專用的一行設定指令。請立刻複製密鑰，之後不會再顯示。
+然後建立。頁面只會顯示一次這個 binding 專用的設定指令，指令裡包含它的密鑰。請立刻複製，之後不會再顯示。
 
 ## 2. 每台機器執行一次設定指令
 
-需要 Node.js 20.19 以上。執行頁面顯示的那一行，然後在隱藏輸入提示貼上密鑰：
+需要 Node.js 20.19 以上。執行頁面顯示的那一行：
 
 ```bash
-npm install -g https://km.example.com/cli/knowledge-hub.tgz && knowledge-hub install-agent && knowledge-hub configure --hub-url https://km.example.com --binding-id <binding-id>
+npm install -g https://km.example.com/cli/knowledge-hub.tgz && knowledge-hub install-agent && knowledge-hub configure --hub-url https://km.example.com --binding-id <binding-id> --token <secret>
 ```
 
 - `npm install -g` 安裝 Hub 自己提供的 `knowledge-hub` 指令，版本一定和伺服器一致。
 - `install-agent` 在 `~/.claude/skills/hub-export/SKILL.md` 安裝 Claude Code Skill，並在
   `~/.config/opencode/commands/hub-export.md` 安裝指向同一份 Skill 的 OpenCode 指令。
   它不會覆寫你改過的檔案；加 `--force` 才會取代。加 `--claude` 只裝 Claude Code。
-- `configure` 把 Hub URL、binding 與密鑰存在你的使用者設定目錄，只有你能讀取。密鑰不會出現在命令列上。
+- `configure` 把 Hub URL、binding 與密鑰存在你的使用者設定目錄，只有你能讀取。它不會印出密鑰，也不會把密鑰寫進專案。不加 `--token` 時，會改在隱藏輸入提示詢問密鑰。
+
+**請把這行指令當成密鑰。** 它帶著密鑰，所以會留在你的 shell history；執行期間，共用機器上的其他使用者也看得到它出現在行程清單。
+只在你自己的機器上執行；如果這行指令曾顯示或貼到其他地方，請到設定頁輪替密鑰，舊指令就會立刻失效。
 
 這樣就完成了：這台機器上的每個專案與 worktree 都能匯出，不必逐一設定專案。
 
 - **另一台機器：** 在設定頁替它另建一個 binding，並在那台機器執行它的設定指令。
   不要為此輪替這個 binding 的密鑰：輪替會讓仍使用舊密鑰的機器停止運作。兩台機器都會匯出到同一個 My Space。
 - **同一台機器上的第二個 binding：** 在 `configure` 與每次 `export` 加上 `--profile <name>`。
-- **輪替密鑰：** 先在設定頁輪替，再執行
-  `knowledge-hub configure --rotate <binding-id>` 貼上新密鑰。再執行一次同樣的
-  `configure` 也會詢問密鑰並取代已存的那份。
+- **輪替密鑰：** 在設定頁輪替，頁面會顯示新的設定指令，執行它就會取代已存的密鑰。
+  也可以執行 `knowledge-hub configure --rotate <binding-id>`，在提示貼上新密鑰（或加 `--token <secret>`）。
 
 Agent 用路徑寫的 Wiki 引用，只要 My Space 裡恰好有一個已同步資料夾有該路徑，就會連到那一頁。
 

@@ -75,7 +75,9 @@ function run(args: string[], options: { stdin?: string; cwd?: string } = {}): Pr
     child.stderr.on("data", (data) => { out += data; });
     child.stdin.end(options.stdin ?? "");
     child.on("close", (code) => {
-      outputs.push(out, args.join(" "));
+      outputs.push(out);
+      // A --token line carries the token by design (spec Amendment 4); what it prints must still never echo it.
+      if (!args.includes("--token") && !args.some((arg) => arg.startsWith("--token="))) outputs.push(args.join(" "));
       resolve({ code: code ?? -1, out });
     });
   });
@@ -123,9 +125,40 @@ describe("configure", () => {
     expect(filesUnder(project)).toEqual([]);
   });
 
-  it("refuses a token in argv", async () => {
-    const result = await run(["configure", "--hub-url", hub.url, "--binding-id", B1, "--allow-insecure-localhost", "--token", "khx_x"]);
+  const credentialFiles = () => filesUnder(home).filter((file) => file.includes(`${path.sep}credentials${path.sep}`));
+
+  it("takes the token from --token, so the setup line configures in one paste", async () => {
+    const result = await run(["configure", "--hub-url", hub.url, "--binding-id", B1, "--token", TOKEN, "--allow-insecure-localhost"]);
+    expect(result.code).toBe(0);
+    expect(credentialFiles()).toHaveLength(1);
+    expect(readFileSync(credentialFiles()[0], "utf8")).toContain(TOKEN);
+    if (process.platform !== "win32") expect(statSync(credentialFiles()[0]).mode & 0o777).toBe(0o600);
+    expect((await exportNew()).code).toBe(0);
+    expect(hub.received[0].token).toBe(TOKEN);
+  });
+
+  it("takes the new token from --token on --rotate", async () => {
+    expect((await configure()).code).toBe(0);
+    const result = await run(["configure", "--rotate", B1, "--token", TOKEN2]);
+    expect(result.code).toBe(0);
+    expect(readFileSync(credentialFiles()[0], "utf8")).toContain(TOKEN2);
+    expect((await exportNew()).code).toBe(0);
+    expect(hub.received[0].token).toBe(TOKEN2);
+  });
+
+  it("refuses an empty --token and stores nothing", async () => {
+    const result = await run(["configure", "--hub-url", hub.url, "--binding-id", B1, "--token", "", "--allow-insecure-localhost"]);
     expect(result.code).toBe(2);
+    expect(credentialFiles()).toEqual([]);
+  });
+
+  it("does not echo a token it refuses to use, whether the Hub URL or the flag spelling is wrong", async () => {
+    const url = await run(["configure", "--hub-url", "http://hub.example.com", "--binding-id", B1, "--token", TOKEN]);
+    expect(url.code).toBe(2);
+    const spelling = await run(["configure", "--hub-url", hub.url, "--binding-id", B1, `--token=${TOKEN}`]);
+    expect(spelling.code).toBe(2);
+    expect(spelling.out).toContain("--name value");
+    expect(credentialFiles()).toEqual([]);
   });
 
   it("refuses http:// without the flag, and any non-localhost http:// with it", async () => {

@@ -10,17 +10,16 @@ never sent unless you ask for it (`/hub-export`).
 ## 1. Create a binding
 
 In Knowledge Hub open **My Space → Tasks → Set up export**, give the binding a
-label (for example the machine it runs on), and create it. The page shows a
-secret once, and one setup line for this binding. Copy the secret now; it is not
-shown again.
+label (for example the machine it runs on), and create it. The page shows one
+setup line for this binding, once. The line contains the binding's secret, so
+copy it now; it is not shown again.
 
 ## 2. Run the setup line, once per machine
 
-Node.js 20.19 or later is required. Run the line the page shows, then paste the
-secret at the hidden prompt:
+Node.js 20.19 or later is required. Run the line the page shows:
 
 ```bash
-npm install -g https://km.example.com/cli/knowledge-hub.tgz && knowledge-hub install-agent && knowledge-hub configure --hub-url https://km.example.com --binding-id <binding-id>
+npm install -g https://km.example.com/cli/knowledge-hub.tgz && knowledge-hub install-agent && knowledge-hub configure --hub-url https://km.example.com --binding-id <binding-id> --token <secret>
 ```
 
 - `npm install -g` installs the `knowledge-hub` command the Hub itself serves, so
@@ -31,7 +30,14 @@ npm install -g https://km.example.com/cli/knowledge-hub.tgz && knowledge-hub ins
   never overwrites a file you edited; `--force` replaces it. `--claude` installs
   the Claude Code Skill only.
 - `configure` stores the Hub URL, the binding and the secret in your user config
-  directory, readable only by you. The secret is never passed on the command line.
+  directory, readable only by you. It never prints the secret and never writes it
+  into a project. Without `--token` it asks for the secret at a hidden prompt instead.
+
+**Treat the line as a secret.** It carries the secret, so it stays in your shell
+history and, while it runs, in the process list that other users of a shared
+machine can read. Run it only on your own machine, and if the line was shown or
+pasted anywhere else, rotate the secret on the setup page: that makes the old
+line useless at once.
 
 That is all: every project and worktree on this machine can now export. There is
 nothing to configure per project.
@@ -41,9 +47,10 @@ nothing to configure per project.
   machine that uses the old secret. Both machines export to the same My Space.
 - **A second binding on one machine:** add `--profile <name>` to `configure` and to every
   `export`.
-- **Rotating the secret:** rotate it on the setup page, then run
-  `knowledge-hub configure --rotate <binding-id>` and paste the new one.
-  Running the same `configure` again also asks for the secret and replaces it.
+- **Rotating the secret:** rotate it on the setup page, which shows a new setup
+  line; running it replaces the stored secret. Or run
+  `knowledge-hub configure --rotate <binding-id>` and paste the new secret at the
+  prompt (or add `--token <secret>`).
 
 A Wiki reference the Agent writes as a path links to the page when exactly one
 synced folder in My Space has that path.

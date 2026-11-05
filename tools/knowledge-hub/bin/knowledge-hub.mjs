@@ -12,6 +12,8 @@ function parse(args) {
     const arg = args[index];
     if (!arg.startsWith("--")) throw new UsageError(`Unexpected argument: ${arg.length > 40 ? `${arg.slice(0, 8)}…` : arg}`);
     const name = arg.slice(2);
+    // `--token=<secret>` must not come back in an error message.
+    if (name.includes("=")) throw new UsageError("Write flags as --name value, not --name=value.");
     if (BOOLEAN.has(name)) flags[name] = true;
     else {
       const value = args[index + 1];
@@ -24,8 +26,8 @@ function parse(args) {
 }
 
 const HELP = `knowledge-hub <command>
-  configure [--hub-url <url>] [--binding-id <id>] [--profile <name>] [--allow-insecure-localhost]
-  configure --rotate <bindingId>
+  configure [--hub-url <url>] [--binding-id <id>] [--token <token>] [--profile <name>] [--allow-insecure-localhost]
+  configure --rotate <bindingId> [--token <token>]
   export --new | --retry <taskId> | --task <taskId> | --discard <taskId>  [--profile <name>]
   install-agent [--claude] [--opencode] [--force]`;
 

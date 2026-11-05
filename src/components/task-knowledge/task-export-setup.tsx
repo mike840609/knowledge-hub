@@ -35,12 +35,13 @@ function Commands({ bindingId, token }: Issued) {
   const tokenInput = useRef<HTMLInputElement>(null);
   const local = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin) ? " --allow-insecure-localhost" : "";
   const commands = [
-    "# once per machine; paste the token at the hidden prompt",
-    `npm install -g ${origin}/cli/knowledge-hub.tgz && knowledge-hub install-agent && knowledge-hub configure --hub-url ${origin} --binding-id ${bindingId}${local}`,
+    "# once per machine; this line contains the token",
+    `npm install -g ${origin}/cli/knowledge-hub.tgz && knowledge-hub install-agent && knowledge-hub configure --hub-url ${origin} --binding-id ${bindingId} --token ${token}${local}`,
   ].join("\n");
   return (
     <div className="space-y-3 rounded-md border border-kh-border p-4" role="status">
-      <p className="text-body font-medium">Copy this token now. It is shown only once.</p>
+      <p className="text-body font-medium">Copy the setup line now. It carries the token and is shown only once.</p>
+      <p className="text-caption text-kh-text-muted">Treat this line as a secret: run it only on your own machine, and rotate the token if it was pasted anywhere else.</p>
       <div className="flex gap-2">
         <Input ref={tokenInput} readOnly value={token} aria-label="Export token" className="font-mono" onFocus={(event) => event.currentTarget.select()} />
         <Button

@@ -36,6 +36,15 @@ describe("the Task export setup page", () => {
     expect(container.textContent).toContain("rotating a token stops the machine that uses it");
   });
 
+  it("puts the token on the setup line and tells the reader to treat the line as a secret", async () => {
+    await issueToken();
+    const line = container.querySelector("pre")!.textContent!;
+    expect(line).toContain("knowledge-hub configure --hub-url");
+    expect(line).toContain("--binding-id b1 --token khx_secret");
+    expect(line).not.toContain("hidden prompt");
+    expect(container.textContent).toContain("Treat this line as a secret");
+  });
+
   it("says so when the clipboard refuses, and leaves the token selected to copy by hand", async () => {
     await issueToken();
     vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn(async () => { throw new Error("denied"); }) } });

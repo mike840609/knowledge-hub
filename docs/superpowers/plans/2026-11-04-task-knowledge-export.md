@@ -16,6 +16,8 @@
 
 **Amendment 3 (2026-11-05):** Tasks is a primary-navigation row in My Space (spec Amendment 3). Where a task below says *no* sidebar entry or a Home link, read: a `Tasks` row in `primary-nav.tsx`, and no Home actions link.
 
+**Amendment 4 (2026-11-06):** the setup line carries `--token <token>` (spec Amendment 4). Where a task below says the token is never accepted as an argument or only read from a hidden prompt or stdin, read: `configure` and `configure --rotate` also accept `--token <token>`; without it they still prompt.
+
 ## Global Constraints
 
 - **Trigger:** manual `/hub-export` only; no Stop/Idle Hook, background daemon or persistent Outbox.
