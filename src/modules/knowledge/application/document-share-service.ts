@@ -185,6 +185,16 @@ export class DocumentShareService {
     });
   }
 
+  async createForSource(caller: CallerContext, input: { sourceId: string } & ShareCreateInput): Promise<ShareLinkView> {
+    return this.unitOfWork.run(async (repositories) => {
+      await syncCallerIdentity(repositories.users, caller);
+      const { source, workspace } = await lockOwnedSourceScope(repositories, caller, input.sourceId);
+      const target: ShareLinkTarget = { kind: "SOURCE", sourceId: source.id };
+      const activeLinkCount = await repositories.shareLinks.countActiveBySource(source.id, this.clock());
+      return this.issueLink(repositories, caller, { target, targetStatus: source.status, source, workspace, activeLinkCount, input });
+    });
+  }
+
   /** The part of creation that does not depend on what the link opens. */
   private async issueLink(
     repositories: KnowledgeRepositories,
@@ -265,6 +275,19 @@ export class DocumentShareService {
       if (!workspace || workspace.personalOwnerUserId !== caller.identity.id) throw new DocumentNotFoundError();
       requireFolder(node);
       return this.toViews(repositories, await repositories.shareLinks.listByFolder(node.id));
+    });
+  }
+
+  /** Mirrors `listForFolder` without a node-type check: a Source has no tree node. */
+  async listForSource(caller: CallerContext, sourceId: string): Promise<ShareLinkView[]> {
+    return this.unitOfWork.run(async (repositories) => {
+      await syncCallerIdentity(repositories.users, caller);
+      const source = await repositories.sourcePolicy.findById(sourceId);
+      if (!source) throw new DocumentNotFoundError();
+      await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
+      const workspace = await repositories.workspaces.findById(source.workspaceId);
+      if (!workspace || workspace.personalOwnerUserId !== caller.identity.id) throw new DocumentNotFoundError();
+      return this.toViews(repositories, await repositories.shareLinks.listBySource(source.id));
     });
   }
 
