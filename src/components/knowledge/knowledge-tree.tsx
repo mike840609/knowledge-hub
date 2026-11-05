@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronRight, FileText, Share2, Star } from "lucide-react";
+import { ChevronRight, FileText, Share2, Star } from "lucide-react";
 import {
   buildKnowledgeTree,
   filterKnowledgeTree,
@@ -188,7 +188,11 @@ function TreeNodeRow({
           tabIndex={-1}
           className={`kh-tree-folder-button kh-control flex kh-rail-row min-w-0 flex-1 items-center gap-2 px-2 text-left kh-rail-text font-medium kh-focus-ring rounded-md ${archived ? "text-kh-text-muted" : "text-kh-text"}`}
         >
-          {collapsed ? <ChevronRight size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : <ChevronDown size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
+          <ChevronRight
+            size={14}
+            className={`shrink-0 text-kh-text-muted transition-transform duration-120 ease-out ${collapsed ? "" : "rotate-90"}`}
+            aria-hidden="true"
+          />
           <span className="min-w-0 truncate">{item.label}</span>
           {/* Right after the name, not at the row's edge: the row's menu button is floated over that edge. */}
           {sharedFolderIds?.has(item.id) ? <Share2 size={14} role="img" aria-label="Shared" data-shared-folder="" className="shrink-0 text-kh-text-muted" /> : null}

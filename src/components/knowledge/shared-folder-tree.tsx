@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from "react";
-import { ChevronDown, ChevronRight, FileText, Folder, FolderTree } from "lucide-react";
+import { ChevronRight, FileText, Folder, FolderTree } from "lucide-react";
 import type { SharedTreeNode } from "@/modules/knowledge/application/document-share-service";
 import { sharedFolderHref } from "@/lib/share-paths";
 import { buttonClasses } from "@/components/ui/button";
@@ -168,7 +168,11 @@ function Branch({ parentId, tree, expanded, toggle, token, pagePath, currentDocu
         return (
           <li key={node.id}>
             <button type="button" aria-expanded={open} onClick={() => toggle(node.id)} title={node.name} className="kh-interactive-row kh-control flex kh-rail-row w-full min-w-0 items-center gap-2 px-2 text-left kh-rail-text font-medium text-kh-text">
-              {open ? <ChevronDown size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : <ChevronRight size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
+              <ChevronRight
+                size={14}
+                className={`shrink-0 text-kh-text-muted transition-transform duration-120 ease-out ${open ? "rotate-90" : ""}`}
+                aria-hidden="true"
+              />
               <span className="truncate">{node.name}</span>
             </button>
             {open ? <Branch parentId={node.id} tree={tree} expanded={expanded} toggle={toggle} token={token} pagePath={pagePath} currentDocumentId={currentDocumentId} onNavigate={onNavigate} /> : null}

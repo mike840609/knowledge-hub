@@ -78,7 +78,7 @@ export function PageIconPicker({
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Positioner side="bottom" align="start" sideOffset={6} className="z-50">
-            <Popover.Popup className="w-72 rounded-lg border border-kh-border bg-kh-bg p-2 shadow-popover outline-none">
+            <Popover.Popup className="w-72 rounded-lg border border-kh-border bg-kh-bg p-2 shadow-popover outline-none transition-[opacity,transform] duration-120 ease-out data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0">
               <Popover.Title className="px-1 pb-2 text-caption font-semibold text-kh-text-muted">Page icon</Popover.Title>
               <div role="group" aria-label="Page icons" className="grid grid-cols-8 gap-0.5">
                 {PAGE_ICONS.map((choice) => (

@@ -86,8 +86,11 @@ test("shared comments follow passage order and the selected card stays beside it
   // The new comment takes the passage's level; the discussion already there moves aside, not under it.
   const draft = page.locator("[data-review-rail] [data-review-draft]");
   await expect.poll(async () => Math.abs((await draft.boundingBox())!.y - await later.evaluate(textTop))).toBeLessThan(1);
-  const [draftBox, laterBox] = [(await draft.boundingBox())!, (await laterCard.boundingBox())!];
-  expect(laterBox.y >= draftBox.y + draftBox.height || laterBox.y + laterBox.height <= draftBox.y).toBe(true);
+  // The card already there glides aside on the rail's beat; measure where it ends, not mid-move.
+  await expect.poll(async () => {
+    const [draftBox, laterBox] = [(await draft.boundingBox())!, (await laterCard.boundingBox())!];
+    return laterBox.y >= draftBox.y + draftBox.height || laterBox.y + laterBox.height <= draftBox.y;
+  }).toBe(true);
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect.poll(async () => Math.abs((await laterCard.boundingBox())!.y - await later.evaluate(textTop))).toBeLessThan(1);
 
