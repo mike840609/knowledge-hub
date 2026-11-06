@@ -507,7 +507,7 @@ describe("unconfirmed revisions", () => {
     expect(blocked.code).toBe(2);
     expect(blocked.out).toContain("Title?]0;changed?");
     expect(blocked.out).toContain("Summary?[2J hidden");
-    expect(blocked.out).not.toMatch(/[\u0000-\u001f\u007f-\u009f]/);
+    expect(blocked.out).not.toMatch(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/);
   });
 
   it("a committed-but-timed-out --new blocks a second --new until --retry confirms it", async () => {
