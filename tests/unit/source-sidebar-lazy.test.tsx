@@ -2,6 +2,7 @@
 import { act, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
+import { SourceShareAction, SourceSharedMarker } from '@/components/sources/source-share-action';
 import { SourceSidebar } from '@/components/knowledge/source-sidebar';
 import { useSourceTrees } from '@/components/knowledge/use-source-trees';
 import type { SourceView } from '@/modules/knowledge/application/knowledge-query-service';
@@ -60,4 +61,15 @@ it('only shows source sharing and markers to the confirmed owner for active sour
  await act(async()=>root.render(<Host/>));
  expect(host.querySelector('[aria-label="Shared"]')).toBeNull();
  expect(host.querySelector('button[aria-label="Share source Alpha"]')).toBeNull();
+});
+
+it('hides both marker and action for archived sources and non-owners', async()=>{
+ const host=document.createElement('div'); document.body.append(host); const root=createRoot(host);
+ cleanup=async()=>{await act(async()=>root.unmount());host.remove();auth.owner=true;};
+ const view=(status:string)=><><SourceShareAction workspaceId="w" sourceId="a" sourceName="Alpha" status={status}/><SourceSharedMarker workspaceId="w" sourceId="a" status={status}/></>;
+ await act(async()=>root.render(view('ARCHIVED')));
+ expect(host.querySelector('button')).toBeNull(); expect(host.querySelector('[aria-label="Shared"]')).toBeNull();
+ auth.owner=false;
+ await act(async()=>root.render(view('ACTIVE')));
+ expect(host.querySelector('button')).toBeNull(); expect(host.querySelector('[aria-label="Shared"]')).toBeNull();
 });
