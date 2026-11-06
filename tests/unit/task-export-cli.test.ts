@@ -501,16 +501,14 @@ describe("unconfirmed revisions", () => {
 
   it("does not execute terminal control sequences from a pending task's saved title or summary", async () => {
     hub.replies.push("timeout");
-    const first = await exportNew(content({ title: "Title\\u001b]0;changed\\u0007", summary: "Summary\\u001b[2J hidden" }));
+    const first = await exportNew(content({ title: "Title\u001b]0;changed\u0007", summary: "Summary\u001b[2J hidden" }));
     expect(first.code).toBe(3);
     const blocked = await exportNew();
     expect(blocked.code).toBe(2);
     expect(blocked.out).toContain("Title?]0;changed?");
     expect(blocked.out).toContain("Summary?[2J hidden");
-    expect(blocked.out).not.toMatch(/[\\u0000-\\u001f\\u007f-\\u009f]/);
+    expect(blocked.out).not.toMatch(/[\u0000-\u001f\u007f-\u009f]/);
   });
-
-
 
   it("a committed-but-timed-out --new blocks a second --new until --retry confirms it", async () => {
     hub.replies.push("timeout");
