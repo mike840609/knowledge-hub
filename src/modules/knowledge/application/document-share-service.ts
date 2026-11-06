@@ -20,7 +20,7 @@ import { linkLookupKey } from "../domain/link-graph";
 import { buildLinkResolver } from "../domain/link-resolution";
 import { MENTION_LIMIT } from "../domain/review-mention";
 import type { ShareProposal } from "../domain/share-proposal";
-import type { OpenFolderLink } from "../ports/document-share-link-repository";
+import type { OpenFolderLink, OpenSourceLink } from "../ports/document-share-link-repository";
 import type { ShareTokenIssuer } from "../ports/share-token-issuer";
 import { openShareLinkTarget, reachableChain, reachableChainForSource } from "./internal/folder-link-reach";
 import { linkOrigin } from "./internal/link-origin";
@@ -148,11 +148,18 @@ export class DocumentShareService {
 
   /** The owner's folders with a link open now, for the tree's marker (folder share spec §8). Owner of that My Space only. */
   async listOpenFolderLinks(caller: CallerContext, workspaceId: string): Promise<OpenFolderLink[]> {
+    return (await this.listOpenShareTargets(caller, workspaceId)).folders;
+  }
+
+  async listOpenShareTargets(caller: CallerContext, workspaceId: string): Promise<{ folders: OpenFolderLink[]; sources: OpenSourceLink[] }> {
     return this.unitOfWork.run(async r => {
       await r.workspaceAccess.requireWorkspaceRead(caller, workspaceId);
       const workspace = await r.workspaces.findById(workspaceId);
       if (!workspace || workspace.workspaceType !== "PERSONAL" || workspace.personalOwnerUserId !== caller.identity.id || workspace.lifecycleState !== "ACTIVE") throw new DocumentNotFoundError();
-      return r.shareLinks.listOpenFolderLinks(workspaceId, caller.identity.id, this.clock());
+      const now = this.clock();
+      const folders = await r.shareLinks.listOpenFolderLinks(workspaceId, caller.identity.id, now);
+      const sources = await r.shareLinks.listOpenSourceLinks(workspaceId, caller.identity.id, now);
+      return { folders, sources };
     });
   }
 
@@ -161,22 +168,29 @@ export class DocumentShareService {
    * now, reached through ACTIVE nodes only (folder share spec §8). Owner of the document's My Space only.
    */
   async foldersSharingDocument(caller: CallerContext, documentId: string): Promise<OpenFolderLink[]> {
+    return (await this.containersSharingDocument(caller, documentId)).folders;
+  }
+
+  async containersSharingDocument(caller: CallerContext, documentId: string): Promise<{ folders: OpenFolderLink[]; sources: OpenSourceLink[] }> {
     return this.unitOfWork.run(async r => {
       const { document, workspace } = await requireOwnedDocument(r, caller, documentId);
-      if (document.status !== "ACTIVE") return [];
+      if (document.status !== "ACTIVE") return { folders: [], sources: [] };
       const node = await r.tree.findByDocumentId(document.id);
-      if (!node) return [];
+      if (!node) return { folders: [], sources: [] };
       const open = new Map((await r.shareLinks.listOpenFolderLinks(workspace.id, caller.identity.id, this.clock())).map(folder => [folder.folderNodeId, folder]));
-      if (open.size === 0) return [];
+      const sourceLinks = await r.shareLinks.listOpenSourceLinks(workspace.id, caller.identity.id, this.clock());
+      const chain = await r.tree.listChain(node.id);
       const shared: OpenFolderLink[] = [];
       const seen = new Set<string>();
-      for (const [index, ancestor] of (await r.tree.listChain(node.id)).entries()) {
+      for (const [index, ancestor] of chain.entries()) {
         if (ancestor.status !== "ACTIVE" || seen.has(ancestor.id)) break;
         seen.add(ancestor.id);
         const folder = index > 0 ? open.get(ancestor.id) : undefined;
         if (folder) shared.push(folder);
       }
-      return shared;
+      const source = sourceLinks.find(item => item.sourceId === document.sourceId);
+      const reachable = source ? await reachableChainForSource(r, { id: source.sourceId, status: "ACTIVE" }, document) : null;
+      return { folders: shared, sources: source && reachable ? [source] : [] };
     });
   }
 
