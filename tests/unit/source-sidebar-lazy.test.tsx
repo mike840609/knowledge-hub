@@ -7,13 +7,15 @@ import { useSourceTrees } from '@/components/knowledge/use-source-trees';
 import type { SourceView } from '@/modules/knowledge/application/knowledge-query-service';
 vi.mock('next/navigation',()=>({useRouter:()=>({push:vi.fn()}),usePathname:()=>'/w/w/knowledge/a',useSearchParams:()=>new URLSearchParams(),useParams:()=>({})}));
 vi.mock('next/link',()=>({default:({children,...props}:React.ComponentProps<'a'>)=> <a {...props}>{children}</a>}));
-vi.mock('@/components/shell/use-workspace-authorization',()=>({useWorkspaceAuthorization:()=>({access:{actions:{},workspace:{type:'PERSONAL'}},confirmed:true})}));
+const auth = vi.hoisted(() => ({ owner: true, confirmed: true, type: 'PERSONAL' }));
+vi.mock('@/components/shell/use-workspace-authorization',()=>({useWorkspaceAuthorization:()=>({access:{actions:{},workspace:{type:auth.type},isPersonalOwner:auth.owner},confirmed:auth.confirmed})}));
 vi.mock('@/components/knowledge/use-document-shortcuts',()=>({useDocumentShortcuts:()=>({shortcuts:{favorites:[],recent:[]},ready:true,update:vi.fn()}),documentShortcutKey:(s:string,d:string)=>`${s}:${d}`}));
 vi.mock('@/components/knowledge/use-tree-mutations',()=>({useTreeMutations:()=>({})}));
-vi.mock('@/components/actions/action-menu',()=>({useActionRunner:()=>vi.fn()}));
+const share = vi.hoisted(() => vi.fn());
+vi.mock('@/components/actions/action-menu',()=>({useActionRunner:()=>vi.fn(),requestShare:share}));
 vi.mock('@/components/actions/action-registry',()=>({actionsFor:()=>[]}));
 // This file counts the fetches a source's tree makes; the tree's share marker has its own request.
-vi.mock('@/components/knowledge/shared-folders',()=>({useSharedFolderIds:()=>new Set<string>()}));
+vi.mock('@/components/knowledge/shared-folders',()=>({useSharedTargets:()=>({folderIds:new Set<string>(),sourceIds:new Set<string>(['a','b'])})}));
 vi.mock('@/components/knowledge/knowledge-tree',()=>({KnowledgeTree:({items}:{items:{label:string}[]})=><div>{items.map(i=><span key={i.label}>{i.label}</span>)}</div>}));
 vi.mock('@/components/ui/tooltip',()=>({Tooltip:({children}:{children:React.ReactNode})=>children}));
 (globalThis as {IS_REACT_ACT_ENVIRONMENT?:boolean}).IS_REACT_ACT_ENVIRONMENT=true;
@@ -45,4 +47,17 @@ it('restores a saved-open source and loads it once after hydration',async()=>{
  await act(async()=>root.render(<Host/>));
  expect(fetcher).toHaveBeenCalledTimes(1);
  expect(host.textContent).not.toContain('Loading documents…');
+});
+
+it('only shows source sharing and markers to the confirmed owner for active sources',async()=>{
+ const host=document.createElement('div');document.body.append(host);const root=createRoot(host);
+ cleanup=async()=>{await act(async()=>root.unmount());host.remove();auth.owner=true;share.mockClear();};
+ await act(async()=>root.render(<Host/>));
+ expect(host.querySelectorAll('[aria-label="Shared"]')).toHaveLength(2);
+ await act(async()=>host.querySelector<HTMLButtonElement>('button[aria-label="Share source Alpha"]')!.click());
+ expect(share).toHaveBeenCalledWith({sourceId:'a',name:'Alpha'});
+ auth.owner=false;
+ await act(async()=>root.render(<Host/>));
+ expect(host.querySelector('[aria-label="Shared"]')).toBeNull();
+ expect(host.querySelector('button[aria-label="Share source Alpha"]')).toBeNull();
 });

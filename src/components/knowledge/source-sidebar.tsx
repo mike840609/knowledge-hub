@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, ChevronsLeft, Plus, ListFilter, Star } from "lucide-react";
+import { ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, ChevronsLeft, Plus, ListFilter, Star, Share2 } from "lucide-react";
+import { SourceShareAction } from "@/components/sources/source-share-action";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { favoritesInPlace, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
@@ -12,7 +13,7 @@ import { MenuCheckboxItem, MenuContent, MenuItem, MenuRoot, MenuTrigger } from "
 import type { TreeLoadState } from "./source-tree-cache";
 import { useSidebarShortcuts } from "./use-sidebar-shortcuts";
 import { KnowledgeTree } from "./knowledge-tree";
-import { useSharedFolderIds } from "./shared-folders";
+import { useSharedTargets } from "./shared-folders";
 import { SidebarGetStarted, hasNoDocuments, startActions } from "./sidebar-get-started";
 import { TreeFilter } from "./tree-filter";
 import { buttonClasses } from "@/components/ui/button";
@@ -62,7 +63,8 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   const routeParams = useParams();
   const { access, confirmed } = useWorkspaceAuthorization();
   // Only My Space's owner has links to be reminded of; the route refuses anyone else.
-  const sharedFolderIds = useSharedFolderIds(workspaceId, access.workspace.type === "PERSONAL");
+  const canShareSources = confirmed && access.workspace.type === "PERSONAL" && access.isPersonalOwner;
+  const { folderIds: sharedFolderIds, sourceIds } = useSharedTargets(workspaceId, canShareSources);
   // The filter is work in progress rather than an arrangement, so it lasts
   // for the session: worth keeping across a refresh, not worth greeting
   // someone with a week later. Everything else below is a choice, and keeps.
@@ -359,8 +361,10 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                     />
                   </span>
                   <span className="truncate">{candidate.name}</span>
+                  {canShareSources && candidate.status === "ACTIVE" && sourceIds.has(candidate.id) ? <Share2 size={14} aria-label="Shared" className="shrink-0 text-kh-text-muted" /> : null}
                   {candidate.status === "ARCHIVED" ? <Status kind="archived" className="ml-auto text-caption font-normal text-kh-text-muted">Archived</Status> : null}
                 </button>
+                <SourceShareAction workspaceId={workspaceId} sourceId={candidate.id} sourceName={candidate.name} status={candidate.status} />
                 {isNotes && canCreate ? <div className="flex items-center">{addFolder}{addNote}</div> : null}
               </div>
               <div id={`collection-${candidate.id}`} hidden={!open} className="mt-1 pl-2">

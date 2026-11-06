@@ -1,3 +1,4 @@
+import { SourceShareAction, SourceSharedMarker } from "./source-share-action";
 import type { FolderImportClientLimits } from "@/components/imports/folder-import-form";
 import { SourceLifecycleActions } from "./source-lifecycle-actions";
 import { SourceSyncActions } from "@/components/sources/source-sync-actions";
@@ -44,6 +45,7 @@ export function SourceListRow({ workspaceId, item, limits, showTypeLabel = true 
         className="group kh-focus-ring col-start-2 row-start-1 flex min-w-0 min-h-10 flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-2 py-2 transition-colors hover:bg-kh-bg-hover focus-visible:bg-kh-bg-hover"
       >
         <span className="min-w-0 flex-1 truncate text-body font-medium text-kh-text group-hover:text-kh-link group-hover:underline group-focus-visible:text-kh-link group-focus-visible:underline">{source.name}</span>
+        <SourceSharedMarker workspaceId={workspaceId} sourceId={source.id} status={source.status} />
         {showTypeLabel ? (
           <span className="shrink-0 text-caption text-kh-text-muted">
             {sourceTypeLabel(source.sourceType)}
@@ -64,7 +66,7 @@ export function SourceListRow({ workspaceId, item, limits, showTypeLabel = true 
           </span>
         ) : null}
       </Link>
-      <div className="col-start-3 row-start-1 ml-1 flex min-w-10 justify-center"><SourceLifecycleActions workspaceId={workspaceId} sourceId={source.id} sourceName={source.name} status={source.status} label={`Source actions: ${source.name}`} /></div>
+      <div className="col-start-3 row-start-1 ml-1 flex min-w-10 justify-center"><SourceShareAction workspaceId={workspaceId} sourceId={source.id} sourceName={source.name} status={source.status} /><SourceLifecycleActions workspaceId={workspaceId} sourceId={source.id} sourceName={source.name} status={source.status} label={`Source actions: ${source.name}`} /></div>
       {item.pendingPreviewId ? <Link className="kh-focus-ring col-start-2 w-fit rounded-md pb-2 text-body-sm font-medium text-kh-link hover:underline" href={`/w/${workspaceId}/sources/imports/${item.pendingPreviewId}`}>Awaiting Apply · Review preview</Link> : null}
     </li>
   );

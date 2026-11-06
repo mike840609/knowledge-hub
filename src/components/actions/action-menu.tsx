@@ -31,7 +31,7 @@ export const SHARE_REQUEST_EVENT = "kh:request-share";
  * What the share-link dialog can be opened for: a document, or a folder of My Space. A folder's `name`
  * only titles the dialog; the server decides what the link opens.
  */
-export type ShareTarget = { documentId: string } | { folderNodeId: string; name?: string };
+export type ShareTarget = { documentId: string } | { folderNodeId: string; name?: string } | { sourceId: string; name?: string };
 
 /**
  * Ask the share-link dialog (ShareLinkDialogHost, mounted by the knowledge

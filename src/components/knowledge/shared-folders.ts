@@ -16,11 +16,11 @@ const NONE: ReadonlySet<string> = new Set();
  * when the workspace loads and again whenever the share dialog says a link was made or revoked. A
  * reminder, not a decision, so a failed read leaves the last answer rather than raising anything.
  */
-export function useSharedFolderIds(workspaceId: string, enabled: boolean): ReadonlySet<string> {
-  const [ids, setIds] = useState<ReadonlySet<string>>(NONE);
+export function useSharedTargets(workspaceId: string, enabled: boolean): { folderIds: ReadonlySet<string>; sourceIds: ReadonlySet<string> } {
+  const [ids, setIds] = useState<{ workspaceId: string; folderIds: ReadonlySet<string>; sourceIds: ReadonlySet<string> }>({ workspaceId, folderIds: NONE, sourceIds: NONE });
   useEffect(() => {
     if (!enabled) {
-      setIds(NONE);
+      setIds({ workspaceId, folderIds: NONE, sourceIds: NONE });
       return;
     }
     let live = true;
@@ -32,8 +32,8 @@ export function useSharedFolderIds(workspaceId: string, enabled: boolean): Reado
       try {
         const response = await fetch(`/api/workspaces/${workspaceId}/shared-folders`, { cache: "no-store" });
         if (!response.ok) return;
-        const body = (await response.json()) as { folders?: { folderNodeId: string }[] };
-        if (live && ticket === latest && Array.isArray(body.folders)) setIds(new Set(body.folders.map((folder) => folder.folderNodeId)));
+        const body = (await response.json()) as { folders?: { folderNodeId: string }[]; sources?: { sourceId: string }[] };
+        if (live && ticket === latest && Array.isArray(body.folders)) setIds({ workspaceId, folderIds: new Set(body.folders.map((folder) => folder.folderNodeId)), sourceIds: new Set((body.sources ?? []).map((source) => source.sourceId)) });
       } catch {
         // Keep the last answer.
       }
@@ -57,5 +57,5 @@ export function useSharedFolderIds(workspaceId: string, enabled: boolean): Reado
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [workspaceId, enabled]);
-  return ids;
+  return enabled && ids.workspaceId === workspaceId ? ids : { folderIds: NONE, sourceIds: NONE };
 }

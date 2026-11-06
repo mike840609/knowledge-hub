@@ -59,13 +59,15 @@ const DEFAULT_EXPIRY_DAYS = 30;
 
 /** A shared folder a document is also visible through (folder share spec §8). */
 type ViaFolder = { folderNodeId: string; name: string };
+type ViaSource = { sourceId: string; name: string };
 
-const targetKey = (target: ShareTarget | null) => (target === null ? null : "documentId" in target ? `document:${target.documentId}` : `folder:${target.folderNodeId}`);
-const linksUrl = (target: ShareTarget) => ("documentId" in target ? `/api/documents/${target.documentId}/share-links` : `/api/tree-nodes/${target.folderNodeId}/share-links`);
+const targetKey = (target: ShareTarget | null) => (target === null ? null : "documentId" in target ? `document:${target.documentId}` : "folderNodeId" in target ? `folder:${target.folderNodeId}` : `source:${target.sourceId}`);
+const linksUrl = (target: ShareTarget) => ("documentId" in target ? `/api/documents/${target.documentId}/share-links` : "folderNodeId" in target ? `/api/tree-nodes/${target.folderNodeId}/share-links` : `/api/sources/${target.sourceId}/share-links`);
 
-function parseTarget(detail: Partial<{ documentId: unknown; folderNodeId: unknown; name: unknown }> | null | undefined): ShareTarget | null {
+function parseTarget(detail: Partial<{ documentId: unknown; folderNodeId: unknown; sourceId: unknown; name: unknown }> | null | undefined): ShareTarget | null {
   if (typeof detail?.documentId === "string") return { documentId: detail.documentId };
   if (typeof detail?.folderNodeId === "string") return { folderNodeId: detail.folderNodeId, name: typeof detail.name === "string" ? detail.name : undefined };
+  if (typeof detail?.sourceId === "string") return { sourceId: detail.sourceId, name: typeof detail.name === "string" ? detail.name : undefined };
   return null;
 }
 
@@ -120,6 +122,7 @@ export function ShareLinkDialog({
   const [reviewCapability, setReviewCapability] = useState({ read: false, write: false });
   const [origin, setOrigin] = useState("");
   const [viaFolders, setViaFolders] = useState<ViaFolder[]>([]);
+  const [viaSources, setViaSources] = useState<ViaSource[]>([]);
   // The document or folder the dialog is open for right now. A response for any
   // other — the dialog was closed and reopened elsewhere before it arrived — is
   // dropped rather than shown with this one's buttons.
@@ -127,15 +130,18 @@ export function ShareLinkDialog({
   const current = useRef<string | null>(key);
   current.current = key;
   const isFolder = target !== null && "folderNodeId" in target;
+  const isSource = target !== null && "sourceId" in target;
+  const sourceName = isSource ? target.name : undefined;
   const folderName = target !== null && "folderNodeId" in target ? target.name : undefined;
 
   const load = useCallback(async (next: ShareTarget) => {
     const loadingKey = targetKey(next);
     try {
-      const result = await governanceRequest<{ links: ShareLink[]; viaFolders?: ViaFolder[]; reviewReadAvailable?: boolean; reviewWritesEnabled?: boolean }>(linksUrl(next));
+      const result = await governanceRequest<{ links: ShareLink[]; viaFolders?: ViaFolder[]; viaSources?: ViaSource[]; reviewReadAvailable?: boolean; reviewWritesEnabled?: boolean }>(linksUrl(next));
       if (current.current !== loadingKey) return;
       setLinks(result.links);
       setViaFolders(Array.isArray(result.viaFolders) ? result.viaFolders : []);
+      setViaSources(Array.isArray(result.viaSources) ? result.viaSources : []);
       setReviewCapability({ read: result.reviewReadAvailable === true, write: result.reviewWritesEnabled === true });
     } catch (failure) {
       if (current.current === loadingKey) setError(governanceFailure(failure));
@@ -149,6 +155,7 @@ export function ShareLinkDialog({
     setOrigin(window.location.origin);
     setLinks(null);
     setViaFolders([]);
+    setViaSources([]);
     setReviewCapability({ read: false, write: false });
     setLabel("");
     setExpiresInDays(DEFAULT_EXPIRY_DAYS);
@@ -185,9 +192,11 @@ export function ShareLinkDialog({
       <Dialog.Portal>
         <Dialog.Backdrop className={dialogBackdropClasses()} />
         <Dialog.Popup className={dialogPopupClasses("max-h-[85vh] w-[min(36rem,92vw)] overflow-y-auto")}>
-          <Dialog.Title className="text-title font-semibold">{isFolder ? (folderName ? `Share folder ${folderName}` : "Share folder") : "Share link"}</Dialog.Title>
+          <Dialog.Title className="text-title font-semibold">{isSource ? (sourceName ? `Share source ${sourceName}` : "Share source") : isFolder ? (folderName ? `Share folder ${folderName}` : "Share folder") : "Share link"}</Dialog.Title>
           <Dialog.Description className="mt-1 text-body text-kh-text-muted">
-            {named
+            {isSource
+              ? named ? "Only the people you pick can open this source, and only after signing in. It never expires." : "Anyone with this link can read every document in this source, including any you add later. They will see every change you make from now on, but they cannot edit anything or see anything else in My Space."
+              : named
               ? `Only the people you pick can open this ${isFolder ? "folder" : "document"}, and only after signing in. It never expires. Remove a person, or revoke the link, to end their access.`
               : isFolder
               ? "Anyone with this link can read every document in this folder and its subfolders without signing in, including any you add later. They will see every change you make from now on, but they cannot edit anything or see anything else in My Space. Share only what you are happy to see forwarded."
@@ -274,6 +283,10 @@ export function ShareLinkDialog({
             </ul>
           ) : null}
 
+          {viaSources.length > 0 ? <ul aria-label="Also shared through sources" className="mt-3 space-y-1">
+            {viaSources.map((source) => <li key={source.sourceId} className="text-body-sm text-kh-text-muted">Also visible through the shared source{" "}<button type="button" aria-label={`${source.name} — open share links for this source`} disabled={busy} onClick={() => onRetarget?.({ sourceId: source.sourceId, name: source.name })} className="rounded-sm font-medium text-kh-text underline kh-focus-ring">{source.name}</button>.</li>)}
+          </ul> : null}
+
           <section aria-label="Active links" className="mt-5">
             {links === null ? (
               <ShareLinksSkeleton />
@@ -316,7 +329,7 @@ export function ShareLinkDialog({
                                 // A revoked link moves to the inactive list, where its people are not managed.
                                 setManaging((open) => (open === link.id ? null : open));
                                 if (revoking) await load(revoking);
-                                toast({ message: `Link revoked. Anyone holding it can no longer open the ${isFolder ? "folder" : "document"}.` });
+                                toast({ message: `Link revoked. Anyone holding it can no longer open the ${isSource ? "source" : isFolder ? "folder" : "document"}.` });
                               } catch (failure) {
                                 setError(governanceFailure(failure));
                               }
