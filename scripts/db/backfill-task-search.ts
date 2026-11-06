@@ -18,14 +18,20 @@ export type TaskSearchBackfillResult = TaskSearchConsistency & { indexed: number
  * This proves latest-revision currency at one database statement, NOT that
  * every deployed writer already emits projections. Deploy all writers first.
  */
-export async function checkTaskSearchConsistency(pool: Pool): Promise<TaskSearchConsistency> {
+export async function checkTaskSearchConsistency(pool: Pool, workspaceId?: string): Promise<TaskSearchConsistency> {
+  // Scope is for isolated integration/diagnostic checks; production cutover
+  // MUST use the global check without workspaceId.
+  const scopeJoin = workspaceId ? "JOIN task_export_bindings b ON b.id = t.binding_id" : "";
+  const scopeClause = workspaceId ? "AND b.workspace_id = ?" : "";
   const [row] = await pool.query<{missing: string | number; mismatched: string | number}[]>(
     `SELECT
       COALESCE(SUM(CASE WHEN s.task_result_id IS NULL THEN 1 ELSE 0 END), 0) AS missing,
       COALESCE(SUM(CASE WHEN s.task_result_id IS NOT NULL AND s.revision_no <> t.latest_revision_no THEN 1 ELSE 0 END), 0) AS mismatched
       FROM task_results t
+      ${scopeJoin}
       LEFT JOIN task_result_search s ON s.task_result_id = t.id
-      WHERE t.latest_revision_no > 0`,
+      WHERE t.latest_revision_no > 0 ${scopeClause}`,
+    workspaceId ? [workspaceId] : [],
   );
   const missing = Number(row?.missing ?? 0);
   const mismatched = Number(row?.mismatched ?? 0);
@@ -39,7 +45,7 @@ export async function checkTaskSearchConsistency(pool: Pool): Promise<TaskSearch
  */
 export async function backfillTaskSearch(
   pool: Pool,
-  options: { batchSize?: number; maxBatches?: number } = {},
+  options: { batchSize?: number; maxBatches?: number; workspaceId?: string } = {},
 ): Promise<TaskSearchBackfillResult> {
   const batchSize = options.batchSize ?? 100;
   const maxBatches = options.maxBatches ?? Number.POSITIVE_INFINITY;
@@ -48,6 +54,8 @@ export async function backfillTaskSearch(
     throw new Error("Use batchSize 1–500 and maxBatches >= 1.");
   }
   const unitOfWork = new MariaDbTaskKnowledgeUnitOfWork(pool);
+  const scopeJoin = options.workspaceId ? "JOIN task_export_bindings b ON b.id = t.binding_id" : "";
+  const scopeClause = options.workspaceId ? "AND b.workspace_id = ?" : "";
   let indexed = 0;
   let skipped = 0;
   let batches = 0;
@@ -55,12 +63,14 @@ export async function backfillTaskSearch(
   while (batches < maxBatches) {
     const candidates: { id: string }[] = await pool.query<{id:string}[]>(
       `SELECT t.id FROM task_results t
+       ${scopeJoin}
        LEFT JOIN task_result_search s ON s.task_result_id = t.id
        WHERE t.latest_revision_no > 0
          AND (s.task_result_id IS NULL OR s.revision_no <> t.latest_revision_no)
+         ${scopeClause}
          AND (? IS NULL OR t.id > ?)
        ORDER BY t.id ASC LIMIT ?`,
-      [afterId, afterId, batchSize],
+      [...(options.workspaceId ? [options.workspaceId] : []), afterId, afterId, batchSize],
     );
     if (candidates.length === 0) break;
     batches++;
@@ -82,7 +92,7 @@ export async function backfillTaskSearch(
     }
     afterId = String(candidates[candidates.length-1].id);
   }
-  return {indexed,skipped,batches,...await checkTaskSearchConsistency(pool)};
+  return {indexed,skipped,batches,...await checkTaskSearchConsistency(pool, options.workspaceId)};
 }
 
 const HELP = `Usage: npx tsx scripts/db/backfill-task-search.ts [--target dev|test|e2e] [--check|--run] [--batch-size N] [--max-batches N]
