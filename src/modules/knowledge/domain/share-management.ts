@@ -5,7 +5,7 @@ export type ShareManagementStatus = "active" | "expired" | "revoked" | "unavaila
 export type ShareManagementInput = { q?: string; status?: string; page?: string };
 export type ShareManagementQuery = { q: string; status: ShareManagementStatus | "all"; page: number };
 type ManagedShareLinkBase = {
-  id: string; sourceId: string; title: string; sourceName: string;
+  id: string; sourceId: string; title: string; sourceName: string | null;
   label: string | null; path: string; status: ShareManagementStatus;
   createdAt: Date; expiresAt: Date | null; revokedAt: Date | null;
   totalViews: number; lastViewedAt: Date | null;
@@ -19,7 +19,8 @@ type ManagedShareLinkBase = {
  */
 export type ManagedShareLink =
   | (ManagedShareLinkBase & { kind: "DOCUMENT"; documentId: string; folderNodeId: null })
-  | (ManagedShareLinkBase & { kind: "FOLDER"; documentId: null; folderNodeId: string });
+  | (ManagedShareLinkBase & { kind: "FOLDER"; documentId: null; folderNodeId: string })
+  | (ManagedShareLinkBase & { kind: "SOURCE"; documentId: null; folderNodeId: null });
 export function parseShareManagementQuery(input: ShareManagementInput): ShareManagementQuery {
   const q = (input.q ?? "").trim();
   const status = input.status || "active";

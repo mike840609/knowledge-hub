@@ -38,22 +38,22 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
     // predicates remain inside the query so pagination never mixes scopes.
     const state = `CASE WHEN l.revoked_at IS NOT NULL THEN 'revoked'
       WHEN l.expires_at IS NOT NULL AND l.expires_at <= ? THEN 'expired'
-      WHEN COALESCE(d.status, f.status) <> 'ACTIVE' OR s.status <> 'ACTIVE' OR w.lifecycle_state <> 'ACTIVE' OR m.user_id IS NULL THEN 'unavailable'
+      WHEN COALESCE(d.status, f.status, s.status) <> 'ACTIVE' OR s.status <> 'ACTIVE' OR w.lifecycle_state <> 'ACTIVE' OR m.user_id IS NULL THEN 'unavailable'
       ELSE 'active' END`;
     const rows = await this.connection.query<DbRow[]>(
       `SET STATEMENT max_statement_time=5 FOR SELECT scoped.*
        FROM (
-         SELECT l.*, (SELECT COUNT(*) FROM document_share_link_recipients rc WHERE rc.share_link_id = l.id) AS recipient_count, s.id AS owner_source_id, COALESCE(r.title, f.name) AS title, s.name AS source_name, ${state} AS link_status
+         SELECT l.*, l.source_id AS target_source_id, (SELECT COUNT(*) FROM document_share_link_recipients rc WHERE rc.share_link_id = l.id) AS recipient_count, s.id AS owner_source_id, COALESCE(r.title, f.name, s.name) AS title, s.name AS source_name, ${state} AS link_status
          FROM document_share_links l
          LEFT JOIN knowledge_documents d ON d.id = l.document_id
          LEFT JOIN knowledge_tree_nodes f ON f.id = l.folder_node_id AND f.node_type = 'FOLDER'
          LEFT JOIN knowledge_revisions r ON r.id = d.current_revision_id
-         JOIN knowledge_sources s ON s.id = COALESCE(d.source_id, f.source_id)
+         JOIN knowledge_sources s ON s.id = COALESCE(d.source_id, f.source_id, l.source_id)
          JOIN workspaces w ON w.id = s.workspace_id
          LEFT JOIN workspace_memberships m ON m.workspace_id = w.id AND m.user_id = l.created_by
          WHERE s.workspace_id = ? AND l.created_by = ? AND w.workspace_type = 'PERSONAL' AND w.personal_owner_user_id = ?
-           AND (r.id IS NOT NULL OR f.id IS NOT NULL)
-           AND (? = '' OR COALESCE(r.title, f.name) COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '!' OR l.label COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '!')
+           AND (r.id IS NOT NULL OR f.id IS NOT NULL OR l.source_id IS NOT NULL)
+           AND (? = '' OR COALESCE(r.title, f.name, s.name) COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '!' OR l.label COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '!')
        ) scoped
        WHERE (? = 'all' OR scoped.link_status = ?)
        ORDER BY scoped.created_at DESC, scoped.id DESC LIMIT ? OFFSET ?`,
@@ -68,7 +68,7 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
         audience: String(row.audience) as ShareAudience,
         recipientCount: row.audience === "NAMED" ? asNumber(row.recipient_count, "share link recipient count") : null,
       };
-      return row.folder_node_id === null
+      return row.target_source_id !== null ? { ...base, kind: "SOURCE", sourceId: String(row.target_source_id), sourceName: null, documentId: null, folderNodeId: null } : row.folder_node_id === null
         ? { ...base, kind: "DOCUMENT", documentId: String(row.document_id), folderNodeId: null }
         : { ...base, kind: "FOLDER", documentId: null, folderNodeId: String(row.folder_node_id) };
     });
