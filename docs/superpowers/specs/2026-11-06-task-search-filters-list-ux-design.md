@@ -1,6 +1,6 @@
 # Task Search + Filters + List UX — Design Spec
 
-**Status:** Proposed for implementation; scope approved 2026-11-06. This document fixes the engineering contract before coding.
+**Status:** Approved scope, implementation in progress on PR #336. Task 4–5 visual direction refined 2026-11-06; Tasks 3–6 are not yet complete.
 **Area:** My Space → Tasks; read/discovery only. **Related:** [Task Knowledge Export design](2026-11-04-task-knowledge-export-design.md) and [implementation plan](../plans/2026-11-06-task-search-filters-list-ux.md).
 
 ## 1. Problem and outcome
@@ -23,7 +23,11 @@ Manual /hub-export already stores finished Claude Code/OpenCode tasks as immutab
 | Lifecycle | Preserve Active and Archived tabs; selecting one never includes the other. Retain query and filters across tabs, reset cursor. |
 | Sort | Always completedAt descending, then taskResultId descending, for both filtered and unfiltered lists. No sort control in this phase. |
 | Pagination | 50 results/page; opaque versioned composite keyset cursor over (completedAt, taskResultId) bound to the normalized search criteria. |
-| List | Title, 2-line safe plain-text snippet/summary preview, Agent, Verification, completed time, revision when >1, binding metadata as needed. |
+| List | Linear-inspired **compact list rows**, not cards: one prominent title, at most two lines of inert plain-text summary/matched excerpt, then muted Agent / Verification / completed time / revision and binding metadata. |
+| Search and filters layout | Full-width search field first, then a compact **Agent / Verification / Completed** filter toolbar. Keep filters in accessible popovers/dropdowns rather than a tall permanent filter form; preserve a keyboard- and no-JS-operable native GET fallback. |
+| Selected criteria | Show removable chips **only for active criteria**, with a Clear all filters action that keeps the Active/Archived lifecycle but resets the cursor. |
+| Tabs and result count | Compact Active / Archived tabs immediately above the list. Use an accurate displayed-page count or a clearly labeled “50+” when only `limit + 1` is known; do not invent a workspace-wide result total or run an unscoped count. |
+| Responsive and states | Toolbar wraps/stacks at 390px; distinguish initial-empty, no archived tasks, no matches, pending navigation, invalid filters and retryable errors. No new sidebar entry or global design token. |
 | Search URL | GET search on the existing /w/{workspaceId}/tasks route, bookmarkable and functional without JavaScript. |
 | Empty state | Separate no tasks yet / no archived tasks from no matching tasks; clear filters without losing lifecycle. |
 
@@ -89,6 +93,26 @@ Use existing Task List, EmptyState, Timestamp, search input, and native filter p
 - Empty state differs for no tasks, no archived tasks and zero results using the owner-scoped, lifecycle-only `hasTasksInLifecycle` value; a search with zero hits is insufficient by itself. No horizontal scrolling at 390px; long Japanese/Chinese text, emoji, URLs and malicious markup must be inert.
 - Search result cards/rows open the existing Task Detail. Preserve browser history, URL parameters and standard focus semantics; don't add a second Tasks nav destination.
 
+### 5.1 Tasks-only Linear-inspired layout contract (approved visual refinement)
+
+**Scope boundary.** Apply this only to `My Space → Tasks` when `TASK_SEARCH_READ_ENABLED=true`. Keep the existing PageHeader breadcrumb, “Set up export” action, App Shell, primary navigation/Sidebar, Task Detail and site-wide tokens untouched. While the flag is false, the legacy Tasks page, tabs, pagination and empty states remain unchanged. Follow the existing `frontend-design-language.md` contract (14px body, 12px caption, 6px control radius, restrained indigo/neutral hierarchy, subtle dividers, one shared focus treatment); do **not** introduce unrelated card designs, shadows, animation, new color tokens or a separate Tasks sub-navigation.
+
+**Visual topology, top to bottom:**
+
+1. Existing compact `My Space › Tasks` PageHeader with the existing “Set up export” secondary action; no tall hero/banner.
+2. One prominent text search input labelled **Search tasks**, occupying available width, with immediate Enter submission. A keyboard shortcut hint such as `⌘K` must **not** be shown because the global Quick Search already owns that shortcut. Do not open the global palette from this field.
+3. Directly below, a compact horizontal filter toolbar with **Agent**, **Verification** and **Completed** controls (visually neutral 32px-class controls using existing design tokens). Each control has its name and meaningful selected value; an accessible popover/dropdown expands the choices, and keyboard activation/escape/focus return work. With JavaScript disabled the equivalent native GET form controls remain available: Agent and Verification use labelled native choices, Completed date range can expand using a native `<details>` or remain visibly inline. No JS-only filter that disappears or becomes impossible to submit when scripting is off.
+4. A separate short row of active chips **only when at least one filter or q is applied**. Chips use existing small neutral control/badge styling; removing one chip preserves all other search parameters, the active lifecycle and the fixed UTC offset when dates remain; it always drops `cursor`. A `Clear all` action clears q/agent/verification/from/to/offset and cursor while keeping the current Active/Archived tab. A chip is a genuine link/button with an accessible name, not a decorative badge.
+5. **Active** and **Archived** tabs, with the current tab clearly indicated by text + selected background or understated underline, not accent-heavy blocks. Place an accurately labelled results indicator on the opposite side. Unless a scoped total is explicitly calculated, use “Showing N tasks” (number on this page) or “50+ tasks” for a first page that has more results; never present a current-page count as a global exact total.
+6. A continuous, compact **row list** with subtle separators and one hover/focus target for the existing Task Detail link; no individual cards or multi-column grid. The dominant line is a 14px-medium title, wrapping or truncating without making the entire task ambiguous. A maximum-two-line, 160–200-character plain-text excerpt is next. The last line contains muted 12px metadata: Agent, **textual** Verification (Agent-reported, never Hub-certified), completed date/time, revision only if >1 and the existing revoked binding marker when applicable. Prefer stable alignment with semantic separators. Do not repeat bulky colored badges for ordinary metadata. Matching text may be highlighted using inert text spans only.
+7. “Older tasks” is an understated pagination link beneath the list; preserve every active criterion and date offset. Avoid any new pagination widget in this phase.
+
+**States and interaction contracts.** A pending client-side filter/URL navigation may show a subtle inline pending state or row skeleton without shifting the toolbar; do not show the new offset label over old UTC-filtered results during hydration. With no JavaScript, native GET submission and SSR results remain completely usable. Zero results must use owner-scoped `hasTasksInLifecycle`: initial-empty offers “Set up task export”; empty Archived explains how archive works; no matches includes “Clear filters”. An invalid filter shows bounded, non-sensitive guidance and keeps the user on Tasks; a query timeout shows a retry action, never a spinner indefinitely. Keep focus visibly on controls; avoid focus loss on chip removal, tab navigation or URL updates. Respect reduced motion.
+
+**390px viewport.** Search remains full width; Agent/Verification/Completed wrap or stack; filter popovers are viewport-contained, date fields do not overrun, active chips wrap naturally, metadata wraps, long CJK/emoji/URLs do not cause horizontal scrolling. The Task title must remain readable and the row action needs a full-width accessible target. Test desktop + 390px in both light and dark themes; do not change the shared Sidebar width or collapse behavior.
+
+**Implementation split.** Task 4 owns search/toolbar/popover-fallback/chips/tabs/URL state and tests; Task 5 owns result count presentation, row hierarchy, summary/highlights, empty/loading/error states and responsive polish; Task 6 owns integrated desktop/mobile, keyboard/no-JS/SSR and accessibility regression. This contract refines only the Tasks surface, not shared primitives.
+
 ## 6. Security and invariants
 
 - All list/search reads require <code>CallerContext</code> and <code>assertOwnedPersonal</code> for the ACTIVE PERSONAL Workspace, exactly as the current TaskResultReadService. Query inputs, cursors, IDs, or the export token never grant reads.
@@ -108,6 +132,10 @@ Use existing Task List, EmptyState, Timestamp, search input, and native filter p
 6. Search URLs work after browser refresh/back; changing filters or lifecycle resets cursor. Direct-load `?from=2026-11-01&to=2026-11-06` (without offset) with and without JavaScript: SSR/no-JS visibly uses UTC+00:00; JS canonicalizes to an explicit browser offset, clears cursor, and re-queries before showing the new label. Assert the **URL offset, rendered label, and actual date-boundary results agree at every stage**, including nonzero browser offsets, no-JS native form, explicit-offset reloads and fixed-offset DST behavior.
 7. 390px mobile, long UTF-8 strings, invalid filters, empty states, keyboard focus and hostile HTML/script text are tested.
 8. Existing task export/detail/revision/archive/restore tests and repo verify, MariaDB integration, E2E remain green.
+9. With the read feature flag **off**, the original Tasks UI is unchanged. With the flag **on**, the hierarchy is Header → Search → compact Agent/Verification/Completed toolbar → active chips (conditional) → Active/Archived tabs + accurate **page** indicator → rows → Older tasks; do not alter Sidebar or shared style tokens.
+10. With and without JavaScript, entering q, choosing each filter, submitting by Enter, removing an active chip, clearing all criteria, switching tabs and paging preserve URL semantics, lifecycle and keyboard focus; there is no conflicting `⌘K` hint in Task Search.
+11. Each row has a dominant readable title, ≤2 lines of inert summary/excerpt, muted metadata and a single accessible detail link. At 390px, long CJK text/emoji/URLs, controls and chips wrap without horizontal scrolling; both light/dark and keyboard focus are verified.
+12. Initial empty, empty Archived, no matches, loading, validation and retryable timeout states are distinct, accurate and do not leak inaccessible task counts or previous date-filter results.
 
 ## 8. Alternatives and decisions
 
