@@ -248,7 +248,7 @@ describe("configure", () => {
 describe("non-default profile recovery commands", () => {
   const profile = "team";
   const profileFlag = ["--profile", profile];
-  const suffix = "--profile 'team'";
+  const suffix = "--profile team";
   beforeEach(async () => {
     expect((await run(["configure", "--hub-url", hub.url, "--binding-id", B2, "--allow-insecure-localhost", ...profileFlag], { stdin: TOKEN2 })).code).toBe(0);
     hub.bindingId = B2;
@@ -301,12 +301,32 @@ describe("non-default profile recovery commands", () => {
     expect(conflict.out).toContain(`knowledge-hub export --task ${confirmedId} ${suffix}`);
   });
 
-  it("quotes profiles that contain shell syntax in copied recovery commands", async () => {
-    const trickyProfile = "dev's; echo injected";
+  it.each(["dev\'s; echo injected", "中 文 $()"])("prints a portable encoded profile and accepts it when pasted back (%s)", async (trickyProfile) => {
     expect((await run(["configure", "--hub-url", hub.url, "--binding-id", B2, "--allow-insecure-localhost", "--profile", trickyProfile], { stdin: TOKEN2 })).code).toBe(0);
     const result = await run(["export", "--new", "--profile", trickyProfile], { stdin: content() });
     expect(result.code).toBe(0);
-    expect(result.out).toContain("--profile 'dev'\\''s; echo injected'");
+    const taskId = taskIdOf(result.out);
+    const encoded = Buffer.from(trickyProfile, "utf8").toString("base64url");
+    const hint = `knowledge-hub export --task ${taskId} --profile-b64 ${encoded}`;
+    expect(result.out).toContain(hint);
+    // A copied hint contains only shell-safe tokens, without quoting or expansions.
+    expect(hint).toMatch(/^knowledge-hub export --task [a-f0-9-]+ --profile-b64 [A-Za-z0-9_-]+$/);
+    const recovered = await run(hint.split(" ").slice(1), { stdin: content({ summary: "Updated via printed hint" }) });
+    expect(recovered.code).toBe(0);
+    expect(hub.received.at(-1)?.json.artifactRevision).toBe(2);
+    expect(hub.received.at(-1)?.token).toBe(TOKEN2);
+  });
+
+  it("refuses invalid or ambiguous encoded profile flags", async () => {
+    for (const extra of [
+      ["--profile-b64", "??"],
+      ["--profile-b64", "77-9"],
+      ["--profile", "team", "--profile-b64", Buffer.from("team").toString("base64url")],
+    ]) {
+      const result = await run(["export", "--new", ...extra], { stdin: content() });
+      expect(result.code).toBe(2);
+      expect(hub.received).toHaveLength(0);
+    }
   });
 });
 
