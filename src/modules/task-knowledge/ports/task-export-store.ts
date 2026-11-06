@@ -1,4 +1,5 @@
 import type { TaskReferenceInput } from "../domain/task-references";
+import type { TaskSearchProjection } from "../domain/task-search-projection";
 
 export type ExportBindingStatus = "ACTIVE" | "REVOKED";
 export type ExportCredentialStatus = "ACTIVE" | "REVOKED";
@@ -85,6 +86,8 @@ export interface TaskExportStore {
   getRevision(taskResultId: string, revisionNo: number): Promise<TaskRevisionRow | null>;
   insertRevision(revision: { id: string; taskResultId: string; revisionNo: number; artifactJson: string; contentHash: string }): Promise<void>;
   insertReferences(taskResultId: string, revisionNo: number, references: readonly StoredTaskReference[]): Promise<void>;
+  /** Monotonic latest-revision projection, written in the same ingest transaction. */
+  upsertSearchProjection(projection: TaskSearchProjection): Promise<void>;
   listReferences(taskResultId: string, revisionNo: number): Promise<StoredTaskReference[]>;
 
   /** Tasks whose binding names `workspaceId`, newest first, ids below `beforeId` when given. */
