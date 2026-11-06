@@ -15,7 +15,7 @@ import { ensureDefaultHubSource } from "@/modules/sources/application/ensure-def
 import { PersonalWorkspaceService } from "@/modules/workspaces/application/personal-workspace-service";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 
-/** Discussions and follows through a folder link (folder share spec §6). */
+/** Discussions and follows through a Source link (source share spec §6). */
 let pool: Pool;
 beforeAll(() => { pool = createDatabasePool(databaseConfig("test")); });
 afterAll(async () => { await pool.end(); });
@@ -30,11 +30,12 @@ function steppingClock() {
 }
 
 /**
+ * Source root:
  * Shared/
  *   Engineering/
  *     Dev setup   (the deep document discussed)
  *   FAQ
- * Outside         (My Space root, outside the shared folder; also shared by its own document link)
+ * Outside         (another document in the shared Source, also shared by its own document link)
  */
 async function fixture() {
   const uow = new MariaDbUnitOfWork(pool);
@@ -106,6 +107,9 @@ describe("discussions through a Source link", () => {
     const f = await fixture();
     const thread = await f.start();
     await f.ownerReply(thread.id);
+    const inbox = async () => (await f.service.listInbox(f.reader, { kind: "follow", status: "all", unread: false })).discussions;
+    const liveRow = expect.objectContaining({ threadId: thread.id, kind: "FOLLOW", documentId: f.devSetup.documentId, sourceId: f.sourceId, documentTitle: "Dev setup", token: f.token, href: `/s/${f.token}?d=${f.devSetup.documentId}&thread=${thread.id}` });
+    expect(await inbox()).toEqual([liveRow]);
     expect(await f.discussions()).toEqual([expect.objectContaining({ threadId: thread.id, linkAvailable: true, documentId: f.devSetup.documentId })]);
     await f.hub.archiveDocument(f.owner, f.devSetup.documentId);
     const scope = { token: f.token, documentId: f.devSetup.documentId, threadId: thread.id };
@@ -115,8 +119,11 @@ describe("discussions through a Source link", () => {
     await expect(f.service.markSeenForLink(f.reader, scope)).rejects.toMatchObject(notFound);
     expect(await f.discussions()).toEqual([{ threadId: thread.id, linkAvailable: false }]);
     expect(await f.activity()).toEqual([expect.objectContaining({ threadId: thread.id, linkAvailable: false, documentId: "", documentTitle: "" })]);
+    // The Inbox index delegates to the same follow availability judgement, but omits dead rows entirely.
+    expect(await inbox()).toEqual([]);
     await f.hub.restoreDocument(f.owner, f.devSetup.documentId);
     expect(await f.discussions()).toEqual([expect.objectContaining({ threadId: thread.id, linkAvailable: true })]);
+    expect(await inbox()).toEqual([liveRow]);
     await f.hub.archiveDocument(f.owner, f.devSetup.documentId);
     expect(await f.service.unfollowOwn(f.reader, thread.id)).toEqual({ following: false });
   });
