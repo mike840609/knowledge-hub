@@ -9,6 +9,7 @@ import {
   TaskArchivedError,
 } from "../domain/task-errors";
 import type { TaskKnowledgeRepositories, TaskKnowledgeUnitOfWork } from "../ports/unit-of-work";
+import { projectTaskSearch } from "../domain/task-search-projection";
 import { resolveTaskReferences } from "./internal/resolve-task-references";
 
 export type IngestResult = {
@@ -76,6 +77,7 @@ export class IngestTaskResultService {
     await r.taskExports.insertRevision({ id: uuidv7(), taskResultId: task.id, revisionNo, artifactJson: input.artifactJson, contentHash: input.contentHash });
     await r.taskExports.insertReferences(task.id, revisionNo, await resolveTaskReferences(r, input.workspaceId, artifact.references ?? []));
     await r.taskExports.advanceLatestRevision(task.id, revisionNo);
+    await r.taskExports.upsertSearchProjection(projectTaskSearch(task.id, artifact));
     return answer("CREATED");
   }
 }
