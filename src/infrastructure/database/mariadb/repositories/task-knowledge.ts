@@ -2,6 +2,7 @@ import { DomainError } from "@/shared/domain/errors";
 import { normalizeImportPath } from "@/modules/sources/domain/import-path";
 import { IntegrityError } from "@/modules/knowledge/domain/errors";
 import type { TaskReferenceInput } from "@/modules/task-knowledge/domain/task-references";
+import type { TaskSearchProjection } from "@/modules/task-knowledge/domain/task-search-projection";
 import type {
   TaskDocumentLookup,
   TaskDocumentState,
@@ -218,6 +219,26 @@ export class MariaDbTaskExportStore implements TaskExportStore {
         [uuidv7(), taskResultId, revisionNo, item.ordinal, type, locator, item.resolution, item.resolvedDocumentId],
       );
     }
+  }
+
+  /** An older backfill snapshot may never replace a newer atomic ingest. */
+  async upsertSearchProjection(projection: TaskSearchProjection): Promise<void> {
+    await this.connection.query(
+      "INSERT INTO task_result_search (task_result_id, revision_no, completed_at_epoch_ms, agent, verification_status, title, summary, search_body) " +
+      "VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
+      "ON DUPLICATE KEY UPDATE " +
+      "completed_at_epoch_ms = IF(VALUES(revision_no) >= revision_no, VALUES(completed_at_epoch_ms), completed_at_epoch_ms), " +
+      "agent = IF(VALUES(revision_no) >= revision_no, VALUES(agent), agent), " +
+      "verification_status = IF(VALUES(revision_no) >= revision_no, VALUES(verification_status), verification_status), " +
+      "title = IF(VALUES(revision_no) >= revision_no, VALUES(title), title), " +
+      "summary = IF(VALUES(revision_no) >= revision_no, VALUES(summary), summary), " +
+      "search_body = IF(VALUES(revision_no) >= revision_no, VALUES(search_body), search_body), " +
+      "revision_no = GREATEST(revision_no, VALUES(revision_no))",
+      [
+        projection.taskResultId, projection.revisionNo, projection.completedAtEpochMs,
+        projection.agent, projection.verificationStatus, projection.title, projection.summary, projection.searchBody,
+      ],
+    );
   }
 
   async listReferences(taskResultId: string, revisionNo: number): Promise<StoredTaskReference[]> {
