@@ -7,6 +7,8 @@ import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbTaskKnowledgeUnitOfWork } from "@/infrastructure/database/mariadb/task-knowledge-transaction";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import { IngestTaskResultService } from "@/modules/task-knowledge/application/ingest-task-result";
+import { parseTaskArtifact } from "@/modules/task-knowledge/domain/task-artifact";
+import { projectTaskSearch } from "@/modules/task-knowledge/domain/task-search-projection";
 import { ManageExportBindingService } from "@/modules/task-knowledge/application/manage-export-binding";
 import type { TaskKnowledgeRepositories, TaskKnowledgeUnitOfWork } from "@/modules/task-knowledge/ports/unit-of-work";
 import { WorkspaceBusyError } from "@/shared/domain/errors";
@@ -68,6 +70,41 @@ describe("revision sequence", () => {
     expect(await ingest(token, artifact(taskId, 2))).toMatchObject({ state: "CREATED", taskResultId: first.taskResultId, revisionNo: 2 });
     expect(await counts(bindingId)).toMatchObject({ tasks: 1, revisions: 2 });
     expect(await latest(first.taskResultId)).toBe(2);
+    const [projection] = await pool.query<{ revision_no: number; completed_at_epoch_ms: string | number | bigint; summary: string }[]>(
+      "SELECT revision_no, completed_at_epoch_ms, summary FROM task_result_search WHERE task_result_id = ?", [first.taskResultId],
+    );
+    expect(Number(projection.revision_no)).toBe(2);
+    expect(Number(projection.completed_at_epoch_ms)).toBe(Date.parse(base.completedAt));
+    expect(projection.summary).toBe("Revision 2.");
+  });
+
+  it("never allows a stale backfill projection to replace the latest revision", async () => {
+    const { token } = await exporter();
+    const taskId = crypto.randomUUID();
+    const { taskResultId } = await ingest(token, artifact(taskId, 1));
+    await ingest(token, artifact(taskId, 2));
+    await uow().run((r) => r.taskExports.upsertSearchProjection({
+      ...projectTaskSearch(taskResultId, parseTaskArtifact(artifact(taskId, 1))),
+      summary: "stale-backfill",
+      searchBody: "stale-backfill",
+    }));
+    const [row] = await pool.query<{ revision_no: number; summary: string }[]>(
+      "SELECT revision_no, summary FROM task_result_search WHERE task_result_id = ?", [taskResultId],
+    );
+    expect(Number(row.revision_no)).toBe(2);
+    expect(row.summary).toBe("Revision 2.");
+  });
+
+  it("rolls back a newly accepted revision if its projection write fails", async () => {
+    const { token, bindingId } = await exporter();
+    const gated = patched((r) => ({
+      ...r,
+      taskExports: Object.assign(Object.create(r.taskExports), {
+        upsertSearchProjection: async () => { throw new Error("projection write failed"); },
+      }),
+    }));
+    await expect(ingest(token, artifact(crypto.randomUUID(), 1), gated)).rejects.toThrow(/projection write failed/);
+    expect(await counts(bindingId)).toMatchObject({ tasks: 0, revisions: 0 });
   });
 
   it("refuses a skipped number, and revision 2 of an unknown task, with the known latest", async () => {
