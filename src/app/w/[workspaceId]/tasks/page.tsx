@@ -34,6 +34,7 @@ export default async function TaskResultsPage({ params, searchParams }: Props) {
   const services = applicationServices();
   const { caller } = await services.establishTrustedCaller();
   let page;
+  let searchError: string | null = null;
   try {
     page = await services.taskResults.list(caller, workspaceId, {
       lifecycle: showArchived ? "ARCHIVED" : "ACTIVE",
@@ -43,7 +44,12 @@ export default async function TaskResultsPage({ params, searchParams }: Props) {
   } catch (error) {
     // Task Results exist only in the caller's own active My Space; anything else reads as not found.
     if (error instanceof DomainError && (error.code === "WORKSPACE_NOT_FOUND" || error.code === "WORKSPACE_ARCHIVED")) notFound();
-    throw error;
+    if (enabled && error instanceof DomainError && error.code === "TASK_SEARCH_UNAVAILABLE") {
+      searchError = error.message;
+      page = { items: [], nextCursor: null, hasTasksInLifecycle: true };
+    } else {
+      throw error;
+    }
   }
   return (
     <main className="kh-page pb-6">
@@ -59,7 +65,7 @@ export default async function TaskResultsPage({ params, searchParams }: Props) {
           <TaskSearchOffsetHydrator hasDateFilter={Boolean(search.from || search.to)} explicitOffset={typeof raw.offset === "string" && raw.offset !== ""} />
           <TaskSearchForm workspaceId={workspaceId} query={search} error={validationError} />
           <TaskSearchResults workspaceId={workspaceId} query={search} items={page.items}
-            nextCursor={page.nextCursor} hasTasksInLifecycle={page.hasTasksInLifecycle} />
+            nextCursor={page.nextCursor} hasTasksInLifecycle={page.hasTasksInLifecycle} error={searchError} />
         </>
       ) : (
         <TaskList workspaceId={workspaceId} archived={showArchived} items={page.items} nextCursor={page.nextCursor} />
