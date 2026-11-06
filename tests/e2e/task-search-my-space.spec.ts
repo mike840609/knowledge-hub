@@ -69,7 +69,7 @@ test("flag-on Tasks search: field hits, filter URLs, invalid cursor and 390px", 
   await expect(page.getByText(/security authorization evidence/i)).toBeVisible();
   await expect(page.getByText("Showing 1 task")).toBeVisible();
 
-  await page.getByLabel("Agent", { exact: true }).selectOption("claude-code");
+  await page.getByRole("combobox", { name: "Agent" }).selectOption("claude-code");
   await page.getByRole("button", { name: "Apply filters" }).click();
   await expect(page).toHaveURL(/agent=claude-code/);
   await expect(page.getByText("No matching tasks")).toBeVisible();
@@ -125,6 +125,14 @@ test("missing date-offset deep link re-queries at browser fixed offset while exp
   const context = await browser.newContext({ timezoneId: "Asia/Taipei" });
   try {
     const page = await context.newPage();
+    // Selecting a date on a previously unfiltered page must submit the
+    // local offset in the FIRST GET instead of flashing UTC then replacing.
+    await page.goto(base);
+    await page.locator("details").first().locator("summary").click();
+    await page.locator('input[name="from"]').fill("2026-11-06");
+    await page.getByRole("button", { name: "Apply filters" }).click();
+    await expect(page).toHaveURL(/from=2026-11-06/);
+    await expect(page).toHaveURL(/offset=480/);
     await page.goto(base + "?from=2026-11-06&to=2026-11-06");
     await expect(page).toHaveURL(/offset=480/);
     await expect(page.locator("details")).toContainText("UTC+08:00");
