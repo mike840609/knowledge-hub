@@ -12,6 +12,9 @@ export type TaskSearchBackfillResult = TaskSearchConsistency & { indexed: number
  * Single-statement snapshot: do not scan in multiple independently committed
  * chunks and claim readiness from a mixed set of observed revision numbers.
  *
+ * Exclude zero-revision staging rows: they have no committed Artifact and are
+ * not returned by the legacy Tasks list. Rows with a positive revision
+ * but no Artifact remain a hard integrity error during backfill.
  * This proves latest-revision currency at one database statement, NOT that
  * every deployed writer already emits projections. Deploy all writers first.
  */
@@ -21,7 +24,8 @@ export async function checkTaskSearchConsistency(pool: Pool): Promise<TaskSearch
       COALESCE(SUM(CASE WHEN s.task_result_id IS NULL THEN 1 ELSE 0 END), 0) AS missing,
       COALESCE(SUM(CASE WHEN s.task_result_id IS NOT NULL AND s.revision_no <> t.latest_revision_no THEN 1 ELSE 0 END), 0) AS mismatched
       FROM task_results t
-      LEFT JOIN task_result_search s ON s.task_result_id = t.id`,
+      LEFT JOIN task_result_search s ON s.task_result_id = t.id
+      WHERE t.latest_revision_no > 0`,
   );
   const missing = Number(row?.missing ?? 0);
   const mismatched = Number(row?.mismatched ?? 0);
@@ -52,7 +56,8 @@ export async function backfillTaskSearch(
     const candidates: { id: string }[] = await pool.query<{id:string}[]>(
       `SELECT t.id FROM task_results t
        LEFT JOIN task_result_search s ON s.task_result_id = t.id
-       WHERE (s.task_result_id IS NULL OR s.revision_no <> t.latest_revision_no)
+       WHERE t.latest_revision_no > 0
+         AND (s.task_result_id IS NULL OR s.revision_no <> t.latest_revision_no)
          AND (? IS NULL OR t.id > ?)
        ORDER BY t.id ASC LIMIT ?`,
       [afterId, afterId, batchSize],
