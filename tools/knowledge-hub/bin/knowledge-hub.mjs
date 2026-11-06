@@ -28,7 +28,7 @@ function parse(args) {
 const HELP = `knowledge-hub <command>
   configure [--hub-url <url>] [--binding-id <id>] [--token <token>] [--profile <name>] [--allow-insecure-localhost]
   configure --rotate <bindingId> [--token <token>]
-  export --new | --retry <taskId> | --task <taskId> | --discard <taskId>  [--profile <name>]
+  export --new | --retry <taskId> | --task <taskId> | --discard <taskId>  [--profile <name> | --profile-b64 <encoded>]
   install-agent [--claude] [--opencode] [--force]`;
 
 async function main() {

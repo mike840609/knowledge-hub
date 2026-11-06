@@ -64,16 +64,35 @@ let home: string;
 let project: string;
 let outputs: string[];
 
-function run(args: string[], options: { stdin?: string; cwd?: string } = {}): Promise<{ code: number; out: string }> {
+function run(args: string[], options: { stdin?: string; stdinChunks?: Buffer[]; cwd?: string; viaShell?: boolean } = {}): Promise<{ code: number; out: string }> {
   return new Promise((resolve) => {
-    const child: ChildProcessWithoutNullStreams = spawn(process.execPath, [CLI, ...args], {
+    const spawnOptions = {
       cwd: options.cwd ?? project,
-      env: { NODE_ENV: "test", HOME: home, USERPROFILE: home, PATH: process.env.PATH ?? "", KNOWLEDGE_HUB_TIMEOUT_MS: "1500" },
-    });
+      env: { NODE_ENV: "test" as const, HOME: home, USERPROFILE: home, PATH: process.env.PATH ?? "", KNOWLEDGE_HUB_TIMEOUT_MS: "1500" },
+    };
+    // Execute generated hints through the platform's real shell, not only
+    // through Node's argv-based spawn (which would hide shell-quoting bugs).
+    const quoteExecutable = (value: string) => process.platform === "win32"
+      ? `"${value.replaceAll('"', '""')}"`
+      : `'${value.replaceAll("'", "'\\''")}'`;
+    const child: ChildProcessWithoutNullStreams = options.viaShell
+      ? spawn(`${quoteExecutable(process.execPath)} ${quoteExecutable(CLI)} ${args.join(" ")}`, { ...spawnOptions, shell: true })
+      : spawn(process.execPath, [CLI, ...args], spawnOptions);
     let out = "";
     child.stdout.on("data", (data) => { out += data; });
     child.stderr.on("data", (data) => { out += data; });
-    child.stdin.end(options.stdin ?? "");
+    if (options.stdinChunks) {
+      // Separate writes so a multibyte UTF-8 character can reach stdin in two chunks.
+      void (async () => {
+        for (const chunk of options.stdinChunks ?? []) {
+          child.stdin.write(chunk);
+          await new Promise((resume) => setTimeout(resume, 40));
+        }
+        child.stdin.end();
+      })();
+    } else {
+      child.stdin.end(options.stdin ?? "");
+    }
     child.on("close", (code) => {
       outputs.push(out);
       // A --token line carries the token by design (spec Amendment 4); what it prints must still never echo it.
@@ -230,6 +249,112 @@ describe("configure", () => {
     } finally {
       rmSync(other, { recursive: true, force: true });
     }
+  });
+});
+
+
+describe("non-default profile recovery commands", () => {
+  const profile = "team";
+  const profileFlag = ["--profile", profile];
+  const suffix = "--profile team";
+  beforeEach(async () => {
+    expect((await run(["configure", "--hub-url", hub.url, "--binding-id", B2, "--allow-insecure-localhost", ...profileFlag], { stdin: TOKEN2 })).code).toBe(0);
+    hub.bindingId = B2;
+  });
+
+  it("keeps --profile in pending, retry and update commands, all of which remain usable", async () => {
+    hub.replies.push("timeout");
+    const first = await run(["export", "--new", ...profileFlag], { stdin: content({ title: "First" }) });
+    expect(first.code).toBe(3);
+    const taskId = taskIdOf(first.out);
+    expect(first.out).toContain(`knowledge-hub export --retry ${taskId} ${suffix}`);
+
+    const blocked = await run(["export", "--new", ...profileFlag], { stdin: content({ title: "Second" }) });
+    expect(blocked.code).toBe(2);
+    expect(blocked.out).toContain(`knowledge-hub export --retry ${taskId} ${suffix}`);
+
+    const printedRetry = first.out.match(/knowledge-hub export --retry [^\r\n]+/)?.[0] ?? "";
+    expect(printedRetry).toContain(suffix);
+    const retried = await run(printedRetry.split(" ").slice(1), { viaShell: true });
+    expect(retried.code).toBe(0);
+    expect(retried.out).toContain(`knowledge-hub export --task ${taskId} ${suffix}`);
+
+    hub.replies.push(error(503, "WORKSPACE_BUSY"));
+    const update = await run(["export", "--task", taskId, ...profileFlag], { stdin: content({ summary: "Next revision" }) });
+    expect(update.code).toBe(3);
+    expect(update.out).toContain(`knowledge-hub export --retry ${taskId} ${suffix}`);
+
+    const blockedUpdate = await run(["export", "--task", taskId, ...profileFlag], { stdin: content({ summary: "Another revision" }) });
+    expect(blockedUpdate.code).toBe(2);
+    expect(blockedUpdate.out).toContain(`knowledge-hub export --retry ${taskId} ${suffix}`);
+
+    const retriedUpdate = await run(["export", "--retry", taskId, ...profileFlag]);
+    expect(retriedUpdate.code).toBe(0);
+    expect(retriedUpdate.out).toContain(`knowledge-hub export --task ${taskId} ${suffix}`);
+  });
+
+  it("retains the profile on credential errors, discard hints and revision conflicts", async () => {
+    hub.replies.push(error(401, "CREDENTIAL_INVALID"));
+    const first = await run(["export", "--new", ...profileFlag], { stdin: content() });
+    expect(first.code).toBe(4);
+    const taskId = taskIdOf(first.out);
+    expect(first.out).toContain(`knowledge-hub export --retry ${taskId} ${suffix}`);
+    expect(first.out).toContain(`knowledge-hub export --discard ${taskId} ${suffix}`);
+
+    expect((await run(["export", "--discard", taskId, ...profileFlag])).code).toBe(0);
+    const accepted = await run(["export", "--new", ...profileFlag], { stdin: content() });
+    expect(accepted.code).toBe(0);
+    const confirmedId = taskIdOf(accepted.out);
+    hub.replies.push(error(409, "REVISION_OUT_OF_ORDER", { latestRevisionNo: 2 }));
+    const conflict = await run(["export", "--task", confirmedId, ...profileFlag], { stdin: content({ summary: "Update" }) });
+    expect(conflict.code).toBe(4);
+    expect(conflict.out).toContain(`knowledge-hub export --task ${confirmedId} ${suffix}`);
+  });
+
+  it.each(["dev\'s; echo injected", "中 文 $()"])("prints a portable encoded profile and accepts it when pasted back (%s)", async (trickyProfile) => {
+    expect((await run(["configure", "--hub-url", hub.url, "--binding-id", B2, "--allow-insecure-localhost", "--profile", trickyProfile], { stdin: TOKEN2 })).code).toBe(0);
+    const result = await run(["export", "--new", "--profile", trickyProfile], { stdin: content() });
+    expect(result.code).toBe(0);
+    const taskId = taskIdOf(result.out);
+    const encoded = Buffer.from(trickyProfile, "utf8").toString("base64url");
+    const hint = `knowledge-hub export --task ${taskId} --profile-b64 ${encoded}`;
+    expect(result.out).toContain(hint);
+    // A copied hint contains only shell-safe tokens, without quoting or expansions.
+    expect(hint).toMatch(/^knowledge-hub export --task [a-f0-9-]+ --profile-b64 [A-Za-z0-9_-]+$/);
+    const recovered = await run(hint.split(" ").slice(1), { stdin: content({ summary: "Updated via printed hint" }), viaShell: true });
+    expect(recovered.code).toBe(0);
+    expect(hub.received.at(-1)?.json.artifactRevision).toBe(2);
+    expect(hub.received.at(-1)?.token).toBe(TOKEN2);
+  });
+
+  it("refuses invalid or ambiguous encoded profile flags", async () => {
+    for (const extra of [
+      ["--profile-b64", "??"],
+      ["--profile-b64", "a"],
+      ["--profile", "team", "--profile-b64", Buffer.from("team").toString("base64url")],
+    ]) {
+      const result = await run(["export", "--new", ...extra], { stdin: content() });
+      expect(result.code).toBe(2);
+      expect(result.out).toMatch(/profile-b64/);
+      expect(hub.received).toHaveLength(0);
+    }
+  });
+});
+
+describe("UTF-8 stdin decoding", () => {
+  beforeEach(async () => { await configure(); });
+
+  it("preserves Chinese characters when a pipe splits inside a multibyte sequence", async () => {
+    const original = content({ title: "中文任務", summary: "修正跨區塊的中文輸入，不能替換成亂碼。" });
+    const bytes = Buffer.from(original, "utf8");
+    const split = bytes.indexOf(Buffer.from("中", "utf8")) + 1;
+    expect(split).toBeGreaterThan(0);
+    const result = await run(["export", "--new"], { stdinChunks: [bytes.subarray(0, split), bytes.subarray(split)] });
+    expect(result.code).toBe(0);
+    expect(hub.received).toHaveLength(1);
+    expect(hub.received[0].json.title).toBe("中文任務");
+    expect(hub.received[0].json.summary).toBe("修正跨區塊的中文輸入，不能替換成亂碼。");
+    expect(hub.received[0].json).toMatchObject({ title: "中文任務", summary: "修正跨區塊的中文輸入，不能替換成亂碼。" });
   });
 });
 
@@ -404,6 +529,17 @@ describe("conformance with the server contract", () => {
 
 describe("unconfirmed revisions", () => {
   beforeEach(async () => { await configure(); });
+
+  it("does not execute terminal control sequences from a pending task's saved title or summary", async () => {
+    hub.replies.push("timeout");
+    const first = await exportNew(content({ title: "Title\u001b]0;changed\u0007", summary: "Summary\u001b[2J hidden" }));
+    expect(first.code).toBe(3);
+    const blocked = await exportNew();
+    expect(blocked.code).toBe(2);
+    expect(blocked.out).toContain("Title?]0;changed?");
+    expect(blocked.out).toContain("Summary?[2J hidden");
+    expect(blocked.out).not.toMatch(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/);
+  });
 
   it("a committed-but-timed-out --new blocks a second --new until --retry confirms it", async () => {
     hub.replies.push("timeout");

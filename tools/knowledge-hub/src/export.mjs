@@ -21,9 +21,26 @@ const HUB_ERROR_CODES = new Set([
   "TASK_ARCHIVED", "PAYLOAD_TOO_LARGE", "INVALID_ARTIFACT", "UNSUPPORTED_SCHEMA_VERSION",
 ]);
 
-const retryCommand = (taskId) => `knowledge-hub export --retry ${taskId}`;
-const taskCommand = (taskId) => `knowledge-hub export --task ${taskId}`;
-const discardCommand = (taskId) => `knowledge-hub export --discard ${taskId}`;
+// Printed commands must work in POSIX shells, PowerShell and Windows CMD.
+// Plain profile slugs need no quoting. Encode anything else into shell-safe
+// base64url to avoid invoking shell-specific expansions or escape rules.
+const SIMPLE_PROFILE = /^[A-Za-z0-9_.-]+$/;
+const profileOption = (profile) => !profile ? "" : SIMPLE_PROFILE.test(profile)
+  ? ` --profile ${profile}`
+  : ` --profile-b64 ${Buffer.from(profile, "utf8").toString("base64url")}`;
+
+function decodeExportProfile(flags) {
+  const encoded = flags["profile-b64"];
+  if (encoded === undefined) return flags;
+  if (flags.profile !== undefined) throw new UsageError("Use --profile or --profile-b64, not both.");
+  if (typeof encoded !== "string" || !/^[A-Za-z0-9_-]+$/.test(encoded)) throw new UsageError("Invalid --profile-b64 value.");
+  const profile = Buffer.from(encoded, "base64url").toString("utf8");
+  if (!profile || Buffer.from(profile, "utf8").toString("base64url") !== encoded) throw new UsageError("Invalid --profile-b64 value.");
+  return { ...flags, profile };
+}
+const retryCommand = (taskId, profile) => `knowledge-hub export --retry ${taskId}${profileOption(profile)}`;
+const taskCommand = (taskId, profile) => `knowledge-hub export --task ${taskId}${profileOption(profile)}`;
+const discardCommand = (taskId, profile) => `knowledge-hub export --discard ${taskId}${profileOption(profile)}`;
 
 function context(flags) {
   const key = configKey(flags.profile);
@@ -33,6 +50,8 @@ function context(flags) {
 }
 
 async function readStdin() {
+  // Node's stream decoder buffers split UTF-8 sequences across pipe chunks.
+  process.stdin.setEncoding("utf8");
   let text = "";
   for await (const chunk of process.stdin) text += chunk;
   return text;
@@ -74,22 +93,22 @@ function saveNew(key, meta, revisionNo, bytes, bindingId) {
   writeMeta(key, meta);
 }
 
-function pendingList(key) {
+function pendingList(key, profile) {
   return listMetas(key).flatMap((meta) => {
     const n = unconfirmedRevision(meta);
     if (n === null) return [];
     const bytes = readRevision(key, meta.taskId, n);
     const saved = bytes ? JSON.parse(bytes.toString("utf8")) : {};
     const opening = typeof saved.summary === "string" ? saved.summary.slice(0, 120) : "";
-    return [`- ${saved.title ?? "(unreadable)"} (completed ${saved.completedAt ?? "?"}, revision ${n})\n  ${opening}\n  ${retryCommand(meta.taskId)}`];
+    return [`- ${printable(saved.title ?? "(unreadable)")} (completed ${printable(saved.completedAt ?? "?")}, revision ${n})\n  ${printable(opening)}\n  ${retryCommand(meta.taskId, profile)}`];
   });
 }
 
-function recordedBindingRefusal(meta, project) {
+function recordedBindingRefusal(meta, project, profile) {
   if (meta.bindingId === project.bindingId) return;
   throw new Refusal(
     `Task ${meta.taskId} was sent under binding ${meta.bindingId}, but export is now configured with binding ${project.bindingId}.\n` +
-      `Run ${discardCommand(meta.taskId)}, or run configure again with binding ${meta.bindingId}.`,
+      `Run ${discardCommand(meta.taskId, profile)}, or run configure again with binding ${meta.bindingId}.`,
   );
 }
 
@@ -117,7 +136,7 @@ async function post(project, bytes) {
 }
 
 /** Sends one saved revision and turns the answer into its next state and the exact next step. */
-async function send(key, project, meta, revisionNo) {
+async function send(key, project, meta, revisionNo, profile) {
   const revision = meta.revisions[revisionNo];
   const bytes = readRevision(key, meta.taskId, revisionNo);
   if (!bytes || sha256(bytes) !== revision.hash) throw new Refusal(`The saved revision ${revisionNo} of task ${meta.taskId} was changed after it was saved; it will not be sent.`);
@@ -128,20 +147,20 @@ async function send(key, project, meta, revisionNo) {
   if (status === 0 || status >= 500) {
     save({ lastOutcome: "retryable", mayBeStored: true });
     console.error(`${status === 0 ? "No answer from Knowledge Hub (network error or timeout)" : `Knowledge Hub answered ${status}`}. Task ID: ${id}`);
-    console.error(`The revision may already be stored. Run: ${retryCommand(id)}`);
+    console.error(`The revision may already be stored. Run: ${retryCommand(id, profile)}`);
     return EXIT.RETRYABLE;
   }
   if (status >= 300 && status < 400) {
     save({ lastOutcome: status });
     console.error(`Knowledge Hub answered with a redirect (${status}); it was not followed and nothing was sent elsewhere. Task ID: ${id}`);
-    console.error(`Check the Hub URL (${project.hubUrl}) with knowledge-hub configure, then run: ${retryCommand(id)}`);
+    console.error(`Check the Hub URL (${project.hubUrl}) with knowledge-hub configure, then run: ${retryCommand(id, profile)}`);
     return EXIT.ACTION;
   }
   const hubAnswer = typeof body?.bindingId === "string" && typeof body?.url === "string" && body.url.startsWith("/");
   if ((status === 200 || status === 201) && !hubAnswer) {
     save({ lastOutcome: "retryable", mayBeStored: true });
     console.error(`The answer (${status}) did not come from Knowledge Hub's ingest API. Task ID: ${id}`);
-    console.error(`The revision may already be stored. Run: ${retryCommand(id)}`);
+    console.error(`The revision may already be stored. Run: ${retryCommand(id, profile)}`);
     return EXIT.RETRYABLE;
   }
   if (status === 200 || status === 201) {
@@ -156,13 +175,13 @@ async function send(key, project, meta, revisionNo) {
     save({ state: "confirmed", lastOutcome: status });
     console.log(`Saved to Knowledge Hub: ${project.hubUrl}${printable(body.url)}`);
     console.log(`Task ID: ${id}`);
-    console.log(`To update this export later: ${taskCommand(id)}`);
+    console.log(`To update this export later: ${taskCommand(id, profile)}`);
     return EXIT.OK;
   }
   if (status < 500 && !HUB_ERROR_CODES.has(body?.error?.code)) {
     save({ lastOutcome: status });
     console.error(`The answer (${status}) is not Knowledge Hub's answer; the revision was kept unsent. Task ID: ${id}`);
-    console.error(`Check the Hub URL (${project.hubUrl}) with knowledge-hub configure, then run: ${retryCommand(id)}`);
+    console.error(`Check the Hub URL (${project.hubUrl}) with knowledge-hub configure, then run: ${retryCommand(id, profile)}`);
     return EXIT.ACTION;
   }
   const code = body?.error?.code ?? "UNKNOWN";
@@ -171,27 +190,27 @@ async function send(key, project, meta, revisionNo) {
   if (status === 401) {
     save({ lastOutcome: 401 });
     console.error(`Knowledge Hub refused the export credential (401). Task ID: ${id}`);
-    console.error(`Run: knowledge-hub configure --rotate ${project.bindingId}, then ${retryCommand(id)}`);
-    console.error(`If the binding was revoked, drop this export with: ${discardCommand(id)}`);
+    console.error(`Run: knowledge-hub configure --rotate ${project.bindingId}, then ${retryCommand(id, profile)}`);
+    console.error(`If the binding was revoked, drop this export with: ${discardCommand(id, profile)}`);
     return EXIT.ACTION;
   }
   if (status === 409 && code === "TASK_ARCHIVED") {
     save({ lastOutcome: 409 });
     console.error(`This task is archived in My Space (409 TASK_ARCHIVED). Task ID: ${id}`);
-    console.error(`Restore it in My Space, then run: ${retryCommand(id)}`);
-    console.error(`If you archived it on purpose, drop this export with: ${discardCommand(id)}`);
+    console.error(`Restore it in My Space, then run: ${retryCommand(id, profile)}`);
+    console.error(`If you archived it on purpose, drop this export with: ${discardCommand(id, profile)}`);
     return EXIT.ACTION;
   }
   save({ state: "rejected", lastOutcome: status });
   console.error(`Knowledge Hub rejected revision ${revisionNo} (${status} ${printable(code)}${message ? `: ${printable(message)}` : ""}). Task ID: ${id}`);
-  if (status === 409) console.error(`To send this content as the next revision, pipe it again to: ${taskCommand(id)}`);
+  if (status === 409) console.error(`To send this content as the next revision, pipe it again to: ${taskCommand(id, profile)}`);
   else console.error("The revision was rejected and blocks nothing.");
   return EXIT.ACTION;
 }
 
 async function exportNew(flags) {
   const { key, project } = context(flags);
-  const pending = pendingList(key);
+  const pending = pendingList(key, flags.profile);
   if (pending.length > 0) {
     throw new Refusal(
       `Earlier exports are not confirmed yet. If one of them is this same task, retry it instead of exporting again:\n${pending.join("\n")}`,
@@ -200,7 +219,7 @@ async function exportNew(flags) {
   const content = await readContent(project);
   const meta = { taskId: randomUUID(), bindingId: project.bindingId, knownLatestRevisionNo: 0, revisions: {} };
   saveNew(key, meta, 1, artifactBytes(meta.taskId, 1, content), project.bindingId);
-  return send(key, project, meta, 1);
+  return send(key, project, meta, 1, flags.profile);
 }
 
 function knownTask(key, taskId) {
@@ -218,20 +237,20 @@ async function exportRetry(flags) {
     console.log(`Task ${meta.taskId} has no unconfirmed revision; nothing to retry.`);
     return EXIT.OK;
   }
-  recordedBindingRefusal(meta, project);
-  return send(key, project, meta, n);
+  recordedBindingRefusal(meta, project, flags.profile);
+  return send(key, project, meta, n, flags.profile);
 }
 
 async function exportTask(flags) {
   const { key, project } = context(flags);
   const meta = knownTask(key, flags.task);
   const pending = unconfirmedRevision(meta);
-  if (pending !== null) throw new Refusal(`Revision ${pending} of task ${meta.taskId} is not confirmed yet. Run ${retryCommand(meta.taskId)} first.`);
-  recordedBindingRefusal(meta, project);
+  if (pending !== null) throw new Refusal(`Revision ${pending} of task ${meta.taskId} is not confirmed yet. Run ${retryCommand(meta.taskId, flags.profile)} first.`);
+  recordedBindingRefusal(meta, project, flags.profile);
   const content = await readContent(project);
   const next = knownLatest(meta) + 1;
   saveNew(key, meta, next, artifactBytes(meta.taskId, next, content), project.bindingId);
-  return send(key, project, meta, next);
+  return send(key, project, meta, next, flags.profile);
 }
 
 async function exportDiscard(flags) {
@@ -244,13 +263,14 @@ async function exportDiscard(flags) {
   writeMeta(key, meta);
   console.log(`Discarded revision ${n} of task ${meta.taskId}. Nothing was removed from Knowledge Hub.`);
   if (revision.mayBeStored) {
-    console.log(`Warning: an earlier send got no trustworthy answer, so this revision may already be stored in Knowledge Hub. Prefer ${retryCommand(meta.taskId)} first to find out.`);
+    console.log(`Warning: an earlier send got no trustworthy answer, so this revision may already be stored in Knowledge Hub. Prefer ${retryCommand(meta.taskId, flags.profile)} first to find out.`);
   }
   return EXIT.OK;
 }
 
 export async function runExport(flags) {
   try {
+    flags = decodeExportProfile(flags);
     if (flags.new) return await exportNew(flags);
     if (flags.retry) return await exportRetry(flags);
     if (flags.task) return await exportTask(flags);
