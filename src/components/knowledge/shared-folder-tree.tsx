@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from "react";
-import { ChevronRight, FileText, Folder, FolderTree } from "lucide-react";
+import { ChevronRight, Database, FileText, Folder, FolderTree } from "lucide-react";
 import type { SharedTreeNode } from "@/modules/knowledge/application/document-share-service";
 import { sharedFolderHref } from "@/lib/share-paths";
 import { buttonClasses } from "@/components/ui/button";
@@ -64,7 +64,7 @@ export function SharedFolderTreeButton() {
  * document's path start open, the others closed, and a document reached another way (a tree click,
  * an in-folder link) opens its path without closing what the reader opened.
  */
-export function SharedFolderTree({ token, nodes, currentDocumentId, folderName, pagePath }: { token: string; nodes: SharedTreeNode[]; currentDocumentId: string | null; folderName: string; pagePath?: string }) {
+export function SharedFolderTree({ token, nodes, currentDocumentId, rootName, rootKind, pagePath }: { token: string; nodes: SharedTreeNode[]; currentDocumentId: string | null; rootName: string; rootKind: "FOLDER" | "SOURCE"; pagePath?: string }) {
   const { navId, buttonRef, open, setOpen } = useDisclosure();
   const navRef = useRef<HTMLElement>(null);
   const [expanded, setExpanded] = useState(() => new Set(foldersAbove(nodes, currentDocumentId)));
@@ -118,19 +118,20 @@ export function SharedFolderTree({ token, nodes, currentDocumentId, folderName, 
       ref={navRef}
       id={navId}
       tabIndex={-1}
-      aria-label={folderName}
+      aria-label={rootName}
       className={`kh-shared-folder-tree fixed inset-x-0 top-14 z-30 max-h-[70vh] overflow-y-auto border-b border-kh-border bg-kh-bg p-3 shadow-popover sm:bottom-0 sm:right-auto sm:max-h-none sm:w-[var(--kh-tree-rail)] sm:border-b-0 sm:border-r sm:bg-kh-bg-explorer sm:shadow-none ${open ? "" : "max-sm:hidden"}`}
     >
       <p className="flex kh-rail-row min-w-0 items-center gap-2 px-2 kh-rail-text font-semibold text-kh-text">
-        <Folder size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
-        <span className="truncate">{folderName}</span>
+        {rootKind === "SOURCE" ? <Database size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : <Folder size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
+        <span className="truncate">{rootName}</span>
       </p>
-      <Branch parentId={null} tree={children} expanded={expanded} toggle={toggle} token={token} pagePath={pagePath} currentDocumentId={currentDocumentId} onNavigate={() => setOpen(false)} />
+      <Branch rootKind={rootKind} parentId={null} tree={children} expanded={expanded} toggle={toggle} token={token} pagePath={pagePath} currentDocumentId={currentDocumentId} onNavigate={() => setOpen(false)} />
     </nav>
   );
 }
 
-function Branch({ parentId, tree, expanded, toggle, token, pagePath, currentDocumentId, onNavigate }: {
+function Branch({ rootKind, parentId, tree, expanded, toggle, token, pagePath, currentDocumentId, onNavigate }: {
+  rootKind?: "FOLDER" | "SOURCE";
   parentId: string | null;
   tree: Children;
   expanded: ReadonlySet<string>;
@@ -142,7 +143,7 @@ function Branch({ parentId, tree, expanded, toggle, token, pagePath, currentDocu
 }) {
   const nodes = tree.get(parentId) ?? [];
   const nested = parentId === null ? "" : "ml-3 border-l border-kh-border pl-2";
-  if (nodes.length === 0) return <p className={`flex kh-rail-row items-center px-2 kh-rail-text text-kh-text-muted ${nested}`}>Empty folder</p>;
+  if (nodes.length === 0) return <p className={`flex kh-rail-row items-center px-2 kh-rail-text text-kh-text-muted ${nested}`}>Empty {parentId === null && rootKind === "SOURCE" ? "source" : "folder"}</p>;
   return (
     <ul className={nested}>
       {nodes.map((node) => {

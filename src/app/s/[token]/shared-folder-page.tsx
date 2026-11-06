@@ -1,5 +1,5 @@
 import { ExternalLink } from "lucide-react";
-import type { SharedFolderView } from "@/modules/knowledge/application/document-share-service";
+import type { SharedTreeView } from "@/modules/knowledge/application/document-share-service";
 import { SaveShareButton } from "@/components/knowledge/save-share-button";
 import { SharedReviewPanel } from "@/components/knowledge/shared-review-panel";
 import { sharedFolderLinks } from "@/components/knowledge/shared-folder-links";
@@ -24,14 +24,14 @@ import { buttonClasses } from "@/components/ui/button";
  * app shell: `platformEntry` is null there, so it has no brand, Save, Open or footer, and `pagePath`
  * points the tree and the in-folder links at that reader instead of `/s/<token>`.
  */
-export function SharedFolderPage({ token, folder, platformEntry, signInHref, pagePath }: { token: string; folder: SharedFolderView; platformEntry: string | null; signInHref: string; pagePath?: string }) {
-  const { document } = folder;
+export function SharedFolderPage({ token, shared, platformEntry, signInHref, pagePath }: { token: string; shared: SharedTreeView; platformEntry: string | null; signInHref: string; pagePath?: string }) {
+  const { document } = shared;
   // In the shell the page is its scroll pane's content, not a window: layout containment holds the
   // tree's fixed rail inside it rather than over the shell's own navigation.
   const Root = platformEntry === null ? "div" : "main";
   const rootClass = `kh-share-page kh-share-folder bg-kh-bg ${platformEntry === null ? "min-h-full [contain:layout]" : "min-h-screen"}`;
-  const crumbs = document ? [folder.rootName, ...document.path.map((ancestor) => ancestor.name), document.title] : [folder.rootName];
-  const tree = <SharedFolderTree token={token} nodes={folder.tree} currentDocumentId={document?.documentId ?? null} folderName={folder.rootName} pagePath={pagePath} />;
+  const crumbs = document ? [shared.rootName, ...document.path.map((ancestor) => ancestor.name), document.title] : [shared.rootName];
+  const tree = <SharedFolderTree token={token} nodes={shared.tree} currentDocumentId={document?.documentId ?? null} rootName={shared.rootName} rootKind={shared.kind} pagePath={pagePath} />;
   const lead = (
     <>
       <SharedFolderTreeButton />
@@ -73,9 +73,9 @@ export function SharedFolderPage({ token, folder, platformEntry, signInHref, pag
         </SharedFolderTreeScope>
         <div className="kh-share-folder-body">
           <div className="kh-reading-column py-6">
-            <h1 id={SHARED_CONTENT_ID} tabIndex={-1} className="scroll-mt-14 text-page-title font-semibold tracking-tight text-kh-text">{folder.rootName}</h1>
-            <SharedByline sharedByName={folder.sharedByName} expiresAt={folder.expiresAt} />
-            <p className="mt-6 text-body text-kh-text-muted">This folder has no documents yet.</p>
+            <h1 id={SHARED_CONTENT_ID} tabIndex={-1} className="scroll-mt-14 text-page-title font-semibold tracking-tight text-kh-text">{shared.rootName}</h1>
+            <SharedByline sharedByName={shared.sharedByName} expiresAt={shared.expiresAt} />
+            <p className="mt-6 text-body text-kh-text-muted">This {shared.kind === "SOURCE" ? "source" : "folder"} has no documents yet.</p>
           </div>
           {platformEntry === null ? null : <SharedFooter platformEntry={platformEntry} />}
         </div>

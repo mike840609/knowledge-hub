@@ -59,11 +59,9 @@ export default async function HubSharePage(props: HubSharePageProps) {
   if (ownPath) redirect(ownPath);
   if (!shared) notFound();
   if (shared.linkId) await markRead(shared.linkId);
-  // A Source link renders the tree page too, but not until Task 4 (source share spec §4).
-  if (shared.kind === "SOURCE") notFound();
-  if (shared.kind === "FOLDER") {
+  if (shared.kind !== "DOCUMENT") {
     const documentId = shared.document?.documentId;
-    return <SharedFolderPage token={token} folder={shared} platformEntry={null} pagePath={pagePath} signInHref={documentId ? `${pagePath}?d=${documentId}` : pagePath} />;
+    return <SharedFolderPage token={token} shared={shared} platformEntry={null} pagePath={pagePath} signInHref={documentId ? `${pagePath}?d=${documentId}` : pagePath} />;
   }
   return (
     <div className="kh-share-page min-h-full bg-kh-bg">

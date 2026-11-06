@@ -40,7 +40,7 @@ afterEach(async () => {
 });
 
 /** As the page draws it: the button in the bar, the tree beside it, one scope over both. */
-const page = (tree: SharedTreeNode[], currentDocumentId: string | null) => <SharedFolderTreeScope><SharedFolderTreeButton /><SharedFolderTree token="tok" nodes={tree} currentDocumentId={currentDocumentId} folderName="Onboarding" /></SharedFolderTreeScope>;
+const page = (tree: SharedTreeNode[], currentDocumentId: string | null, rootKind: "FOLDER" | "SOURCE" = "FOLDER") => <SharedFolderTreeScope><SharedFolderTreeButton /><SharedFolderTree token="tok" nodes={tree} currentDocumentId={currentDocumentId} rootName="Onboarding" rootKind={rootKind} /></SharedFolderTreeScope>;
 const show = (currentDocumentId: string | null) => act(async () => root.render(page(nodes, currentDocumentId)));
 const folder = (name: string) => [...container.querySelectorAll<HTMLButtonElement>("nav button[aria-expanded]")].find(button => button.textContent?.trim() === name)!;
 /** What a link is called aloud: its text without the icon beside it. */
@@ -49,6 +49,24 @@ const linkNames = () => [...container.querySelectorAll("nav a")].map(spoken);
 const disclosure = () => container.querySelector<HTMLButtonElement>("button[aria-controls]")!;
 
 describe("SharedFolderTree", () => {
+  it("shows all Source roots and expands the current document's path", async () => {
+    await act(async () => root.render(page(nodes, "d-deploy", "SOURCE")));
+    expect(container.querySelector("nav .lucide-database")).not.toBeNull();
+    expect(container.querySelector("nav .lucide-folder")).toBeNull();
+    expect(folder("Engineering").getAttribute("aria-expanded")).toBe("true");
+    expect(folder("Runbooks").getAttribute("aria-expanded")).toBe("true");
+    expect(folder("HR")).toBeTruthy();
+    expect(linkNames()).toEqual(["Welcome", "Dev setup", "Deploy"]);
+  });
+
+  it("labels an empty Source while nested empty folders remain folders", async () => {
+    await act(async () => root.render(page([], null, "SOURCE")));
+    expect(container.querySelector("nav")!.textContent).toContain("Empty source");
+    await act(async () => root.render(page(nodes, "d-welcome", "SOURCE")));
+    await act(async () => folder("HR").click());
+    await act(async () => folder("Empty").click());
+    expect(container.querySelector("nav")!.textContent).toContain("Empty folder");
+  });
   it("names itself by the folder, and links each visible document within the link", async () => {
     await show("d-setup");
     const nav = container.querySelector("nav")!;

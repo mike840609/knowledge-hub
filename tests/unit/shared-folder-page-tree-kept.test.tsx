@@ -62,7 +62,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-const show = (folder: SharedFolderView) => act(async () => root.render(<SharedFolderPage token="tok" folder={folder} platformEntry="/s/tok/open" signInHref="/sign-in" />));
+const show = (folder: SharedFolderView) => act(async () => root.render(<SharedFolderPage token="tok" shared={folder} platformEntry="/s/tok/open" signInHref="/sign-in" />));
 const folderButton = (name: string) => [...container.querySelectorAll<HTMLButtonElement>("nav button[aria-expanded]")].find(button => button.textContent?.trim() === name)!;
 
 describe("the folder page's tree across documents", () => {
