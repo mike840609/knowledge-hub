@@ -64,12 +64,20 @@ let home: string;
 let project: string;
 let outputs: string[];
 
-function run(args: string[], options: { stdin?: string; stdinChunks?: Buffer[]; cwd?: string } = {}): Promise<{ code: number; out: string }> {
+function run(args: string[], options: { stdin?: string; stdinChunks?: Buffer[]; cwd?: string; viaShell?: boolean } = {}): Promise<{ code: number; out: string }> {
   return new Promise((resolve) => {
-    const child: ChildProcessWithoutNullStreams = spawn(process.execPath, [CLI, ...args], {
+    const spawnOptions = {
       cwd: options.cwd ?? project,
       env: { NODE_ENV: "test", HOME: home, USERPROFILE: home, PATH: process.env.PATH ?? "", KNOWLEDGE_HUB_TIMEOUT_MS: "1500" },
-    });
+    };
+    // Execute generated hints through the platform's real shell, not only
+    // through Node's argv-based spawn (which would hide shell-quoting bugs).
+    const quoteExecutable = (value: string) => process.platform === "win32"
+      ? `"${value.replaceAll('"', '""')}"`
+      : `'${value.replaceAll("'", "'\\''")}'`;
+    const child: ChildProcessWithoutNullStreams = options.viaShell
+      ? spawn(`${quoteExecutable(process.execPath)} ${quoteExecutable(CLI)} ${args.join(" ")}`, { ...spawnOptions, shell: true })
+      : spawn(process.execPath, [CLI, ...args], spawnOptions);
     let out = "";
     child.stdout.on("data", (data) => { out += data; });
     child.stderr.on("data", (data) => { out += data; });
@@ -265,7 +273,9 @@ describe("non-default profile recovery commands", () => {
     expect(blocked.code).toBe(2);
     expect(blocked.out).toContain(`knowledge-hub export --retry ${taskId} ${suffix}`);
 
-    const retried = await run(["export", "--retry", taskId, ...profileFlag]);
+    const printedRetry = first.out.match(/knowledge-hub export --retry [^\\r\\n]+/)?.[0] ?? "";
+    expect(printedRetry).toContain(suffix);
+    const retried = await run(printedRetry.split(" ").slice(1), { viaShell: true });
     expect(retried.code).toBe(0);
     expect(retried.out).toContain(`knowledge-hub export --task ${taskId} ${suffix}`);
 
@@ -311,7 +321,7 @@ describe("non-default profile recovery commands", () => {
     expect(result.out).toContain(hint);
     // A copied hint contains only shell-safe tokens, without quoting or expansions.
     expect(hint).toMatch(/^knowledge-hub export --task [a-f0-9-]+ --profile-b64 [A-Za-z0-9_-]+$/);
-    const recovered = await run(hint.split(" ").slice(1), { stdin: content({ summary: "Updated via printed hint" }) });
+    const recovered = await run(hint.split(" ").slice(1), { stdin: content({ summary: "Updated via printed hint" }), viaShell: true });
     expect(recovered.code).toBe(0);
     expect(hub.received.at(-1)?.json.artifactRevision).toBe(2);
     expect(hub.received.at(-1)?.token).toBe(TOKEN2);
