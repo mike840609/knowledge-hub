@@ -21,9 +21,23 @@ const HUB_ERROR_CODES = new Set([
   "TASK_ARCHIVED", "PAYLOAD_TOO_LARGE", "INVALID_ARTIFACT", "UNSUPPORTED_SCHEMA_VERSION",
 ]);
 
-// Recovery commands must retain the profile that owns the saved task state.
-// Single-quote profile values so copying a command never executes shell metacharacters.
-const profileOption = (profile) => profile ? ` --profile '${profile.replaceAll("'", "'\\''")}'` : "";
+// Printed commands must work in POSIX shells, PowerShell and Windows CMD.
+// Plain profile slugs need no quoting. Encode anything else into shell-safe
+// base64url to avoid invoking shell-specific expansions or escape rules.
+const SIMPLE_PROFILE = /^[A-Za-z0-9_.-]+$/;
+const profileOption = (profile) => !profile ? "" : SIMPLE_PROFILE.test(profile)
+  ? ` --profile ${profile}`
+  : ` --profile-b64 ${Buffer.from(profile, "utf8").toString("base64url")}`;
+
+function decodeExportProfile(flags) {
+  const encoded = flags["profile-b64"];
+  if (encoded === undefined) return flags;
+  if (flags.profile !== undefined) throw new UsageError("Use --profile or --profile-b64, not both.");
+  if (typeof encoded !== "string" || !/^[A-Za-z0-9_-]+$/.test(encoded)) throw new UsageError("Invalid --profile-b64 value.");
+  const profile = Buffer.from(encoded, "base64url").toString("utf8");
+  if (!profile || Buffer.from(profile, "utf8").toString("base64url") !== encoded) throw new UsageError("Invalid --profile-b64 value.");
+  return { ...flags, profile };
+}
 const retryCommand = (taskId, profile) => `knowledge-hub export --retry ${taskId}${profileOption(profile)}`;
 const taskCommand = (taskId, profile) => `knowledge-hub export --task ${taskId}${profileOption(profile)}`;
 const discardCommand = (taskId, profile) => `knowledge-hub export --discard ${taskId}${profileOption(profile)}`;
@@ -256,6 +270,7 @@ async function exportDiscard(flags) {
 
 export async function runExport(flags) {
   try {
+    flags = decodeExportProfile(flags);
     if (flags.new) return await exportNew(flags);
     if (flags.retry) return await exportRetry(flags);
     if (flags.task) return await exportTask(flags);
