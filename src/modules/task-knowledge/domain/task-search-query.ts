@@ -6,14 +6,16 @@ export type TaskSearchAgent = (typeof AGENTS)[number];
 export type TaskSearchVerification = (typeof VERIFICATION)[number];
 export type TaskSearchLifecycle = "ACTIVE" | "ARCHIVED";
 
+/** Next.js repeated URL keys arrive as arrays; never coerce them into search criteria. */
+export type TaskSearchValue = string | readonly string[] | null | undefined;
 export type TaskSearchQueryInput = {
-  q?: string | null;
-  agent?: string | null;
-  verification?: string | null;
-  from?: string | null;
-  to?: string | null;
-  offset?: string | null;
-  archived?: string | null;
+  q?: TaskSearchValue;
+  agent?: TaskSearchValue;
+  verification?: TaskSearchValue;
+  from?: TaskSearchValue;
+  to?: TaskSearchValue;
+  offset?: TaskSearchValue;
+  archived?: TaskSearchValue;
 };
 
 export type TaskSearchQuery = {
@@ -31,6 +33,13 @@ export type TaskSearchQuery = {
 
 function reject(message: string): never {
   throw new DomainError("INVALID_TASK_SEARCH", message);
+}
+
+/** Reject multi-valued or non-string URL fields with a stable domain error. */
+function scalar(raw: unknown, field: string): string | undefined {
+  if (raw === null || raw === undefined) return undefined;
+  if (typeof raw !== "string") return reject("Invalid task search " + field + ": expected one string value.");
+  return raw;
 }
 
 function option<T extends string>(raw: string | null | undefined, values: readonly T[], label: string): T | null {
@@ -56,25 +65,26 @@ export function buildTaskSearchLikePattern(term: string): string {
 }
 
 export function parseTaskSearchQuery(input: TaskSearchQueryInput): TaskSearchQuery {
-  const raw = input.q ?? "";
+  const raw = scalar(input.q, "q") ?? "";
   if (raw.length > 200) return reject("Task search query must be at most 200 characters.");
   const q = raw.trim().replace(/\s+/gu, " ");
   const words = q ? q.split(" ") : [];
   const terms = Array.from(new Set(words.map((word) => word.toLowerCase())));
   if (terms.length > 5) return reject("Use at most five task search terms.");
   if (words.some((word) => word.length > 64)) return reject("Each task search term must be at most 64 characters.");
-  const agent = option(input.agent, AGENTS, "agent");
-  const verification = option(input.verification, VERIFICATION, "verification");
-  const lifecycle: TaskSearchLifecycle = input.archived === "1" ? "ARCHIVED" : "ACTIVE";
-  if (input.archived && input.archived !== "1") return reject("Invalid archived task search filter.");
-  const rawOffset = input.offset || "0";
+  const agent = option(scalar(input.agent, "agent"), AGENTS, "agent");
+  const verification = option(scalar(input.verification, "verification"), VERIFICATION, "verification");
+  const archived = scalar(input.archived, "archived");
+  const lifecycle: TaskSearchLifecycle = archived === "1" ? "ARCHIVED" : "ACTIVE";
+  if (archived && archived !== "1") return reject("Invalid archived task search filter.");
+  const rawOffset = scalar(input.offset, "offset") || "0";
   if (!/^-?\d+$/.test(rawOffset)) return reject("Invalid task search UTC offset.");
   const offsetMinutes = Number(rawOffset);
   if (!Number.isSafeInteger(offsetMinutes) || Math.abs(offsetMinutes) > 840) {
     return reject("Invalid task search UTC offset.");
   }
-  const from = input.from || null;
-  const to = input.to || null;
+  const from = scalar(input.from, "from") || null;
+  const to = scalar(input.to, "to") || null;
   const fromStart = dateStart(from);
   const toStart = dateStart(to);
   if (fromStart !== null && toStart !== null && fromStart > toStart) {
