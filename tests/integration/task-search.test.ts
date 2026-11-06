@@ -36,7 +36,7 @@ async function setup() {
 
 describe("task search/backfill operational safety", () => {
   it("recovers missing projections in bounded batches and can rerun safely", async () => {
-    const { ingest, bindingId } = await setup();
+    const { ingest, bindingId, workspaceId } = await setup();
     // Staging task rows without any accepted revision are invisible to the legacy Tasks reader.
     const placeholderId = await uow().run((r) => r.taskExports.insertTaskIfAbsent({
       id: uuidv7(), bindingId, taskId: randomUUID(),
@@ -46,17 +46,17 @@ describe("task search/backfill operational safety", () => {
     for (const r of results) {
       await pool.query("DELETE FROM task_result_search WHERE task_result_id = ?", [r.taskResultId]);
     }
-    const before = await checkTaskSearchConsistency(pool);
+    const before = await checkTaskSearchConsistency(pool, workspaceId);
     expect(before.missing).toBeGreaterThanOrEqual(2);
-    const partial = await backfillTaskSearch(pool, { batchSize: 1, maxBatches: 1 });
+    const partial = await backfillTaskSearch(pool, { batchSize: 1, maxBatches: 1, workspaceId });
     expect(partial.indexed).toBe(1);
-    const completed = await backfillTaskSearch(pool, { batchSize: 1 });
+    const completed = await backfillTaskSearch(pool, { batchSize: 1, workspaceId });
     expect(completed.complete).toBe(true);
     const [staged] = await pool.query<{ count: number }[]>(
       "SELECT COUNT(*) AS count FROM task_result_search WHERE task_result_id = ?", [placeholderId],
     );
     expect(Number(staged.count)).toBe(0);
-    const again = await backfillTaskSearch(pool, { batchSize: 1 });
+    const again = await backfillTaskSearch(pool, { batchSize: 1, workspaceId });
     expect(again.indexed).toBe(0);
     for (const r of results) {
       const [row] = await pool.query<{revision_no:number;summary:string}[]>("SELECT revision_no, summary FROM task_result_search WHERE task_result_id=?", [r.taskResultId]);
