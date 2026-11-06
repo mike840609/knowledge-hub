@@ -37,6 +37,17 @@ describe("Tasks-only compact search UI", () => {
     expect(html).toContain("Agent-reported");
     expect(html).toContain("revision 2");
   });
+  it("shows a retryable timeout instead of an incorrect empty-state claim", () => {
+    const html = renderToStaticMarkup(
+      <TaskSearchResults workspaceId="ws" query={parseTaskSearchQuery({q: "安全"})}
+        items={[]} nextCursor={null} hasTasksInLifecycle={true}
+        error="Task search timed out. Try again or narrow the filters." />,
+    );
+    expect(html).toContain("Task search timed out");
+    expect(html).toContain("Retry");
+    expect(html).not.toContain("No matching tasks");
+  });
+
   it("distinguishes no matches from a genuinely empty My Space", () => {
     const query = parseTaskSearchQuery({ q: "none" });
     const props = { workspaceId: "ws", query, items: [], nextCursor: null };
