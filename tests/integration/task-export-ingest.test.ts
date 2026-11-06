@@ -108,6 +108,26 @@ describe("revision sequence", () => {
     expect(await counts(bindingId)).toMatchObject({ tasks: 0, revisions: 0 });
   });
 
+  it("keeps revision 1 and its projection when revision 2 projection write fails", async () => {
+    const { token, bindingId } = await exporter();
+    const taskId = crypto.randomUUID();
+    const first = await ingest(token, artifact(taskId, 1));
+    const gated = patched((r) => ({
+      ...r,
+      taskExports: Object.assign(Object.create(r.taskExports), {
+        upsertSearchProjection: async () => { throw new Error("projection write failed"); },
+      }),
+    }));
+    await expect(ingest(token, artifact(taskId, 2), gated)).rejects.toThrow(/Database operation failed/);
+    expect(await latest(first.taskResultId)).toBe(1);
+    expect(await counts(bindingId)).toMatchObject({ tasks: 1, revisions: 1 });
+    const [row] = await pool.query<{ revision_no: number; summary: string }[]>(
+      "SELECT revision_no, summary FROM task_result_search WHERE task_result_id = ?", [first.taskResultId],
+    );
+    expect(Number(row.revision_no)).toBe(1);
+    expect(row.summary).toBe("Revision 1.");
+  });
+
   it("refuses a skipped number, and revision 2 of an unknown task, with the known latest", async () => {
     const { token, bindingId } = await exporter();
     expect(await rejection(ingest(token, artifact(crypto.randomUUID(), 2)))).toMatchObject({ code: "REVISION_OUT_OF_ORDER", latestRevisionNo: 0 });

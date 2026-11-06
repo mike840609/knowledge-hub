@@ -3,6 +3,10 @@ import { normalizeImportPath } from "@/modules/sources/domain/import-path";
 import { IntegrityError } from "@/modules/knowledge/domain/errors";
 import type { TaskReferenceInput } from "@/modules/task-knowledge/domain/task-references";
 import type { TaskSearchProjection } from "@/modules/task-knowledge/domain/task-search-projection";
+import type { TaskSearchQuery } from "@/modules/task-knowledge/domain/task-search-query";
+import type { TaskSearchCursor } from "@/modules/task-knowledge/domain/task-search-cursor";
+import { TaskSearchUnavailableError } from "@/modules/task-knowledge/domain/task-errors";
+import { buildTaskSearchSql } from "./task-search-sql";
 import type {
   TaskDocumentLookup,
   TaskDocumentState,
@@ -22,6 +26,7 @@ import type {
   TaskExportStore,
   TaskLifecycle,
   TaskListRow,
+  TaskSearchRow,
   TaskResultRow,
   TaskRevisionRow,
   TaskScope,
@@ -32,6 +37,12 @@ import { asDate, asNullableDate, asNumber, type DbRow, type QueryConnection } fr
 
 const asId = (value: unknown) => String(value);
 const asNullableId = (value: unknown) => (value === null || value === undefined ? null : String(value));
+/** Unlike sequence numbers, UTC epoch milliseconds can be negative (year 0000). */
+function signedEpochMillis(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isSafeInteger(n)) throw new IntegrityError("Database returned an invalid completed timestamp.");
+  return n;
+}
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], field: string): T {
   if (typeof value !== "string" || !allowed.includes(value as T)) throw new IntegrityError(`Database returned an invalid ${field}.`);
@@ -271,6 +282,45 @@ export class MariaDbTaskExportStore implements TaskExportStore {
       bindingStatus: oneOf(row.binding_status, ["ACTIVE", "REVOKED"] as const, "binding status"),
       artifactJson: String(row.artifact_json),
     }));
+  }
+
+  async searchTasks(
+    workspaceId: string, ownerUserId: string, query: TaskSearchQuery,
+    cursor: TaskSearchCursor | null, limit: number,
+  ): Promise<TaskSearchRow[]> {
+    const { sql, params } = buildTaskSearchSql(workspaceId, ownerUserId, query, cursor, limit);
+    let rows: DbRow[];
+    try {
+      rows = await this.connection.query<DbRow[]>(sql, params);
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "errno" in error &&
+          Number(error.errno) === 1969) throw new TaskSearchUnavailableError();
+      throw error;
+    }
+    return rows.map((row) => ({
+      taskResultId: asId(row.task_result_id),
+      lifecycle: oneOf(row.lifecycle, ["ACTIVE", "ARCHIVED"] as const, "task lifecycle"),
+      latestRevisionNo: asNumber(row.latest_revision_no, "latest revision"),
+      bindingLabel: String(row.binding_label),
+      bindingStatus: oneOf(row.binding_status, ["ACTIVE", "REVOKED"] as const, "binding status"),
+      completedAtEpochMs: signedEpochMillis(row.completed_at_epoch_ms),
+      agent: String(row.agent),
+      verificationStatus: String(row.verification_status),
+      title: String(row.title),
+      summary: String(row.summary),
+      searchBody: String(row.search_body),
+    }));
+  }
+
+  async hasTasksInLifecycle(workspaceId: string, ownerUserId: string, lifecycle: TaskLifecycle): Promise<boolean> {
+    const rows = await this.connection.query<DbRow[]>(
+      `SET STATEMENT max_statement_time=5 FOR SELECT EXISTS (
+        SELECT 1 FROM task_results t JOIN task_export_bindings b ON b.id = t.binding_id
+        WHERE b.workspace_id = ? AND b.owner_user_id = ? AND t.lifecycle = ?
+      ) AS has_tasks`,
+      [workspaceId, ownerUserId, lifecycle],
+    );
+    return Number(rows[0]?.has_tasks ?? 0) === 1;
   }
 
   async getTaskScope(taskResultId: string): Promise<TaskScope | null> {
