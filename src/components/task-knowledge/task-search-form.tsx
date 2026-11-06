@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { TaskSearchDateOffsetSubmit } from "./task-search-date-offset-submit";
 import type { TaskSearchQuery } from "@/modules/task-knowledge/domain/task-search-query";
 import { taskSearchHref } from "./task-search-url";
 
@@ -18,7 +19,8 @@ export function TaskSearchForm({
   const field = "min-w-0 rounded-md border border-kh-border-strong bg-kh-bg px-2.5 py-1.5 text-body text-kh-text kh-focus-ring";
   return (
     <section aria-label="Task search and filters" className="kh-reading-column max-w-panel px-0 pb-3">
-      <form method="get" action={base} role="search" className="space-y-3">
+      <form id="task-search-filter-form" method="get" action={base} role="search" className="space-y-3">
+        <TaskSearchDateOffsetSubmit formId="task-search-filter-form" hasExplicitOffset={Boolean(query.from || query.to)} />
         {query.lifecycle === "ARCHIVED" ? <Input type="hidden" name="archived" value="1" /> : null}
         {(query.from || query.to) ? <Input type="hidden" name="offset" value={String(query.offsetMinutes)} /> : null}
         <div className="relative">
@@ -28,17 +30,17 @@ export function TaskSearchForm({
             placeholder="Search tasks…" className={`kh-focus-ring w-full rounded-md border border-kh-border bg-kh-bg py-2 pl-9 pr-3 text-body text-kh-text placeholder:text-kh-text-muted`} />
         </div>
         <div className="flex flex-wrap items-end gap-2">
-          <label className="flex min-w-0 flex-col gap-1 text-caption text-kh-text-muted">
+          <label htmlFor="task-search-agent" className="flex min-w-0 flex-col gap-1 text-caption text-kh-text-muted">
             Agent
-            <Select name="agent" defaultValue={query.agent ?? ""} className={field}>
+            <Select id="task-search-agent" name="agent" defaultValue={query.agent ?? ""} className={field}>
               <option value="">All agents</option>
               <option value="claude-code">Claude Code</option>
               <option value="opencode">OpenCode</option>
             </Select>
           </label>
-          <label className="flex min-w-0 flex-col gap-1 text-caption text-kh-text-muted">
+          <label htmlFor="task-search-verification" className="flex min-w-0 flex-col gap-1 text-caption text-kh-text-muted">
             Verification
-            <Select name="verification" defaultValue={query.verification ?? ""} className={field}>
+            <Select id="task-search-verification" name="verification" defaultValue={query.verification ?? ""} className={field}>
               <option value="">Any verification</option>
               <option value="passed">Passed</option>
               <option value="failed">Failed</option>
