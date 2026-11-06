@@ -33,12 +33,13 @@ function Excerpt({ value, terms }: { value: string; terms: string[] }) {
 }
 
 export function TaskSearchResults({
-  workspaceId, query, items, nextCursor, hasTasksInLifecycle = true,
+  workspaceId, query, items, nextCursor, hasTasksInLifecycle = true, error,
 }: {
   workspaceId: string; query: TaskSearchQuery;
   items: (TaskListItemView & { summary?: string })[];
   nextCursor: string | null;
   hasTasksInLifecycle?: boolean;
+  error?: string | null;
 }) {
   const base = `/w/${workspaceId}/tasks`;
   const archived = query.lifecycle === "ARCHIVED";
@@ -54,7 +55,12 @@ export function TaskSearchResults({
           {nextCursor ? "50+ tasks" : `Showing ${items.length} ${items.length === 1 ? "task" : "tasks"}`}
         </span>
       </div>
-      {items.length === 0 ? (
+      {error ? (
+        <div role="alert" className="rounded-md border border-kh-border p-4 text-body text-kh-text">
+          <p>{error}</p>
+          <Link className="kh-focus-ring mt-2 inline-block text-kh-link" href={taskSearchHref(base, query)}>Retry</Link>
+        </div>
+      ) : items.length === 0 ? (
         !hasTasksInLifecycle ? (
           <EmptyState icon={ListChecks} title={archived ? "No archived tasks" : "No tasks yet"}
             description={archived ? "Archived tasks stay readable here." : "Finish a task with Claude Code or OpenCode, then use /hub-export to save it."}
