@@ -52,6 +52,24 @@ async function setup() {
 }
 
 describe("SavedShareService.listNamedForRecipient", () => {
+  it.each(["archived", "expired"] as const)("omits a named Source when %s", async state => {
+    const f = await setup();
+    const link = await f.shares.createForSource(f.caller, { sourceId: f.sourceId, recipients: [f.alice.id] });
+    expect(await f.saved.listNamedForRecipient(f.aliceCaller, f.aliceWorkspaceId)).toEqual([expect.objectContaining({ linkId: link.id })]);
+    if (state === "archived") {
+      await pool.query("UPDATE knowledge_sources SET status='ARCHIVED', archived_at=NOW(6), archived_by=? WHERE id=?", [f.caller.identity.id, f.sourceId]);
+    } else {
+      const conn = await pool.getConnection();
+      try {
+        await conn.query("SET SESSION check_constraint_checks=OFF");
+        await conn.query("UPDATE document_share_links SET expires_at=? WHERE id=?", [new Date(0), link.id]);
+      } finally {
+        await conn.query("SET SESSION check_constraint_checks=ON");
+        conn.release();
+      }
+    }
+    expect(await f.saved.listNamedForRecipient(f.aliceCaller, f.aliceWorkspaceId)).toEqual([]);
+  });
   it("lists a named Source by its name and drops it when revoked", async () => {
     const f = await setup();
     const source = await unitOfWork().run(r => r.sourcePolicy.findById(f.sourceId));

@@ -21,9 +21,9 @@ function json(value: unknown) {
   return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
 }
 
-type Link = { id: string; label: string | null; active: boolean; audience?: "LINK" | "NAMED"; targetKind?: "DOCUMENT" | "FOLDER" };
+type Link = { id: string; label: string | null; active: boolean; audience?: "LINK" | "NAMED"; targetKind?: "DOCUMENT" | "FOLDER" | "SOURCE" };
 type Candidate = { id: string; name: string; nameEn: string | null; empId: string; needsApproval?: boolean; addsRecipient?: boolean };
-function stubFetch({ candidates = [MING, MEI] as Candidate[], links = [] as Link[] | (() => Link[]), targetKind = undefined as "DOCUMENT" | "FOLDER" | undefined } = {}) {
+function stubFetch({ candidates = [MING, MEI] as Candidate[], links = [] as Link[] | (() => Link[]), targetKind = undefined as "DOCUMENT" | "FOLDER" | "SOURCE" | undefined } = {}) {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     requests.push(url);
     // The server answers only the links that open now.
@@ -329,6 +329,14 @@ test("a NAMED folder link says it adds people to the whole folder", async () => 
   expect(Array.from(select.options).map(option => option.textContent)).toEqual(["Team", "Plans · Adds people not yet on it (whole folder)"]);
 });
 
+test("a NAMED Source link choice says it adds people to the whole source", async () => {
+  stubFetch({ links: [{ id: "link-a", label: "Team", active: true }, { id: "link-s", label: "Notes", active: true, audience: "NAMED", targetKind: "SOURCE" }] });
+  const textarea = render({ documentId: "doc-1" });
+  await type(textarea, "@ming");
+  key(textarea, "Enter");
+  expect(Array.from(host.querySelector("select")!.options).map(option => option.textContent)).toEqual(["Team", "Notes · Adds people not yet on it (whole source)"]);
+});
+
 test("the owner's only link, when NAMED, still says it adds people not yet on it", async () => {
   stubFetch({ links: [{ id: "link-n", label: "Reviewers", active: true, audience: "NAMED" }] });
   const sent: Sent[] = [];
@@ -369,6 +377,13 @@ test("on a folder link the note says the whole folder is opened", async () => {
   const textarea = render({ token: "tok", documentId: "doc-1" });
   await type(textarea, "@m");
   expect(options()[0].textContent).toContain("Adds them to this link (whole folder)");
+});
+
+test("on a Source link the candidate note says the whole source is opened", async () => {
+  stubFetch({ candidates: [{ ...MEI, addsRecipient: true }], targetKind: "SOURCE" });
+  const textarea = render({ token: "tok", documentId: "doc-1" });
+  await type(textarea, "@m");
+  expect(options()[0].textContent).toContain("Adds them to this link (whole source)");
 });
 
 test("owner with one live link: no choice, its id is sent", async () => {

@@ -143,6 +143,30 @@ describe("a folder shared with a named recipient", () => {
 });
 
 describe("a Source shared with a named recipient", () => {
+  it.each(["archived", "expired"] as const)("hides the unread share and names nothing in activity when %s", async state => {
+    const f = await setup();
+    const link = await f.shares.createForSource(f.caller, { sourceId: f.sourceId, recipients: [f.alice.id] });
+    const source = await unitOfWork().run(r => r.sourcePolicy.findById(f.sourceId));
+    expect(await shared(f)).toEqual([expect.objectContaining({ id: `shared:${link.id}`, documentTitle: source!.name, authorName: f.owner.name })]);
+    expect(await badge(f)).toBe(1);
+    if (state === "archived") {
+      await pool.query("UPDATE knowledge_sources SET status='ARCHIVED', archived_at=NOW(6), archived_by=? WHERE id=?", [f.owner.id, f.sourceId]);
+    } else {
+      const conn = await pool.getConnection();
+      try {
+        await conn.query("SET SESSION check_constraint_checks=OFF");
+        await conn.query("UPDATE document_share_links SET expires_at=? WHERE id=?", [new Date(0), link.id]);
+      } finally {
+        await conn.query("SET SESSION check_constraint_checks=ON");
+        conn.release();
+      }
+    }
+    expect(await shared(f)).toEqual([]);
+    expect(await badge(f)).toBe(0);
+    const activity = (await f.review.listActivityForOwner(f.aliceCaller)).notifications.filter(n => n.kind === "SHARED_WITH_YOU");
+    expect(activity).toEqual([expect.objectContaining({ id: `shared:${link.id}`, linkAvailable: false, documentTitle: "", authorName: undefined })]);
+    expect(activity[0]).not.toHaveProperty("href");
+  });
   it("names the Source in Inbox and names nothing after revocation", async () => {
     const f = await setup();
     const source = await unitOfWork().run(r => r.sourcePolicy.findById(f.sourceId));
