@@ -7,6 +7,10 @@ const WORKSPACE_RETURN = /^\/w\/[A-Za-z0-9-]+(?:\/[A-Za-z0-9._~/-]*)?$/;
 
 export function isGooglePublicPath(pathname: string): boolean {
   if (pathname === "/login" || pathname === "/api/health" || pathname === "/s") return true;
+  // Exact pathname only: the route authenticates by its export credential (task knowledge export design §7).
+  if (pathname === "/api/task-results/ingest") return true;
+  // Exact pathname only: npm downloads the CLI without a session; it holds no data (design, Amendment 2).
+  if (pathname === "/cli/knowledge-hub.tgz") return true;
   if (pathname.startsWith("/api/auth/")) return true;
   if (pathname.startsWith("/api/share-review/")) return true;
   if (pathname.startsWith("/sample-wiki/")) return true;

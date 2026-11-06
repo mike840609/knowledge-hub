@@ -92,3 +92,15 @@ describe("middleware matcher", () => {
     expect(pattern.test(path)).toBe(false);
   });
 });
+
+describe("the task export ingest exemption", () => {
+  it("exempts exactly /api/task-results/ingest", () => {
+    expect(isSitePasswordExempt("/api/task-results/ingest")).toBe(true);
+  });
+  it.each(["/api/task-results/ingest/", "/api/task-results/ingest/extra", "/api/task-results/Ingest", "/api/task-results/%69ngest", "/api/task-results"])(
+    "still requires the site password for %s",
+    (path) => {
+      expect(isSitePasswordExempt(path)).toBe(false);
+    },
+  );
+});

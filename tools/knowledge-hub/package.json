@@ -1,0 +1,11 @@
+{
+  "name": "knowledge-hub",
+  "version": "0.1.0",
+  "description": "Export a finished Claude Code or OpenCode task to Knowledge Hub My Space.",
+  "type": "module",
+  "bin": { "knowledge-hub": "bin/knowledge-hub.mjs" },
+  "files": ["bin/", "src/", "agent/"],
+  "engines": { "node": ">=20.19" },
+  "license": "UNLICENSED",
+  "private": true
+}

@@ -70,3 +70,6 @@ docs/ui-comparisons/
 
 # local database dumps (may contain production data)
 *.sql
+
+# The CLI tarball scripts/pack-cli.mjs builds before dev and build
+/public/cli/

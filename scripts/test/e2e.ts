@@ -163,6 +163,8 @@ async function main(): Promise<void> {
       const fixturePool = createDatabasePool(databaseConfig("e2e"));
       try { if (services.personas) await timed("SSO fixtures", () => seedPhase3Identities(fixturePool)); } finally { await fixturePool.end(); }
       cancellation.check();
+      // The CLI the Hub serves is packed here, as scripts/build.mjs does; this build calls next directly, and a fresh checkout has no public/cli.
+      await timed("CLI tarball", () => cancellation.run("scripts/pack-cli.mjs", [], commonEnvironment));
       await timed("application build", () => cancellation.run("node_modules/next/dist/bin/next", ["build"], { ...commonEnvironment, NODE_ENV: "production" }));
       if (services.personas) phase3Root = await timed("SSO application preparation", () => preparePhase3Application(projectRoot));
       const ssoCache = process.env.KM_E2E_BUILD_CACHE === "true" ? path.join(projectRoot, ".cache/e2e-sso") : undefined;

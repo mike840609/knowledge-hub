@@ -57,3 +57,22 @@ describe("Google middleware gate", () => {
     expect(response.headers.get("content-security-policy")).toContain("script-src");
   });
 });
+
+describe("the task export ingest exemption", () => {
+  it("passes both gates without a session or a Basic header", async () => {
+    vi.stubEnv("KM_IDENTITY_PROVIDER", "google");
+    vi.stubEnv("KM_SITE_PASSWORD", "s3cret");
+    state.session = null;
+    const response = await middleware(new NextRequest("https://km.example.com/api/task-results/ingest", { method: "POST" }));
+    expect(response.status).toBe(200);
+  });
+
+  it("still answers 401 for the browser binding API without a session", async () => {
+    vi.stubEnv("KM_IDENTITY_PROVIDER", "google");
+    vi.stubEnv("KM_SITE_PASSWORD", "s3cret");
+    state.session = null;
+    const basic = `Basic ${btoa("owner:s3cret")}`;
+    const response = await middleware(new NextRequest("https://km.example.com/api/workspaces/ws/task-export-bindings", { headers: { authorization: basic } }));
+    expect(response.status).toBe(401);
+  });
+});

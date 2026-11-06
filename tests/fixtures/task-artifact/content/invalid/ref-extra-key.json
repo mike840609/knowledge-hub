@@ -1,0 +1,17 @@
+{
+  "agent": "claude-code",
+  "status": "completed",
+  "title": "Fix login redirect loop",
+  "summary": "Stopped the sign-in page from redirecting back to itself after a session expired.",
+  "completedAt": "2026-11-04T10:00:00Z",
+  "verification": {
+    "status": "not_run"
+  },
+  "references": [
+    {
+      "type": "COMMIT",
+      "id": "abc1234",
+      "label": "x"
+    }
+  ]
+}
