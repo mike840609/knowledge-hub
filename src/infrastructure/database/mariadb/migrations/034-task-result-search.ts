@@ -23,8 +23,7 @@ export const taskResultSearchMigration: Migration = {
       CONSTRAINT fk_task_search_task FOREIGN KEY (task_result_id) REFERENCES task_results(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
       CONSTRAINT ck_task_search_revision CHECK (revision_no >= 1),
       CONSTRAINT ck_task_search_agent CHECK (agent IN ('claude-code', 'opencode')),
-      CONSTRAINT ck_task_search_verification CHECK (verification_status IN ('passed', 'failed', 'not_run', 'not_applicable')),
-      KEY idx_task_search_completed (completed_at_epoch_ms, task_result_id)
+      CONSTRAINT ck_task_search_verification CHECK (verification_status IN ('passed', 'failed', 'not_run', 'not_applicable'))
     ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   ],
 };
