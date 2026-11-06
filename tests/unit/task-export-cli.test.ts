@@ -273,7 +273,7 @@ describe("non-default profile recovery commands", () => {
     expect(blocked.code).toBe(2);
     expect(blocked.out).toContain(`knowledge-hub export --retry ${taskId} ${suffix}`);
 
-    const printedRetry = first.out.match(/knowledge-hub export --retry [^\\r\\n]+/)?.[0] ?? "";
+    const printedRetry = first.out.match(/knowledge-hub export --retry [^\r\n]+/)?.[0] ?? "";
     expect(printedRetry).toContain(suffix);
     const retried = await run(printedRetry.split(" ").slice(1), { viaShell: true });
     expect(retried.code).toBe(0);
