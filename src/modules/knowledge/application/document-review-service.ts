@@ -649,7 +649,7 @@ export class DocumentReviewService {
       const link = links.get(proposal.shareLinkId.toLowerCase());
       const viewer = party === "PROPOSER" ? proposal.proposedBy : link?.createdBy;
       const key = `${proposal.shareLinkId}:${viewer}`;
-      if (link && viewer && !targets.has(key)) targets.set(key, await openNamedTarget(r, link, viewer, now));
+      if (link && viewer && !targets.has(key)) targets.set(key, await openNamedTarget(r, link, viewer, now, party !== "PROPOSER"));
       const target = targets.get(key) ?? null;
       const createdAt = party === "OWNER" || proposal.status === "PENDING" ? proposal.createdAt : proposal.decidedAt ?? proposal.createdAt;
       const read = party === "OWNER" ? proposal.ownerReadAt ?? (proposal.status === "PENDING" ? null : proposal.decidedAt)

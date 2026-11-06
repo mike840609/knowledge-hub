@@ -1,19 +1,26 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
+import { isUuid } from "@/shared/ids/uuidv7";
 import type { DocumentShareLink } from "../../domain/document-share-link";
 import type { ReceivedShareLink } from "../../ports/document-share-link-repository";
 import type { KnowledgeRepositories } from "../../ports/unit-of-work";
-import { openShareLinkTarget } from "./folder-link-reach";
+import { linkOpensFor, openShareLinkTarget } from "./folder-link-reach";
 
 /** What a named link opens for its viewer: a document, or a folder (by name). */
-export type NamedShareTarget = { documentId: string } | { folderName: string };
+export type NamedShareTarget = { documentId: string } | { folderName: string } | { sourceName: string };
 
 /** What a named link opens for this viewer now: its document, or its folder's name; null for every refusal. Proposal entries judge through it too. */
-export async function openNamedTarget(r: KnowledgeRepositories, link: DocumentShareLink, userId: string, now: Date): Promise<NamedShareTarget | null> {
+export async function openNamedTarget(r: KnowledgeRepositories, link: DocumentShareLink, userId: string, now: Date, ownerForProposal = false): Promise<NamedShareTarget | null> {
   if (link.target.kind === "DOCUMENT") {
     const document = await r.documents.findById(link.target.documentId);
     return document && await openShareLinkTarget(r, link, document, now, userId) ? { documentId: document.id } : null;
   }
-  if (link.target.kind === "SOURCE") return null;
+  if (link.target.kind === "SOURCE") {
+    if (link.audience !== "NAMED" || !isUuid(userId) || !(ownerForProposal && userId.toLowerCase() === link.createdBy.toLowerCase()) && !await r.shareLinks.isRecipient(link.id, userId)) return null;
+    const source = await r.sourcePolicy.findById(link.target.sourceId);
+    if (!source) return null;
+    const workspace = await r.workspaces.findById(source.workspaceId);
+    return workspace && await linkOpensFor(r, link, source.status, source, workspace, now, userId) ? { sourceName: source.name } : null;
+  }
   const folder = await r.tree.findById(link.target.folderNodeId);
   return folder?.nodeType === "FOLDER" && await openShareLinkTarget(r, link, folder, now, userId) ? { folderName: folder.name ?? "" } : null;
 }
@@ -49,5 +56,5 @@ export async function judgeNamedShares(r: KnowledgeRepositories, userId: string,
  * must require a caller (`tests/unit/share-link-single-exception.test.ts`): it keeps this from becoming a caller-less read.
  */
 export async function namedShareTitle(r: KnowledgeRepositories, caller: CallerContext, target: NamedShareTarget): Promise<string> {
-  return "documentId" in target ? (await r.revisions.findCurrent(target.documentId))?.title ?? "" : target.folderName;
+  return "documentId" in target ? (await r.revisions.findCurrent(target.documentId))?.title ?? "" : "sourceName" in target ? target.sourceName : target.folderName;
 }

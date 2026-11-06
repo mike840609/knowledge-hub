@@ -44,7 +44,7 @@ async function setup() {
   const alicePersonal = await uow.run((r) => r.workspaces.findPersonalByOwnerUserId(alice.id));
   const bobPersonal = await uow.run((r) => r.workspaces.findPersonalByOwnerUserId(bob.id));
   return {
-    caller, folderNodeId, firstId: first.documentId, secondId: second.documentId, alice, bob,
+    caller, sourceId, folderNodeId, firstId: first.documentId, secondId: second.documentId, alice, bob,
     aliceCaller: callerFromIdentity(alice), bobCaller: callerFromIdentity(bob),
     aliceWorkspaceId: alicePersonal!.id, bobWorkspaceId: bobPersonal!.id, hub,
     shares: new DocumentShareService(uow, new RandomShareTokenIssuer()), saved: new SavedShareService(uow),
@@ -52,6 +52,16 @@ async function setup() {
 }
 
 describe("SavedShareService.listNamedForRecipient", () => {
+  it("lists a named Source by its name and drops it when revoked", async () => {
+    const f = await setup();
+    const source = await unitOfWork().run(r => r.sourcePolicy.findById(f.sourceId));
+    const link = await f.shares.createForSource(f.caller, { sourceId: f.sourceId, recipients: [f.alice.id] });
+    expect(await f.saved.listNamedForRecipient(f.aliceCaller, f.aliceWorkspaceId)).toEqual([
+      expect.objectContaining({ linkId: link.id, title: source!.name, href: `/w/${f.aliceWorkspaceId}/shares/${link.path.slice(3)}` }),
+    ]);
+    await f.shares.revoke(f.caller, link.id);
+    expect(await f.saved.listNamedForRecipient(f.aliceCaller, f.aliceWorkspaceId)).toEqual([]);
+  });
   it("lists the named shares that open now, newest first, with title, sender and link", async () => {
     const f = await setup();
     const one = await f.shares.create(f.caller, { documentId: f.firstId, recipients: [f.alice.id] });

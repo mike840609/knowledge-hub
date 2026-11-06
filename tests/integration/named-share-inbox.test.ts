@@ -47,7 +47,7 @@ async function setup() {
   const shares = new DocumentShareService(uow, new RandomShareTokenIssuer());
   const review = new DocumentReviewService(uow);
   const alicePersonal = await uow.run((r) => r.workspaces.findPersonalByOwnerUserId(alice.id));
-  return { owner, caller, folderNodeId, documentId: doc.documentId, alice, bob, aliceCaller: callerFromIdentity(alice), bobCaller: callerFromIdentity(bob), aliceWorkspaceId: alicePersonal!.id, shares, review, hub };
+  return { owner, caller, sourceId, folderNodeId, documentId: doc.documentId, alice, bob, aliceCaller: callerFromIdentity(alice), bobCaller: callerFromIdentity(bob), aliceWorkspaceId: alicePersonal!.id, shares, review, hub };
 }
 type Fixture = Awaited<ReturnType<typeof setup>>;
 
@@ -139,6 +139,20 @@ describe("a folder shared with a named recipient", () => {
     await f.shares.revoke(f.caller, view.id);
     expect(await shared(f)).toEqual([]);
     expect(await badge(f)).toBe(0);
+  });
+});
+
+describe("a Source shared with a named recipient", () => {
+  it("names the Source in Inbox and names nothing after revocation", async () => {
+    const f = await setup();
+    const source = await unitOfWork().run(r => r.sourcePolicy.findById(f.sourceId));
+    const link = await f.shares.createForSource(f.caller, { sourceId: f.sourceId, recipients: [f.alice.id] });
+    expect(await shared(f)).toEqual([expect.objectContaining({ documentTitle: source!.name, href: `/w/${f.aliceWorkspaceId}/shares/${link.path.slice(3)}` })]);
+    await f.shares.revoke(f.caller, link.id);
+    expect(await shared(f)).toEqual([]);
+    expect((await f.review.listActivityForOwner(f.aliceCaller)).notifications.filter(n => n.kind === "SHARED_WITH_YOU")).toEqual([
+      expect.objectContaining({ linkAvailable: false, documentTitle: "", authorName: undefined }),
+    ]);
   });
 });
 
