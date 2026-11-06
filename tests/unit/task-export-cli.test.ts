@@ -68,7 +68,7 @@ function run(args: string[], options: { stdin?: string; stdinChunks?: Buffer[]; 
   return new Promise((resolve) => {
     const spawnOptions = {
       cwd: options.cwd ?? project,
-      env: { NODE_ENV: "test", HOME: home, USERPROFILE: home, PATH: process.env.PATH ?? "", KNOWLEDGE_HUB_TIMEOUT_MS: "1500" },
+      env: { NODE_ENV: "test" as const, HOME: home, USERPROFILE: home, PATH: process.env.PATH ?? "", KNOWLEDGE_HUB_TIMEOUT_MS: "1500" },
     };
     // Execute generated hints through the platform's real shell, not only
     // through Node's argv-based spawn (which would hide shell-quoting bugs).
