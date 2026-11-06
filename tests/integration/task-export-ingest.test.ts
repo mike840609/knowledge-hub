@@ -103,7 +103,8 @@ describe("revision sequence", () => {
         upsertSearchProjection: async () => { throw new Error("projection write failed"); },
       }),
     }));
-    await expect(ingest(token, artifact(crypto.randomUUID(), 1), gated)).rejects.toThrow(/projection write failed/);
+    // The UoW intentionally hides internal adapter failures behind a generic database error.
+    await expect(ingest(token, artifact(crypto.randomUUID(), 1), gated)).rejects.toThrow(/Database operation failed/);
     expect(await counts(bindingId)).toMatchObject({ tasks: 0, revisions: 0 });
   });
 
