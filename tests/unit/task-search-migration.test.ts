@@ -8,6 +8,11 @@ describe("task search projection migration contract", () => {
     expect(new Set(migrations.map((m) => m.version)).size).toBe(migrations.length);
   });
 
+  it("defers the speculative global sort index until scoped SQL is available for EXPLAIN", () => {
+    const tableSql = migrations.find((m) => m.name === "task-result-search")?.statements.join("\n") ?? "";
+    expect(tableSql).not.toContain("idx_task_search_completed");
+  });
+
   it("creates one task-scoped, time-sortable row without duplicated owner authorization", () => {
     const sql = migrations.at(-1)?.statements.join("\n") ?? "";
     expect(sql).toContain("CREATE TABLE task_result_search");
