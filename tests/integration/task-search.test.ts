@@ -43,7 +43,7 @@ describe("task search/backfill operational safety", () => {
     }
     const before = await checkTaskSearchConsistency(pool);
     expect(before.missing).toBeGreaterThanOrEqual(2);
-    const partial = await backfillTaskSearch(pool, { batchSize: 1, maxBatches: 1 });
+    const partial = await backfillTaskSearch(pool, { batchSize: 1, maxBatches: 1 }).catch((error: unknown) => { console.error('BACKFILL_CAUSE', error instanceof Error ? error.cause : error); throw error; });
     expect(partial.indexed).toBe(1);
     const completed = await backfillTaskSearch(pool, { batchSize: 1 });
     expect(completed.complete).toBe(true);
