@@ -1,6 +1,6 @@
 # Task Search + Filters + List UX — Implementation Plan
 
-> Use Superpowers TDD / subagent-driven development: implement one scoped task, run focused tests, review, and commit before proceeding. **Implementation in progress on PR #336: Tasks 1–2 implemented; Tasks 3–6 pending. Do not merge until the remaining tasks and verification are complete.**
+> Use Superpowers TDD / subagent-driven development: implement one scoped task, run focused tests, review, and commit before proceeding. **Implementation in progress on PR #336: Tasks 1–5 implemented; Task 6 verification and rollout gates still pending. Do not merge until tests, scoped performance evidence and final review pass.**
 
 **Goal:** Search completed Agent Task results in My Space by the latest revision's title, summary, findings, decisions, and changes. Add Agent, Verification, and fixed-offset completed-date filters plus a readable, mobile-friendly list. Introduce search without hiding previously uploaded Tasks during backfill.
 

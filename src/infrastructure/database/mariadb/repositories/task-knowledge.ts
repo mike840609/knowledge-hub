@@ -313,14 +313,20 @@ export class MariaDbTaskExportStore implements TaskExportStore {
   }
 
   async hasTasksInLifecycle(workspaceId: string, ownerUserId: string, lifecycle: TaskLifecycle): Promise<boolean> {
-    const rows = await this.connection.query<DbRow[]>(
-      `SET STATEMENT max_statement_time=5 FOR SELECT EXISTS (
-        SELECT 1 FROM task_results t JOIN task_export_bindings b ON b.id = t.binding_id
-        WHERE b.workspace_id = ? AND b.owner_user_id = ? AND t.lifecycle = ?
-      ) AS has_tasks`,
-      [workspaceId, ownerUserId, lifecycle],
-    );
-    return Number(rows[0]?.has_tasks ?? 0) === 1;
+    try {
+      const rows = await this.connection.query<DbRow[]>(
+        `SET STATEMENT max_statement_time=5 FOR SELECT EXISTS (
+          SELECT 1 FROM task_results t JOIN task_export_bindings b ON b.id = t.binding_id
+          WHERE b.workspace_id = ? AND b.owner_user_id = ? AND t.lifecycle = ?
+        ) AS has_tasks`,
+        [workspaceId, ownerUserId, lifecycle],
+      );
+      return Number(rows[0]?.has_tasks ?? 0) === 1;
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "errno" in error &&
+          Number(error.errno) === 1969) throw new TaskSearchUnavailableError();
+      throw error;
+    }
   }
 
   async getTaskScope(taskResultId: string): Promise<TaskScope | null> {

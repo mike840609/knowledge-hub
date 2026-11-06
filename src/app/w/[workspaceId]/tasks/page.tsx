@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/shell/page-header";
 import { TaskList } from "@/components/task-knowledge/task-list";
 import { TaskSearchForm } from "@/components/task-knowledge/task-search-form";
 import { TaskSearchResults } from "@/components/task-knowledge/task-search-results";
 import { TaskSearchOffsetHydrator } from "@/components/task-knowledge/task-search-offset-hydrator";
+import { taskSearchHref } from "@/components/task-knowledge/task-search-url";
 import { parseTaskSearchQuery } from "@/modules/task-knowledge/domain/task-search-query";
 import { buttonClasses } from "@/components/ui/button";
 import { applicationServices } from "@/server/composition";
@@ -30,17 +31,23 @@ export default async function TaskResultsPage({ params, searchParams }: Props) {
       }
     }
   }
-  const cursor = typeof raw.cursor === "string" ? raw.cursor : null;
+  const cursor = typeof raw.cursor === "string" ? raw.cursor : raw.cursor === undefined ? null : "";
   const services = applicationServices();
   const { caller } = await services.establishTrustedCaller();
-  let page;
+  let page: Awaited<ReturnType<typeof services.taskResults.list>> | null = null;
   let searchError: string | null = null;
   try {
-    page = await services.taskResults.list(caller, workspaceId, {
-      lifecycle: showArchived ? "ARCHIVED" : "ACTIVE",
-      cursor: validationError ? null : cursor,
-      ...(enabled ? { search } : {}),
-    });
+    if (enabled && validationError) {
+      // An invalid query is not a search, but must still authorize the
+      // workspace before revealing any Tasks page or validation state.
+      await services.taskResults.assertOwnedMySpace(caller, workspaceId);
+    } else {
+      page = await services.taskResults.list(caller, workspaceId, {
+        lifecycle: showArchived ? "ARCHIVED" : "ACTIVE",
+        cursor,
+        ...(enabled ? { search } : {}),
+      });
+    }
   } catch (error) {
     // Task Results exist only in the caller's own active My Space; anything else reads as not found.
     if (error instanceof DomainError && (error.code === "WORKSPACE_NOT_FOUND" || error.code === "WORKSPACE_ARCHIVED")) notFound();
@@ -50,6 +57,11 @@ export default async function TaskResultsPage({ params, searchParams }: Props) {
     } else {
       throw error;
     }
+  }
+  // Avoid a bookmark showing the wrong cursor while rendering first-page
+  // results. The service already checked ownership before returning reset.
+  if (enabled && !validationError && page?.resetCursor) {
+    redirect(taskSearchHref(`/w/${workspaceId}/tasks`, search));
   }
   return (
     <main className="kh-page pb-6">
@@ -64,11 +76,13 @@ export default async function TaskResultsPage({ params, searchParams }: Props) {
         <>
           <TaskSearchOffsetHydrator hasDateFilter={Boolean(search.from || search.to)} explicitOffset={typeof raw.offset === "string" && raw.offset !== ""} />
           <TaskSearchForm workspaceId={workspaceId} query={search} error={validationError} />
-          <TaskSearchResults workspaceId={workspaceId} query={search} items={page.items}
-            nextCursor={page.nextCursor} hasTasksInLifecycle={page.hasTasksInLifecycle} error={searchError} />
+          {!validationError && page ? (
+            <TaskSearchResults workspaceId={workspaceId} query={search} items={page.items}
+              nextCursor={page.nextCursor} hasTasksInLifecycle={page.hasTasksInLifecycle} error={searchError} />
+          ) : null}
         </>
       ) : (
-        <TaskList workspaceId={workspaceId} archived={showArchived} items={page.items} nextCursor={page.nextCursor} />
+        page ? <TaskList workspaceId={workspaceId} archived={showArchived} items={page.items} nextCursor={page.nextCursor} /> : null
       )}
     </main>
   );

@@ -3,6 +3,7 @@ import { DomainError } from "@/shared/domain/errors";
 import { isUuid } from "@/shared/ids/uuid";
 import { decodeTaskSearchCursor, encodeTaskSearchCursor, taskSearchCriteriaDigest } from "../domain/task-search-cursor";
 import { parseTaskSearchQuery, type TaskSearchQuery } from "../domain/task-search-query";
+import { buildTaskSearchPreview } from "../domain/task-search-preview";
 import { parseTaskContent, type TaskContentV1 } from "../domain/task-artifact";
 import type { TaskReferenceInput } from "../domain/task-references";
 import type { ExportBindingStatus, ReferenceResolution, TaskLifecycle, TaskScope } from "../ports/task-export-store";
@@ -59,6 +60,14 @@ function content(artifactJson: string): TaskContent {
 export class TaskResultReadService {
   constructor(private readonly unitOfWork: TaskKnowledgeUnitOfWork) {}
 
+  /** Validate owner scope without executing any Tasks search or list SQL. */
+  async assertOwnedMySpace(caller: CallerContext, workspaceId: string): Promise<void> {
+    if (!isUuid(workspaceId)) throw new DomainError("WORKSPACE_NOT_FOUND", "Workspace not found.");
+    await this.unitOfWork.run(async (r) => {
+      assertOwnedPersonal(caller, await r.workspaces.lockSharedById(workspaceId));
+    });
+  }
+
   async list(
     caller: CallerContext, workspaceId: string,
     query: { lifecycle?: TaskLifecycle; cursor?: string | null; search?: TaskSearchQuery },
@@ -76,7 +85,7 @@ export class TaskResultReadService {
         );
         const visible = records.slice(0, TASK_LIST_PAGE_SIZE);
         const items: TaskListItem[] = visible.map((row) => ({
-          taskResultId: row.taskResultId, title: row.title, summary: row.summary,
+          taskResultId: row.taskResultId, title: row.title, summary: buildTaskSearchPreview(row.summary, row.searchBody, search.terms),
           agent: row.agent, completedAt: new Date(row.completedAtEpochMs).toISOString(),
           verificationStatus: row.verificationStatus, lifecycle: row.lifecycle,
           latestRevisionNo: row.latestRevisionNo, bindingLabel: row.bindingLabel,

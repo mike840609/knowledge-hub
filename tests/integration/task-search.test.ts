@@ -14,6 +14,7 @@ import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import { backfillTaskSearch, checkTaskSearchConsistency } from "../../scripts/db/backfill-task-search";
 import { seedMySpace } from "./task-knowledge-fixtures";
 import { uuidv7 } from "@/shared/ids/uuidv7";
+import { buildTaskSearchSql } from "@/infrastructure/database/mariadb/repositories/task-search-sql";
 
 let pool: Pool;
 beforeAll(() => { pool = createDatabasePool(databaseConfig("test")); });
@@ -64,6 +65,50 @@ describe("task search/backfill operational safety", () => {
       expect(row.summary).toContain("Backfill");
     }
   });
+
+  it("keeps newest committed revision when real ingest races bounded backfill", async () => {
+    const { ingest, workspaceId } = await setup();
+    const taskId = randomUUID();
+    const first = await ingest(taskId, 1, "old revision");
+    await pool.query("DELETE FROM task_result_search WHERE task_result_id = ?", [first.taskResultId]);
+    await Promise.all([
+      backfillTaskSearch(pool, { workspaceId, batchSize: 1, maxBatches: 1 }),
+      ingest(taskId, 2, "concurrent revision 2"),
+    ]);
+    const [row] = await pool.query<{ revision_no: number; summary: string }[]>(
+      "SELECT revision_no, summary FROM task_result_search WHERE task_result_id = ?", [first.taskResultId],
+    );
+    expect(Number(row.revision_no)).toBe(2);
+    expect(row.summary).toBe("concurrent revision 2");
+    expect((await checkTaskSearchConsistency(pool, workspaceId)).complete).toBe(true);
+  });
+
+  it("pages 50+ tied-millisecond Tasks without duplicates and verifies a scoped EXPLAIN", async () => {
+    vi.stubEnv("TASK_SEARCH_READ_ENABLED", "true");
+    const { caller, workspaceId, ingest, read } = await setup();
+    const taskIds = Array.from({length: 52}, () => randomUUID());
+    // Bounded concurrent real writes, not mocked repositories.
+    for (let start = 0; start < taskIds.length; start += 8) {
+      await Promise.all(taskIds.slice(start, start + 8).map((id) => ingest(id, 1, "pagination-match")));
+    }
+    const query = parseTaskSearchQuery({q:"pagination-match"});
+    const firstPage = await read.list(caller, workspaceId, {search:query});
+    expect(firstPage.items).toHaveLength(50);
+    expect(firstPage.nextCursor).toBeTruthy();
+    const secondPage = await read.list(caller, workspaceId, {search:query,cursor:firstPage.nextCursor});
+    expect(secondPage.items).toHaveLength(2);
+    expect(secondPage.nextCursor).toBeNull();
+    const ids = [...firstPage.items,...secondPage.items].map((item) => item.taskResultId);
+    expect(new Set(ids).size).toBe(52);
+
+    // E2E SQL can be explained on the seeded tenant; do not treat this
+    // tiny fixture as representative latency evidence for 1k/10k Tasks.
+    const built = buildTaskSearchSql(workspaceId, caller.identity.id, query, null, 51);
+    const explained = built.sql.replace(/^SET STATEMENT max_statement_time=5 FOR\s*/, "EXPLAIN ");
+    const plan = await pool.query<{ table: string; type: string; key: string | null }[]>(explained, built.params);
+    expect(plan.length).toBeGreaterThan(0);
+    console.info("TASK_SEARCH_EXPLAIN_52", JSON.stringify(plan.map(({table,type,key}) => ({table,type,key}))));
+  }, 120_000);
 
   it("owner-scoped search enforces filters, literal punctuation and latest revision", async () => {
     vi.stubEnv("TASK_SEARCH_READ_ENABLED","true");
