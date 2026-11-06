@@ -13,6 +13,7 @@ import { parseTaskSearchQuery } from "@/modules/task-knowledge/domain/task-searc
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import { backfillTaskSearch, checkTaskSearchConsistency } from "../../scripts/db/backfill-task-search";
 import { seedMySpace } from "./task-knowledge-fixtures";
+import { uuidv7 } from "@/shared/ids/uuidv7";
 
 let pool: Pool;
 beforeAll(() => { pool = createDatabasePool(databaseConfig("test")); });
@@ -24,18 +25,22 @@ const uow = () => new MariaDbTaskKnowledgeUnitOfWork(pool);
 async function setup() {
   const { owner, workspaceId } = await seedMySpace(pool);
   const caller = callerFromIdentity(owner);
-  const { token } = await new ManageExportBindingService(uow()).create(caller, {workspaceId,label:"Task fixture"});
+  const { token, bindingId } = await new ManageExportBindingService(uow()).create(caller, {workspaceId,label:"Task fixture"});
   const ingest = async (taskId: string, artifactRevision: number, summary: string, extra: Record<string,unknown>={}) =>
     new IngestTaskResultService(uow()).ingest(token, new TextEncoder().encode(JSON.stringify({
       ...artifactBase, taskId, artifactRevision, summary, ...extra,
     })));
   const read = new TaskResultReadService(uow());
-  return {caller,workspaceId,ingest,read};
+  return {caller,workspaceId,bindingId,ingest,read};
 }
 
 describe("task search/backfill operational safety", () => {
   it("recovers missing projections in bounded batches and can rerun safely", async () => {
-    const { ingest } = await setup();
+    const { ingest, bindingId } = await setup();
+    // Staging task rows without any accepted revision are invisible to the legacy Tasks reader.
+    const placeholderId = await uow().run((r) => r.taskExports.insertTaskIfAbsent({
+      id: uuidv7(), bindingId, taskId: randomUUID(),
+    }));
     const ids = [randomUUID(), randomUUID()];
     const results = await Promise.all(ids.map((id, i) => ingest(id, 1, "Backfill-"+i)));
     for (const r of results) {
@@ -43,10 +48,14 @@ describe("task search/backfill operational safety", () => {
     }
     const before = await checkTaskSearchConsistency(pool);
     expect(before.missing).toBeGreaterThanOrEqual(2);
-    const partial = await backfillTaskSearch(pool, { batchSize: 1, maxBatches: 1 }).catch((error: unknown) => { console.error('BACKFILL_CAUSE', error instanceof Error ? error.cause : error); throw error; });
+    const partial = await backfillTaskSearch(pool, { batchSize: 1, maxBatches: 1 });
     expect(partial.indexed).toBe(1);
     const completed = await backfillTaskSearch(pool, { batchSize: 1 });
     expect(completed.complete).toBe(true);
+    const [staged] = await pool.query<{ count: number }[]>(
+      "SELECT COUNT(*) AS count FROM task_result_search WHERE task_result_id = ?", [placeholderId],
+    );
+    expect(Number(staged.count)).toBe(0);
     const again = await backfillTaskSearch(pool, { batchSize: 1 });
     expect(again.indexed).toBe(0);
     for (const r of results) {
