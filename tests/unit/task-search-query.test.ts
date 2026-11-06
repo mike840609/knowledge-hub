@@ -89,8 +89,21 @@ describe("task search cursor contract", () => {
     expect(decodeTaskSearchCursor(token, taskSearchCriteriaDigest(parseTaskSearchQuery({ q: "安全 login", verification: "failed", from: "2026-11-01", offset: "480" }), WORKSPACE_ID))).toEqual({ cursor: null, reset: true });
   });
 
+  it("rejects out-of-domain cursor timestamps while preserving Artifact V1 boundary instants", () => {
+    const beyondSqlDate = Date.parse("9999-12-31T23:59:59.999-23:59");
+    const valid = encodeTaskSearchCursor({ completedAtEpochMs: beyondSqlDate, taskResultId: TASK_ID }, criteria);
+    expect(decodeTaskSearchCursor(valid, criteria)).toEqual({
+      cursor: { completedAtEpochMs: beyondSqlDate, taskResultId: TASK_ID }, reset: false,
+    });
+    for (const timestamp of [Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER]) {
+      const forged = encodeTaskSearchCursor({ completedAtEpochMs: timestamp, taskResultId: TASK_ID }, criteria);
+      expect(decodeTaskSearchCursor(forged, criteria)).toEqual({ cursor: null, reset: true });
+    }
+  });
+
   it("handles malformed, legacy and incompatible versions by requesting first page", () => {
     expect(decodeTaskSearchCursor(null, criteria)).toEqual({ cursor: null, reset: false });
+    expect(decodeTaskSearchCursor("", criteria)).toEqual({ cursor: null, reset: true });
     for (const candidate of [
       TASK_ID, "!!!", "x".repeat(3000), "e30",
       Buffer.from(JSON.stringify({ v: 2, t: 1000, id: TASK_ID, criteria })).toString("base64url"),
