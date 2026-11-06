@@ -16,7 +16,7 @@ import { filterInboxDiscussions, mergeInboxDiscussions, sortInboxDiscussions, ty
 import type { InboxOwnerSummary } from "../ports/share-comment-event-repository";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
 import { judgeNamedShares, namedShareTitle, openNamedTarget, type NamedShareTarget } from "./internal/named-share-judgement";
-import { audienceAdmits, documentReachesFolder, linkOpensFor, openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
+import { audienceAdmits, documentReachesFolder, documentReachesSource, linkOpensFor, openShareLinkTarget, reachableChain, reachableChainForSource } from "./internal/folder-link-reach";
 import { hubSharePath, shareDiscussionHref } from "@/lib/share-paths";
 
 function fail(code:string, message:string):never { throw new DomainError(code,message); }
@@ -36,7 +36,8 @@ type MentionRequest = { ids: string[]; linkId: string | null; hashed: Record<str
 type MentionPlan = { link: DocumentShareLink; add: string[]; propose: string[] };
 /** A followed discussion on a folder link names its document, which that link's page needs (`?d=`); a document link's needs none. */
 const ownsLink = (link: DocumentShareLink, caller: CallerContext) => link.createdBy.toLowerCase() === caller.identity.id.toLowerCase();
-const folderDocument = (link: DocumentShareLink, documentId: string) => link.target.kind === "FOLDER" ? { documentId } : {};
+// Non-document targets need the document id to open a discussion.
+const folderDocument = (link: DocumentShareLink, documentId: string) => link.target.kind !== "DOCUMENT" ? { documentId } : {};
 const PROPOSAL_PARTIES: readonly string[] = ["OWNER", "PROPOSED", "PROPOSER"] satisfies ProposalParty[];
 /** One party's view of one proposal, judged now: `target` is null when the link no longer opens for that party. */
 type JudgedProposal = { party: ProposalParty; proposal: ShareProposal; link: DocumentShareLink | undefined; target: NamedShareTarget | null; createdAt: Date; readAt: Date | null };
@@ -393,6 +394,7 @@ export class DocumentReviewService {
       const chain = (await r.tree.listChainsByDocumentIds([s.document.id], s.document.sourceId)).get(s.document.id) ?? [];
       const folderIds = chain.slice(1).filter(node => node.nodeType === "FOLDER").map(node => node.id);
       const candidates = [...await r.shareLinks.listByDocument(s.document.id)];
+      candidates.push(...await r.shareLinks.listBySource(s.document.sourceId));
       for (const folderId of folderIds) candidates.push(...await r.shareLinks.listByFolder(folderId));
       const links: Array<{ id: string; label: string | null; audience: DocumentShareLink["audience"]; targetKind: DocumentShareLink["target"]["kind"] }> = [];
       for (const link of candidates) {
@@ -449,7 +451,7 @@ export class DocumentReviewService {
     let readerWorkspace: Promise<string | null> | undefined;
     return async (link: DocumentShareLink, threadId: string, documentId: string) => shareDiscussionHref(link,
       link.audience === "NAMED" ? await (readerWorkspace ??= r.workspaces.findPersonalByOwnerUserId(userId).then(found => found?.id ?? null)) : null,
-      threadId, link.target.kind === "FOLDER" ? documentId : undefined);
+      threadId, link.target.kind !== "DOCUMENT" ? documentId : undefined);
   }
   private async withFollowing(r: KnowledgeRepositories, s: Awaited<ReturnType<DocumentReviewService["scope"]>>, caller: CallerContext | null, threads: ReviewThreadView[]): Promise<ReviewThreadView[]> {
     if (!caller || s.workspace.personalOwnerUserId === caller.identity.id) return threads;
@@ -492,7 +494,7 @@ export class DocumentReviewService {
       if (!link) { reachable.set(linkId, null); continue; }
       reachable.set(linkId, link.target.kind === "DOCUMENT"
         ? (await this.linkValid(r, link, link.target.documentId, userId) ? new Set([link.target.documentId]) : null)
-        : await this.folderLinkDocuments(r, link, [...documentIds], userId));
+        : await this.treeLinkDocuments(r, link, [...documentIds], userId));
     }
     const found = [];
     for (const follow of follows) {
@@ -692,27 +694,29 @@ export class DocumentReviewService {
    * membership are judged once; only the per-document chain is read in a batch, so a reader who
    * follows many discussions through one folder does not pay for the link once per document.
    */
-  private async folderLinkDocuments(r: KnowledgeRepositories, link: DocumentShareLink, documentIds: readonly string[], viewerId: string | null): Promise<ReadonlySet<string> | null> {
-    if (link.target.kind !== "FOLDER" || documentIds.length === 0) return null;
-    const folder = await r.tree.findById(link.target.folderNodeId);
-    if (!folder || folder.nodeType !== "FOLDER") return null;
-    if (!await openShareLinkTarget(r, link, folder, this.clock(), viewerId)) return null;
+  private async treeLinkDocuments(r: KnowledgeRepositories, link: DocumentShareLink, documentIds: readonly string[], viewerId: string | null): Promise<ReadonlySet<string> | null> {
+    if (link.target.kind === "DOCUMENT" || documentIds.length === 0) return null;
+    const folder = link.target.kind === "FOLDER" ? await r.tree.findById(link.target.folderNodeId) : null;
+    const source = link.target.kind === "SOURCE" ? await r.sourcePolicy.findById(link.target.sourceId) : null;
+    if (link.target.kind === "FOLDER" && (!folder || folder.nodeType !== "FOLDER")) return null;
+    if (link.target.kind === "SOURCE" && !source) return null;
+    const target = folder ?? (source ? { sourceId: source.id, status: source.status } : null);
+    if (!target || !await openShareLinkTarget(r, link, target, this.clock(), viewerId)) return null;
     const documents = new Map((await r.documents.findByIds(documentIds)).map(document => [document.id, document]));
-    const chains = await r.tree.listChainsByDocumentIds(documentIds, folder.sourceId);
+    const chains = await r.tree.listChainsByDocumentIds(documentIds, target.sourceId);
     const reachable = new Set<string>();
     for (const documentId of documentIds) {
       const document = documents.get(documentId);
-      if (document && documentReachesFolder(folder, document, chains.get(documentId))) reachable.add(documentId);
+      if (document && (folder ? documentReachesFolder(folder, document, chains.get(documentId)) : source && documentReachesSource(source, document, chains.get(documentId)))) reachable.add(documentId);
     }
     return reachable;
   }
 
   /** Whether the link opens now on this document for this viewer: the same judgement `linkScope` makes, without refusing. */
   private async linkValid(r: KnowledgeRepositories, link: DocumentShareLink, documentId: string, viewerId: string | null): Promise<boolean> {
-    if (link.target.kind === "SOURCE") return false;
     if (link.target.kind === "DOCUMENT" && link.target.documentId !== documentId) return false;
     try {
-      await this.targetScope(r, link, link.target.kind === "FOLDER" ? documentId : undefined, false, viewerId);
+      await this.targetScope(r, link, link.target.kind !== "DOCUMENT" ? documentId : undefined, false, viewerId);
       return true;
     } catch (error) {
       if (error instanceof ShareLinkNotFoundError) return false;
@@ -825,8 +829,15 @@ export class DocumentReviewService {
       if(!await this.opens(r,scope,link,scope.document.status,viewerId)) throw new ShareLinkNotFoundError();
       return scope;
     }
-    if(link.target.kind==="SOURCE") throw new ShareLinkNotFoundError();
     if(documentId===undefined) throw new ShareLinkNotFoundError();
+    if(link.target.kind==="SOURCE") {
+      const source=await r.sourcePolicy.findById(link.target.sourceId);
+      const named=source?await r.documents.findById(documentId):null;
+      if(!source || !named || named.sourceId!==source.id || !await reachableChainForSource(r,source,named)) throw new ShareLinkNotFoundError();
+      const scope=await this.scope(r,documentId,lock);
+      if(scope.source.id!==link.target.sourceId || !await reachableChainForSource(r,scope.source,scope.document) || !await this.opens(r,scope,link,scope.source.status,viewerId)) throw new ShareLinkNotFoundError();
+      return scope;
+    }
     // Judged before any lock: a document outside the folder's Source or outside its live subtree is
     // refused as missing, and nothing of it is locked. The locked recheck below stays, so a move
     // committed while this write waited is still caught.
