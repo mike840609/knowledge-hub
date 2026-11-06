@@ -320,11 +320,12 @@ describe("non-default profile recovery commands", () => {
   it("refuses invalid or ambiguous encoded profile flags", async () => {
     for (const extra of [
       ["--profile-b64", "??"],
-      ["--profile-b64", "77-9"],
+      ["--profile-b64", "a"],
       ["--profile", "team", "--profile-b64", Buffer.from("team").toString("base64url")],
     ]) {
       const result = await run(["export", "--new", ...extra], { stdin: content() });
       expect(result.code).toBe(2);
+      expect(result.out).toMatch(/profile-b64/);
       expect(hub.received).toHaveLength(0);
     }
   });
