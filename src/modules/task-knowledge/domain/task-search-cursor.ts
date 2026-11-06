@@ -5,6 +5,10 @@ export type TaskSearchCursor = { completedAtEpochMs: number; taskResultId: strin
 export type TaskSearchCursorResult = { cursor: TaskSearchCursor | null; reset: boolean };
 
 const TASK_ID_UUIDV7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+// Artifact V1 permits years 0000..9999 with an explicit offset up to ±23:59.
+// Reject forged cursor timestamps outside this representable source range.
+const EARLIEST_COMPLETED_AT_MS = Date.parse("0000-01-01T00:00:00.000+23:59");
+const LATEST_COMPLETED_AT_MS = Date.parse("9999-12-31T23:59:59.999-23:59");
 
 /** Criteria fingerprint prevents a cursor from being reused across another workspace/filter set. */
 export function taskSearchCriteriaDigest(query: TaskSearchQuery, workspaceId: string): string {
@@ -32,7 +36,8 @@ export function encodeTaskSearchCursor(cursor: TaskSearchCursor, criteria: strin
 
 /** Any malformed, mismatched or legacy cursor resets to the first page. */
 export function decodeTaskSearchCursor(raw: string | null | undefined, criteria: string): TaskSearchCursorResult {
-  if (!raw) return { cursor: null, reset: false };
+  if (raw === null || raw === undefined) return { cursor: null, reset: false };
+  if (raw === "") return { cursor: null, reset: true };
   if (raw.length > 1024 || !/^[A-Za-z0-9_-]+$/.test(raw)) {
     return { cursor: null, reset: true };
   }
@@ -48,6 +53,7 @@ export function decodeTaskSearchCursor(raw: string | null | undefined, criteria:
     const data = input as Record<string, unknown>;
     if (data.v !== 1 || data.criteria !== criteria ||
         typeof data.t !== "number" || !Number.isSafeInteger(data.t) ||
+        data.t < EARLIEST_COMPLETED_AT_MS || data.t > LATEST_COMPLETED_AT_MS ||
         typeof data.id !== "string" || !TASK_ID_UUIDV7.test(data.id)) {
       return { cursor: null, reset: true };
     }
