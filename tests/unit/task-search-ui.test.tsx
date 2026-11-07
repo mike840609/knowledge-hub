@@ -18,6 +18,35 @@ describe("Tasks-only compact search UI", () => {
     expect(html).toContain("Search tasks");
     expect(html).not.toContain("⌘K");
   });
+  it("expands Completed dates when either date filter is already active", () => {
+    for (const input of [{ from: "2026-11-01" }, { to: "2026-11-06" }]) {
+      const html = renderToStaticMarkup(
+        <TaskSearchForm workspaceId="ws" query={parseTaskSearchQuery(input)} />,
+      );
+      expect(html).toMatch(/<details\s+open=""/);
+    }
+    const empty = renderToStaticMarkup(
+      <TaskSearchForm workspaceId="ws" query={parseTaskSearchQuery({})} />,
+    );
+    expect(empty).not.toMatch(/<details\s+open/);
+  });
+
+  it("safely ignores empty and whitespace terms when highlighting", () => {
+    const query = { ...parseTaskSearchQuery({ q: "安全" }), terms: ["", "   ", "安全"] };
+    const html = renderToStaticMarkup(
+      <TaskSearchResults workspaceId="ws" query={query}
+        items={[{
+          taskResultId: "task-1", title: "安全 update", summary: "安全 review summary",
+          agent: "opencode", completedAt: "2026-11-06T08:00:00Z",
+          verificationStatus: "passed", latestRevisionNo: 1, bindingLabel: "laptop", bindingStatus: "ACTIVE",
+        }]} nextCursor={null} hasTasksInLifecycle={true} />,
+    );
+    expect(html).toContain("<mark");
+    expect(html).toContain("安全");
+    expect(html).toContain("review summary");
+    expect(html).not.toContain("<mark></mark>");
+  });
+
   it("shows no chips when no criteria are selected", () => {
     const html = renderToStaticMarkup(<TaskSearchForm workspaceId="ws" query={parseTaskSearchQuery({})} />);
     expect(html).not.toContain("Clear all");
