@@ -20,9 +20,9 @@ const STATUSES: readonly { value: InboxStatusFilter; label: string }[] = [
 
 /**
  * The one discussion index, refined three ways: the reader's relationship to a
- * thread, its state, and whether it is unread. The tabs are a filter, not a
- * panel switcher — the list below them is the panel — so they are plain buttons
- * with `aria-selected`, styled by the shared tab shape.
+ * thread, its state, and whether it is unread. These are filters rather than
+ * ARIA tabs, so each button exposes a pressed state and keeps native keyboard
+ * navigation. The shared tab shape still matches other pages.
  */
 export function InboxFilters({
   kind,
@@ -42,12 +42,11 @@ export function InboxFilters({
   sticky?: boolean;
 }) {
   return <div className={`space-y-2 pb-3 ${sticky ? "sticky top-0 z-10 bg-kh-bg" : ""}`}>
-    <div role="tablist" aria-label="Inbox relationships" className={tabListClasses}>
+    <div role="group" aria-label="Inbox relationships" className={tabListClasses}>
       {RELATIONSHIPS.map(relationship => <button
         key={relationship.value}
         type="button"
-        role="tab"
-        aria-selected={kind === relationship.value}
+        aria-pressed={kind === relationship.value}
         className={tabClasses(kind === relationship.value)}
         onClick={() => onKindChange(relationship.value)}
       >{relationship.label}</button>)}

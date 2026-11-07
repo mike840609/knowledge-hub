@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ListChecks } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Timestamp } from "@/components/ui/timestamp";
+import { tabClasses, tabListClasses } from "@/components/ui/tab";
 import type { TaskSearchQuery } from "@/modules/task-knowledge/domain/task-search-query";
 import type { TaskListItemView } from "./task-list";
 import { agentName } from "./task-list";
@@ -46,13 +47,12 @@ export function TaskSearchResults({
 }) {
   const base = `/w/${workspaceId}/tasks`;
   const archived = query.lifecycle === "ARCHIVED";
-  const tab = (active: boolean) => `kh-focus-ring rounded-md px-3 py-1.5 text-body-sm ${active ? "bg-kh-bg-hover font-medium text-kh-text" : "text-kh-text-muted hover:bg-kh-bg-subtle"}`;
   return (
     <section className="kh-reading-column max-w-panel">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-3 border-b border-kh-border pb-2">
-        <nav aria-label="Task lifecycle" className="flex gap-1">
-          <Link href={taskSearchHref(base, query, { lifecycle: "ACTIVE" })} className={tab(!archived)} aria-current={!archived ? "page" : undefined}>Active</Link>
-          <Link href={taskSearchHref(base, query, { lifecycle: "ARCHIVED" })} className={tab(archived)} aria-current={archived ? "page" : undefined}>Archived</Link>
+      <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-3">
+        <nav aria-label="Task lifecycle" className={tabListClasses}>
+          <Link href={taskSearchHref(base, query, { lifecycle: "ACTIVE" })} className={tabClasses(!archived)} aria-current={!archived ? "page" : undefined}>Active</Link>
+          <Link href={taskSearchHref(base, query, { lifecycle: "ARCHIVED" })} className={tabClasses(archived)} aria-current={archived ? "page" : undefined}>Archived</Link>
         </nav>
         <span className="text-caption text-kh-text-muted">
           {nextCursor ? "50+ tasks" : `Showing ${items.length} ${items.length === 1 ? "task" : "tasks"}`}
