@@ -16,7 +16,11 @@ that backfill or production activation was performed.
    deployment still receiving requests. Do not enable the read flag yet.
 3. Run `npx tsx scripts/db/backfill-task-search.ts --target dev --check`
    to see missing/stale projection rows. Use the correct target's database
-   configuration; `dev` may use `KM_DB_URL` for the configured deployment.
+   configuration. With `--target dev`, `KM_DB_URL` **takes precedence**
+   when set and may point to a remote staging or production database. Verify
+   the host and database name from the environment *before* executing
+   `--check` or any `--run` backfill. The `test` and `e2e` targets
+   ignore `KM_DB_URL` and use their separate test database settings.
 4. Run `npx tsx scripts/db/backfill-task-search.ts --target dev --run --batch-size 100`.
    You may use `--max-batches 5` to bound one operation. It is safe to
    interrupt and rerun: each result is processed transactionally under the
