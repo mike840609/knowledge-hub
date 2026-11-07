@@ -15,7 +15,7 @@
  * The Base UI form was keyed on `data-selected`, an attribute that library never sets, so the inspector's
  * and the Inbox's tabs showed no current tab at all (design language §15).
  */
-const TAB_BASE = "kh-focus-ring -mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-body-sm font-medium transition-colors";
+const TAB_BASE = "kh-focus-ring ring-inset -mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-body-sm font-medium transition-colors";
 const TAB_IDLE = "border-transparent text-kh-text-muted hover:text-kh-text";
 const TAB_ACTIVE = "border-kh-primary text-kh-selected-text";
 
