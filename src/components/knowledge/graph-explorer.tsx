@@ -130,9 +130,9 @@ export function GraphExplorer({
             </Link>
           ))}
         </nav>
-        {noDocuments ? null : <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1 py-1">
+        {noDocuments ? null : <div className="ml-auto flex w-full min-w-0 flex-wrap items-center gap-x-4 gap-y-2 py-2 sm:w-auto">
           {/* The width belongs to a wrapper; the field fills it (`Input` does by default, `Select` is told to below). */}
-          <div className="w-56">
+          <div className="w-full min-w-0 sm:w-56">
             <label className="sr-only" htmlFor="graph-find">Find a document</label>
             <Input
               id="graph-find"
@@ -144,7 +144,7 @@ export function GraphExplorer({
             />
           </div>
           {sources.length > 1 ? (
-            <div className="w-44">
+            <div className="w-full min-w-0 sm:w-44">
               <label className="sr-only" htmlFor="graph-source">Source</label>
               <SelectMenu
                 id="graph-source"

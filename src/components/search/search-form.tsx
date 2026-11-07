@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { filterChipClasses } from "@/components/ui/filter-chip";
 import { LiveSearchSubmit } from "./live-search-submit";
 import { Label } from "@/components/ui/label";
 
@@ -67,7 +68,7 @@ export function SearchForm({
               key={chip.param}
               href={without(chip.param)}
               aria-label={`Remove filter ${chip.label}: ${chip.value}`}
-              className="kh-focus-ring inline-flex h-6 max-w-full items-center gap-1 rounded-md border border-kh-border bg-kh-bg-selected pl-2 pr-1 text-caption text-kh-selected-text transition-colors hover:border-kh-primary"
+              className={filterChipClasses}
             >
               <span className="min-w-0 truncate"><span className="text-kh-text-muted">{chip.label}:</span> {chip.value}</span>
               <X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />

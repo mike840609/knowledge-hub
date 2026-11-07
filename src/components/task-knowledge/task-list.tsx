@@ -3,6 +3,7 @@ import { ListChecks } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Timestamp } from "@/components/ui/timestamp";
+import { tabClasses, tabListClasses } from "@/components/ui/tab";
 
 export type TaskListItemView = {
   taskResultId: string;
@@ -20,12 +21,11 @@ export const agentName = (agent: string) => AGENT_NAMES[agent] ?? agent;
 
 export function TaskList({ workspaceId, archived, items, nextCursor }: { workspaceId: string; archived: boolean; items: TaskListItemView[]; nextCursor: string | null }) {
   const base = `/w/${workspaceId}/tasks`;
-  const tab = (active: boolean) => `kh-focus-ring rounded-md px-3 py-1 text-body ${active ? "bg-kh-bg-hover font-medium text-kh-text" : "text-kh-text-muted hover:bg-kh-bg-subtle"}`;
   return (
     <div className="max-w-panel space-y-4">
-      <nav aria-label="Task filter" className="flex gap-2">
-        <Link href={base} className={tab(!archived)} aria-current={archived ? undefined : "page"}>Active</Link>
-        <Link href={`${base}?archived=1`} className={tab(archived)} aria-current={archived ? "page" : undefined}>Archived</Link>
+      <nav aria-label="Task filter" className={tabListClasses}>
+        <Link href={base} className={tabClasses(!archived)} aria-current={archived ? undefined : "page"}>Active</Link>
+        <Link href={`${base}?archived=1`} className={tabClasses(archived)} aria-current={archived ? "page" : undefined}>Archived</Link>
       </nav>
       {items.length === 0 ? (
         <EmptyState

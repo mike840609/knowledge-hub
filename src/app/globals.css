@@ -468,6 +468,16 @@ input[type="search"]::-webkit-search-cancel-button:hover {
     @apply mx-auto w-full max-w-wide px-6;
   }
 
+  /* Keep route and panel tabs accessible on narrow screens without widening the page. */
+  .kh-tab-list {
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .kh-tab-list::-webkit-scrollbar { display: none; }
+  .kh-tab-list > * { flex-shrink: 0; white-space: nowrap; }
+
   /* The document pane, not the viewport, decides where the outline goes: the
      primary nav, the explorer and the inspector take a variable share of the
      window, so a viewport breakpoint says nothing about the room the content

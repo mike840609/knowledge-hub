@@ -123,7 +123,7 @@ const click = async (element: HTMLElement, init: MouseEventInit = {}) => {
   return event;
 };
 const tab = async (label: string) => {
-  await act(async () => { [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find(item => item.textContent === label)!.click(); });
+  await act(async () => { [...host.querySelectorAll<HTMLElement>('[role="group"][aria-label="Inbox relationships"] button')].find(item => item.textContent === label)!.click(); });
   await settle();
 };
 const button = async (label: string) => {
@@ -505,7 +505,7 @@ it("reads the tab, status and unread from the URL once on mount", async () => {
   expect(inboxGets()).toContain("kind=mention");
   expect(inboxGets()).toContain("status=open");
   expect(inboxGets()).toContain("unread=1");
-  expect(host.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Mentions");
+  expect(host.querySelector('[role="group"][aria-label="Inbox relationships"] button[aria-pressed="true"]')?.textContent).toBe("Mentions");
   expect(host.querySelector('[role="combobox"]')?.getAttribute("data-value")).toBe("open");
   expect([...host.querySelectorAll("button")].find(element => element.textContent === "Unread")?.getAttribute("aria-pressed")).toBe("true");
   // A filter is active, so the named-share section stays in Shares.

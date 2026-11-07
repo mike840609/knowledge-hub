@@ -47,7 +47,7 @@ afterEach(async () => { await act(async () => root.unmount()); host.remove(); })
 it("switches the relationship tab, the status and the unread toggle", async () => {
   const onKindChange = vi.fn(), onStatusChange = vi.fn(), onUnreadChange = vi.fn();
   await act(async () => root.render(<InboxFilters kind="all" status="all" unread={false} onKindChange={onKindChange} onStatusChange={onStatusChange} onUnreadChange={onUnreadChange} />));
-  await act(async () => { host.querySelector<HTMLElement>('[role="tab"]:nth-of-type(3)')!.click(); });
+  await act(async () => { host.querySelector<HTMLElement>('[role="group"][aria-label="Inbox relationships"] button:nth-of-type(3)')!.click(); });
   expect(onKindChange).toHaveBeenCalledWith("follow");
   await chooseStatus("open");
   expect(onStatusChange).toHaveBeenCalledWith("open");
@@ -57,10 +57,11 @@ it("switches the relationship tab, the status and the unread toggle", async () =
 
 it("names the four relationships and marks the current one and the unread toggle", async () => {
   await act(async () => root.render(<InboxFilters kind="mention" status="resolved" unread onKindChange={() => {}} onStatusChange={() => {}} onUnreadChange={() => {}} />));
-  const tabs = [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+  const tabs = [...host.querySelectorAll<HTMLButtonElement>('[role="group"][aria-label="Inbox relationships"] button')];
   expect(tabs.map(tab => tab.textContent)).toEqual(["All", "My documents", "Following", "Mentions"]);
-  expect(tabs.map(tab => tab.getAttribute("aria-selected"))).toEqual(["false", "false", "false", "true"]);
-  expect(host.querySelector('[role="tablist"]')?.getAttribute("aria-label")).toBe("Inbox relationships");
+  expect(tabs.map(tab => tab.getAttribute("aria-pressed"))).toEqual(["false", "false", "false", "true"]);
+  expect(tabs.every(tab => tab.getAttribute("role") !== "tab")).toBe(true);
+  expect(host.querySelector('[role="group"]')?.getAttribute("aria-label")).toBe("Inbox relationships");
   expect(host.querySelector('[role="combobox"]')?.getAttribute("aria-label")).toBe("Status");
   expect(host.querySelector('[role="combobox"]')?.getAttribute("data-value")).toBe("resolved");
   expect([...host.querySelectorAll("button")].find(b => b.textContent === "Unread")?.getAttribute("aria-pressed")).toBe("true");
