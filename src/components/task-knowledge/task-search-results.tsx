@@ -16,10 +16,13 @@ function Verification({ status }: { status: string }) {
 function Excerpt({ value, terms }: { value: string; terms: string[] }) {
   const truncated = [...value].slice(0, 200).join("");
   const source = truncated.toLocaleLowerCase();
+  // Empty terms never advance the highlighting cursor (indexOf("") === start).
+  // Query parsing excludes them today, but keep this renderer safe on its own.
+  const activeTerms = terms.filter((term) => term.trim().length > 0);
   const pieces: React.ReactNode[] = [];
   let start = 0;
   while (start < truncated.length) {
-    const matches = terms.map((term) => {
+    const matches = activeTerms.map((term) => {
       const at = source.indexOf(term.toLocaleLowerCase(), start);
       return at < 0 ? null : { at, length: term.length };
     }).filter((m): m is { at: number; length: number } => m !== null).sort((a, b) => a.at - b.at);
