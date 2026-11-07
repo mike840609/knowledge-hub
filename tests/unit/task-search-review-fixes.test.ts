@@ -53,3 +53,17 @@ describe("code-review fixes: lifecycle count timeout",()=>{
   });
 });
 
+
+describe("code-review fixes: empty lifecycle excludes staging rows", () => {
+  it("only regards committed revisions as existing Tasks", async () => {
+    let capturedSql = "";
+    const connection = {
+      query: async (sql: string) => {
+        capturedSql = sql;
+        return [{ has_tasks: 0 }];
+      },
+    } as unknown as QueryConnection;
+    expect(await new MariaDbTaskExportStore(connection).hasTasksInLifecycle("ws","owner","ACTIVE")).toBe(false);
+    expect(capturedSql).toContain("t.latest_revision_no > 0");
+  });
+});

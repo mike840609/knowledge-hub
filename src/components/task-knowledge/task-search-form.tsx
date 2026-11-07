@@ -20,7 +20,7 @@ export function TaskSearchForm({
   return (
     <section aria-label="Task search and filters" className="kh-reading-column max-w-panel px-0 pb-3">
       <form id="task-search-filter-form" method="get" action={base} role="search" className="space-y-3">
-        <TaskSearchDateOffsetSubmit formId="task-search-filter-form" hasExplicitOffset={Boolean(query.from || query.to)} />
+        <TaskSearchDateOffsetSubmit formId="task-search-filter-form" />
         {query.lifecycle === "ARCHIVED" ? <Input type="hidden" name="archived" value="1" /> : null}
         {(query.from || query.to) ? <Input type="hidden" name="offset" value={String(query.offsetMinutes)} /> : null}
         <div className="relative">

@@ -45,10 +45,18 @@ that backfill or production activation was performed.
   Validate the rollback path. The flag is read server-side only.
 - **Mixed writer versions:** keep the flag off, upgrade every writer, rerun
   backfill/consistency and only then retry cutover.
-- **Slow search:** SQL uses `SET STATEMENT max_statement_time=5` and responds
-  without leaking query text. Collect scoped `EXPLAIN` plans with realistic
-  100, 1,000 and 10,000-task datasets before choosing any secondary index.
-  The initial schema deliberately has no speculative global sort index.
+- **Slow search:** SQL uses the MariaDB 5-second statement timeout and
+  responds without leaking query text. Run the reproducible opt-in benchmark
+  `KM_TASK_SEARCH_PERF=1 npm run test:integration -- tests/integration/task-search-performance.test.ts`.
+  It seeds one owner with synthetic 100 / 1,000 / 10,000 Task projections,
+  records five-sample p95 plus scoped EXPLAIN for unfiltered, keyword and
+  combined queries at each size, and cleans up its fixture. The PR CI includes
+  a separate isolated database run; output begins with
+  `TASK_SEARCH_PERF_100_1000_10000`.
+  **Record CI run ID, actual measurements, and plans before read cutover.**
+  A CI benchmark is not a production SLA; inspect real tenant data and query
+  p95/timeouts after rollout. Do not invent a secondary index without a plan.
+
 
 ## Scope
 

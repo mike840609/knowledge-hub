@@ -6,11 +6,8 @@ import { useEffect } from "react";
  * must send the browser offset immediately, not flash UTC results first.
  * Existing explicit offsets remain authoritative.
  */
-export function TaskSearchDateOffsetSubmit({
-  formId, hasExplicitOffset,
-}: { formId: string; hasExplicitOffset: boolean }) {
+export function TaskSearchDateOffsetSubmit({ formId }: { formId: string }) {
   useEffect(() => {
-    if (hasExplicitOffset) return;
     const form = document.getElementById(formId);
     if (!(form instanceof HTMLFormElement)) return;
     const submit = () => {
@@ -30,6 +27,6 @@ export function TaskSearchDateOffsetSubmit({
     };
     form.addEventListener("submit", submit);
     return () => form.removeEventListener("submit", submit);
-  }, [formId, hasExplicitOffset]);
+  }, [formId]);
   return null;
 }

@@ -83,7 +83,7 @@ test("flag-on Tasks search: field hits, filter URLs, invalid cursor and 390px", 
   await expect(page).not.toHaveURL(/archived=1/);
 
   await page.goto(searchOrigin + base + "?q=" + "x".repeat(201));
-  await expect(page.getByRole("alert")).toContainText(/at most 200/i);
+  await expect(page.getByRole("region", { name: "Task search and filters" }).getByRole("alert")).toContainText(/at most 200/i);
   await expect(page.getByText("No matching tasks")).toHaveCount(0);
   await page.goto(searchOrigin + base + "?cursor=malformed");
   await expect(page).toHaveURL(searchOrigin + base);
@@ -133,6 +133,16 @@ test("missing date-offset deep link re-queries at browser fixed offset while exp
     await page.getByRole("button", { name: "Apply filters" }).click();
     await expect(page).toHaveURL(/from=2026-11-06/);
     await expect(page).toHaveURL(/offset=480/);
+    // Clearing both dates from an explicitly dated page removes obsolete
+    // hidden offsets rather than keeping a stale offset-only URL.
+    await page.goto(base + "?from=2026-11-06&to=2026-11-06&offset=480");
+    await page.locator("details").first().locator("summary").click();
+    await page.locator('input[name="from"]').fill("");
+    await page.locator('input[name="to"]').fill("");
+    await page.getByRole("button", { name: "Apply filters" }).click();
+    await expect(page).not.toHaveURL(/(?:[?&])offset=/);
+    await expect(page).not.toHaveURL(/(?:[?&])from=/);
+    await expect(page).not.toHaveURL(/(?:[?&])to=/);
     await page.goto(base + "?from=2026-11-06&to=2026-11-06");
     await expect(page).toHaveURL(/offset=480/);
     await expect(page.locator("details")).toContainText("UTC+08:00");

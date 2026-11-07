@@ -170,3 +170,13 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:integration
+      # Representative Task Search benchmark; opt-in and limited to its
+      # implementation PR. Separate isolated DB prevents interference with
+      # the general integration suite. Logs retain p95 and EXPLAIN for 100,
+      # 1000 and 10000 owner-scoped results.
+      - name: Task Search performance (100 / 1k / 10k)
+        if: github.event_name == 'pull_request' && github.head_ref == 'docs/task-search-filters-list-ux-plan'
+        env:
+          KM_TASK_SEARCH_PERF: "1"
+        run: npm run test:integration -- tests/integration/task-search-performance.test.ts
+

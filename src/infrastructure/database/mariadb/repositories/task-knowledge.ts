@@ -317,7 +317,7 @@ export class MariaDbTaskExportStore implements TaskExportStore {
       const rows = await this.connection.query<DbRow[]>(
         `SET STATEMENT max_statement_time=5 FOR SELECT EXISTS (
           SELECT 1 FROM task_results t JOIN task_export_bindings b ON b.id = t.binding_id
-          WHERE b.workspace_id = ? AND b.owner_user_id = ? AND t.lifecycle = ?
+          WHERE b.workspace_id = ? AND b.owner_user_id = ? AND t.lifecycle = ? AND t.latest_revision_no > 0
         ) AS has_tasks`,
         [workspaceId, ownerUserId, lifecycle],
       );
