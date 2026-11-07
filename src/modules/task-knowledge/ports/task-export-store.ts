@@ -1,4 +1,7 @@
 import type { TaskReferenceInput } from "../domain/task-references";
+import type { TaskSearchProjection } from "../domain/task-search-projection";
+import type { TaskSearchQuery } from "../domain/task-search-query";
+import type { TaskSearchCursor } from "../domain/task-search-cursor";
 
 export type ExportBindingStatus = "ACTIVE" | "REVOKED";
 export type ExportCredentialStatus = "ACTIVE" | "REVOKED";
@@ -58,6 +61,21 @@ export type StoredTaskReference = {
 /** A task with what its list row shows: the binding and the latest revision's artifact. */
 export type TaskListRow = { task: TaskResultRow; bindingLabel: string; bindingStatus: ExportBindingStatus; artifactJson: string };
 
+/** One indexed latest-revision result, ordered by UTC milliseconds and Task ID. */
+export type TaskSearchRow = {
+  taskResultId: string;
+  lifecycle: TaskLifecycle;
+  latestRevisionNo: number;
+  bindingLabel: string;
+  bindingStatus: ExportBindingStatus;
+  completedAtEpochMs: number;
+  agent: string;
+  verificationStatus: string;
+  title: string;
+  summary: string;
+  searchBody: string;
+};
+
 /** A task with its binding. */
 export type TaskScope = { task: TaskResultRow; binding: ExportBinding };
 
@@ -85,10 +103,16 @@ export interface TaskExportStore {
   getRevision(taskResultId: string, revisionNo: number): Promise<TaskRevisionRow | null>;
   insertRevision(revision: { id: string; taskResultId: string; revisionNo: number; artifactJson: string; contentHash: string }): Promise<void>;
   insertReferences(taskResultId: string, revisionNo: number, references: readonly StoredTaskReference[]): Promise<void>;
+  /** Monotonic latest-revision projection, written in the same ingest transaction. */
+  upsertSearchProjection(projection: TaskSearchProjection): Promise<void>;
   listReferences(taskResultId: string, revisionNo: number): Promise<StoredTaskReference[]>;
 
   /** Tasks whose binding names `workspaceId`, newest first, ids below `beforeId` when given. */
   listTasks(workspaceId: string, query: { lifecycle: TaskLifecycle; beforeId: string | null; limit: number }): Promise<TaskListRow[]>;
+  /** Always scoped to the authenticated My Space owner, including the SQL predicate. */
+  searchTasks(workspaceId: string, ownerUserId: string, query: TaskSearchQuery, cursor: TaskSearchCursor | null, limit: number): Promise<TaskSearchRow[]>;
+  /** Lifecycle-only owner-scoped existence, never a global unscoped result count. */
+  hasTasksInLifecycle(workspaceId: string, ownerUserId: string, lifecycle: TaskLifecycle): Promise<boolean>;
   getTaskScope(taskResultId: string): Promise<TaskScope | null>;
   /** Newest first. */
   listRevisions(taskResultId: string): Promise<{ revisionNo: number; createdAt: Date }[]>;

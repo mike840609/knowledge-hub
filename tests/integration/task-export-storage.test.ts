@@ -37,12 +37,12 @@ const columns = async (table: string) =>
   ));
 
 describe("task export schema", () => {
-  it("creates the five tables", async () => {
+  it("creates the task export tables and derived search projection", async () => {
     const rows = await pool.query<{ TABLE_NAME: string }[]>(
       "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE 'task\\_%' ORDER BY TABLE_NAME",
     );
     expect(rows.map((row) => row.TABLE_NAME).sort()).toEqual([
-      "task_export_bindings", "task_export_credentials", "task_result_references", "task_result_revisions", "task_results",
+      "task_export_bindings", "task_export_credentials", "task_result_references", "task_result_revisions", "task_result_search", "task_results",
     ]);
   });
 
@@ -85,6 +85,7 @@ describe("task export schema", () => {
       "task_export_credentials.binding_id->task_export_bindings",
       "task_result_references.task_result_id->task_results",
       "task_result_revisions.task_result_id->task_results",
+      "task_result_search.task_result_id->task_results",
       "task_results.binding_id->task_export_bindings",
     ]);
   });

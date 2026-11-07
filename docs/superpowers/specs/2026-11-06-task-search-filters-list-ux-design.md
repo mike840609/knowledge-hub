@@ -1,0 +1,151 @@
+# Task Search + Filters + List UX — Design Spec
+
+**Status:** Approved scope, implementation in progress on PR #336. Task 4–5 visual direction refined 2026-11-06; Tasks 3–6 are not yet complete.
+**Area:** My Space → Tasks; read/discovery only. **Related:** [Task Knowledge Export design](2026-11-04-task-knowledge-export-design.md) and [implementation plan](../plans/2026-11-06-task-search-filters-list-ux.md).
+
+## 1. Problem and outcome
+
+Manual /hub-export already stores finished Claude Code/OpenCode tasks as immutable revisions with a latest revision, verification, references, and ACTIVE/ARCHIVED lifecycle. The existing Tasks page lists up to 50 newest-created task IDs, with older-task paging but **no keyword search, filters, or summary preview**. Finding past decisions requires opening tasks one at a time.
+
+**Outcome:** An owner can find a past task by words in its latest revision, narrow by agent/verification/completed date, see enough context in the list to choose a result, and continue paging from a shareable URL.
+
+**Non-goals:** edit or re-ingest, semantic/vector search, embeddings, search across historic revisions, repository/project metadata, tags, saved searches, references/code path search, Wiki-to-Task reverse links, Task graph nodes, Copy for Agent, sharing, Team Tasks, analytics.
+
+## 2. Scope and interaction decisions
+
+| Area | Decision |
+| --- | --- |
+| Entry | Keep existing My Space → Tasks primary-navigation row and route. No sidebar item. |
+| Keyword fields | Latest revision's title, summary, findings, decisions, changes. Not verification checks or references. |
+| Query | Case-insensitive Chinese/English substring matching; whitespace-separated AND terms; escape SQL LIKE metacharacters literally. |
+| Latest revision | Exactly one indexed/searchable result per Task, with the latest **committed** revision only. |
+| Filters | Agent (all / claude-code / opencode), Verification (all / passed / failed / not_run / not_applicable), completed date inclusive from/to. |
+| Lifecycle | Preserve Active and Archived tabs; selecting one never includes the other. Retain query and filters across tabs, reset cursor. |
+| Sort | Always completedAt descending, then taskResultId descending, for both filtered and unfiltered lists. No sort control in this phase. |
+| Pagination | 50 results/page; opaque versioned composite keyset cursor over (completedAt, taskResultId) bound to the normalized search criteria. |
+| List | Linear-inspired **compact list rows**, not cards: one prominent title, at most two lines of inert plain-text summary/matched excerpt, then muted Agent / Verification / completed time / revision and binding metadata. |
+| Search and filters layout | Full-width search field first, then a compact **Agent / Verification / Completed** filter toolbar. Keep filters in accessible popovers/dropdowns rather than a tall permanent filter form; preserve a keyboard- and no-JS-operable native GET fallback. |
+| Selected criteria | Show removable chips **only for active criteria**, with a Clear all filters action that keeps the Active/Archived lifecycle but resets the cursor. |
+| Tabs and result count | Compact Active / Archived tabs immediately above the list. Use an accurate displayed-page count or a clearly labeled “50+” when only `limit + 1` is known; do not invent a workspace-wide result total or run an unscoped count. |
+| Responsive and states | Toolbar wraps/stacks at 390px; distinguish initial-empty, no archived tasks, no matches, pending navigation, invalid filters and retryable errors. No new sidebar entry or global design token. |
+| Search URL | GET search on the existing /w/{workspaceId}/tasks route, bookmarkable and functional without JavaScript. |
+| Empty state | Separate no tasks yet / no archived tasks from no matching tasks; clear filters without losing lifecycle. |
+
+### User flows
+
+1. Open Tasks with no search inputs. See the 50 most recently *completed* active tasks, with concise previews and an Older tasks link when there are more.
+2. Type a keyword (e.g. "登入 redirect"), submit or allow debounced live submit. Every term must appear somewhere across the supported fields of the **same latest revision**; matching is Workspace-scoped.
+3. Select Agent, Verification, and/or date range. Results update, with criteria in URL. Changing any criterion discards an old cursor. Active filter chips can remove one criterion or all of them.
+4. Switch Active ↔ Archived; preserve q/agent/verification/date inputs, reset cursor.
+5. Click a result; existing Task Detail and revision navigation remain unchanged. Browser back restores the list's search URL.
+6. If the owner has no tasks at all in the selected lifecycle, retain the setup/no-archives empty state. If tasks exist but no match, show "No matching tasks" and a clear-search action. The read result must carry an owner-scoped `hasTasksInLifecycle` flag (or equivalent): compute this via a bounded `EXISTS` on the selected lifecycle **without** applying q/agent/verification/date filters. A filtered zero-row page alone cannot distinguish these two cases; never use an unscoped/global count.
+
+### URL contract
+
+Existing route gains optional parameters: <code>q</code>, <code>agent</code>, <code>verification</code>, <code>from</code>, <code>to</code>, <code>offset</code>, <code>archived=1</code>, <code>cursor</code>.
+
+- <code>q</code>: at most 200 characters; up to five distinct whitespace-separated terms, each up to 64 characters. A too-long query displays a non-sensitive validation message and does not execute SQL. Empty/whitespace-only q with filters is a filter-only query; no criteria means default list.
+- <code>agent</code> and <code>verification</code>: fixed enum values; empty/omitted is all. Unknown values fail validation without being interpreted as "all".
+- <code>from</code>/<code>to</code>: valid YYYY-MM-DD dates (inclusive) interpreted in a **fixed UTC offset**, not an IANA time zone. <code>offset</code> is that submitted offset in minutes, -840 to +840. Compute half-open UTC bounds [start, next-day end) at that **same** offset, including across DST transitions: this deliberately does **not** model true wall-clock calendar days where DST changes. With JavaScript, prefer the browser's current UTC offset **only after URL canonicalization and a matching server query**; an explicit URL offset always wins. Specifically, if `from` or `to` is present but `offset` is absent, SSR must initially calculate **UTC+00:00** and render an **UTC+00:00** label. During hydration, issue exactly one `router.replace` to the **same URL with explicit `offset=<browser UTC offset minutes>`** and **drop any old cursor**, preserving q/agent/verification/from/to/archived. **Do not update the hidden offset or visible label to the browser zone until the offset-bearing server response and its results are rendered together**; while navigation is pending, keep the initial UTC result and UTC label consistent. If an explicit offset is already present, never override it or re-canonicalize. If neither date bound is present, it is safe to initialize the hidden offset to the browser offset for the user's **next** date-filter submission, since no date predicate is currently applied; always include that offset in the submitted GET URL. Without JavaScript, a date-filtered request without an explicit offset remains **UTC+00:00** and visibly labels that fact; never claim the no-JS results are in the browser's local zone. Implement this as Task-specific date-zone canonicalization; **do not reuse the existing SearchDateZone hydration behavior unchanged**, because it changes the label and hidden field without re-querying. Display "Fixed offset UTC±HH:MM", not "current content version". The date filter applies to **Agent artifact completedAt**, not database updated_at or revision created_at.
+- <code>archived=1</code> only selects ARCHIVED; omitted selects ACTIVE.
+- <code>cursor</code>: opaque URL-safe v1 value representing the last **UTC epoch-millisecond** completion value, UUIDv7 Task Result ID, and a digest of canonical criteria (q after query normalization, agent, verification, from/to/offset, lifecycle). It is not authorization. Invalid, unsupported-version, criteria-mismatched and legacy UUID-only cursors must never 500 or silently show data from unrelated criteria; respond with a safe first-page/canonical URL reset and a user-understandable state. A criteria fingerprint is **not** a dataset snapshot or freshness check: updating/revising/archiving tasks between pages can reorder/omit results across requests. Promise no duplicates or skips **only when the matching dataset is unchanged**; do not call a cursor "stale" merely because the underlying data changed.
+- Changing any filter, q, or lifecycle resets cursor to page one; clicking Older tasks preserves all criteria. Page-size remains 50 with limit+1 to determine hasNext.
+- Query values are length- and type-bounded before hitting the DB. Unknown params do not grant any scope; avoid reflecting untrusted content as HTML.
+
+## 3. Search data and storage
+
+Keep source of truth unchanged: <code>task_results</code> + immutable <code>task_result_revisions.artifact_json</code>. Indexing must be a **derived projection**, not a second editable artifact or a new knowledge Document.
+
+Suggested new table <code>task_result_search</code>, one row per Task:
+- <code>task_result_id UUID PRIMARY KEY</code> (FK to task_results).
+- <code>revision_no INT UNSIGNED</code> tracks the indexed latest revision.
+- <code>completed_at_epoch_ms BIGINT SIGNED NOT NULL</code>, an integer number of **UTC Unix epoch milliseconds** derived from the latest artifact's ISO completedAt (including explicit timezone offsets). This is **not** MariaDB DATETIME: Artifact V1 permits years 0000/0001 and dates whose offsets cross into UTC year 10000, which DATETIME(6) cannot represent. All currently accepted dates must remain ingestible without changing Artifact V1 validation. JavaScript Date's numeric epoch milliseconds are safe integers for this supported range. The existing validator permits up to nine fractional second digits; deliberately truncate extra precision **toward the prior millisecond** (not round) and use taskResultId as the deterministic tie-breaker. Normalize **once** and reuse the same integer for index write, UTC range comparison, sort and cursor. Test `0001-01-01T00:00:00Z`, `0000-01-01T00:00:00+23:59`, `9999-12-31T23:59:59-23:00`, fractional nanoseconds and timezone offsets.
+- <code>agent</code>, <code>verification_status</code>, <code>title</code>, and <code>summary</code> for list rendering/filtering.
+- <code>search_body</code> (TEXT/MEDIUMTEXT after sizing) containing summary + findings + decisions + changes as plain text separated with unambiguous line breaks; no Markdown/HTML interpretation or executable rendering.
+- Add only the measured indexes that support the workspace/binding, lifecycle, agent/verification/date filtering and sort path. Task scope derives through task_results → binding → My Space; **do not duplicate owner/workspace authority into the projection**.
+
+**Revision write:** in the *same transaction* as successful ingest's revision insert and latest_revision_no advancement, upsert the projection to that revision. Exact replay returning 200 makes no change. A rejected, out-of-order or conflicting revision makes no change. Archive/restore changes only the task's lifecycle and immediately affects search visibility via its join. Revoked bindings' previously stored tasks stay readable.
+
+**Backfill/rollout with explicit read cutover:** provide an idempotent, bounded-batch backfill for all existing Task Results using their current latest revision. **Default `TASK_SEARCH_READ_ENABLED=false` at deployment**, including when the projection table exists. While false, keep the original Task list query/pagination and UI fully operational (no search/filters exposed and no projection-dependent reads). Deploy schema and projection-writing ingest on **all writer instances** before backfill. Then backfill; compare revision number on upsert to prevent an old batch overwriting a concurrently ingested newer projection. Check completeness and currency over the Task source of truth using an owner-independent, administrative consistency query (no missing rows and `projection.revision_no = task.latest_revision_no` for all Tasks); make the check part of a repeatable runbook. **Only enable projection-backed reads and the new search UI after all writers are updated and the check passes.** A failed/interrupted backfill leaves the flag disabled, the legacy Task list visible, and a resumable/re-runnable backfill; never claim rollout complete. If a post-cutover problem occurs, disable the read flag to revert to the legacy list without discarding revisions. Flag coordination across app instances is a deployment prerequisite (a consistently applied runtime setting or durable readiness marker). Test an interrupted backfill while legacy Tasks remains usable, the disabled/enabled states, re-runs, and a concurrently advanced revision. Migration number is allocated **at implementation time** (main is currently at 033; avoid competing branches claiming 034).
+
+Projection recovery should be deterministic from the immutable artifact. Do not store full chat, terminal logs, thinking, or additional unapproved content. Search data must receive the same owner-only protection as existing Task Results.
+
+## 4. Search SQL and performance
+
+The existing MariaDB 10.11 deployment has no ngram/Mroonga parser for Chinese full-text. Do not add an Elasticsearch dependency, FULLTEXT index, GPU, embeddings or a separate search service for this phase.
+
+- Scope and lifecycle predicate **must precede** result disclosure: join task_results to binding and projection; restrict to caller's currently ACTIVE, owned PERSONAL Workspace in the application service, and include workspace predicate in the SQL. No other Workspace contributes hits, snippets, counts or errors.
+- Each AND term matches <code>title COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '!'</code> OR <code>search_body COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '!'</code>. Use parameterized values and literal-escape <code>!</code>, <code>%</code>, <code>_</code>. Never interpolate query text or filter values into SQL. Do not use LOWER() or case-sensitive utf8mb4_bin comparison.
+- Verification and Agent filters match their exact enums; dates use UTC epoch-millisecond bounds against projection.completed_at_epoch_ms. Sorting and keyset comparison use the **same** normalized columns; DESC requires (completed_at_epoch_ms < cursor.completedAtEpochMs) OR (completed_at_epoch_ms = cursor.completedAtEpochMs AND task_result_id < cursor.id). This is a stable ordering for an unchanged dataset, not cross-request snapshot isolation.
+- Projection may be scanned for substring LIKE; the target is a bounded per-owner task corpus, not an assertion of index-only search. Add server-side statement timeout comparable to existing Knowledge Search (currently 5 s); show a retryable, non-leaking UI error instead of infinite loading.
+- Avoid N+1 fetches; fetch a limited set of previews directly. Display at most 160–200 visible characters of summary by default, and when q hits another supported field choose a bounded matching excerpt, rendered as inert text. Prefer simple deterministic snippet logic over a second search engine.
+- Verify with realistic seeds and EXPLAIN before adding multiple redundant indexes. No exact latency SLA is asserted without measurement.
+
+## 5. UX and accessibility
+
+Use existing Task List, EmptyState, Timestamp, search input, and native filter patterns; do not redesign the navigation or change the Task Detail contract.
+
+- One prominent search field above a compact filter row; agent, verification, and completed dates. On narrow screens, controls wrap vertically. Avoid a dashboard/card wall.
+- Active/Archived tabs remain visible and keyboard-operable. Show current filter values, removability, and a Clear filters link that preserves lifecycle.
+- Use a native GET form as a no-JS fallback; optional 250 ms debounced live search can reuse existing LiveSearchSubmit. Submitting with Enter applies immediately, no repeated navigations for unchanged inputs. **Hydration may add a missing offset to a date-filtered URL only once**; it must preserve other filters, remove a mismatched cursor, and atomically synchronize offset label, form state and server-fetched result set. Guard `router.replace` from loops and race with debounced form submission.
+- Task row: title (truncate or wrap without hiding all context), summary preview max 2 lines, Agent, explicit verification label/icon (Passed, Failed, Not run, Not applicable), human-readable completed time with an exact timestamp accessible, revision indicator and existing binding revoked badge. Status is self-reported by the Agent, **not Hub certification**; color never carries the only meaning.
+- Highlight matched text without interpreting content as Markdown/HTML or using dangerouslySetInnerHTML. Prefer existing HighlightedSearchText logic, with documented Unicode full-width highlighting limitation.
+- Empty state differs for no tasks, no archived tasks and zero results using the owner-scoped, lifecycle-only `hasTasksInLifecycle` value; a search with zero hits is insufficient by itself. No horizontal scrolling at 390px; long Japanese/Chinese text, emoji, URLs and malicious markup must be inert.
+- Search result cards/rows open the existing Task Detail. Preserve browser history, URL parameters and standard focus semantics; don't add a second Tasks nav destination.
+
+### 5.1 Tasks-only Linear-inspired layout contract (approved visual refinement)
+
+**Scope boundary.** Apply this only to `My Space → Tasks` when `TASK_SEARCH_READ_ENABLED=true`. Keep the existing PageHeader breadcrumb, “Set up export” action, App Shell, primary navigation/Sidebar, Task Detail and site-wide tokens untouched. While the flag is false, the legacy Tasks page, tabs, pagination and empty states remain unchanged. Follow the existing `frontend-design-language.md` contract (14px body, 12px caption, 6px control radius, restrained indigo/neutral hierarchy, subtle dividers, one shared focus treatment); do **not** introduce unrelated card designs, shadows, animation, new color tokens or a separate Tasks sub-navigation.
+
+**Visual topology, top to bottom:**
+
+1. Existing compact `My Space › Tasks` PageHeader with the existing “Set up export” secondary action; no tall hero/banner.
+2. One prominent text search input labelled **Search tasks**, occupying available width, with immediate Enter submission. A keyboard shortcut hint such as `⌘K` must **not** be shown because the global Quick Search already owns that shortcut. Do not open the global palette from this field.
+3. Directly below, a compact horizontal filter toolbar with **Agent**, **Verification** and **Completed** controls (visually neutral 32px-class controls using existing design tokens). Each control has its name and meaningful selected value; an accessible popover/dropdown expands the choices, and keyboard activation/escape/focus return work. With JavaScript disabled the equivalent native GET form controls remain available: Agent and Verification use labelled native choices, Completed date range can expand using a native `<details>` or remain visibly inline. No JS-only filter that disappears or becomes impossible to submit when scripting is off.
+4. A separate short row of active chips **only when at least one filter or q is applied**. Chips use existing small neutral control/badge styling; removing one chip preserves all other search parameters, the active lifecycle and the fixed UTC offset when dates remain; it always drops `cursor`. A `Clear all` action clears q/agent/verification/from/to/offset and cursor while keeping the current Active/Archived tab. A chip is a genuine link/button with an accessible name, not a decorative badge.
+5. **Active** and **Archived** tabs, with the current tab clearly indicated by text + selected background or understated underline, not accent-heavy blocks. Place an accurately labelled results indicator on the opposite side. Unless a scoped total is explicitly calculated, use “Showing N tasks” (number on this page) or “50+ tasks” for a first page that has more results; never present a current-page count as a global exact total.
+6. A continuous, compact **row list** with subtle separators and one hover/focus target for the existing Task Detail link; no individual cards or multi-column grid. The dominant line is a 14px-medium title, wrapping or truncating without making the entire task ambiguous. A maximum-two-line, 160–200-character plain-text excerpt is next. The last line contains muted 12px metadata: Agent, **textual** Verification (Agent-reported, never Hub-certified), completed date/time, revision only if >1 and the existing revoked binding marker when applicable. Prefer stable alignment with semantic separators. Do not repeat bulky colored badges for ordinary metadata. Matching text may be highlighted using inert text spans only.
+7. “Older tasks” is an understated pagination link beneath the list; preserve every active criterion and date offset. Avoid any new pagination widget in this phase.
+
+**States and interaction contracts.** A pending client-side filter/URL navigation may show a subtle inline pending state or row skeleton without shifting the toolbar; do not show the new offset label over old UTC-filtered results during hydration. With no JavaScript, native GET submission and SSR results remain completely usable. Zero results must use owner-scoped `hasTasksInLifecycle`: initial-empty offers “Set up task export”; empty Archived explains how archive works; no matches includes “Clear filters”. An invalid filter shows bounded, non-sensitive guidance and keeps the user on Tasks; a query timeout shows a retry action, never a spinner indefinitely. Keep focus visibly on controls; avoid focus loss on chip removal, tab navigation or URL updates. Respect reduced motion.
+
+**390px viewport.** Search remains full width; Agent/Verification/Completed wrap or stack; filter popovers are viewport-contained, date fields do not overrun, active chips wrap naturally, metadata wraps, long CJK/emoji/URLs do not cause horizontal scrolling. The Task title must remain readable and the row action needs a full-width accessible target. Test desktop + 390px in both light and dark themes; do not change the shared Sidebar width or collapse behavior.
+
+**Implementation split.** Task 4 owns search/toolbar/popover-fallback/chips/tabs/URL state and tests; Task 5 owns result count presentation, row hierarchy, summary/highlights, empty/loading/error states and responsive polish; Task 6 owns integrated desktop/mobile, keyboard/no-JS/SSR and accessibility regression. This contract refines only the Tasks surface, not shared primitives.
+
+## 6. Security and invariants
+
+- All list/search reads require <code>CallerContext</code> and <code>assertOwnedPersonal</code> for the ACTIVE PERSONAL Workspace, exactly as the current TaskResultReadService. Query inputs, cursors, IDs, or the export token never grant reads.
+- The single caller-less write remains only <code>IngestTaskResultService.ingest</code>; do not add a public caller-less search path or expand the export credential beyond <code>task-result:create</code>.
+- Never search a global unfiltered index and filter on the client. Do not leak titles, search snippets, match counts or binding labels between users/workspaces.
+- Preserve Task revision immutability, idempotent ingest, Archive/Restore and source-reference availability rules.
+- Search timeout, malformed cursor, invalid date and oversize q are expected UX states, not uncaught 500s. Escape output as plain text.
+- No changes to Folder Sync, Knowledge Graph, published documents, CLI or /hub-export payload schema.
+
+## 7. Acceptance tests
+
+1. Title/summary/findings/decisions/changes search succeeds; Unicode Chinese and English case-insensitive, whitespace AND and LIKE punctuation behave correctly. A term found only in historic revision does not match.
+2. No q + no filters reproduces the complete Tasks list; filter-only search works; Agent, all four verification statuses, inclusive dates and archived filter combine via AND.
+3. A new revision atomically replaces the projection. Exact replay is idempotent; rejected revision, timeout, failed transaction cannot leave stale/wrong projection. Backfill is repeatable and safe against concurrent newer revisions. Legacy list must remain visible until a verified full read cutover; failed/interrupted backfill must not hide historical Tasks.
+4. 50 + one pagination under completedAt-millisecond ties yields deterministic no duplicate/skip on an unchanged dataset. URL cursor is bound to current filters; malformed/version-mismatched/legacy cursors fail safely, no 500. Concurrent dataset changes do not promise snapshot consistency.
+5. A second owner, foreign My Space ID and archived Workspace cannot obtain results/counts/snippets. Revoked binding history remains visible to its owner.
+6. Search URLs work after browser refresh/back; changing filters or lifecycle resets cursor. Direct-load `?from=2026-11-01&to=2026-11-06` (without offset) with and without JavaScript: SSR/no-JS visibly uses UTC+00:00; JS canonicalizes to an explicit browser offset, clears cursor, and re-queries before showing the new label. Assert the **URL offset, rendered label, and actual date-boundary results agree at every stage**, including nonzero browser offsets, no-JS native form, explicit-offset reloads and fixed-offset DST behavior.
+7. 390px mobile, long UTF-8 strings, invalid filters, empty states, keyboard focus and hostile HTML/script text are tested.
+8. Existing task export/detail/revision/archive/restore tests and repo verify, MariaDB integration, E2E remain green.
+9. With the read feature flag **off**, the original Tasks UI is unchanged. With the flag **on**, the hierarchy is Header → Search → compact Agent/Verification/Completed toolbar → active chips (conditional) → Active/Archived tabs + accurate **page** indicator → rows → Older tasks; do not alter Sidebar or shared style tokens.
+10. With and without JavaScript, entering q, choosing each filter, submitting by Enter, removing an active chip, clearing all criteria, switching tabs and paging preserve URL semantics, lifecycle and keyboard focus; there is no conflicting `⌘K` hint in Task Search.
+11. Each row has a dominant readable title, ≤2 lines of inert summary/excerpt, muted metadata and a single accessible detail link. At 390px, long CJK text/emoji/URLs, controls and chips wrap without horizontal scrolling; both light/dark and keyboard focus are verified.
+12. Initial empty, empty Archived, no matches, loading, validation and retryable timeout states are distinct, accurate and do not leak inaccessible task counts or previous date-filter results.
+
+## 8. Alternatives and decisions
+
+- **Only client-side filtering:** rejected; current list is paginated 50 per page and would omit matching older tasks. The legacy list is intentionally preserved **only while search reads are disabled during rollout**, not as a substitute for server-side search.
+- **JSON_EXTRACT/LIKE directly over all revisions:** rejected as primary design; it complicates matching, latest revision and preview reads and makes backfill/reindex recovery harder.
+- **MariaDB FULLTEXT:** deferred; available tokenizer lacks suitable mixed Chinese search behavior in this environment.
+- **Vector/semantic search / Elasticsearch:** deferred; adds infrastructure/operational overhead and is unnecessary to validate the user workflow.
+- **Search all revisions:** deferred; confusing duplicate hits and stale decisions; continue to expose historical revisions only inside Task Detail.
+- **Project/Repository filters:** deferred; existing binding labels represent machines/configurations, not canonical repository identities, so inventing project attribution would be misleading.
+
+## 9. Delivery
+
+Implement in six reviewable steps using [the implementation plan](../plans/2026-11-06-task-search-filters-list-ux.md). Require domain/service/repository tests before UI. Deliver in one implementation PR after independent commits and full CI; this document-only PR deliberately makes no product changes.

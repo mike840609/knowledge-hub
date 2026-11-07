@@ -68,3 +68,12 @@ export class TaskArchivedError extends DomainError {
     this.name = "TaskArchivedError";
   }
 }
+
+
+/** A bounded owner-scoped search timed out; no matching data may be leaked. */
+export class TaskSearchUnavailableError extends DomainError {
+  constructor() {
+    super("TASK_SEARCH_UNAVAILABLE", "Task search timed out. Try again or narrow the filters.");
+    this.name = "TaskSearchUnavailableError";
+  }
+}

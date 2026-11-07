@@ -1,6 +1,9 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { DomainError } from "@/shared/domain/errors";
 import { isUuid } from "@/shared/ids/uuid";
+import { decodeTaskSearchCursor, encodeTaskSearchCursor, taskSearchCriteriaDigest } from "../domain/task-search-cursor";
+import { parseTaskSearchQuery, type TaskSearchQuery } from "../domain/task-search-query";
+import { buildTaskSearchPreview } from "../domain/task-search-preview";
 import { parseTaskContent, type TaskContentV1 } from "../domain/task-artifact";
 import type { TaskReferenceInput } from "../domain/task-references";
 import type { ExportBindingStatus, ReferenceResolution, TaskLifecycle, TaskScope } from "../ports/task-export-store";
@@ -24,6 +27,7 @@ export type TaskListItem = {
   latestRevisionNo: number;
   bindingLabel: string;
   bindingStatus: ExportBindingStatus;
+  summary?: string;
 };
 
 /** A WIKI reference's state now; `document` is set only while the viewer may open it. External references carry no state. */
@@ -56,11 +60,46 @@ function content(artifactJson: string): TaskContent {
 export class TaskResultReadService {
   constructor(private readonly unitOfWork: TaskKnowledgeUnitOfWork) {}
 
-  async list(caller: CallerContext, workspaceId: string, query: { lifecycle?: TaskLifecycle; cursor?: string | null }): Promise<{ items: TaskListItem[]; nextCursor: string | null }> {
+  /** Validate owner scope without executing any Tasks search or list SQL. */
+  async assertOwnedMySpace(caller: CallerContext, workspaceId: string): Promise<void> {
+    if (!isUuid(workspaceId)) throw new DomainError("WORKSPACE_NOT_FOUND", "Workspace not found.");
+    await this.unitOfWork.run(async (r) => {
+      assertOwnedPersonal(caller, await r.workspaces.lockSharedById(workspaceId));
+    });
+  }
+
+  async list(
+    caller: CallerContext, workspaceId: string,
+    query: { lifecycle?: TaskLifecycle; cursor?: string | null; search?: TaskSearchQuery },
+  ): Promise<{ items: TaskListItem[]; nextCursor: string | null; hasTasksInLifecycle?: boolean; resetCursor?: boolean }> {
     if (!isUuid(workspaceId)) throw new DomainError("WORKSPACE_NOT_FOUND", "Workspace not found.");
     const beforeId = query.cursor && isUuid(query.cursor) ? query.cursor : null;
     return this.unitOfWork.run(async (r) => {
       assertOwnedPersonal(caller, await r.workspaces.lockSharedById(workspaceId));
+      if (process.env.TASK_SEARCH_READ_ENABLED === "true") {
+        const search = query.search ?? parseTaskSearchQuery({archived: query.lifecycle === "ARCHIVED" ? "1" : undefined});
+        const criteria = taskSearchCriteriaDigest(search, workspaceId);
+        const decoded = decodeTaskSearchCursor(query.cursor, criteria);
+        const records = await r.taskExports.searchTasks(
+          workspaceId, caller.identity.id, search, decoded.cursor, TASK_LIST_PAGE_SIZE + 1,
+        );
+        const visible = records.slice(0, TASK_LIST_PAGE_SIZE);
+        const items: TaskListItem[] = visible.map((row) => ({
+          taskResultId: row.taskResultId, title: row.title, summary: buildTaskSearchPreview(row.summary, row.searchBody, search.terms),
+          agent: row.agent, completedAt: new Date(row.completedAtEpochMs).toISOString(),
+          verificationStatus: row.verificationStatus, lifecycle: row.lifecycle,
+          latestRevisionNo: row.latestRevisionNo, bindingLabel: row.bindingLabel,
+          bindingStatus: row.bindingStatus,
+        }));
+        const last = visible.at(-1);
+        const nextCursor = records.length > TASK_LIST_PAGE_SIZE && last
+          ? encodeTaskSearchCursor({completedAtEpochMs: last.completedAtEpochMs, taskResultId: last.taskResultId}, criteria)
+          : null;
+        const hasTasksInLifecycle = items.length > 0 || await r.taskExports.hasTasksInLifecycle(
+          workspaceId, caller.identity.id, search.lifecycle,
+        );
+        return {items, nextCursor, hasTasksInLifecycle, resetCursor: decoded.reset};
+      }
       const rows = await r.taskExports.listTasks(workspaceId, { lifecycle: query.lifecycle ?? "ACTIVE", beforeId, limit: TASK_LIST_PAGE_SIZE + 1 });
       const items = rows.slice(0, TASK_LIST_PAGE_SIZE).map(({ task, bindingLabel, bindingStatus, artifactJson }) => {
         const { title, agent, completedAt, verification } = content(artifactJson);
