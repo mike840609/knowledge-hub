@@ -141,8 +141,12 @@ test("missing date-offset deep link re-queries at browser fixed offset while exp
     await page.locator('input[name="to"]').fill("");
     await page.getByRole("button", { name: "Apply filters" }).click();
     await expect(page).not.toHaveURL(/(?:[?&])offset=/);
-    await expect(page).not.toHaveURL(/(?:[?&])from=/);
-    await expect(page).not.toHaveURL(/(?:[?&])to=/);
+    // Native GET can serialize blank dates as from=&to=; both mean no filter.
+    // The stale offset must actually be absent.
+    const cleared = new URL(page.url()).searchParams;
+    expect(cleared.has("offset")).toBe(false);
+    expect(cleared.get("from") ?? "").toBe("");
+    expect(cleared.get("to") ?? "").toBe("");
     await page.goto(base + "?from=2026-11-06&to=2026-11-06");
     await expect(page).toHaveURL(/offset=480/);
     await expect(page.locator("details")).toContainText("UTC+08:00");
