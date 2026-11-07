@@ -128,6 +128,7 @@ test("missing date-offset deep link re-queries at browser fixed offset while exp
     // Selecting a date on a previously unfiltered page must submit the
     // local offset in the FIRST GET instead of flashing UTC then replacing.
     await page.goto(base);
+    await expect(page.locator("details").first()).toHaveJSProperty("open", false);
     await page.locator("details").first().locator("summary").click();
     await page.locator('input[name="from"]').fill("2026-11-06");
     await page.getByRole("button", { name: "Apply filters" }).click();
@@ -136,7 +137,9 @@ test("missing date-offset deep link re-queries at browser fixed offset while exp
     // Clearing both dates from an explicitly dated page removes obsolete
     // hidden offsets rather than keeping a stale offset-only URL.
     await page.goto(base + "?from=2026-11-06&to=2026-11-06&offset=480");
-    await page.locator("details").first().locator("summary").click();
+    // Active dates now auto-expand Completed. Clicking the summary would
+    // collapse the inputs, causing Playwright's fill() to time out.
+    await expect(page.locator("details").first()).toHaveJSProperty("open", true);
     await page.locator('input[name="from"]').fill("");
     await page.locator('input[name="to"]').fill("");
     await page.getByRole("button", { name: "Apply filters" }).click();
