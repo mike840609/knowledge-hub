@@ -48,7 +48,7 @@ export function TaskSearchForm({
               <option value="not_applicable">Not applicable</option>
             </Select>
           </label>
-          <details className="group min-w-0 rounded-md border border-kh-border px-2.5 py-1.5 text-body text-kh-text">
+          <details open={Boolean(query.from || query.to)} className="group min-w-0 rounded-md border border-kh-border px-2.5 py-1.5 text-body text-kh-text">
             <summary className="kh-focus-ring cursor-pointer select-none">Completed</summary>
             <div className="mt-3 flex flex-wrap gap-2">
               <label className="flex flex-col gap-1 text-caption text-kh-text-muted">From
