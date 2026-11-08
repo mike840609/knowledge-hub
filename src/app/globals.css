@@ -468,11 +468,14 @@ input[type="search"]::-webkit-search-cancel-button:hover {
     @apply mx-auto w-full max-w-wide px-6;
   }
 
-  /* Keep route and panel tabs accessible on narrow screens without widening the page. */
+  /* Keep route and panel tabs accessible on narrow screens without widening the page.
+     The tab's `-mb-px` overlap has to stay inside the clip: with `overflow-y: hidden`
+     the bottom row of the 2px active underline and the inset focus ring would be cut. */
   .kh-tab-list {
     overflow-x: auto;
     overflow-y: hidden;
     overscroll-behavior-x: contain;
+    padding-bottom: 1px;
     scrollbar-width: none;
   }
   .kh-tab-list::-webkit-scrollbar { display: none; }
