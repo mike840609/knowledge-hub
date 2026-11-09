@@ -103,7 +103,7 @@ export function TaskDetail({ workspaceId, detail }: { workspaceId: string; detai
           <Meta first><Status kind={verificationKind(content.verification.status)}>Verification {verification.toLowerCase()}</Status></Meta>
           <Meta>{agentName(content.agent)}</Meta>
           <Meta>Completed <Timestamp value={content.completedAt} /></Meta>
-          <Meta>via {detail.binding.label}</Meta>
+          <Meta>via <span className="min-w-0 break-words">{detail.binding.label}</span></Meta>
           {detail.binding.status === "REVOKED" ? <Meta><Status kind="danger">Binding revoked</Status></Meta> : null}
           {archived ? <Meta><Status kind="archived">Archived</Status></Meta> : null}
         </p>

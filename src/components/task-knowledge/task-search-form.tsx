@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ChevronDown, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { controlHeight } from "@/components/ui/control";
 import { filterChipClasses } from "@/components/ui/filter-chip";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -10,7 +11,7 @@ import type { TaskSearchQuery } from "@/modules/task-knowledge/domain/task-searc
 import { taskSearchHref } from "./task-search-url";
 
 /** The filter controls sit on the same 32px line as the shared buttons. */
-const control = "inline-flex h-8 min-w-0 items-center gap-2 rounded-md border border-kh-border-strong bg-kh-bg px-2.5 text-body text-kh-text hover:bg-kh-bg-hover";
+const control = `inline-flex ${controlHeight.md} min-w-0 items-center gap-2 rounded-md border border-kh-border-strong bg-kh-bg px-2.5 text-body text-kh-text hover:bg-kh-bg-hover`;
 
 function offsetLabel(minutes: number): string {
   const sign = minutes < 0 ? "-" : "+";
@@ -40,7 +41,7 @@ export function TaskSearchForm({
           <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-kh-text-muted" />
           <Input id="task-search-q" name="q" size="lg" type="search" defaultValue={query.q} placeholder="Search tasks…" className="kh-search-field" />
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex flex-wrap items-center gap-2">
           <label htmlFor="task-search-agent" className="flex items-center gap-2 text-caption text-kh-text-muted">
             <span>Agent</span>
             <Select id="task-search-agent" name="agent" defaultValue={query.agent ?? ""} className="min-w-32">
@@ -59,9 +60,8 @@ export function TaskSearchForm({
               <option value="not_applicable">Not applicable</option>
             </Select>
           </label>
-          <details open={hasDate} className="group relative min-w-0">
-            <summary aria-label={hasDate ? `Completed from ${query.from || "any date"} to ${query.to || "any date"}` : "Completed"} className={`${control} kh-focus-ring cursor-pointer select-none [&::-webkit-details-marker]:hidden`}>
-              <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-kh-text-muted transition-transform group-open:rotate-180" />
+          <details open={hasDate} className="min-w-0">
+            <summary aria-label={hasDate ? `Completed from ${query.from || "any date"} to ${query.to || "any date"}` : "Completed"} className={`${control} kh-focus-ring cursor-pointer select-none`}>
               <span className="truncate">Completed</span>
               {hasDate ? <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-kh-primary" /> : null}
             </summary>

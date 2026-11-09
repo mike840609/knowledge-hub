@@ -37,9 +37,9 @@ export function TaskLifecycleAction({ workspaceId, taskResultId, lifecycle }: { 
   }
 
   return (
-    <span className="flex flex-col items-end gap-1">
+    <div className="flex flex-col items-end gap-1">
       <Button variant="secondary" disabled={busy} onClick={toggleLifecycle}>{archived ? "Restore" : "Archive"}</Button>
       {error ? <p role="alert" className="max-w-[12rem] text-right text-caption text-kh-danger">{error}</p> : null}
-    </span>
+    </div>
   );
 }

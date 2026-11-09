@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment } from "react";
 import { ListChecks } from "lucide-react";
+import { HighlightedSearchText } from "@/components/search/highlighted-search-text";
 import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Status } from "@/components/ui/status";
@@ -15,63 +15,13 @@ import type { TaskListItemView } from "./task-list";
 import { taskSearchHref } from "./task-search-url";
 import { verificationKind, verificationLabel } from "./task-verification";
 
-const MAX_EXCERPT = 200;
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 /**
- * Keep the matched term in view, start and end on a word boundary where the
- * script has spaces, and make truncation visible. The projection already
- * provides a bounded excerpt; this trims the partial word it can start on.
+ * The read service already bounds this preview and windows it around the
+ * matched term. Render it as-is so the client never re-trims the server's
+ * leading word or adds a second ellipsis.
  */
-function excerpt(value: string, terms: string[]): string {
-  const active = terms.filter((term) => term.trim().length > 0);
-  const leading = value.startsWith("…") ? "…" : "";
-  const source = leading ? value.slice(1) : value;
-  const chars = Array.from(source);
-  if (active.length === 0) {
-    const text = chars.slice(0, MAX_EXCERPT).join("");
-    return leading + text + (chars.length > MAX_EXCERPT ? "…" : "");
-  }
-  const lower = source.toLocaleLowerCase();
-  let at = -1;
-  for (const term of active) {
-    const index = lower.indexOf(term.toLocaleLowerCase());
-    if (index >= 0 && (at < 0 || index < at)) at = index;
-  }
-  if (at < 0) {
-    const text = chars.slice(0, MAX_EXCERPT).join("");
-    return leading + text + (chars.length > MAX_EXCERPT ? "…" : "");
-  }
-  const charAt = Array.from(source.slice(0, at)).length;
-  const backoff = Math.max(0, charAt - 45);
-  const window = chars.slice(backoff, charAt);
-  const spaceIndex = window.findIndex((char) => /\s/.test(char));
-  const start = spaceIndex >= 0 ? backoff + spaceIndex + 1 : backoff;
-  const prefix = leading || start > 0 ? "…" : "";
-  const suffix = start + MAX_EXCERPT < chars.length ? "…" : "";
-  const text = chars.slice(start, start + MAX_EXCERPT - prefix.length - suffix.length).join("");
-  return prefix + text + suffix;
-}
-
-/** Safe, inert emphasis: never interpret an Agent summary as HTML or Markdown. */
 function Excerpt({ value, terms }: { value: string; terms: string[] }) {
-  const text = excerpt(value, terms);
-  const active = terms.filter((term) => term.trim().length > 0);
-  if (active.length === 0) return <>{text}</>;
-  const pattern = new RegExp(`(${active.map(escapeRegExp).join("|")})`, "giu");
-  const normalized = new Set(active.map((term) => term.toLocaleLowerCase()));
-  return (
-    <>
-      {text.split(pattern).map((part, index) =>
-        normalized.has(part.toLocaleLowerCase())
-          ? <mark key={index} className="rounded-sm bg-kh-bg-selected text-kh-text">{part}</mark>
-          : <Fragment key={index}>{part}</Fragment>,
-      )}
-    </>
-  );
+  return <HighlightedSearchText text={value} terms={terms} />;
 }
 
 export function TaskSearchResults({
@@ -93,7 +43,7 @@ export function TaskSearchResults({
           <Link href={taskSearchHref(base, query, { lifecycle: "ARCHIVED" })} className={tabClasses(archived)} aria-current={archived ? "page" : undefined}>Archived</Link>
         </nav>
         <span className="self-center text-caption text-kh-text-muted">
-          {nextCursor ? "50+ tasks" : `Showing ${items.length} ${items.length === 1 ? "task" : "tasks"}`}
+          {nextCursor ? "50+ tasks" : items.length > 0 ? `Showing ${items.length} ${items.length === 1 ? "task" : "tasks"}` : null}
         </span>
       </div>
       {error ? (
@@ -104,7 +54,7 @@ export function TaskSearchResults({
       ) : items.length === 0 ? (
         !hasTasksInLifecycle ? (
           <EmptyState icon={ListChecks} title={archived ? "No archived tasks" : "No tasks yet"}
-            description={archived ? "Archived tasks stay readable here." : "Finish a task with Claude Code or OpenCode, then use /hub-export to save it."}
+            description={archived ? "Tasks you archive appear here and stay readable." : "Finish a task with Claude Code or OpenCode, then use /hub-export to save it."}
             action={archived ? undefined : <Link className={buttonClasses({ variant: "primary" })} href={`${base}/setup`}>Set up task export</Link>} />
         ) : (
           <EmptyState icon={ListChecks} title="No matching tasks"

@@ -88,6 +88,12 @@ test("flag-on Tasks search: field hits, filter URLs, invalid cursor and 390px", 
   await page.goto(searchOrigin + base + "?cursor=malformed");
   await expect(page).toHaveURL(searchOrigin + base);
 
+  // Opening the date disclosure must not widen the page at tablet widths.
+  await page.setViewportSize({ width: 700, height: 900 });
+  await page.goto(searchOrigin + base);
+  await page.locator("details").first().locator("summary").click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(searchOrigin + base + "?q=security");
   await expect(page.getByText(/security authorization evidence/i)).toBeVisible();
@@ -101,6 +107,18 @@ test("flag-on Tasks search: field hits, filter URLs, invalid cursor and 390px", 
 test("flag-on Task Search GET form works without JavaScript", async ({ browser, request }) => {
   const nav = await (await request.get("/api/workspaces")).json();
   const ws = nav.items.find((w: { type: string }) => w.type === "PERSONAL").id;
+  // Keep this test independent of the previous test's seed: a workspace with
+  // no Tasks intentionally hides the search form.
+  const binding = await request.post(searchOrigin + "/api/workspaces/" + ws + "/task-export-bindings", {
+    headers: { origin: searchOrigin },
+    data: { label: "no-js " + randomUUID().slice(0, 8) },
+  });
+  expect(binding.status()).toBe(201);
+  const token = (await binding.json()).token as string;
+  await seedTask(request, token, {
+    id: randomUUID(), title: "No-JS search target " + randomUUID().slice(0, 8),
+    summary: "Unrelated summary",
+  });
   const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
   try {
     const page = await context.newPage();
