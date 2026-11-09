@@ -30,7 +30,8 @@ test("owner Inbox is a discussion index, one row per discussion, settled and fil
   await page.goto(`${owner}/w/${doc.workspaceId}/inbox`);
   await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
   await expect(page.getByText("Inbox ·")).toHaveCount(0);
-  await expect(page.getByRole("tab", { name: "All", exact: true })).toHaveAttribute("aria-selected", "true");
+  const relationshipFilters = page.getByRole("group", { name: "Inbox relationships" });
+  await expect(relationshipFilters.getByRole("button", { name: "All", exact: true })).toHaveAttribute("aria-pressed", "true");
   const inbox = page.getByRole("list", { name: "Inbox discussions" });
   const rows = inbox.getByRole("listitem").filter({ hasText: title });
   await expect(rows).toHaveCount(1, LOADED);
@@ -90,15 +91,22 @@ test("owner Inbox is a discussion index, one row per discussion, settled and fil
 
   // The relationship tabs are over the same index; this discussion is neither followed nor mentioned.
   await page.goto(`${owner}/w/${doc.workspaceId}/inbox`);
-  await page.getByRole("tab", { name: "Following", exact: true }).click();
+  await relationshipFilters.getByRole("button", { name: "Following", exact: true }).click();
   await expect(page).toHaveURL(/[?&]kind=follow/);
   await expect(page.getByText("No discussions match these filters.", { exact: true })).toBeVisible(LOADED);
-  await page.getByRole("tab", { name: "Mentions", exact: true }).click();
+  await relationshipFilters.getByRole("button", { name: "Mentions", exact: true }).click();
   await expect(page).toHaveURL(/[?&]kind=mention/);
   await expect(page.getByText("No discussions match these filters.", { exact: true })).toBeVisible(LOADED);
-  await page.getByRole("tab", { name: "All", exact: true }).click();
+  await relationshipFilters.getByRole("button", { name: "All", exact: true }).click();
   await expect(rows).toHaveCount(1, LOADED);
   await expect(rows.first()).toContainText("A second reader comment");
+
+  // The last relationship remains reachable at 320px without page overflow.
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.goto(`${owner}/w/${doc.workspaceId}/inbox`);
+  await relationshipFilters.getByRole("button", { name: "Mentions", exact: true }).click();
+  await expect(relationshipFilters.getByRole("button", { name: "Mentions", exact: true })).toHaveAttribute("aria-pressed", "true");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
   // Narrow, the same index is a plain list whose rows open the document; there is no pane.
   await page.setViewportSize({ width: 600, height: 900 });

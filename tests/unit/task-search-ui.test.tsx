@@ -16,6 +16,10 @@ describe("Tasks-only compact search UI", () => {
     expect(html).toContain('name="to"');
     expect(html).toContain("Clear all");
     expect(html).toContain("Search tasks");
+    expect(html).toContain("kh-search-field");
+    expect(html).toContain("kh-select"); // native form controls work without JS
+    expect(html).toContain("border-kh-border-strong");
+    expect(html).toContain("bg-kh-bg-selected"); // shared lavender chip
     expect(html).not.toContain("⌘K");
   });
   it("expands Completed dates when either date filter is already active", () => {
@@ -61,6 +65,8 @@ describe("Tasks-only compact search UI", () => {
         }]} nextCursor={null} hasTasksInLifecycle={true} />,
     );
     expect(html).toContain("Showing 1 task");
+    expect(html).toContain("kh-tab-list");
+    expect(html).toContain("border-kh-primary");
     expect(html).toContain("Fix Task Index");
     expect(html).toContain("Safety and indexing details");
     expect(html).toContain("Agent-reported");

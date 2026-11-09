@@ -30,7 +30,7 @@ export default async function SettingsLayout({
       <PageHeader location={team.name} locationHref={`/w/${workspaceId}/knowledge`} title="Settings" />
       </div>
       <div className="kh-page-wide">
-      <div className="my-6">
+      <div className="mb-5 mt-4">
         <NavTabs label="Team settings" tabs={tabs} />
       </div>
       {children}

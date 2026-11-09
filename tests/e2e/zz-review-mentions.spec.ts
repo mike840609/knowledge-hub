@@ -78,7 +78,7 @@ test("a reader mentions someone new on the shared page; the mention and the next
   const followed = page.getByRole("list", { name: "Inbox discussions" }).locator(`a[href="/s/${token}?thread=${threadId}"]`).filter({ hasText: "Owner answer" });
   // A mention that is also followed keeps the stronger relationship on its one row, and the thread is under `Following`.
   await expect(followed).toContainText("Mentioned you");
-  await page.getByRole("tab", { name: "Following", exact: true }).click();
+  await page.getByRole("group", { name: "Inbox relationships" }).getByRole("button", { name: "Following", exact: true }).click();
   await expect(page.getByRole("list", { name: "Inbox discussions" }).locator(`a[href="/s/${token}?thread=${threadId}"]`)).toContainText("Owner answer");
   // Leave this person's Inbox as it was found for a repeated run.
   expect((await request.post(`${mentioned}/api/review-notifications/inbox`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);

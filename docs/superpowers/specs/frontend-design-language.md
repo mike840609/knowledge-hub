@@ -1212,9 +1212,38 @@ the section.
 
 Base UI marks the current tab `data-active`. The look was keyed on
 `data-selected`, which this version of the library never sets, so the
-inspector and the Inbox showed no current tab at all and nothing failed;
+inspector showed no current tab at all and nothing failed;
 `tests/unit/tabs-active-state.test.tsx` now reads the attribute out of the
 classes and checks it against what the library renders.
+
+### A tab, a segment and a filter answer different questions
+
+The three shapes are easy to confuse because two of them can wear the tab look.
+Pick by the question the control answers, not by its outline.
+
+- **A tab** answers "which page or panel am I on?" Its options are destinations
+  or panels with their own content, and the selected one is the location:
+  `NavTabs` links carry `aria-current="page"`, Base UI panels carry `role="tab"`.
+  A tab strip may be long and scroll horizontally (`kh-tab-list`), it owns the
+  section rule, and its labels are not required to fit at 320px.
+- **A segmented control** answers "which slice of this one page?" Its options are
+  parameters of the same view — a period, a view mode — not destinations. Two to
+  four short labels sit in the page header beside the title, the control is only
+  as wide as its labels, and it never carries the full-width section rule. It
+  should fit at 320px; if the labels cannot, use a scrolling tab strip or a
+  native select instead of widening the page. Insights' 7/30-day period is the
+  reference.
+- **A filter group** answers "which subset of this data?" Its buttons are not
+  navigation: each carries `aria-pressed`, the same list stays below them, and
+  the strip may keep the tab shape (a "filter tab") without claiming
+  `role="tab"` — that role would promise arrow-key panel movement it does not
+  have. Inbox's relationships are the reference, and their visible tab shape is
+  a look, not a semantic claim.
+
+Destinations go to underline tabs, parameters of the current page go to a
+segmented control, and narrowing the current list goes to an `aria-pressed`
+group. A control that changes the URL is not automatically a tab; a control that
+does not change the URL is not automatically a filter.
 
 ### A state is a glyph and a word; an empty place leads with its action
 
