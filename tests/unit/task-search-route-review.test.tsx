@@ -48,6 +48,14 @@ describe("Task Search server route guard", () => {
     await expect(render({q:"x".repeat(201)})).rejects.toThrow("NOT_FOUND");
     expect(mocks.list).not.toHaveBeenCalled();
   });
+  it("shows the setup state without a search form when the workspace has no Tasks", async () => {
+    mocks.list.mockResolvedValueOnce({items:[],nextCursor:null,hasTasksInLifecycle:false,resetCursor:false});
+    const html = await render({});
+    expect(html).not.toContain('aria-label="Task search and filters"');
+    expect(html).toContain("No tasks yet");
+    expect(html).toContain("Set up task export");
+    expect(html).toContain("Archived");
+  });
   it("removes invalid cursor from bookmark after authorized read", async()=>{
     mocks.list.mockResolvedValueOnce({items:[],nextCursor:null,hasTasksInLifecycle:true,resetCursor:true});
     await expect(render({q:"security",cursor:"malformed"})).rejects.toThrow("REDIRECT:");

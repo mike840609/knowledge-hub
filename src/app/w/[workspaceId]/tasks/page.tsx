@@ -63,27 +63,34 @@ export default async function TaskResultsPage({ params, searchParams }: Props) {
   if (enabled && !validationError && page?.resetCursor) {
     redirect(taskSearchHref(`/w/${workspaceId}/tasks`, search));
   }
+  // The empty state carries the one setup action; repeating it in the header would be two of the same.
+  const showSetupAction = showArchived || (page?.items.length ?? 0) > 0;
+  // With search enabled, an empty workspace is a setup state, not a filter bar over nothing.
+  const hasCriteria = Boolean(search.q || search.agent || search.verification || search.from || search.to);
+  const hasTasks = page?.hasTasksInLifecycle ?? true;
+  const showSearchForm = Boolean(validationError) || hasTasks || hasCriteria;
   return (
     <main className="kh-page pb-6">
       <PageHeader
         location="My Space"
         locationHref={`/w/${workspaceId}/home`}
         title="Tasks"
-        description="Finished tasks your coding agents saved with /hub-export."
-        actions={<Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/tasks/setup`}>Set up export</Link>}
+        actions={showSetupAction ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/tasks/setup`}>Set up export</Link> : undefined}
       />
-      {enabled ? (
-        <>
-          <TaskSearchOffsetHydrator hasDateFilter={Boolean(search.from || search.to)} explicitOffset={typeof raw.offset === "string" && raw.offset !== ""} />
-          <TaskSearchForm workspaceId={workspaceId} query={search} error={validationError} />
-          {!validationError && page ? (
-            <TaskSearchResults workspaceId={workspaceId} query={search} items={page.items}
-              nextCursor={page.nextCursor} hasTasksInLifecycle={page.hasTasksInLifecycle} error={searchError} />
-          ) : null}
-        </>
-      ) : (
-        page ? <TaskList workspaceId={workspaceId} archived={showArchived} items={page.items} nextCursor={page.nextCursor} /> : null
-      )}
+      <div className="mt-6">
+        {enabled ? (
+          <>
+            <TaskSearchOffsetHydrator hasDateFilter={Boolean(search.from || search.to)} explicitOffset={typeof raw.offset === "string" && raw.offset !== ""} />
+            {showSearchForm ? <TaskSearchForm workspaceId={workspaceId} query={search} error={validationError} /> : null}
+            {!validationError && page ? (
+              <TaskSearchResults workspaceId={workspaceId} query={search} items={page.items}
+                nextCursor={page.nextCursor} hasTasksInLifecycle={page.hasTasksInLifecycle} error={searchError} />
+            ) : null}
+          </>
+        ) : page ? (
+          <TaskList workspaceId={workspaceId} archived={showArchived} items={page.items} nextCursor={page.nextCursor} />
+        ) : null}
+      </div>
     </main>
   );
 }

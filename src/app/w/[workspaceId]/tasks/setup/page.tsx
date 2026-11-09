@@ -24,10 +24,12 @@ export default async function TaskExportSetupPage({ params }: { params: Promise<
         title="Task export"
         description="Let Claude Code or OpenCode save finished tasks to My Space with /hub-export."
       />
-      <TaskExportSetup
-        workspaceId={workspaceId}
-        bindings={bindings.map((binding) => ({ ...binding, createdAt: binding.createdAt.toISOString(), revokedAt: binding.revokedAt?.toISOString() ?? null }))}
-      />
+      <div className="mt-6">
+        <TaskExportSetup
+          workspaceId={workspaceId}
+          bindings={bindings.map((binding) => ({ ...binding, createdAt: binding.createdAt.toISOString(), revokedAt: binding.revokedAt?.toISOString() ?? null }))}
+        />
+      </div>
     </main>
   );
 }

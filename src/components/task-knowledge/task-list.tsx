@@ -1,9 +1,14 @@
+"use client";
+
 import Link from "next/link";
 import { ListChecks } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Timestamp } from "@/components/ui/timestamp";
+import { Status } from "@/components/ui/status";
 import { tabClasses, tabListClasses } from "@/components/ui/tab";
+import { Timestamp } from "@/components/ui/timestamp";
+import { navigateListRows } from "@/lib/list-row-navigation";
+import { agentName } from "./agent-name";
 
 export type TaskListItemView = {
   taskResultId: string;
@@ -16,14 +21,11 @@ export type TaskListItemView = {
   bindingStatus: "ACTIVE" | "REVOKED";
 };
 
-const AGENT_NAMES: Record<string, string> = { "claude-code": "Claude Code", opencode: "OpenCode" };
-export const agentName = (agent: string) => AGENT_NAMES[agent] ?? agent;
-
 export function TaskList({ workspaceId, archived, items, nextCursor }: { workspaceId: string; archived: boolean; items: TaskListItemView[]; nextCursor: string | null }) {
   const base = `/w/${workspaceId}/tasks`;
   return (
-    <div className="max-w-panel space-y-4">
-      <nav aria-label="Task filter" className={tabListClasses}>
+    <div className="space-y-4">
+      <nav aria-label="Task lifecycle" className={tabListClasses}>
         <Link href={base} className={tabClasses(!archived)} aria-current={archived ? undefined : "page"}>Active</Link>
         <Link href={`${base}?archived=1`} className={tabClasses(archived)} aria-current={archived ? "page" : undefined}>Archived</Link>
       </nav>
@@ -31,25 +33,41 @@ export function TaskList({ workspaceId, archived, items, nextCursor }: { workspa
         <EmptyState
           icon={ListChecks}
           title={archived ? "No archived tasks" : "No tasks yet"}
-          description={archived ? "Tasks you archive appear here and stay readable." : "Finish a task in Claude Code or OpenCode and type /hub-export to save it here."}
-          action={archived ? undefined : <Link className="kh-focus-ring rounded-md text-body text-kh-link" href={`${base}/setup`}>Set up task export</Link>}
+          description={archived ? "Tasks you archive appear here and stay readable." : "Finish a task in Claude Code or OpenCode, then run /hub-export to save it here."}
+          action={archived ? undefined : <Link className={buttonClasses({ variant: "primary" })} href={`${base}/setup`}>Set up export</Link>}
         />
       ) : (
-        <ul className="divide-y divide-kh-border rounded-md border border-kh-border">
-          {items.map((item) => (
-            <li key={item.taskResultId}>
-              <Link href={`${base}/${item.taskResultId}`} className="kh-focus-ring block px-3 py-2 hover:bg-kh-bg-subtle">
-                <p className="truncate text-body font-medium text-kh-text">{item.title}</p>
-                <p className="flex flex-wrap items-center gap-2 text-caption text-kh-text-muted">
-                  <span>{agentName(item.agent)}</span>
-                  <Timestamp value={item.completedAt} label="Completed" />
-                  {item.latestRevisionNo > 1 ? <span>revision {item.latestRevisionNo}</span> : null}
-                  <span>{item.bindingLabel}</span>
-                  {item.bindingStatus === "REVOKED" ? <Badge variant="outline">Binding revoked</Badge> : null}
-                </p>
-              </Link>
-            </li>
-          ))}
+        <ul className="-mx-3 flex flex-col" onKeyDown={navigateListRows}>
+          {items.map((item) => {
+            const revoked = item.bindingStatus === "REVOKED";
+            return (
+              <li key={item.taskResultId}>
+                <Link
+                  data-list-row
+                  href={`${base}/${item.taskResultId}`}
+                  className="kh-focus-ring flex min-h-8 items-center gap-3 rounded-md px-3 py-1.5 transition-colors hover:bg-kh-bg-hover focus-visible:bg-kh-bg-hover"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-body font-medium text-kh-text">{item.title}</span>
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-3 text-caption text-kh-text-muted sm:hidden">
+                      <span>{agentName(item.agent)}</span>
+                      {item.latestRevisionNo > 1 ? <span>revision {item.latestRevisionNo}</span> : null}
+                      <span>via {item.bindingLabel}</span>
+                      {revoked ? <Status kind="danger">Binding revoked</Status> : null}
+                    </span>
+                  </span>
+                  <span className="hidden shrink-0 items-center gap-x-2 text-caption text-kh-text-muted sm:ml-4 sm:flex">
+                    <span>{agentName(item.agent)}</span>
+                    {item.latestRevisionNo > 1 ? <><span aria-hidden="true">·</span><span>revision {item.latestRevisionNo}</span></> : null}
+                    <span aria-hidden="true">·</span>
+                    <span className="max-w-[12rem] truncate">via {item.bindingLabel}</span>
+                    {revoked ? <><span aria-hidden="true">·</span><Status kind="danger">Binding revoked</Status></> : null}
+                  </span>
+                  <Timestamp value={item.completedAt} variant="short" label="Completed" className="shrink-0 text-caption tabular-nums text-kh-text-muted" />
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
       {nextCursor ? (
