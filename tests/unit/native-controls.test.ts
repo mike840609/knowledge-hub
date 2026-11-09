@@ -50,6 +50,14 @@ describe("disclosure", () => {
   });
 });
 
+describe("search field", () => {
+  it("keeps a physical icon clearance for engines without logical properties", () => {
+    const search = rule(".kh-search-field");
+    expect(search).toContain("padding-left: 2.5rem");
+    expect(search).toContain("padding-inline-start: 2.5rem");
+  });
+});
+
 describe("checkbox", () => {
   it("is drawn rather than left to the platform, with the control boundary and the focus idiom", () => {
     const box = rule('input[type="checkbox"]');

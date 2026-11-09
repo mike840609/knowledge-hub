@@ -65,6 +65,19 @@ test("flag-on Tasks search: field hits, filter URLs, invalid cursor and 390px", 
   });
   await page.goto(searchOrigin + base + "?q=security");
   await expect(page.getByRole("searchbox", { name: "Search tasks" })).toHaveValue("security");
+  const clearance = await page.evaluate(() => {
+    const input = document.querySelector<HTMLInputElement>("#task-search-q");
+    const icon = input?.parentElement?.querySelector("svg");
+    if (!input || !icon) return null;
+    const inputRect = input.getBoundingClientRect();
+    const iconRect = icon.getBoundingClientRect();
+    return {
+      textStart: inputRect.left + parseFloat(getComputedStyle(input).paddingLeft),
+      iconRight: iconRect.right,
+    };
+  });
+  expect(clearance).not.toBeNull();
+  expect(clearance!.textStart - clearance!.iconRight).toBeGreaterThanOrEqual(8);
   await expect(page.getByRole("link", { name: new RegExp(name) })).toBeVisible();
   await expect(page.getByText(/security authorization evidence/i)).toBeVisible();
   await expect(page.getByText("Showing 1 task")).toBeVisible();
