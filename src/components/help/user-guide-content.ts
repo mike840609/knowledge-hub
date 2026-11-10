@@ -121,9 +121,14 @@ export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean
         ]},
         {title:"Token、binding 與撤銷",items:[
           "每台機器建立一個 binding。一次性指令含 token，只顯示一次，請當成密鑰。",
-          "Rotate token 會讓舊 token 立即失效；Revoke 會停止該機器的匯出。",
+          "Rotate token 會讓舊 token 立即失效；Revoke 會停止該機器的匯出與讀取。",
           "撤銷 binding 不會刪除已保存的 Task Results。",
           "Task Results 只會出現在自己的 My Space，不會進到 Team 工作區。",
+        ]},
+        {title:"讓代理搜尋與讀取 My Space",items:[
+          "同一把 token 也能讀你自己的 My Space：/hub-search 搜尋使用中的文件或 Task Result，/hub-read 讀取單一文件的目前 Markdown 或單一 Task Result。只在你要求時執行。",
+          "只能讀、不能修改文件，也讀不到 Team 工作區、分享連結或舊版本。",
+          "這個版本之前發出的 token 升級後也具備讀取能力；若某把 token 可能外洩，請 Rotate token。要完全停止讀取，請 Revoke（匯出也會一併停止）。",
         ]},
         ...(taskSearch?[{title:"搜尋與篩選",items:[
           "搜尋標題、摘要與 findings，命中的片段會標示出來。",
@@ -259,9 +264,14 @@ export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean
         ]},
         {title:"Token, binding and revocation",items:[
           "Create one binding per machine. The setup line carries the token and is shown only once; treat it as a secret.",
-          "Rotate token makes the old token useless at once; Revoke stops exports from that machine.",
+          "Rotate token makes the old token useless at once; Revoke stops exports and reads from that machine.",
           "Revoking a binding does not delete Task Results already saved.",
           "Task Results are visible only in your own My Space, not in a Team workspace.",
+        ]},
+        {title:"Let the agent search and read My Space",items:[
+          "The same token also reads your own My Space: /hub-search searches active documents or Task Results, and /hub-read reads one document's current Markdown or one Task Result. Each runs only when you ask.",
+          "It only reads. It cannot change a document, and it cannot reach a Team workspace, a share link or an earlier revision.",
+          "Tokens issued before this release gain reading too; if a token may have been exposed, use Rotate token. To stop reading altogether, Revoke it, which also ends export.",
         ]},
         ...(taskSearch?[{title:"Search and filters",items:[
           "Search title, summary and findings; matches are highlighted in the excerpt.",
