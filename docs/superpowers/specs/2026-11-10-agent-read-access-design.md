@@ -62,7 +62,7 @@ The caller it returns:
 | --- | --- | --- |
 | `GET /api/agent/search?q=<words>&kind=documents\|tasks` | `KnowledgeSearchService.search` (scope `workspace`, ACTIVE only, page 1); `TaskResultReadService.list` | Up to 20 hits: ID, title, source path where there is one, snippet |
 | `GET /api/agent/documents?ref=<path or documentId>` | `AgentContextService.build` with one document | One Markdown bundle |
-| `GET /api/agent/tasks/<taskResultId>` | `TaskResultReadService.get` | The Task Result's latest revision |
+| `GET /api/agent/tasks?id=<taskResultId>` | `TaskResultReadService.get` | The Task Result's latest revision |
 
 Rules for all three:
 
@@ -93,7 +93,7 @@ knowledge-hub status [--profile <name>]
 ```
 
 - `search` prints one hit per line as plain text. `--tasks` searches Task Results. No JSON output.
-- `read` prints the Markdown to stdout. `--task` says the argument is a Task Result ID.
+- `read` prints a document's Markdown to stdout. `--task` says the argument is a Task Result ID; a Task Result prints as JSON, the form the agent wrote it in.
 - `status` reads local config only. It contacts nothing and prints no credential. Exit 0 when a binding and its credential are present; otherwise it names the `configure` to run.
 
 One new file, `tools/knowledge-hub/src/read.mjs`; `status` lives in `configure.mjs`. HTTP follows `export.mjs`: the same token header, `redirect: "manual"` so a redirect cannot carry the token to another host, the same timeout. No new package. Reads keep no local state: nothing is saved, cached or queued for retry.
