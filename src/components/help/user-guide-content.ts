@@ -92,6 +92,11 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
           "擁有者可回覆、解決或隱藏留言；評論不修改 Markdown，也不影響 Folder Sync。",
           "儲存分享不會加入自己的最愛。到期或失效的紀錄仍可 Remove；移除不會撤銷對方連結。撤銷後，原連結無法再開啟文件。",
         ]},
+        {title:"代理匯出與讀取（Claude Code、OpenCode）",items:[
+          "到 My Space → Tasks → Set up export 建立 binding，照頁面上的設定行在每台機器執行一次；設定行含 token，只顯示一次，請當作機密。",
+          "在代理輸入 /hub-export，把完成的任務存成 Task Result；/hub-search 與 /hub-read 讓代理搜尋並讀取你 My Space 的使用中文件與 Task Result。三者都只在你要求時執行。",
+          "同一把 token 只能讀你自己的 My Space，不能修改文件；舊 token 升級後也會取得讀取能力。若要完全停止讀取，請在設定頁撤銷（匯出也會一併停止）。",
+        ]},
         {title:"Team workspace 的適用範圍",items:[
           "本手冊以 My Space 為主。Team 是否可用取決於部署設定，操作受角色與工作區狀態限制；唯讀或沒有權限時請依介面提示處理。",
         ]},
@@ -179,6 +184,11 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
           "A valid link allows anonymous reading of visible comments. Adding comments and replies requires trusted sign-in and enabled writes. Reading still works without configured company sign-in.",
           "Owners can reply, resolve and hide comments without changing Markdown or Folder Sync.",
           "Saving a share does not add a workspace favorite. Expired or unavailable entries remain removable; Remove does not revoke the sender's link. Revoked links can no longer open the article.",
+        ]},
+        {title:"Agent export and read (Claude Code, OpenCode)",items:[
+          "Open My Space → Tasks → Set up export, create a binding, and run the setup line it shows once per machine. The line carries the token and is shown only once, so treat it as a secret.",
+          "In your agent, /hub-export saves a finished task as a Task Result; /hub-search and /hub-read let the agent search and read the active documents and Task Results of your My Space. All three run only when you ask.",
+          "The same token reads only your own My Space and cannot change a document. Tokens issued earlier gain reading after this release; to stop reading altogether, revoke the token on the setup page, which also ends export.",
         ]},
         {title:"Team workspace scope",items:[
           "This guide focuses on My Space. Team availability depends on deployment settings; operations depend on roles and workspace state. Follow read-only or access-denied messages.",
