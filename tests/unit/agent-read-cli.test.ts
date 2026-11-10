@@ -171,6 +171,23 @@ describe("read", () => {
     expect(hub.received[0].body).toHaveLength(0);
   });
 
+  it("read strips control characters, so a hostile document cannot drive the terminal", async () => {
+    const markdown = "# Title\n\x1b]0;x\x07red \x1b[31mtext\x1b[0m\n";
+    hub.replies.push({ status: 200, body: { documentId: "doc-1", markdown } });
+    const result = await run(["read", "architecture/auth.md"]);
+    expect(result.code).toBe(0);
+    expect(result.out).toBe("# Title\n]0;xred [31mtext[0m\n");
+    expect(result.out).not.toMatch(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/);
+  });
+
+  it("read keeps tabs, newlines, CJK text and emoji byte-identical", async () => {
+    const markdown = "A\tB\n\n中文 😀\r\nend\n";
+    hub.replies.push({ status: 200, body: { documentId: "doc-1", markdown } });
+    const result = await run(["read", "architecture/auth.md"]);
+    expect(result.code).toBe(0);
+    expect(result.out).toBe(markdown);
+  });
+
   it("read --task prints the Task Result as JSON", async () => {
     const task = { taskResultId: "tr-1", revisionNo: 3, content: { title: "T", summary: "S" }, references: [] };
     hub.replies.push({ status: 200, body: task });
@@ -369,6 +386,23 @@ describe("status", () => {
     const result = await run(["status", "--profile", "team"]);
     expect(result.code).toBe(2);
     expect(result.out).toContain("for profile team");
+  });
+
+  it("status honours --profile-b64 and exits 2 for a malformed value", async () => {
+    const second = "0192f0a4-1b2c-7d3e-8f40-0000000000b2";
+    const secondToken = "khx_TEST-second-token-value-0002";
+    await configure();
+    expect((await run(["configure", "--profile", "team", "--hub-url", hub.url, "--binding-id", second, "--allow-insecure-localhost"], { stdin: secondToken })).code).toBe(0);
+    const encoded = Buffer.from("team", "utf8").toString("base64url");
+
+    const result = await run(["status", "--profile-b64", encoded]);
+    expect(result.code).toBe(0);
+    expect(result.out).toBe(`Configured: binding ${second} at ${hub.url}.\n`);
+
+    const malformed = await run(["status", "--profile-b64", "%%%"]);
+    expect(malformed.code).toBe(2);
+    expect(malformed.out).toContain("Invalid --profile-b64 value.");
+    expect(hub.received).toHaveLength(0);
   });
 });
 

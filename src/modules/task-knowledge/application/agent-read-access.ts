@@ -11,8 +11,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /**
  * Turns an export token into the owner's caller, pinned to the binding's My
  * Space (design §3). Like ingest it takes no CallerContext: the credential is
- * the authority. It makes ingest's checks without its locks, since it writes
- * nothing. Reached only from `src/app/api/agent/**` and `src/server/agent-read.ts`.
+ * the authority. It makes ingest's checks with one shared workspace-row lock
+ * (the port offers no unlocked read) and none of ingest's exclusive locks.
+ * Reached only from `src/app/api/agent/**` and `src/server/agent-read.ts`.
  */
 export class AgentReadAccessService {
   constructor(private readonly unitOfWork: TaskKnowledgeUnitOfWork) {}

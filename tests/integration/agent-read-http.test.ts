@@ -234,6 +234,24 @@ describe("agent read over HTTP", () => {
     expect(JSON.stringify(body)).not.toContain("Hidden task");
   });
 
+  it("searches the token's own ACTIVE Task Results when task search is enabled", async () => {
+    vi.stubEnv("TASK_SEARCH_READ_ENABLED", "true");
+    const box = await exporter();
+    const other = await exporter();
+    const active = await box.ingest({ taskId: randomUUID(), artifactRevision: 1, title: "ZEBRALOOM active task" });
+    const archived = await box.ingest({ taskId: randomUUID(), artifactRevision: 1, title: "ZEBRALOOM archived task" });
+    const foreign = await other.ingest({ taskId: randomUUID(), artifactRevision: 1, title: "ZEBRALOOM other owner" });
+    await new TaskLifecycleService(new MariaDbTaskKnowledgeUnitOfWork(pool)).archive(box.caller, box.workspaceId, archived.taskResultId);
+
+    const response = await searchAgent(get("/api/agent/search?q=ZEBRALOOM&kind=tasks", box.token));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.kind).toBe("tasks");
+    expect(body.hits.map((hit: { id: string }) => hit.id)).toEqual([active.taskResultId]);
+    expect(body.hits.map((hit: { id: string }) => hit.id)).not.toContain(archived.taskResultId);
+    expect(body.hits.map((hit: { id: string }) => hit.id)).not.toContain(foreign.taskResultId);
+  });
+
   it("leaves the owner's users row unchanged after a search", async () => {
     const box = await exporter();
     await syncedDocument(box, "keep/row.md", "Keep", "Row word.");

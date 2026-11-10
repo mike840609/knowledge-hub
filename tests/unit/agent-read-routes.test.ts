@@ -333,13 +333,13 @@ describe("every route's credential and errors", () => {
     await expectPrivate(response);
   });
 
-  it("answers 405 to POST, PUT, PATCH and DELETE on all three routes", async () => {
+  it("answers 405 to every method but GET on all three routes, HEAD and OPTIONS included", async () => {
     for (const [route, path] of [
       [searchRoute, "/api/agent/search?q=x"],
       [documentsRoute, `/api/agent/documents?ref=${DOC}`],
       [tasksRoute, `/api/agent/tasks?id=${TASK}`],
     ] as const) {
-      for (const method of ["POST", "PUT", "PATCH", "DELETE"] as const) {
+      for (const method of ["POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const) {
         const handler = (route as unknown as Record<string, (request: Request) => Promise<Response>>)[method];
         const response = await handler(new Request(`${BASE}${path}`, { method }));
         expect(response.status).toBe(405);

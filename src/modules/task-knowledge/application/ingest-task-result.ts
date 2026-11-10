@@ -22,8 +22,9 @@ export type IngestResult = {
 
 /**
  * The one task-knowledge write without a CallerContext (design §3, deviation
- * 2): its authority is the export credential, which names one binding and
- * permits only `task-result:create`. Reached only from the ingest route.
+ * 2): its authority is the export credential, which names one binding, and
+ * `task-result:create` is the only write it permits; reads are
+ * `AgentReadAccessService`'s. Reached only from the ingest route.
  */
 export class IngestTaskResultService {
   constructor(private readonly unitOfWork: TaskKnowledgeUnitOfWork) {}

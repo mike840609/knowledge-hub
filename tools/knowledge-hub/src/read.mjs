@@ -3,6 +3,8 @@ import { checkHubUrl, configKey, readConfig, readCredential } from "./project-co
 
 const isObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 const isString = (value) => typeof value === "string";
+/** C0 and C1 controls except tab, newline and carriage return; Markdown keeps those byte for byte. */
+const CONTROL_CHARACTERS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g;
 
 function context(flags) {
   const project = readConfig(configKey(flags.profile));
@@ -140,7 +142,7 @@ export async function runRead(flags, ref) {
         console.log(JSON.stringify(body, null, 2));
       } else {
         if (!documentAnswer(body)) return untrusted();
-        process.stdout.write(body.markdown);
+        process.stdout.write(body.markdown.replace(CONTROL_CHARACTERS, ""));
       }
       return EXIT.OK;
     }

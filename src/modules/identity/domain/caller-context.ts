@@ -5,9 +5,11 @@ import type { UserIdentity } from "./user-identity";
 export type CallerContext = {
   identity: UserIdentity;
   /**
-   * Set only by the request bootstrap, after it has committed this identity's
-   * upsert. Says the Hub user row is in step with `identity`, so services need
-   * not upsert it again; it says nothing about what the caller may do.
+   * Set by the request bootstrap after it has committed this identity's upsert,
+   * and by `AgentReadAccessService.authorize`, whose caller is built from the
+   * users row itself. Says the Hub user row is in step with `identity`, so
+   * services need not upsert it again; it says nothing about what the caller
+   * may do.
    */
   identitySynced?: true;
   /** Server deployment scope; when set, all other workspaces are unavailable. */

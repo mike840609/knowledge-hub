@@ -14,7 +14,7 @@ import { agentReadServices } from "./composition";
  * Agent read access design §4. Three read-only routes take the export
  * credential in its own header, exactly as ingest does: the site password acts
  * on `Authorization`, and a custom header forces a CORS preflight, which
- * every method but `GET` answers 405.
+ * every method but `GET` answers 405, HEAD and OPTIONS included.
  */
 export const AGENT_TOKEN_HEADER = "x-knowledge-hub-export-token";
 

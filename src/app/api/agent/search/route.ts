@@ -44,6 +44,8 @@ export async function GET(request: Request): Promise<Response> {
 }
 
 export const POST = methodNotAllowed;
+export const HEAD = methodNotAllowed;
 export const PUT = methodNotAllowed;
 export const PATCH = methodNotAllowed;
 export const DELETE = methodNotAllowed;
+export const OPTIONS = methodNotAllowed;

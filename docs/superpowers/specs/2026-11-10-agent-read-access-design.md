@@ -50,7 +50,7 @@ The caller it returns:
 
 `personalWorkspaceOnly` is an existing field. `workspace-authorization.ts` gives such a caller an empty permission set for every other Workspace, so the caller cannot read elsewhere even when handed another Workspace's ID.
 
-**No locks.** Reads take none of ingest's locks. A revoke racing a read lets at most the request in flight finish; the next one fails.
+**No ingest locks.** Reads take none of ingest's exclusive locks. A revoke racing a read lets at most the request in flight finish; the next one fails. **Recorded deviation:** `authorize` takes one shared lock on the workspace row because `TaskWorkspaceLookup` offers no unlocked read; it takes none of ingest's exclusive locks; `TaskResultReadService` takes the same one.
 
 **The same module resolves a path.** A `ref` that is not a UUID is a source path, resolved by the export's rule (`activeDocumentsAtPath`): exact match across the My Space's ACTIVE `FOLDER_SYNC` Sources. One match resolves; several are `AMBIGUOUS` and the answer lists the candidate document IDs; none is not found.
 
@@ -125,7 +125,7 @@ Export spec §10 kept Task Results on the Knowledge side partly "because nothing
 - **`CLAUDE.md`:** the invariant that names `ingest` as the one caller-less task-knowledge entry, a credential that "permits only `task-result:create`" and "is not a delegated human identity", is rewritten for two entries and for delegated reads. The three new exempt pathnames are added beside ingest's.
 - **Roadmap:** Phase 7 records this slice (delegated, one My Space, read only) and that it sets no precedent. The canonical-documents tables in the roadmap and README gain a row.
 - **Setup page** (`task-export-setup.tsx`): one sentence beside "treat this line as a secret", saying the token can read the whole My Space.
-- **Setup guides** (`docs/task-export-setup.md`, `.zh-TW.md`): the three subcommands, and an upgrade note at the top: after this release every existing token reads the My Space; rotate on the setup page if that is not wanted.
+- **Setup guides** (`docs/task-export-setup.md`, `.zh-TW.md`): the three subcommands, and an upgrade note at the top: after this release every existing token reads the My Space; rotate on the setup page when a token may have been exposed; to stop reads altogether, revoke, which also ends export.
 
 ## 9. Failures and tests
 

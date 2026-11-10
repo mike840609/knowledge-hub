@@ -10,7 +10,7 @@ it (`/hub-export`).
 
 ## Upgrade note
 
-From this release an export token can also read your My Space: every active document and task result in it. Tokens issued earlier gain this without any action. If a token may have been exposed, rotate it on the setup page.
+From this release an export token can also read your My Space: every active document and task result in it. Tokens issued earlier gain this without any action. If a token may have been exposed, rotate it on the setup page. To stop a token reading altogether, revoke it on the setup page; revoking also ends export.
 
 ## 1. Create a binding
 

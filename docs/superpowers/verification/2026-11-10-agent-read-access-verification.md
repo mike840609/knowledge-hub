@@ -52,3 +52,24 @@ The setup page was also fetched with `curl` on the older server on port 3000 (HT
 - `search --tasks` with `TASK_SEARCH_READ_ENABLED` off exits 3 as the spec requires, but the CLI prints only `Knowledge Hub answered 503.`; it does not say that task search is disabled. The setup guide's exit-3 row names the condition, not the CLI output.
 - The known 409 hint that omits `--profile` did not arise: no ambiguous path was exercised in this run.
 - The setup page on the older server on port 3000 did not show the new sentence; it was serving code from before this task. The process under test on port 3001 did show it (quoted above).
+
+## Follow-up verification (2026-11-10)
+
+The real run above was made before `e682e7cd`. Since that record, `e682e7cd` and the follow-up commit changed every open behaviour it lists:
+
+- `kind=tasks` with the flag off still answers 503, but the route now carries a message and the CLI prints it: `TASK_SEARCH_UNAVAILABLE` and `Task search is not enabled on this Hub.`
+- The 409 ambiguous-path hint now carries `--profile` (or its base64url form) for the selected profile.
+- `HEAD` and `OPTIONS` on all three agent routes now answer 405 with `Allow: GET` and `Cache-Control: private, no-store`, instead of Next's own answers.
+- `read` strips C0 and C1 control characters (except tab, newline and carriage return) from the Markdown it prints.
+- `status` honours `--profile-b64`.
+
+The final verification in this follow-up run, all on this worktree with Node v24.6.0:
+
+| Check | Command | Result |
+|---|---|---|
+| Unit | `vitest run --config vitest.config.ts` | exit 0; 386 files, 4,692 tests passed |
+| Typecheck | `node node_modules/typescript/bin/tsc --noEmit` | exit 0 |
+| Lint | `npm run lint` | exit 0 |
+| Integration | `tsx scripts/test/integration.ts` | exit 0; 121 files passed, 1 skipped; 1,239 tests passed, 1 skipped |
+
+Two earlier full-unit attempts ran while other worktrees on the same machine were running vitest (load average above 45). They failed only in unrelated UI files, all from 5-second timeouts or their cascades, and every failed file passed when rerun alone; the full-unit line above is a clean run.
