@@ -9,11 +9,11 @@ import { knownLatest, listMetas, readMeta, readRevision, saveRevision, sha256, S
 // 4 will not succeed without a user action.
 export const EXIT = { OK: 0, REFUSED: 2, RETRYABLE: 3, ACTION: 4 };
 
-class Refusal extends Error {}
+export class Refusal extends Error {}
 
 const TASK_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 /** Server text reaches the terminal without control characters: a hostile answer cannot drive it. */
-const printable = (value) => String(value).replace(/[\u0000-\u001f\u007f-\u009f]/g, "?");
+export const printable = (value) => String(value).replace(/[\u0000-\u001f\u007f-\u009f]/g, "?");
 
 // The 4xx codes the ingest route answers with; any other 4xx came from something else at that address.
 const HUB_ERROR_CODES = new Set([
@@ -112,7 +112,7 @@ function recordedBindingRefusal(meta, project, profile) {
   );
 }
 
-const timeoutMs = () => Number(process.env.KNOWLEDGE_HUB_TIMEOUT_MS ?? 30_000);
+export const timeoutMs = () => Number(process.env.KNOWLEDGE_HUB_TIMEOUT_MS ?? 30_000);
 
 async function post(project, bytes) {
   const token = readCredential(project.bindingId);
