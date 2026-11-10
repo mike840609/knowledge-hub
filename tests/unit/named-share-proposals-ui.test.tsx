@@ -67,9 +67,6 @@ describe("what a proposal entry says", () => {
       expect(notificationTitle(dead({ kind }))).toBe("A shared document");
       expect(notificationLabel(dead({ kind, proposalStatus: "PENDING" }))).toBeNull();
     }
-    // The link is gone, but the width of what it opened is still the reader's to know.
-    expect(notificationTitle(dead({ kind: "PROPOSAL_REQUEST", targetKind: "SOURCE" }))).toBe("A shared source");
-    expect(notificationTitle(dead({ kind: "PROPOSAL_REQUEST", targetKind: "FOLDER" }))).toBe("A shared folder");
   });
 });
 

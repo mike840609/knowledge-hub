@@ -9,7 +9,7 @@ const view = (overrides: Partial<ShareCommentNotificationView> = {}): ShareComme
 });
 const shared = (overrides: Partial<ShareCommentNotificationView> = {}): ShareCommentNotificationView =>
   view({ kind: "SHARED_WITH_YOU", workspaceId: "", documentId: "", sourceId: "", documentTitle: "Quarterly plan", authorName: "Dana", excerpt: "", href: "/w/me/shares/tok", linkAvailable: true, ...overrides });
-const deadShared = (overrides: Partial<ShareCommentNotificationView> = {}) => shared({ linkAvailable: false, href: undefined, documentTitle: "", authorName: undefined, ...overrides });
+const deadShared = () => shared({ linkAvailable: false, href: undefined, documentTitle: "", authorName: undefined });
 
 describe("where an Inbox entry leads, and what it says", () => {
   it("an owner's notice opens the document in its Workspace at the discussion", () => {
@@ -47,8 +47,6 @@ describe("where an Inbox entry leads, and what it says", () => {
   });
   it("a dead named share names a shared document and says it is gone", () => {
     expect(notificationTitle(deadShared())).toBe("A shared document");
-    expect(notificationTitle(deadShared({ targetKind: "FOLDER" }))).toBe("A shared folder");
-    expect(notificationTitle(deadShared({ targetKind: "SOURCE" }))).toBe("A shared source");
     expect(notificationHref(deadShared())).toBeNull();
     expect(notificationLine(deadShared())).toBe("This link is no longer available.");
   });

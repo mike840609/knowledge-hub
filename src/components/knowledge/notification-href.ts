@@ -67,10 +67,6 @@ export function notificationLine(entry: Entry): string {
   return (entry.replyCount ?? 0) > 1 ? `${entry.replyCount} new replies · ${said}` : said;
 }
 
-/** A dead link's entry has no title of its own to show, only the width of what it used to open. */
-export const notificationTitle = (entry: Pick<ShareCommentNotificationView, "kind" | "linkAvailable" | "documentTitle" | "targetKind">) =>
-  deadEntry(entry)
-    ? (isLinkEntry(entry.kind) && !isSharedEntry(entry.kind)
-      ? "A shared discussion"
-      : entry.targetKind === "SOURCE" ? "A shared source" : entry.targetKind === "FOLDER" ? "A shared folder" : "A shared document")
-    : entry.documentTitle;
+/** A dead link's entry has no title of its own to show. */
+export const notificationTitle = (entry: Pick<ShareCommentNotificationView, "kind" | "linkAvailable" | "documentTitle">) =>
+  deadEntry(entry) ? (isLinkEntry(entry.kind) && !isSharedEntry(entry.kind) ? "A shared discussion" : "A shared document") : entry.documentTitle;
