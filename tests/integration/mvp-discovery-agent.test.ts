@@ -80,3 +80,26 @@ it("builds a personal context with saved paths and rejects mixed-workspace and a
   await pool.query("UPDATE knowledge_tree_nodes SET status='ARCHIVED',archived_by=?,archived_at=NOW() WHERE document_id=?", [fixtureIdentity.id, docs[0].id]);
   await expect(service.build(caller, workspace.id, [docs[0].id])).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
 });
+async function threadedDocument() {
+  await createSourceFixture(pool);
+  const uow = new MariaDbUnitOfWork(pool);
+  const { workspace } = await new PersonalWorkspaceService(uow).ensurePersonalWorkspace(fixtureIdentity.id);
+  const staged = await stage(workspace.id, ["docs/threaded.md"], []);
+  const result = await new ApplyFolderImportService(uow).apply(caller, staged.session.snapshotId); if (result.kind !== "APPLIED") throw new Error("Expected Apply");
+  const [{ id: documentId }] = await pool.query<{ id: string }[]>("SELECT id FROM knowledge_documents WHERE source_id=?", [result.sourceId]);
+  const revision = await uow.run(r => r.revisions.findCurrent(documentId));
+  await new DocumentReviewService(uow, () => new Date(), () => true).createForOwner(caller, { documentId, expectedRevisionId: revision!.id, anchor: { schemaVersion: 1, blockPath: [1], blockKind: "paragraph", startUtf16: 0, endUtf16: 3, exact: "MVP", prefix: "", suffix: " search content." }, body: "MARKER-COMMENT", idempotencyKey: randomUUID() });
+  return { service: new AgentContextService(uow), workspaceId: workspace.id, documentId };
+}
+it("omits discussions when asked, and loads none", async () => {
+  const { service, workspaceId, documentId } = await threadedDocument();
+  const bundle = await service.build(caller, workspaceId, [documentId], "", { includeDiscussions: false });
+  expect(bundle.markdown).not.toContain("MARKER-COMMENT");
+  expect(bundle.markdown).not.toMatch(/discussion/i);
+  expect(bundle.threadCount).toBe(0);
+  expect(bundle.commentCount).toBe(0);
+});
+it("keeps discussions by default", async () => {
+  const { service, workspaceId, documentId } = await threadedDocument();
+  expect((await service.build(caller, workspaceId, [documentId])).markdown).toContain("MARKER-COMMENT");
+});

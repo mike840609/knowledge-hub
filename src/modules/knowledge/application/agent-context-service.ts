@@ -12,7 +12,8 @@ import { isRetractedThread, type ReviewComment } from "../domain/document-review
 const COMMENT_BATCH_THREADS = 100;
 export class AgentContextService {
   constructor(private readonly uow: KnowledgeUnitOfWork) {}
-  async build(caller: CallerContext, workspaceId: string, rawIds: unknown, origin = "") {
+  async build(caller: CallerContext, workspaceId: string, rawIds: unknown, origin = "", options: { includeDiscussions?: boolean } = {}) {
+    const includeDiscussions = options.includeDiscussions ?? true;
     const ids = validateContextSelection(rawIds);
     return this.uow.run(async r => {
       await r.workspaceAccess.requireWorkspaceRead(caller, workspaceId);
@@ -25,7 +26,7 @@ export class AgentContextService {
       // Only returned once every selected id passes the checks below, so the map discloses nothing a failed build would not.
       const links = linkMapFor(graph, ids, edges);
       const assemble = async (map: readonly AgentContextLink[] | null) => {
-        const formatter = new AgentContextFormatter(workspaceId, origin);
+        const formatter = new AgentContextFormatter(workspaceId, origin, includeDiscussions);
         if (map) formatter.addLinks(map); else formatter.addLinkMapOmitted();
         for (const id of ids) {
           const { document, policy } = await requireVisibleDocument(r, caller, id, false);
@@ -37,6 +38,7 @@ export class AgentContextService {
           if (!revision) throw new IntegrityViolationError("Saved revision unavailable.");
           const entry = await r.linkedEntries.findByDocumentId(document.id);
           formatter.addDocument({ documentId: document.id, sourceId: document.sourceId, sourceName: policy.name, sourcePath: entry?.sourcePath ?? null, revisionId: revision.id, revisionNo: revision.revisionNo, title: revision.title, markdown: revision.markdown, updatedAt: revision.createdAt });
+          if (!includeDiscussions) continue;
           const relocate = createReviewAnchorRelocator(revision.markdown);
           const threads = (await r.reviewThreads.listByDocument(document.id)).filter(t => t.visibility !== "HIDDEN").sort(byCreation);
           // Memory is bounded per batch: the formatter throws on overflow before the next batch loads.
