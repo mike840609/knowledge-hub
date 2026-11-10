@@ -98,9 +98,9 @@ In `src/components/help/user-guide-content.ts`:
 Insert the **inbox** section (`id:"inbox"`) with:
 
 - en title `Inbox: discussions, mentions and shares`; zh-TW title `收件匣：討論、提及與分享`.
-- Bullets covering, in this order: the three sources (your documents, followed discussions, mentions); relationship filters `All / My documents / Following / Mentions` plus `Status` (`Any / Open / Resolved`) and `Unread`; selecting a row to read the thread beside the list and `Reply` / `Resolve`, with `Open document` for the article, and the plain-list behaviour below the split width; `Mark read`, `Mark all read`, `Refresh`; `Proposals` and `Shared with you`, noting the latter also lives in Shares.
+- Bullets covering, in this order: the three sources (your documents, followed discussions, mentions); relationship filters `All / My documents / Following / Mentions` plus `Status` (`Any status / Open / Resolved`) and `Unread`; selecting a row to read the thread beside the list and `Reply` / `Resolve`, with `Open document` for the article, and the plain-list behaviour below the split width; `Mark read`, `Mark all read`, `Refresh`; `Proposals` and `Shared with you`, noting the latter also lives in Shares.
 - Three `details` blocks:
-  - `Read, resolve and unread` — opening marks read; a later reply can make it unread again; the sidebar badge counts unread notices (comments, mentions, shares and proposals); resolving is separate.
+  - `Read, resolve and unread` — opening marks read; a later reply can make it unread again; the sidebar badge counts unread items (comments, mentions, shares and proposals); resolving is separate.
   - `Dead links and permissions` — a revoked or expired link reads as unavailable and opens nothing; replying to a followed discussion needs a valid link, a signed-in identity and enabled comment writes; the Inbox grants no access.
   - `Inbox and Shares` — Inbox is the discussion index and notices; Shares manages your own links, expiry/revocation, saved shares and followed discussions.
 - `links:[{target:"inbox",label:"Open Inbox"}]` (zh-TW: `開啟 Inbox`).

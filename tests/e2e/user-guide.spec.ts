@@ -121,15 +121,19 @@ test("Home help covers first import, repeat sync and recovery in both languages"
 });
 
 test("a flag-on deployment shows the Task Search material",async({page})=>{
+  test.setTimeout(60_000);
   const port=Number(process.env.KM_E2E_PORT??"3101")+18;
   const origin="http://127.0.0.1:"+port;
+  let serverOutput="";
   const server=spawn(process.execPath,["node_modules/next/dist/bin/next","start","--hostname","127.0.0.1","--port",String(port)],{
     cwd:process.cwd(),env:{...process.env,NODE_ENV:"production",KM_IDENTITY_PROVIDER:"local",TASK_SEARCH_READ_ENABLED:"true",PORT:String(port)},stdio:["ignore","pipe","pipe"],
   });
+  server.stdout?.on("data",chunk=>{serverOutput+=chunk.toString().slice(-2048);});
+  server.stderr?.on("data",chunk=>{serverOutput+=chunk.toString().slice(-2048);});
   try {
     const until=Date.now()+40_000;
     while(Date.now()<until) {
-      if(server.exitCode!==null)throw new Error("Task Search guide server exited.");
+      if(server.exitCode!==null)throw new Error("Task Search guide server exited: "+serverOutput.slice(-1500));
       try { await fetch(origin,{redirect:"manual"}); break; } catch { await new Promise(resolve=>setTimeout(resolve,350)); }
     }
     await page.goto(`${origin}/help?lang=en`);
@@ -137,6 +141,10 @@ test("a flag-on deployment shows the Task Search material",async({page})=>{
     await expect(page.getByText("With search enabled, each result also shows the verification badge and a matched excerpt.",{exact:true})).toBeAttached();
     await expect(page.getByText("Search and filters",{exact:true})).toBeAttached();
     await expect(page.getByRole("img",{name:/① Search title, summary and findings/}).first()).toBeAttached();
+    // The flag-on guide must show the search screen instead of the legacy list, never both.
+    await expect(page.getByRole("img",{name:/① Each row is one Task Result/})).toHaveCount(0);
+    // One list variant replaces the other, so the total stays 19 (8 diagrams + 11 screens).
+    await expect(page.getByRole("figure")).toHaveCount(19);
   } finally {
     server.kill("SIGTERM");
   }

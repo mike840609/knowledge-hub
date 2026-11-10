@@ -126,7 +126,7 @@ in the guide to look.
     comments that mention you. Opening a discussion marks it read; resolving it
     is a separate action.
   - Switch relationship with All / My documents / Following / Mentions; narrow
-    with Status (Any / Open / Resolved) and Unread.
+    with Status (Any status / Open / Resolved) and Unread.
   - Select a row to read the whole thread beside the list and Reply or Resolve;
     Open document opens the article. Below the split width, the Inbox is a plain
     list and a row opens the document.

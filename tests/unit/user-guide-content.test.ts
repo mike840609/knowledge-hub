@@ -31,7 +31,8 @@ describe("user guide content", () => {
   it("states the badge, row and archive rules the product actually uses", () => {
     for (const locale of ["en", "zh-TW"] as const) {
       const body = text(locale, false);
-      expect(body).toContain(locale === "en" ? "counts unread notices" : "未讀通知數");
+      expect(body).toContain(locale === "en" ? "counts unread items" : "未讀項目");
+      expect(body).toContain(locale === "en" ? "Status (Any status / Open / Resolved)" : "Status（Any status／Open／Resolved）");
       expect(body).toContain(locale === "en" ? "revision when a task has more than one" : "超過一個版本時才顯示 revision");
       expect(body).toContain(locale === "en" ? "Archived results stay readable and can be restored" : "封存後仍可閱讀，也能從同一頁還原");
       expect(body).toContain("64 KiB");

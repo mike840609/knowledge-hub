@@ -15,7 +15,8 @@ test.use({viewport:{width:1280,height:800},deviceScaleFactor:2});
 
 /**
  * Clips `region` (margin, capped height) and shoots both themes. Each target is outlined like a focus
- * ring and numbered at its top-left corner, kept inside the clip, in the order the caption gives the steps.
+ * ring and numbered at its top-left corner (top-right when `markSide` is `"right"`), kept inside the
+ * clip, in the order the caption gives the steps.
  */
 async function capture(page:Page,name:string,region:Locator,targets:Locator[]=[],{maxHeight=560,margin=16,offset=3,markSide="left"}:{maxHeight?:number;margin?:number;offset?:number;markSide?:"left"|"right"}={}) {
   const box=(await region.boundingBox())!;

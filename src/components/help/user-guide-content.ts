@@ -75,14 +75,14 @@ export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean
       ]}]),
       section("inbox","收件匣：討論、提及與分享",[
         "Inbox 彙整你文件上的討論、你追蹤的討論，以及有人提及你的留言。",
-        "用 All／My documents／Following／Mentions 切換關係，再用 Status（Any／Open／Resolved）與 Unread 縮小範圍。",
+        "用 All／My documents／Following／Mentions 切換關係，再用 Status（Any status／Open／Resolved）與 Unread 縮小範圍。",
         "點一列在右側閱讀整串討論並回覆或 Resolve；Open document 開原文。視窗較窄時，Inbox 是純清單，點列直接開文件。",
         "Mark read 只處理那一則，Mark all read 清掉目前未讀，Refresh 重新載入索引。",
         "Proposals（具名分享的加入請求，擁有者可 Approve／Decline）與 Shared with you（別人具名分享給你的文件與資料夾）會出現在同一頁；後者也列在 Shares。",
       ],[
         {title:"已讀、解決與未讀",items:[
           "開啟討論會標為已讀，不代表你已回覆或解決。",
-          "之後有人回覆會再次變成未讀；側欄 Inbox 的數字是未讀通知數（留言、提及、分享與提案）。",
+          "之後有人回覆會再次變成未讀；側欄 Inbox 的數字是未讀項目（留言、提及、分享與提案）。",
           "Resolve 是另一個動作，不會順便處理其他討論。",
         ]},
         {title:"失效連結與權限",items:[
@@ -213,14 +213,14 @@ export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean
       ]}]),
       section("inbox","Inbox: discussions, mentions and shares",[
         "Inbox collects discussions on your documents, discussions you follow, and comments that mention you.",
-        "Switch relationship with All / My documents / Following / Mentions; narrow with Status (Any / Open / Resolved) and Unread.",
+        "Switch relationship with All / My documents / Following / Mentions; narrow with Status (Any status / Open / Resolved) and Unread.",
         "Select a row to read the thread beside the list and Reply or Resolve; Open document opens the article. Below the split width, a row opens the document.",
         "Mark read settles one item, Mark all read clears the current unread, and Refresh reloads the index.",
         "Proposals (named-share requests an owner can Approve or Decline) and Shared with you (documents and folders shared with you by name) appear on the same page; Shared with you also lives in Shares.",
       ],[
         {title:"Read, resolve and unread",items:[
           "Opening a discussion marks it read; it does not mean you replied or resolved it.",
-          "A later reply makes the discussion unread again. The sidebar's Inbox badge counts unread notices — comments, mentions, shares and proposals.",
+          "A later reply makes the discussion unread again. The sidebar's Inbox badge counts unread items — comments, mentions, shares and proposals.",
           "Resolving is a separate action; it does not mark other discussions read.",
         ]},
         {title:"Dead links and permissions",items:[
