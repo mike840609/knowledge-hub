@@ -131,31 +131,47 @@ describe("knowledge-hub install-agent", () => {
 
   const install = (...args: string[]) =>
     spawnSync(process.execPath, [CLI, "install-agent", ...args], { env: { NODE_ENV: "test", HOME: home, USERPROFILE: home, PATH: process.env.PATH ?? "" }, encoding: "utf8" });
-  const skillPath = () => path.join(home, ".claude/skills/hub-export/SKILL.md");
-  const adapterPath = () => path.join(home, ".config/opencode/commands/hub-export.md");
+  const names = ["hub-export", "hub-search", "hub-read"];
+  const skillPath = (name = "hub-export") => path.join(home, `.claude/skills/${name}/SKILL.md`);
+  const adapterPath = (name = "hub-export") => path.join(home, `.config/opencode/commands/${name}.md`);
+  const source = (file: string) => readFileSync(path.join(AGENT, file), "utf8");
+
+  it("writes the three Skills and their three adapters", () => {
+    expect(install().status).toBe(0);
+    for (const name of names) {
+      expect(existsSync(skillPath(name))).toBe(true);
+      expect(existsSync(adapterPath(name))).toBe(true);
+    }
+  });
 
   it("installs the Skill and the adapter, filling in the Skill's absolute path", () => {
     expect(install().status).toBe(0);
-    expect(readFileSync(skillPath(), "utf8")).toBe(skill());
-    const installed = readFileSync(adapterPath(), "utf8");
-    expect(installed).toContain(skillPath());
-    expect(installed).not.toContain("{{SKILL_PATH}}");
+    for (const name of names) {
+      expect(readFileSync(skillPath(name), "utf8")).toBe(source(`${name}/SKILL.md`));
+      const installed = readFileSync(adapterPath(name), "utf8");
+      expect(installed).toContain(skillPath(name));
+      expect(installed).not.toContain("{{SKILL_PATH}}");
+    }
   });
 
-  it("installs only the Skill with --claude, and the Skill too with --opencode alone", () => {
+  it("installs only the Skills with --claude, and the Skills too with --opencode alone", () => {
     expect(install("--claude").status).toBe(0);
-    expect(existsSync(skillPath())).toBe(true);
-    expect(existsSync(adapterPath())).toBe(false);
+    for (const name of names) {
+      expect(existsSync(skillPath(name))).toBe(true);
+      expect(existsSync(adapterPath(name))).toBe(false);
+    }
     rmSync(path.join(home, ".claude"), { recursive: true });
     expect(install("--opencode").status).toBe(0);
-    expect(existsSync(skillPath())).toBe(true);
-    expect(existsSync(adapterPath())).toBe(true);
+    for (const name of names) {
+      expect(existsSync(skillPath(name))).toBe(true);
+      expect(existsSync(adapterPath(name))).toBe(true);
+    }
   });
 
   it("is idempotent", () => {
     expect(install().status).toBe(0);
     expect(install().status).toBe(0);
-    expect(readFileSync(skillPath(), "utf8")).toBe(skill());
+    for (const name of names) expect(readFileSync(skillPath(name), "utf8")).toBe(source(`${name}/SKILL.md`));
   });
 
   it("refuses to overwrite a file the user changed, unless --force", () => {

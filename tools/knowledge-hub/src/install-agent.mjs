@@ -7,6 +7,7 @@ import { userDirs, writePrivate } from "./project-config.mjs";
 import { sha256 } from "./state.mjs";
 
 const AGENT = fileURLToPath(new URL("../agent/", import.meta.url));
+const SKILLS = ["hub-export", "hub-search", "hub-read"];
 
 // Installed-file hashes, so a later install overwrites only what it wrote itself.
 const recordFile = () => path.join(userDirs().config, "installed-agent.json");
@@ -15,13 +16,16 @@ const readRecord = () => (existsSync(recordFile()) ? JSON.parse(readFileSync(rec
 export function installAgent(flags) {
   const claudeOnly = flags.claude && !flags.opencode;
   const home = homedir();
-  const skillPath = path.join(home, ".claude", "skills", "hub-export", "SKILL.md");
   // ponytail: OpenCode's user commands dir as of v2.1; confirm on new OpenCode releases.
   const opencodeDir = path.join(process.env.XDG_CONFIG_HOME ?? path.join(home, ".config"), "opencode", "commands");
-  const files = [[skillPath, readFileSync(path.join(AGENT, "hub-export", "SKILL.md"), "utf8")]];
-  if (!claudeOnly) {
-    const adapter = readFileSync(path.join(AGENT, "opencode", "hub-export.md"), "utf8").replaceAll("{{SKILL_PATH}}", skillPath);
-    files.push([path.join(opencodeDir, "hub-export.md"), adapter]);
+  const files = [];
+  for (const name of SKILLS) {
+    const skillPath = path.join(home, ".claude", "skills", name, "SKILL.md");
+    files.push([skillPath, readFileSync(path.join(AGENT, name, "SKILL.md"), "utf8")]);
+    if (!claudeOnly) {
+      const adapter = readFileSync(path.join(AGENT, "opencode", `${name}.md`), "utf8").replaceAll("{{SKILL_PATH}}", skillPath);
+      files.push([path.join(opencodeDir, `${name}.md`), adapter]);
+    }
   }
 
   const record = readRecord();
