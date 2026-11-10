@@ -15,7 +15,7 @@ import sourcesLight from "./screens/sources-light.png";
 import syncDark from "./screens/sync-dark.png";
 import syncLight from "./screens/sync-light.png";
 
-type Shot={light:StaticImageData;dark:StaticImageData;path:[en:string,zh:string];en:string;zh:string;marks?:[en:string,zh:string][]};
+type Shot={light:StaticImageData;dark:StaticImageData;path:[en:string,zh:string];en:string;zh:string;marks?:[en:string,zh:string][];only?:"taskSearch"|"noTaskSearch"};
 
 // Regenerate with `make guide-screenshots` after the pictured screens change. Each ①② in a caption
 // is the numbered mark the capture places, in the same order (tests/e2e/user-guide-screenshots.spec.ts).
@@ -37,9 +37,12 @@ const SHOTS:Record<string,Shot[]>={
 };
 
 /** Real screens from the sample wiki, one image per theme; the numbered, outlined controls are the ones to use. */
-export function UserGuideScreenshots({sectionId,locale}:{sectionId:string;locale:GuideLocale}) {
+export function UserGuideScreenshots({sectionId,locale,taskSearch=false}:{sectionId:string;locale:GuideLocale;taskSearch?:boolean}) {
   const zh=locale==="zh-TW";
-  return (SHOTS[sectionId]??[]).map(shot=>{
+  return (SHOTS[sectionId]??[])
+    .filter(shot=>shot.only!=="taskSearch"||taskSearch)
+    .filter(shot=>shot.only!=="noTaskSearch"||!taskSearch)
+    .map(shot=>{
     const caption=zh?shot.zh:shot.en;
     // Framed as a window, so the pictured controls do not read as this page's own.
     return <figure key={shot.light.src} className="my-4">

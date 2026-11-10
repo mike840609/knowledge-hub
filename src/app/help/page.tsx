@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/shell/page-header";
 import Link from "next/link";
 import {helpWorkspaceId} from "@/server/help-read";
+import {helpTaskSearchEnabled} from "@/server/help-config";
 import {GuideContentBlock} from "@/components/imports/import-guide";
 import {UserGuideIllustration} from "@/components/help/user-guide-illustration";
 import {UserGuideScreenshots} from "@/components/help/user-guide-screenshot";
@@ -23,7 +24,7 @@ function GuideActionLinks({links,base}:{links:UserGuideAction[];base:string}) {
  */
 export default async function UserGuidePage({searchParams}:{searchParams:Promise<{lang?:string}>}) {
   const workspaceId=await helpWorkspaceId(),{lang}=await searchParams;
-  const locale=lang==="en"?"en":"zh-TW",zh=locale==="zh-TW",content=userGuideContent(locale),format=guideContent(locale,importRuntimeConfig().limits),base=`/w/${workspaceId}`;
+  const locale=lang==="en"?"en":"zh-TW",zh=locale==="zh-TW",taskSearch=helpTaskSearchEnabled(),content=userGuideContent(locale,{taskSearch}),format=guideContent(locale,importRuntimeConfig().limits),base=`/w/${workspaceId}`;
   const link="kh-focus-ring rounded-md text-kh-link underline-offset-4 hover:underline";
   return <main className="pb-6" lang={locale}>
     <div className="kh-page">
@@ -36,7 +37,7 @@ export default async function UserGuidePage({searchParams}:{searchParams:Promise
       <div className="min-w-0 max-w-reading">{content.sections.map(s=><section key={s.id} id={s.id} aria-labelledby={`${s.id}-heading`} className="mt-6 scroll-mt-6 border-t border-kh-border pt-6 first:mt-0 first:border-t-0 first:pt-0">
         <h2 id={`${s.id}-heading`} tabIndex={-1} className="kh-focus-ring rounded-md text-title font-semibold">{s.title}</h2>
         <UserGuideIllustration sectionId={s.id} locale={locale}/>
-        <UserGuideScreenshots sectionId={s.id} locale={locale}/>
+        <UserGuideScreenshots sectionId={s.id} locale={locale} taskSearch={taskSearch}/>
         <div className="[&_ul]:space-y-2">{s.body.map((block,i)=><GuideContentBlock key={i} block={block} caption={s.title}/>)}</div>
         <GuideActionLinks links={s.links} base={base}/>
         <div className="mt-4 space-y-3">{s.details.map(detail=><details key={detail.title}><summary className="kh-focus-ring cursor-pointer rounded-md text-body font-medium text-kh-text-secondary">{detail.title}</summary><GuideContentBlock block={{kind:"ul",items:detail.items}} caption={detail.title}/><GuideActionLinks links={detail.links??[]} base={base}/></details>)}</div>

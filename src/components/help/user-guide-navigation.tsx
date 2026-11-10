@@ -5,9 +5,9 @@ import type {MouseEvent} from "react";
 import type {GuideLocale} from "@/components/imports/import-guide-content";
 
 const labels:Record<GuideLocale,Record<string,string>>={
-  "en":{"quick-start":"Quick start",sync:"Daily sync",troubleshooting:"Troubleshooting",reading:"Read and organize",insights:"Insights","sharing-export":"Share and export",
+  "en":{"quick-start":"Quick start",sync:"Daily sync",troubleshooting:"Troubleshooting",reading:"Read and organize",inbox:"Inbox",insights:"Insights",tasks:"Tasks","sharing-export":"Share and export",
     example:"Example",checklist:"Checklist","titles-links":"Titles and links","knowledge-id":"Renames and knowledge_id",limits:"Limits"},
-  "zh-TW":{"quick-start":"開始使用",sync:"日常同步",troubleshooting:"疑難排解",reading:"閱讀與整理",insights:"Insights","sharing-export":"分享與匯出",
+  "zh-TW":{"quick-start":"開始使用",sync:"日常同步",troubleshooting:"疑難排解",reading:"閱讀與整理",inbox:"收件匣",insights:"Insights",tasks:"Tasks","sharing-export":"分享與匯出",
     example:"完整範例",checklist:"檢查清單","titles-links":"標題與連結","knowledge-id":"改名與 knowledge_id",limits:"限制與略過"},
 };
 
