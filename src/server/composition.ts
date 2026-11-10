@@ -57,6 +57,7 @@ import { IngestTaskResultService } from "@/modules/task-knowledge/application/in
 import { importRuntimeConfig } from "@/server/import-config";
 import { createIdentityProvider } from "@/server/identity-provider-factory";
 import { closeDatabasePool, getDatabasePool } from "./database-pool";
+import { withSourcePaths } from "./agent-search";
 
 let services: ReturnType<typeof buildApplicationServices> | undefined;
 let companySessionReader: CompanySsoSessionReader | undefined;
@@ -200,22 +201,11 @@ export function agentReadServices(): {
 } {
   const unitOfWork = new MariaDbUnitOfWork(getDatabasePool());
   const taskUnitOfWork = new MariaDbTaskKnowledgeUnitOfWork(getDatabasePool());
-  const search = new KnowledgeSearchService(unitOfWork, new WorkspaceQueryService(unitOfWork));
   return {
     access: new AgentReadAccessService(taskUnitOfWork),
-    // A hit names its synced folder path where it has one; the search result
-    // does not carry it, so it is read from the document's own entry.
-    search: {
-      search: async (caller, input) => {
-        const result = await search.search(caller, input);
-        if (!result.hits.length) return result;
-        const entries = await unitOfWork.run((repositories) =>
-          repositories.entries.findByDocumentIds(result.hits.map((hit) => hit.documentId)));
-        const paths = new Map(entries.flatMap((entry) =>
-          entry.documentId === null ? [] : [[entry.documentId, entry.sourcePath] as const]));
-        return { ...result, hits: result.hits.map((hit) => ({ ...hit, sourcePath: paths.get(hit.documentId) ?? null })) };
-      },
-    },
+    // A document hit must name its synced folder path where it has one; the
+    // search projection does not carry it (agent read access design §4).
+    search: withSourcePaths(new KnowledgeSearchService(unitOfWork, new WorkspaceQueryService(unitOfWork)), unitOfWork),
     context: new AgentContextService(unitOfWork),
     tasks: new TaskResultReadService(taskUnitOfWork),
   };

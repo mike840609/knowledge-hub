@@ -1,6 +1,7 @@
 // Request-bound private routes must bypass Next auto-mode Request proxies.
 export const dynamic = "force-dynamic";
 import { ValidationError } from "@/modules/knowledge/domain/errors";
+import { taskResultNotFound } from "@/modules/task-knowledge/application/read-task-results";
 import { isUuid } from "@/shared/ids/uuid";
 import { agentReadHttp, agentScope, methodNotAllowed } from "@/server/agent-read";
 
@@ -15,6 +16,9 @@ export async function GET(request: Request): Promise<Response> {
     if (!isUuid(id)) throw new ValidationError("Provide id as a Task Result UUID.");
     const { caller, space } = await agentScope(services, token);
     const task = await services.tasks.get(caller, space, id);
+    // The token reads ACTIVE content only (design §5, §9); an ARCHIVED Task
+    // Result is answered exactly as a missing one, never served or hinted at.
+    if (task.lifecycle !== "ACTIVE") throw taskResultNotFound();
     return { taskResultId: task.taskResultId, revisionNo: task.revisionNo, content: task.content, references: task.references };
   });
 }

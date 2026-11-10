@@ -237,6 +237,14 @@ describe("GET /api/agent/tasks", () => {
     await expectPrivate(response);
   });
 
+  it("answers 404 for an ARCHIVED Task Result", async () => {
+    injected.tasks.get.mockResolvedValue({ ...detail, lifecycle: "ARCHIVED", archivedAt: new Date() });
+    const response = await tasksRoute.GET(get(`/api/agent/tasks?id=${TASK}`));
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: { code: "NOT_FOUND", message: "Not found." } });
+    await expectPrivate(response);
+  });
+
   it.each([
     ["a missing id", "/api/agent/tasks"],
     ["an empty id", "/api/agent/tasks?id="],

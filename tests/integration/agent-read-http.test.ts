@@ -8,22 +8,24 @@ import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbTaskKnowledgeUnitOfWork } from "@/infrastructure/database/mariadb/task-knowledge-transaction";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
 import { RandomShareTokenIssuer } from "@/infrastructure/security/random-share-token-issuer";
-import { callerFromIdentity, type CallerContext } from "@/modules/identity/domain/caller-context";
+import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
 import { AgentContextService } from "@/modules/knowledge/application/agent-context-service";
 import { DocumentReviewService } from "@/modules/knowledge/application/document-review-service";
 import { DocumentShareService } from "@/modules/knowledge/application/document-share-service";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
-import { KnowledgeSearchService, type KnowledgeSearchInput } from "@/modules/knowledge/application/knowledge-search-service";
+import { KnowledgeSearchService } from "@/modules/knowledge/application/knowledge-search-service";
 import { SavedShareService } from "@/modules/knowledge/application/saved-share-service";
 import { revisionContentHash } from "@/modules/knowledge/domain/content";
 import { AgentReadAccessService } from "@/modules/task-knowledge/application/agent-read-access";
 import { IngestTaskResultService } from "@/modules/task-knowledge/application/ingest-task-result";
 import { ManageExportBindingService } from "@/modules/task-knowledge/application/manage-export-binding";
+import { TaskLifecycleService } from "@/modules/task-knowledge/application/manage-task-lifecycle";
 import { TaskResultReadService } from "@/modules/task-knowledge/application/read-task-results";
 import { WorkspaceQueryService } from "@/modules/workspaces/application/workspace-query-service";
 import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
 import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
+import { withSourcePaths } from "@/server/agent-search";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { insertSyncedDocument, seedMySpaceWithFolderSource } from "./task-knowledge-fixtures";
 
@@ -42,24 +44,13 @@ beforeAll(() => {
 afterAll(async () => { await pool.end(); });
 afterEach(() => vi.unstubAllEnvs());
 
-/** The real services `agentReadServices()` wires, kept in step with the path projection it adds. */
+/** The real services `agentReadServices()` wires, through the same search projection it uses. */
 function buildAgentServices() {
   const unitOfWork = new MariaDbUnitOfWork(pool);
   const taskUnitOfWork = new MariaDbTaskKnowledgeUnitOfWork(pool);
-  const search = new KnowledgeSearchService(unitOfWork, new WorkspaceQueryService(unitOfWork));
   return {
     access: new AgentReadAccessService(taskUnitOfWork),
-    search: {
-      search: async (caller: CallerContext, input: KnowledgeSearchInput) => {
-        const result = await search.search(caller, input);
-        if (!result.hits.length) return result;
-        const entries = await unitOfWork.run((repositories) =>
-          repositories.entries.findByDocumentIds(result.hits.map((hit) => hit.documentId)));
-        const paths = new Map(entries.flatMap((entry) =>
-          entry.documentId === null ? [] : [[entry.documentId, entry.sourcePath] as const]));
-        return { ...result, hits: result.hits.map((hit) => ({ ...hit, sourcePath: paths.get(hit.documentId) ?? null })) };
-      },
-    },
+    search: withSourcePaths(new KnowledgeSearchService(unitOfWork, new WorkspaceQueryService(unitOfWork)), unitOfWork),
     context: new AgentContextService(unitOfWork),
     tasks: new TaskResultReadService(taskUnitOfWork),
   };
@@ -175,6 +166,15 @@ describe("agent read over HTTP", () => {
     await pool.query("UPDATE knowledge_documents SET status='ARCHIVED', archived_by=?, archived_at=NOW(6) WHERE id=?", [box.owner.id, documentId]);
     expect((await readDocument(get(`/api/agent/documents?ref=${documentId}`, box.token))).status).toBe(404);
     expect((await readDocument(get(`/api/agent/documents?${new URLSearchParams({ ref: "old/gone.md" })}`, box.token))).status).toBe(404);
+  });
+
+  it("answers 404 for an ARCHIVED Task Result", async () => {
+    const box = await exporter();
+    const { taskResultId } = await box.ingest({ taskId: randomUUID(), artifactRevision: 1, title: "Archived task" });
+    await new TaskLifecycleService(new MariaDbTaskKnowledgeUnitOfWork(pool)).archive(box.caller, box.workspaceId, taskResultId);
+    const response = await readTask(get(`/api/agent/tasks?id=${taskResultId}`, box.token));
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: { code: "NOT_FOUND", message: "Not found." } });
   });
 
   it("does not read a Team Workspace document the owner is a member of", async () => {
