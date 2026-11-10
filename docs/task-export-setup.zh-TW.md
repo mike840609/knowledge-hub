@@ -1,7 +1,7 @@
 # 任務匯出設定
 
 把用 Claude Code 或 OpenCode 完成的任務，存成 Knowledge Hub My Space 裡的任務結果。
-匯出只走一個受限的 binding：它只能把任務結果加進你自己的 My Space；只有在你要求時（`/hub-export`）才會送出。
+匯出只走一個受限的 binding：它只能把任務結果加進，並讀取使用中的文件與任務結果，而且僅限你自己的 My Space；它不能改變文件。只有在你要求時（`/hub-export`）才會送出。
 
 [English](task-export-setup.md)
 

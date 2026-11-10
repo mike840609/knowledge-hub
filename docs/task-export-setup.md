@@ -2,8 +2,9 @@
 
 Save a task you finished with Claude Code or OpenCode as a task result in your
 Knowledge Hub My Space. The export goes through one restricted binding: it can
-only add task results to your own My Space, and it is
-never sent unless you ask for it (`/hub-export`).
+add task results to, and read the active documents and task results of, only your
+own My Space; it cannot change a document. It is never sent unless you ask for
+it (`/hub-export`).
 
 [繁體中文](task-export-setup.zh-TW.md)
 
