@@ -4,7 +4,6 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, ChevronsLeft, Plus, ListFilter, Star, Share2 } from "lucide-react";
-import { SourceShareAction } from "@/components/sources/source-share-action";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { favoritesInPlace, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
@@ -22,8 +21,8 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { isBoolean, isBooleanRecord, isString, usePersistedJson } from "@/components/shell/use-persisted-state";
 import { documentShortcutKey, useDocumentShortcuts } from "./use-document-shortcuts";
 import { useTreeMutations } from "./use-tree-mutations";
-import { useActionRunner } from "@/components/actions/action-menu";
-import { actionsFor, type ActionTarget, type FolderTarget } from "@/components/actions/action-registry";
+import { RowActionsTrigger, RowContextMenu, useActionRunner } from "@/components/actions/action-menu";
+import { actionsFor, type ActionTarget, type FolderTarget, type SourceTarget } from "@/components/actions/action-registry";
 
 /** Why a synced source's documents cannot be edited here; read after the name, never part of it. */
 const READ_ONLY_DESCRIPTION = "Synced from a folder, read-only in the Hub";
@@ -347,9 +346,17 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
           const open = Boolean(needle) || (expanded[candidate.id] ?? candidate.id === source?.id);
           const readOnly = candidate.ownership === "SOURCE_MANAGED";
           const isNotes = candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE";
+          const sourceActions = actionsFor("row", {
+            workspaceId,
+            workspaceType: access.workspace.type,
+            isPersonalOwner: access.isPersonalOwner,
+            can: access.actions,
+            confirmed,
+            source: { sourceId: candidate.id, label: candidate.name, status: candidate.status } satisfies SourceTarget,
+          });
           return (
             <section key={candidate.id} aria-label={`${candidate.name} documents`}>
-              <div className="flex items-center gap-1">
+              <RowContextMenu as="div" actions={sourceActions} onRun={runAction} className="flex items-center gap-1">
                 <button type="button" aria-expanded={open} aria-controls={`collection-${candidate.id}`} aria-describedby={readOnly ? readOnlyDescriptionId : undefined} onClick={() => setExpanded((previous) => ({ ...previous, [candidate.id]: !open }))} title={readOnly ? `${candidate.name} · ${READ_ONLY_DESCRIPTION}` : candidate.name} className="group kh-control flex kh-rail-row min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left kh-rail-text font-medium text-kh-text hover:bg-kh-bg-hover kh-focus-ring">
                   {/* One slot, Notion-style: the source's mark at rest, its chevron on hover (where hover exists) or keyboard focus. */}
                   <span className="relative size-3.5 shrink-0 text-kh-text-muted" aria-hidden="true">
@@ -364,9 +371,9 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                   {canShareSources && candidate.status === "ACTIVE" && sourceIds.has(candidate.id) ? <Share2 size={14} aria-label="Shared" className="shrink-0 text-kh-text-muted" /> : null}
                   {candidate.status === "ARCHIVED" ? <Status kind="archived" className="ml-auto text-caption font-normal text-kh-text-muted">Archived</Status> : null}
                 </button>
-                <SourceShareAction workspaceId={workspaceId} sourceId={candidate.id} sourceName={candidate.name} status={candidate.status} />
+                <RowActionsTrigger actions={sourceActions} onRun={runAction} label={candidate.name} />
                 {isNotes && canCreate ? <div className="flex items-center">{addFolder}{addNote}</div> : null}
-              </div>
+              </RowContextMenu>
               <div id={`collection-${candidate.id}`} hidden={!open} className="mt-1 pl-2">
                 {open && ensureTree && treeStates?.[candidate.id]?.status !== "loaded" ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">
                   {treeStates?.[candidate.id]?.status === "error" ? <>Documents could not be loaded. <button className="kh-focus-ring underline" onClick={() => void retryTree?.(candidate.id)}>Retry</button></> : "Loading documents…"}

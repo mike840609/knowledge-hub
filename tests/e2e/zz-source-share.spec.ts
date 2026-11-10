@@ -54,7 +54,8 @@ test.describe("source share link", () => {
     await page.goto(`/w/${workspace}/knowledge/${sourceId}`);
     const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
     await expect(explorer.getByRole("img", { name: "Shared" })).toBeVisible(ROUND_TRIP);
-    await explorer.getByRole("button", { name: `Share source ${name}` }).click();
+    await explorer.getByRole("button", { name }).click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Share link…" }).click();
     const sidebarDialog = page.getByRole("dialog", { name: `Share source ${name}` });
     await expect(sidebarDialog.locator("[data-share-link]")).toContainText("for readers", ROUND_TRIP);
     // The sidebar is an entry point of its own: make a link here, then revoke it so the

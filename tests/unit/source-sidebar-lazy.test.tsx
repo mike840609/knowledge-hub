@@ -13,8 +13,7 @@ vi.mock('@/components/shell/use-workspace-authorization',()=>({useWorkspaceAutho
 vi.mock('@/components/knowledge/use-document-shortcuts',()=>({useDocumentShortcuts:()=>({shortcuts:{favorites:[],recent:[]},ready:true,update:vi.fn()}),documentShortcutKey:(s:string,d:string)=>`${s}:${d}`}));
 vi.mock('@/components/knowledge/use-tree-mutations',()=>({useTreeMutations:()=>({})}));
 const share = vi.hoisted(() => vi.fn());
-vi.mock('@/components/actions/action-menu',()=>({useActionRunner:()=>vi.fn(),requestShare:share}));
-vi.mock('@/components/actions/action-registry',()=>({actionsFor:()=>[]}));
+vi.mock('@/components/actions/action-menu',async(orig)=>({...await orig<object>(),useActionRunner:()=>(a:{effect:{kind:string;sourceId:string;label:string}})=>{if(a.effect.kind==='share-source')share({sourceId:a.effect.sourceId,name:a.effect.label});},requestShare:share}));
 // This file counts the fetches a source's tree makes; the tree's share marker has its own request.
 vi.mock('@/components/knowledge/shared-folders',()=>({useSharedTargets:()=>({folderIds:new Set<string>(),sourceIds:new Set<string>(['a','b'])})}));
 vi.mock('@/components/knowledge/knowledge-tree',()=>({KnowledgeTree:({items}:{items:{label:string}[]})=><div>{items.map(i=><span key={i.label}>{i.label}</span>)}</div>}));
@@ -55,12 +54,13 @@ it('only shows source sharing and markers to the confirmed owner for active sour
  cleanup=async()=>{await act(async()=>root.unmount());host.remove();auth.owner=true;share.mockClear();};
  await act(async()=>root.render(<Host/>));
  expect(host.querySelectorAll('[aria-label="Shared"]')).toHaveLength(2);
- await act(async()=>host.querySelector<HTMLButtonElement>('button[aria-label="Share source Alpha"]')!.click());
+ await act(async()=>{host.querySelector<HTMLButtonElement>('button[aria-label="Actions for Alpha"]')!.dispatchEvent(new MouseEvent('click',{bubbles:true}));});
+ await act(async()=>Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(e=>e.textContent==='Share link…')!.click());
  expect(share).toHaveBeenCalledWith({sourceId:'a',name:'Alpha'});
  auth.owner=false;
  await act(async()=>root.render(<Host/>));
  expect(host.querySelector('[aria-label="Shared"]')).toBeNull();
- expect(host.querySelector('button[aria-label="Share source Alpha"]')).toBeNull();
+ expect(host.querySelector('button[aria-label="Actions for Alpha"]')).toBeNull();
 });
 
 it('hides both marker and action for archived sources and non-owners', async()=>{
