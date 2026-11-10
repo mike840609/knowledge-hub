@@ -372,7 +372,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                   {candidate.status === "ARCHIVED" ? <Status kind="archived" className="ml-auto text-caption font-normal text-kh-text-muted">Archived</Status> : null}
                 </button>
                 <RowActionsTrigger actions={sourceActions} onRun={runAction} label={candidate.name} className="kh-row-action" />
-                {isNotes && canCreate ? <div className="flex items-center">{addFolder}{addNote}</div> : null}
+                {isNotes && canCreate ? <div className="kh-row-action flex items-center">{addFolder}{addNote}</div> : null}
               </RowContextMenu>
               <div id={`collection-${candidate.id}`} hidden={!open} className="mt-1 pl-2">
                 {open && ensureTree && treeStates?.[candidate.id]?.status !== "loaded" ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">
