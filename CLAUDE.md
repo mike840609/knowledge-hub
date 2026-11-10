@@ -83,9 +83,10 @@ These boundaries are enforced by `no-restricted-imports` in
   Workspace, Source, SourceEntry and Document data only through its own
   lookup ports (`ports/lookups.ts`). Path normalization that must match Folder
   Sync happens in the infrastructure adapter, which may use the `sources`
-  domain. Its export credential is a non-human principal limited to
-  `task-result:create`; it carries no human's identity and does not decide the
-  Phase 7 Agent-identity model (design §3, §10).
+  domain. Its export credential adds Task Results (`task-result:create`) and,
+  for reads only, stands for its binding's owner inside that one My Space; it
+  does not decide the Phase 7 Agent-identity model (design §3, §10; agent read
+  access design §2, §7).
 - `src/components/**` and `src/app/**` may not import `infrastructure/` or
   `mariadb`. Web adapters call application services through the composition
   root.
