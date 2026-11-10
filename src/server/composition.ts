@@ -49,6 +49,7 @@ import { companySsoProviderName, companySsoRolloutHubUserIds, identityProviderKi
 import { HubIdentityResolver } from "@/modules/identity/application/hub-identity-resolver";
 import { establishTrustedCaller as establishTrustedCallerWith } from "@/server/trusted-caller";
 import { MariaDbTaskKnowledgeUnitOfWork } from "@/infrastructure/database/mariadb/task-knowledge-transaction";
+import { AgentReadAccessService } from "@/modules/task-knowledge/application/agent-read-access";
 import { ManageExportBindingService } from "@/modules/task-knowledge/application/manage-export-binding";
 import { TaskLifecycleService } from "@/modules/task-knowledge/application/manage-task-lifecycle";
 import { TaskResultReadService } from "@/modules/task-knowledge/application/read-task-results";
@@ -184,6 +185,40 @@ export function shareReadService(): Pick<DocumentShareService, "readShared" | "r
  */
 export function taskIngestService(): Pick<IngestTaskResultService, "ingest"> {
   return new IngestTaskResultService(new MariaDbTaskKnowledgeUnitOfWork(getDatabasePool()));
+}
+
+/**
+ * `GET /api/agent/*` (agent read access design §4). Like taskIngestService it
+ * bypasses applicationServices(): the caller is an export credential, not a
+ * browser identity, so no identity provider is built.
+ */
+export function agentReadServices(): {
+  access: Pick<AgentReadAccessService, "authorize">;
+  search: Pick<KnowledgeSearchService, "search">;
+  context: Pick<AgentContextService, "build">;
+  tasks: Pick<TaskResultReadService, "list" | "get">;
+} {
+  const unitOfWork = new MariaDbUnitOfWork(getDatabasePool());
+  const taskUnitOfWork = new MariaDbTaskKnowledgeUnitOfWork(getDatabasePool());
+  const search = new KnowledgeSearchService(unitOfWork, new WorkspaceQueryService(unitOfWork));
+  return {
+    access: new AgentReadAccessService(taskUnitOfWork),
+    // A hit names its synced folder path where it has one; the search result
+    // does not carry it, so it is read from the document's own entry.
+    search: {
+      search: async (caller, input) => {
+        const result = await search.search(caller, input);
+        if (!result.hits.length) return result;
+        const entries = await unitOfWork.run((repositories) =>
+          repositories.entries.findByDocumentIds(result.hits.map((hit) => hit.documentId)));
+        const paths = new Map(entries.flatMap((entry) =>
+          entry.documentId === null ? [] : [[entry.documentId, entry.sourcePath] as const]));
+        return { ...result, hits: result.hits.map((hit) => ({ ...hit, sourcePath: paths.get(hit.documentId) ?? null })) };
+      },
+    },
+    context: new AgentContextService(unitOfWork),
+    tasks: new TaskResultReadService(taskUnitOfWork),
+  };
 }
 
 /** Token-scoped public review projection, independent of identity-provider setup. */

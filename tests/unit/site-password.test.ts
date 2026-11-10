@@ -104,3 +104,12 @@ describe("the task export ingest exemption", () => {
     },
   );
 });
+
+describe("the agent read exemptions", () => {
+  it.each(["/api/agent/search", "/api/agent/documents", "/api/agent/tasks"])("exempts exactly %s", (path) => {
+    expect(isSitePasswordExempt(path)).toBe(true);
+  });
+  it.each(["/api/agent/searchx", "/api/agent", "/api/agent/", "/api/agent/tasks/x"])("still requires the site password for %s", (path) => {
+    expect(isSitePasswordExempt(path)).toBe(false);
+  });
+});

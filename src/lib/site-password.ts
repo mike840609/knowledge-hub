@@ -1,4 +1,4 @@
-const EXEMPT_EXACT = new Set(["/s", "/api/share-review", "/api/health", "/api/task-results/ingest", "/cli/knowledge-hub.tgz"]);
+const EXEMPT_EXACT = new Set(["/s", "/api/share-review", "/api/health", "/api/task-results/ingest", "/cli/knowledge-hub.tgz", "/api/agent/search", "/api/agent/documents", "/api/agent/tasks"]);
 const EXEMPT_PREFIXES = ["/s/", "/api/share-review/", "/sample-wiki/"];
 
 /**
@@ -7,7 +7,9 @@ const EXEMPT_PREFIXES = ["/s/", "/api/share-review/", "/sample-wiki/"];
  * password. The health route stays reachable so an uptime check and a cold
  * database wake do not need a secret. The task export ingest route is exempt
  * by exact pathname only: it authenticates by its own export credential
- * (2026-11-04 task knowledge export design §7). So is the CLI download,
+ * (2026-11-04 task knowledge export design §7). The three agent read routes
+ * are exempt the same way, on the same credential (2026-11-10 agent read
+ * access design §4). So is the CLI download,
  * which npm fetches with no password and which holds no data (Amendment 2).
  */
 export function isSitePasswordExempt(pathname: string): boolean {
