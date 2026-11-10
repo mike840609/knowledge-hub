@@ -82,7 +82,7 @@ export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean
       ],[
         {title:"已讀、解決與未讀",items:[
           "開啟討論會標為已讀，不代表你已回覆或解決。",
-          "之後有人回覆會再次變成未讀；側欄 Inbox 的數字是未讀討論數。",
+          "之後有人回覆會再次變成未讀；側欄 Inbox 的數字是未讀通知數（留言、提及、分享與提案）。",
           "Resolve 是另一個動作，不會順便處理其他討論。",
         ]},
         {title:"失效連結與權限",items:[
@@ -107,7 +107,7 @@ export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean
       section("tasks","Tasks：代理完成的任務",[
         "在 Claude Code 或 OpenCode 完成任務後執行 /hub-export，再從側欄開啟 Tasks。",
         "第一次使用：Set up export → 建立 binding → 複製一次性指令，在自己的機器執行。每台機器一個 binding；token 只顯示一次。",
-        "清單分 Active／Archived。每列顯示 Agent、revision 與完成時間，點開詳情會標明是哪個 binding 匯出的。",
+        "清單分 Active／Archived。每列顯示 Agent 與完成時間，超過一個版本時才顯示 revision；點開詳情會標明是哪個 binding 匯出的。",
         "詳情包含 Summary、Verification、Findings／Decisions／Changes、References 與 Revisions。Verification 是代理回報的結果，不是 Hub 的認證。",
         ...(taskSearch?["啟用搜尋時，每列還會顯示 verification 標記與命中的摘要片段。"]:[]),
       ],[
@@ -115,6 +115,8 @@ export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean
           "Wiki 路徑或文件 id 會在你的 My Space 內解析成連結；找不到標 not found，多個來源同名標 ambiguous。",
           "檔案、commit 與 pull request 參照只是標籤；PR 只有在是 https 連結時才能開啟。",
           "同一個任務再次匯出會建立新 revision；舊版仍可從 Revisions 閱讀。",
+          "封存後仍可閱讀，也能從同一頁還原。",
+          "超過 64 KiB 的內容會被拒絕，不會截斷。",
           "只有完成的任務能匯出；代理不得編造測試、變更或參照。",
         ]},
         {title:"Token、binding 與撤銷",items:[
@@ -218,7 +220,7 @@ export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean
       ],[
         {title:"Read, resolve and unread",items:[
           "Opening a discussion marks it read; it does not mean you replied or resolved it.",
-          "A later reply makes the discussion unread again. The sidebar's Inbox badge counts unread discussions.",
+          "A later reply makes the discussion unread again. The sidebar's Inbox badge counts unread notices — comments, mentions, shares and proposals.",
           "Resolving is a separate action; it does not mark other discussions read.",
         ]},
         {title:"Dead links and permissions",items:[
@@ -243,7 +245,7 @@ export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean
       section("tasks","Tasks: results from coding agents",[
         "Finish a task in Claude Code or OpenCode, run /hub-export, then open Tasks from the sidebar.",
         "First use: Set up export → create a binding → copy the one-time line and run it on your own machine. One binding per machine; the token is shown once.",
-        "The list has Active / Archived. Each row shows the agent, revision and completion time, and opens the detail that names the binding.",
+        "The list has Active / Archived. Each row shows the agent and completion time, plus the revision when a task has more than one; it opens the detail that names the binding.",
         "The detail shows Summary, Verification, Findings / Decisions / Changes, References and Revisions. Verification is what the agent reported, not a Hub certification.",
         ...(taskSearch?["With search enabled, each result also shows the verification badge and a matched excerpt."]:[]),
       ],[
@@ -251,6 +253,8 @@ export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean
           "A Wiki path or document id resolves to a link inside your My Space; a path with no match reads not found, and one present in several sources reads ambiguous.",
           "File, commit and pull-request references are labels; a pull request opens only when it is an https link.",
           "Exporting the same task again creates a new revision; older revisions stay readable from Revisions.",
+          "Archived results stay readable and can be restored from the same detail.",
+          "Artifacts above 64 KiB are rejected, not truncated.",
           "Only completed tasks can be exported. The agent must not invent tests, changes or references.",
         ]},
         {title:"Token, binding and revocation",items:[

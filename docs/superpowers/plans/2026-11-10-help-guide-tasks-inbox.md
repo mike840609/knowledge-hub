@@ -100,7 +100,7 @@ Insert the **inbox** section (`id:"inbox"`) with:
 - en title `Inbox: discussions, mentions and shares`; zh-TW title `收件匣：討論、提及與分享`.
 - Bullets covering, in this order: the three sources (your documents, followed discussions, mentions); relationship filters `All / My documents / Following / Mentions` plus `Status` (`Any / Open / Resolved`) and `Unread`; selecting a row to read the thread beside the list and `Reply` / `Resolve`, with `Open document` for the article, and the plain-list behaviour below the split width; `Mark read`, `Mark all read`, `Refresh`; `Proposals` and `Shared with you`, noting the latter also lives in Shares.
 - Three `details` blocks:
-  - `Read, resolve and unread` — opening marks read; a later reply can make it unread again; the sidebar badge counts unread discussions; resolving is separate.
+  - `Read, resolve and unread` — opening marks read; a later reply can make it unread again; the sidebar badge counts unread notices (comments, mentions, shares and proposals); resolving is separate.
   - `Dead links and permissions` — a revoked or expired link reads as unavailable and opens nothing; replying to a followed discussion needs a valid link, a signed-in identity and enabled comment writes; the Inbox grants no access.
   - `Inbox and Shares` — Inbox is the discussion index and notices; Shares manages your own links, expiry/revocation, saved shares and followed discussions.
 - `links:[{target:"inbox",label:"Open Inbox"}]` (zh-TW: `開啟 Inbox`).
@@ -108,7 +108,7 @@ Insert the **inbox** section (`id:"inbox"`) with:
 Insert the **tasks** section (`id:"tasks"`) with:
 
 - en title `Tasks: results from coding agents`; zh-TW title `Tasks：代理完成的任務`.
-- Bullets covering, in this order: finish in Claude Code or OpenCode, run `/hub-export`, open Tasks; first use (`Set up export` → create a binding → copy the one-time line and run it on your machine; one binding per machine; token shown once); `Active / Archived` list rows showing agent, revision and completion time and opening the detail that names the binding; detail sections `Summary`, `Verification`, `Findings / Decisions / Changes`, `References`, `Revisions`, with Verification described as agent-reported, not Hub-certified.
+- Bullets covering, in this order: finish in Claude Code or OpenCode, run `/hub-export`, open Tasks; first use (`Set up export` → create a binding → copy the one-time line and run it on your machine; one binding per machine; token shown once); `Active / Archived` list rows showing the agent and completion time, plus the revision when a task has more than one, and opening the detail that names the binding; detail sections `Summary`, `Verification`, `Findings / Decisions / Changes`, `References`, `Revisions`, with Verification described as agent-reported, not Hub-certified.
 - One extra bullet only when `taskSearch` is true: the search row also shows the verification badge and a matched excerpt.
 - Two `details` blocks:
   - `References and revisions` — Wiki path/document id resolves inside your My Space; `not found` and `ambiguous`; file/commit/PR labels and https-only PR links; re-exporting the same task creates a revision and old revisions stay readable; only completed tasks export.

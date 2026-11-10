@@ -144,9 +144,10 @@ in the guide to look.
   - First use: Set up export → create a binding → copy the one-time setup line
     and run it on your own machine. One binding per machine; the token is shown
     once.
-  - The list has Active / Archived. Each row shows the agent, revision and
-    completion time, and links to the detail; the detail names the binding that
-    exported it. Archived results stay readable and can be restored.
+  - The list has Active / Archived. Each row shows the agent and completion
+    time, plus the revision when a task has more than one, and links to the
+    detail; the detail names the binding that exported it. Archived results stay
+    readable and can be restored.
   - When `taskSearch` is true, the row also shows the verification badge and a
     matched excerpt; the search detail says so.
   - Detail shows Summary, Verification, Findings / Decisions / Changes,

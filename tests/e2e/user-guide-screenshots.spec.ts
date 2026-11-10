@@ -17,19 +17,19 @@ test.use({viewport:{width:1280,height:800},deviceScaleFactor:2});
  * Clips `region` (margin, capped height) and shoots both themes. Each target is outlined like a focus
  * ring and numbered at its top-left corner, kept inside the clip, in the order the caption gives the steps.
  */
-async function capture(page:Page,name:string,region:Locator,targets:Locator[]=[],{maxHeight=560,margin=16,offset=3}={}) {
+async function capture(page:Page,name:string,region:Locator,targets:Locator[]=[],{maxHeight=560,margin=16,offset=3,markSide="left"}:{maxHeight?:number;margin?:number;offset?:number;markSide?:"left"|"right"}={}) {
   const box=(await region.boundingBox())!;
   const clip={x:Math.max(0,box.x-margin),y:Math.max(0,box.y-margin),width:box.width+margin*2,height:Math.min(box.height+margin*2,maxHeight)};
   const boxes=await Promise.all(targets.map(target=>target.boundingBox()));
   for(const target of targets)await target.evaluate((el,offset)=>{el.style.outline="2px solid var(--kh-focus)";el.style.outlineOffset=`${offset}px`;},offset);
-  await page.evaluate(({boxes,clip})=>boxes.forEach((b,i)=>{
+  await page.evaluate(({boxes,clip,markSide})=>boxes.forEach((b,i)=>{
     const mark=document.createElement("div");
     mark.className="guide-mark";
     mark.textContent=String(i+1);
-    Object.assign(mark.style,{position:"fixed",left:`${Math.max(clip.x+4,b!.x-12)}px`,top:`${Math.max(clip.y+4,b!.y-12)}px`,width:"24px",height:"24px",borderRadius:"9999px",
+    Object.assign(mark.style,{position:"fixed",left:`${markSide==="right"?Math.min(clip.x+clip.width-28,b!.x+b!.width-28):Math.max(clip.x+4,b!.x-12)}px`,top:`${Math.max(clip.y+4,b!.y-12)}px`,width:"24px",height:"24px",borderRadius:"9999px",
       background:"var(--kh-primary)",color:"var(--kh-on-primary)",fontSize:"13px",fontWeight:"600",lineHeight:"24px",textAlign:"center",boxShadow:"0 0 0 2px var(--kh-bg)",zIndex:"2147483647"});
     document.body.append(mark);
-  }),{boxes,clip});
+  }),{boxes,clip,markSide});
   for(const theme of ["light","dark"]) {
     await page.evaluate(value=>{document.documentElement.dataset.theme=value;},theme);
     await page.screenshot({path:`${output}/${name}-${theme}.png`,clip,animations:"disabled",caret:"hide"});
@@ -137,18 +137,18 @@ test("capture user guide screenshots",async({page,request})=>{
     await page.goto(detailUrl);
     const detailSection=(name:string)=>page.locator("section").filter({has:page.getByRole("heading",{name,exact:true})});
     await capture(page,"tasks-detail",content,[
-      detailSection("Verification").locator("ul").first(),
-      detailSection("References").locator("dl").first(),
-      detailSection("Revisions").locator("ul").first(),
-    ],{maxHeight:900});
+      detailSection("Verification"),
+      detailSection("References"),
+      detailSection("Revisions"),
+    ],{maxHeight:900,markSide:"right"});
 
     await page.goto(`/w/${ws}/tasks/setup`);
     // The one-time line carries the token and must never reach a committed image.
     await expect(page.getByText("Copy the setup line now.")).toHaveCount(0);
     await capture(page,"tasks-setup",content,[
-      page.getByLabel("Label"),
+      page.locator("form").first(),
       page.getByRole("button",{name:"Rotate token"}),
-    ]);
+    ],{markSide:"right"});
 
     if(wanted("inbox")) {
       const note=await (await request.post(`/api/workspaces/${ws}/documents`,{data:{
@@ -200,10 +200,10 @@ test("capture user guide screenshots",async({page,request})=>{
       await expect(page.getByRole("searchbox",{name:"Search tasks"})).toBeVisible();
       await capture(page,"tasks-search",content,[
         page.getByRole("searchbox",{name:"Search tasks"}),
-        page.getByRole("combobox",{name:"Agent"}),
+        page.locator("label").filter({has:page.getByRole("combobox",{name:"Agent"})}),
         page.locator("#task-search-filter-form summary").first(),
         page.getByRole("button",{name:"Apply filters"}),
-      ]);
+      ],{markSide:"right"});
     } finally {
       server.kill("SIGTERM");
     }

@@ -1,4 +1,5 @@
 import {mkdir} from "node:fs/promises";
+import {spawn} from "node:child_process";
 import {test,expect} from "./fixtures/test";
 
 test("Home help covers first import, repeat sync and recovery in both languages",async({page,request})=>{
@@ -116,5 +117,27 @@ test("Home help covers first import, repeat sync and recovery in both languages"
         if(output)await figure.screenshot({path:`${output}/${id}-${width}-${theme}.png`,animations:"disabled"});
       }
     }
+  }
+});
+
+test("a flag-on deployment shows the Task Search material",async({page})=>{
+  const port=Number(process.env.KM_E2E_PORT??"3101")+18;
+  const origin="http://127.0.0.1:"+port;
+  const server=spawn(process.execPath,["node_modules/next/dist/bin/next","start","--hostname","127.0.0.1","--port",String(port)],{
+    cwd:process.cwd(),env:{...process.env,NODE_ENV:"production",KM_IDENTITY_PROVIDER:"local",TASK_SEARCH_READ_ENABLED:"true",PORT:String(port)},stdio:["ignore","pipe","pipe"],
+  });
+  try {
+    const until=Date.now()+40_000;
+    while(Date.now()<until) {
+      if(server.exitCode!==null)throw new Error("Task Search guide server exited.");
+      try { await fetch(origin,{redirect:"manual"}); break; } catch { await new Promise(resolve=>setTimeout(resolve,350)); }
+    }
+    await page.goto(`${origin}/help?lang=en`);
+    await expect(page.getByRole("heading",{name:"Tasks: results from coding agents",exact:true})).toBeAttached();
+    await expect(page.getByText("With search enabled, each result also shows the verification badge and a matched excerpt.",{exact:true})).toBeAttached();
+    await expect(page.getByText("Search and filters",{exact:true})).toBeAttached();
+    await expect(page.getByRole("img",{name:/① Search title, summary and findings/}).first()).toBeAttached();
+  } finally {
+    server.kill("SIGTERM");
   }
 });
