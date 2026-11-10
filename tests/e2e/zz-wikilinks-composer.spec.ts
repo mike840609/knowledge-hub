@@ -199,12 +199,16 @@ test.describe("wikilinks in the rendered editor", () => {
     const links = surface.locator("span.kh-wikilink");
     await expect(links).toHaveCount(1);
 
-    // Select the link as a whole, then collapse the selection just after it. Walking back over the
-    // atom with two ArrowLeft presses leaves the caret where the browser last put it: CI lost one
-    // press, so the caret sat after the space and Backspace deleted the space, not the link.
+    // Select the link as a whole, then collapse the selection just after it. The design ruling is to
+    // use the click, not an arrow walk: "Arrow sequences sometimes select then cross and sometimes
+    // cross directly; do not assert arrow behavior" (personal daily driver design §4.1). CI lost an
+    // ArrowLeft inside ProseMirror's 20-50ms selection window, so Backspace deleted the space.
     await links.first().click();
     await expect(surface.locator(".ProseMirror-selectednode")).toHaveCount(1);
     await page.keyboard.press("ArrowRight");
+    // A caret, not a selected node: otherwise Backspace would delete a NodeSelection and never
+    // exercise "directly after the link".
+    await expect(surface.locator(".ProseMirror-selectednode")).toHaveCount(0);
     await page.keyboard.press("Backspace");
     await expect(links).toHaveCount(0);
     await expect(surface.locator("p").first()).toHaveText("a  b");
