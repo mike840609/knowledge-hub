@@ -11,7 +11,7 @@ import {importRuntimeConfig} from "@/server/import-config";
 
 
 function GuideActionLinks({links,base}:{links:UserGuideAction[];base:string}) {
-  const destinations={sample:`${base}/sources/import#sample-wiki`,sources:`${base}/sources`,identity:"#knowledge-id"};
+  const destinations={sample:`${base}/sources/import#sample-wiki`,sources:`${base}/sources`,identity:"#knowledge-id",inbox:`${base}/inbox`,tasks:`${base}/tasks`,taskSetup:`${base}/tasks/setup`};
   if(!links.length)return null;
   return <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-body">{links.map(action=><li key={action.target}><Link className="kh-focus-ring rounded-md text-kh-link underline underline-offset-4" href={destinations[action.target]}>{action.label}</Link></li>)}</ul>;
 }
