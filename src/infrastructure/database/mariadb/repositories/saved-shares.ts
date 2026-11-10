@@ -21,7 +21,7 @@ export class MariaDbSavedShareRepository implements SavedShareRepository {
     // A folder link has no document: its target is the folder node, whose status and name stand in for the document's.
     const rows = await this.connection.query<DbRow[]>(`SELECT l.*,COALESCE(d.status,f.status,s.status) AS document_status,s.status AS source_status,
       w.lifecycle_state AS workspace_lifecycle,w.personal_owner_user_id AS workspace_owner,m.user_id AS creator_membership,m.role AS creator_role,
-      COALESCE(r.title,f.name,s.name) AS title,u.name AS creator_name
+      CASE WHEN l.source_id IS NOT NULL THEN s.name WHEN l.folder_node_id IS NOT NULL THEN f.name ELSE r.title END AS title,u.name AS creator_name
       FROM document_share_links l LEFT JOIN knowledge_documents d ON d.id=l.document_id
       LEFT JOIN knowledge_tree_nodes f ON f.id=l.folder_node_id AND f.node_type='FOLDER'
       JOIN knowledge_sources s ON s.id=COALESCE(d.source_id,f.source_id,l.source_id) JOIN workspaces w ON w.id=s.workspace_id

@@ -169,8 +169,9 @@ export class DocumentShareService {
       if (document.status !== "ACTIVE") return { folders: [], sources: [] };
       const node = await r.tree.findByDocumentId(document.id);
       if (!node) return { folders: [], sources: [] };
-      const open = new Map((await r.shareLinks.listOpenFolderLinks(workspace.id, caller.identity.id, this.clock())).map(folder => [folder.folderNodeId, folder]));
-      const sourceLinks = await r.shareLinks.listOpenSourceLinks(workspace.id, caller.identity.id, this.clock());
+      const now = this.clock();
+      const open = new Map((await r.shareLinks.listOpenFolderLinks(workspace.id, caller.identity.id, now)).map(folder => [folder.folderNodeId, folder]));
+      const sourceLinks = await r.shareLinks.listOpenSourceLinks(workspace.id, caller.identity.id, now);
       const chain = await r.tree.listChain(node.id);
       const shared: OpenFolderLink[] = [];
       const seen = new Set<string>();

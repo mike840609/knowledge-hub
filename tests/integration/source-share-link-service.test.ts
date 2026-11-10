@@ -98,6 +98,17 @@ describe("DocumentShareService.createForSource (source share links §8)", () => 
     await expect(service().createForSource(caller, { sourceId: applied.sourceId })).resolves.toMatchObject({ active: true });
   });
 
+  it("works on a FILE_UPLOAD Source", async () => {
+    const { owner, caller, workspaceId } = await mySpaceSource();
+    const sourceId = uuidv7();
+    await pool.query(
+      "INSERT INTO knowledge_sources (id, name, workspace_id, source_type, ownership, status, sync_version, created_by, updated_by) VALUES (?, 'Uploaded files', ?, 'FILE_UPLOAD', 'HUB_MANAGED', 'ACTIVE', 0, ?, ?)",
+      [sourceId, workspaceId, owner.id, owner.id],
+    );
+    await expect(service().createForSource(caller, { sourceId })).resolves.toMatchObject({ active: true });
+    expect(await linkRows(sourceId)).toBe(1);
+  });
+
   it("refuses a Source in a Team workspace", async () => {
     const { source } = await createSourceFixture(pool);
     await expect(service().createForSource(fixtureCaller(), { sourceId: source.id })).rejects.toMatchObject({ code: "SHARE_LINK_NOT_PERSONAL" });

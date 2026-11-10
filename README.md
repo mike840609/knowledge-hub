@@ -49,6 +49,8 @@ Search the whole workspace and narrow results by source, path and update date.
 
 Review a Markdown folder's ownership and sync history, then use **Update from folder** to select the source folder again and review changes.
 
+A Source can be shared as one link: it opens the Source's current document tree and never exposes its settings, sync history, or assets.
+
 ![Markdown folder source overview and sync history](docs/images/source-history.jpg)
 
 ### Knowledge graph
