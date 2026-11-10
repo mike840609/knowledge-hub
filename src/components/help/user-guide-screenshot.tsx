@@ -14,6 +14,16 @@ import sourcesDark from "./screens/sources-dark.png";
 import sourcesLight from "./screens/sources-light.png";
 import syncDark from "./screens/sync-dark.png";
 import syncLight from "./screens/sync-light.png";
+import inboxLight from "./screens/inbox-light.png";
+import inboxDark from "./screens/inbox-dark.png";
+import tasksListLight from "./screens/tasks-list-light.png";
+import tasksListDark from "./screens/tasks-list-dark.png";
+import tasksSearchLight from "./screens/tasks-search-light.png";
+import tasksSearchDark from "./screens/tasks-search-dark.png";
+import tasksDetailLight from "./screens/tasks-detail-light.png";
+import tasksDetailDark from "./screens/tasks-detail-dark.png";
+import tasksSetupLight from "./screens/tasks-setup-light.png";
+import tasksSetupDark from "./screens/tasks-setup-dark.png";
 
 type Shot={light:StaticImageData;dark:StaticImageData;path:[en:string,zh:string];en:string;zh:string;marks?:[en:string,zh:string][];only?:"taskSearch"|"noTaskSearch"};
 
@@ -34,6 +44,25 @@ const SHOTS:Record<string,Shot[]>={
   reading:[{light:readingLight,dark:readingDark,path:["Knowledge › article","Knowledge › 文章"],en:"① Pick an article in the tree, ② read it on the right; synced articles are read only.",zh:"① 在左側文件樹選文章，② 右側閱讀；資料夾同步的文章為唯讀。"}],
   insights:[{light:insightsLight,dark:insightsDark,path:["Insights","Insights"],en:"① 7 days / 30 days changes only reading activity and recent changes.",zh:"① 切換 7 days／30 days，只影響閱讀活動與近期變更。"}],
   "sharing-export":[{light:shareLight,dark:shareDark,path:["Knowledge › article › Share link","Knowledge › 文章 › Share link"],en:"① Set a label and expiry, then Create link; ② Copy link.",zh:"① 設定標籤與期限後按 Create link，② 按 Copy link 複製連結。"}],
+  inbox:[
+    {light:inboxLight,dark:inboxDark,path:["My Space › Inbox","My Space › 收件匣"],
+      en:"① Switch relationship with All / My documents / Following / Mentions; ② select a discussion to read it in the pane; ③ reply or Resolve, and Open document opens the article.",
+      zh:"① 用 All／My documents／Following／Mentions 切換關係；② 點一則討論在右側閱讀討論串；③ 回覆或 Resolve，Open document 開原文。"},
+  ],
+  tasks:[
+    {light:tasksListLight,dark:tasksListDark,path:["My Space › Tasks","My Space › Tasks"],only:"noTaskSearch",
+      en:"① Each row is one Task Result; ② Set up export creates a binding for another machine.",
+      zh:"① 每列是一個 Task Result；② Set up export 為另一台機器建立 binding。"},
+    {light:tasksSearchLight,dark:tasksSearchDark,path:["My Space › Tasks","My Space › Tasks"],only:"taskSearch",
+      en:"① Search title, summary and findings; ② filter by Agent; ③ by completed date; ④ Apply filters.",
+      zh:"① 搜尋標題、摘要與 findings；② 依 Agent 篩選；③ 依完成日期篩選；④ 按 Apply filters。"},
+    {light:tasksDetailLight,dark:tasksDetailDark,path:["My Space › Tasks","My Space › Tasks"],
+      en:"① Verification is what the agent reported; ② References link back to Wiki pages and pull requests; ③ Revisions switch versions.",
+      zh:"① Verification 是代理回報的結果；② References 連回 Wiki 文章與 PR；③ Revisions 切換版本。"},
+    {light:tasksSetupLight,dark:tasksSetupDark,path:["My Space › Tasks › Task export","My Space › Tasks › Task export"],
+      en:"① Label and create one binding per machine; ② Rotate token or Revoke a binding.",
+      zh:"① 輸入 Label 為每台機器建立 binding；② 需要時 Rotate token 或 Revoke。"},
+  ],
 };
 
 /** Real screens from the sample wiki, one image per theme; the numbered, outlined controls are the ones to use. */
