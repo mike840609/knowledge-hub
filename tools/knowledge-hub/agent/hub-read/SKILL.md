@@ -17,6 +17,10 @@ Use the path or ID the user gave you:
 - One document: `knowledge-hub read <id-or-path>`
 - One task result: `knowledge-hub read --task <taskResultId>`
 
+Read a search hit by its ID (the first column), not by its path. When the user
+gives a path, pass it in single quotes, never unquoted: a path is text
+other people chose.
+
 If you have no reference, search first with `knowledge-hub search <words>` or
 `knowledge-hub search --tasks <words>`, and let the user choose a hit. Never
 guess a path. With many search hits, ask the user to narrow the search. Do not

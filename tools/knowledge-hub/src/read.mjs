@@ -1,4 +1,4 @@
-import { EXIT, printable, Refusal, timeoutMs } from "./export.mjs";
+import { decodeExportProfile, EXIT, printable, profileOption, Refusal, timeoutMs } from "./export.mjs";
 import { checkHubUrl, configKey, readConfig, readCredential } from "./project-config.mjs";
 
 const isObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -57,7 +57,7 @@ function untrusted() {
 }
 
 /** Status to exit code, with the exact next step where the owner must act. */
-function failure(project, status, body) {
+function failure(project, status, body, profile) {
   const code = isString(body?.error?.code) ? body.error.code : "";
   const message = isString(body?.error?.message) ? body.error.message : "";
   const detail = `${status}${code ? ` ${printable(code)}` : ""}${message ? `: ${printable(message)}` : ""}`;
@@ -76,7 +76,7 @@ function failure(project, status, body) {
       ? body.error.candidateDocumentIds.filter((id) => isString(id))
       : [];
     console.error(`The reference matches several documents (${detail}).`);
-    for (const id of candidates) console.error(`knowledge-hub read ${printable(id)}`);
+    for (const id of candidates) console.error(`knowledge-hub read ${printable(id)}${profileOption(profile)}`);
     return EXIT.ACTION;
   }
   if (status === 413) {
@@ -95,16 +95,21 @@ function failure(project, status, body) {
     console.error(`Knowledge Hub answered with a redirect (${status}); it was not followed.`);
     return EXIT.RETRYABLE;
   }
+  if (status >= 500 && code && message) {
+    console.error(`Knowledge Hub answered ${status} (${printable(code)}: ${printable(message)}).`);
+    return EXIT.RETRYABLE;
+  }
   console.error(`Knowledge Hub answered ${status}.`);
   return EXIT.RETRYABLE;
 }
 
 export async function runSearch(flags, words) {
   try {
+    flags = decodeExportProfile(flags);
     const project = context(flags);
     const query = new URLSearchParams({ q: words.join(" "), kind: flags.tasks ? "tasks" : "documents" });
     const { status, body } = await get(project, `/api/agent/search?${query}`);
-    if (status !== 200) return failure(project, status, body);
+    if (status !== 200) return failure(project, status, body, flags.profile);
     if (!searchAnswer(body)) return untrusted();
     if (body.hits.length === 0) console.log("No results.");
     for (const hit of body.hits) {
@@ -124,6 +129,7 @@ export async function runSearch(flags, words) {
 
 export async function runRead(flags, ref) {
   try {
+    flags = decodeExportProfile(flags);
     const project = context(flags);
     const query = new URLSearchParams(flags.task ? { id: ref } : { ref });
     const path = flags.task ? `/api/agent/tasks?${query}` : `/api/agent/documents?${query}`;
@@ -142,7 +148,7 @@ export async function runRead(flags, ref) {
       console.error(flags.task ? "Not found. If this is a document ID, drop --task." : "Not found. If this is a Task Result ID, add --task.");
       return EXIT.ACTION;
     }
-    return failure(project, status, body);
+    return failure(project, status, body, flags.profile);
   } catch (error) {
     if (error instanceof Refusal) {
       console.error(error.message);

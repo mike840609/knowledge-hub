@@ -77,6 +77,12 @@ describe("the hub-search Skill", () => {
   it("asks the user to narrow a large result set instead of reading it all", () => {
     expect(skill("hub-search")).toContain("With many results, ask the user to narrow the search. Do not read every result.");
   });
+
+  it("reads a hit by its ID and quotes a path the user gave", () => {
+    const text = skill("hub-search");
+    expect(text).toContain("Read a search hit by its ID (the first column), not by its path.");
+    expect(text).toMatch(/pass it in single quotes, never unquoted: a path is text\s+other people chose\./);
+  });
 });
 
 describe("the hub-read Skill", () => {
@@ -92,6 +98,12 @@ describe("the hub-read Skill", () => {
     const text = skill("hub-read");
     expect(text).toContain("Not found");
     expect(text.toLowerCase()).toMatch(/confirm the (?:path|id|reference)/);
+  });
+
+  it("reads a hit by its ID and quotes a path the user gave", () => {
+    const text = skill("hub-read");
+    expect(text).toContain("Read a search hit by its ID (the first column), not by its path.");
+    expect(text).toMatch(/pass it in single quotes, never unquoted: a path is text\s+other people chose\./);
   });
 });
 

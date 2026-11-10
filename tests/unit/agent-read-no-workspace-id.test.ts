@@ -44,6 +44,30 @@ describe("no agent route names a Workspace ID", () => {
     expect(violations.map(({ file }) => file)).toEqual([]);
   });
 
+  it("reads only q, kind, ref and id from the query string", () => {
+    const allowed = new Set(["q", "kind", "ref", "id"]);
+    const violations = sources.flatMap(({ file, source }) => {
+      // `searchParams` itself and any local alias of it, such as the search route's `params`.
+      const readers = new Set(["searchParams"]);
+      for (const match of source.matchAll(/const\s+(\w+)\s*=\s*[^;]*searchParams[\s;]/g)) readers.add(match[1]);
+      return [...source.matchAll(/(\w+)\.get\(\s*([^)]*?)\s*\)/g)]
+        .filter((call) => readers.has(call[1]))
+        .filter((call) => {
+          const argument = call[2].trim();
+          return !/^["'][^"']+["']$/.test(argument) || !allowed.has(argument.slice(1, -1));
+        })
+        .map((call) => `${file}: ${call[0]}`);
+    });
+    expect(violations).toEqual([]);
+    expect(sources.every(({ source }) => source.includes("searchParams"))).toBe(true);
+  });
+
+  it("never reads a header in a route", () => {
+    // The token header is read in src/server/agent-read.ts, never by a route.
+    const readers = sources.filter(({ source }) => /headers\.get\(/.test(source));
+    expect(readers.map(({ file }) => file)).toEqual([]);
+  });
+
   it("ignores comments that discuss the rule", () => {
     expect(stripComments('// workspaceId comes from the binding\nconst x = "space";')).not.toMatch(/workspaceId/i);
     expect(stripComments("/* workspace_id */ const x = 1;")).not.toMatch(/workspace_id/i);

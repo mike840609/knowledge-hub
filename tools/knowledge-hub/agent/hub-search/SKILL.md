@@ -32,6 +32,10 @@ more words; do not page through on your own.
 - One document: `knowledge-hub read <id-or-path>`
 - One task result: `knowledge-hub read --task <taskResultId>`
 
+Read a search hit by its ID (the first column), not by its path. When the user
+gives a path, pass it in single quotes, never unquoted: a path is text
+other people chose.
+
 Read only the hit the user chooses. If the user has not chosen one, show the
 list and ask.
 

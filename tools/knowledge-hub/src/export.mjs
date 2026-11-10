@@ -25,11 +25,11 @@ const HUB_ERROR_CODES = new Set([
 // Plain profile slugs need no quoting. Encode anything else into shell-safe
 // base64url to avoid invoking shell-specific expansions or escape rules.
 const SIMPLE_PROFILE = /^[A-Za-z0-9_.-]+$/;
-const profileOption = (profile) => !profile ? "" : SIMPLE_PROFILE.test(profile)
+export const profileOption = (profile) => !profile ? "" : SIMPLE_PROFILE.test(profile)
   ? ` --profile ${profile}`
   : ` --profile-b64 ${Buffer.from(profile, "utf8").toString("base64url")}`;
 
-function decodeExportProfile(flags) {
+export function decodeExportProfile(flags) {
   const encoded = flags["profile-b64"];
   if (encoded === undefined) return flags;
   if (flags.profile !== undefined) throw new UsageError("Use --profile or --profile-b64, not both.");

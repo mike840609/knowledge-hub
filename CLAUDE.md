@@ -180,7 +180,7 @@ pass.
   Two task-knowledge entries have no caller either, outside the share-link grant:
   `IngestTaskResultService.ingest`, reached only from
   `POST /api/task-results/ingest`, and `AgentReadAccessService.authorize`,
-  reached only from `src/app/api/agent/**`. Their authority is a Task Knowledge
+  reached only from `src/app/api/agent/**` via `src/server/agent-read.ts`. Their authority is a Task Knowledge
   export credential, which names one binding (the owner's My Space) and permits
   `task-result:create`; for reads it also stands for the binding's owner inside
   that one My Space, through the three `/api/agent/*` routes, and nowhere else.

@@ -56,7 +56,10 @@ function content(artifactJson: string): TaskContent {
   return parseTaskContent(raw);
 }
 
-/** Owner-only reads of Task Results in their own ACTIVE My Space; a credential alone never reads. */
+/**
+ * Owner-only reads of Task Results in their own ACTIVE My Space. Reads take a
+ * caller; the export credential reads only through `AgentReadAccessService.authorize`.
+ */
 export class TaskResultReadService {
   constructor(private readonly unitOfWork: TaskKnowledgeUnitOfWork) {}
 

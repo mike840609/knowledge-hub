@@ -153,6 +153,20 @@ describe("the one caller-less task-knowledge write", () => {
     expect(outside).toEqual([]);
   });
 
+  it("keeps the agent read helpers inside the agent routes and their definitions", () => {
+    const webFiles = ["server", "app", "components"].flatMap((dir) => filesUnder(path.join(SRC, dir)));
+    const callers = (pattern: RegExp) => webFiles
+      .filter((file) => pattern.test(readFileSync(file, "utf8")))
+      .map((file) => path.relative(SRC, file).split(path.sep).join("/"));
+    const outside = (pattern: RegExp, allowed: string[]) =>
+      callers(pattern).filter((file) => !file.startsWith("app/api/agent/") && !allowed.includes(file));
+
+    // agent-read.ts defines agentScope and is the one caller of agentReadServices;
+    // composition.ts defines agentReadServices.
+    expect(outside(/\bagentScope\(/, ["server/agent-read.ts"])).toEqual([]);
+    expect(outside(/\bagentReadServices\(/, ["server/agent-read.ts", "server/composition.ts"])).toEqual([]);
+  });
+
   it("keeps internal helpers reachable only from application/", () => {
     const files = filesUnder(SRC).map((file) => ({ file: relative(file), source: readFileSync(file, "utf8") }));
     expect(internalHelperViolations(files)).toEqual([]);

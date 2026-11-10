@@ -200,6 +200,38 @@ describe("read", () => {
     expect(result.out).toContain("knowledge-hub read doc-a");
     expect(result.out).toContain("knowledge-hub read doc-b");
   });
+
+  it("keeps --profile in the 409 read hints", async () => {
+    await configure(["--profile", "team"]);
+    hub.replies.push(error(409, "AMBIGUOUS", { candidateDocumentIds: ["doc-a", "doc-b"] }));
+    const result = await run(["read", "dup.md", "--profile", "team"]);
+    expect(result.code).toBe(4);
+    expect(result.out).toContain("knowledge-hub read doc-a --profile team");
+    expect(result.out).toContain("knowledge-hub read doc-b --profile team");
+  });
+});
+
+describe("profiles", () => {
+  it("--profile-b64 selects that profile's binding for search and read", async () => {
+    const second = "0192f0a4-1b2c-7d3e-8f40-0000000000b2";
+    const secondToken = "khx_TEST-second-token-value-0002";
+    await configure();
+    expect((await run(["configure", "--profile", "team", "--hub-url", hub.url, "--binding-id", second, "--allow-insecure-localhost"], { stdin: secondToken })).code).toBe(0);
+    const encoded = Buffer.from("team", "utf8").toString("base64url");
+
+    hub.replies.push(hits([hit("doc-1", "Auth", null, "One.")]));
+    const search = await run(["search", "auth", "--profile-b64", encoded]);
+    expect(search.code).toBe(0);
+    expect(hub.received[0].token).toBe(secondToken);
+
+    hub.replies.push({ status: 200, body: { documentId: "doc-1", markdown: "Body.\n" } });
+    const read = await run(["read", "doc-1", "--profile-b64", encoded]);
+    expect(read.code).toBe(0);
+    expect(hub.received[1].token).toBe(secondToken);
+
+    expect(search.out).not.toContain(secondToken);
+    expect(read.out).not.toContain(secondToken);
+  });
 });
 
 describe("untrusted or failed answers", () => {
@@ -247,6 +279,40 @@ describe("untrusted or failed answers", () => {
   it.each([[401, 4], [403, 4], [413, 4], [422, 2], [503, 3]])("maps %i to exit %i", async (status, expected) => {
     hub.replies.push(error(status, "X"));
     expect((await run(["search", "auth"])).code).toBe(expected);
+  });
+
+  it("prints a 503's server code and message and exits 3", async () => {
+    hub.replies.push({ status: 503, body: { error: { code: "TASK_SEARCH_UNAVAILABLE", message: "Task search is not enabled on this Hub." } } });
+    const result = await run(["search", "--tasks", "auth"]);
+    expect(result.code).toBe(3);
+    expect(result.out).toContain("TASK_SEARCH_UNAVAILABLE");
+    expect(result.out).toContain("Task search is not enabled on this Hub.");
+  });
+
+  it("prints the generic line for a 503 without the routes' error shape", async () => {
+    hub.replies.push({ status: 503, body: { unexpected: true } });
+    const result = await run(["search", "auth"]);
+    expect(result.code).toBe(3);
+    expect(result.out).toBe("Knowledge Hub answered 503.\n");
+  });
+
+  it("exits 3 and prints nothing from a 200 whose JSON has the wrong shape", async () => {
+    hub.replies.push({ status: 200, body: { kind: "documents", hits: "MARKER-not-an-array", hasMore: false } });
+    const search = await run(["search", "auth"]);
+    expect(search.code).toBe(3);
+    expect(search.out).toBe("The answer (200) did not come from Knowledge Hub's read API.\n");
+    expect(search.out).not.toContain("MARKER");
+
+    hub.replies.push({ status: 200, body: {} });
+    const document = await run(["read", "auth.md"]);
+    expect(document.code).toBe(3);
+    expect(document.out).toBe("The answer (200) did not come from Knowledge Hub's read API.\n");
+
+    hub.replies.push({ status: 200, body: { taskResultId: "tr-1", revisionNo: 1, content: { title: "MARKER" } } });
+    const task = await run(["read", "tr-1", "--task"]);
+    expect(task.code).toBe(3);
+    expect(task.out).toBe("The answer (200) did not come from Knowledge Hub's read API.\n");
+    expect(task.out).not.toContain("MARKER");
   });
 
   it("401 and 403 name configure --rotate", async () => {

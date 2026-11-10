@@ -313,6 +313,7 @@ describe("every route's credential and errors", () => {
     expect(response.status).toBe(503);
     const body = await response.json();
     expect(body.error.code).toBe("TASK_SEARCH_UNAVAILABLE");
+    expect(body.error.message).toBe("Task search is not enabled on this Hub.");
     expect(body.hits).toBeUndefined();
     expect(injected.tasks.list).not.toHaveBeenCalled();
     await expectPrivate(response);

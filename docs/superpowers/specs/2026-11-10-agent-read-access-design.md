@@ -54,7 +54,7 @@ The caller it returns:
 
 **The same module resolves a path.** A `ref` that is not a UUID is a source path, resolved by the export's rule (`activeDocumentsAtPath`): exact match across the My Space's ACTIVE `FOLDER_SYNC` Sources. One match resolves; several are `AMBIGUOUS` and the answer lists the candidate document IDs; none is not found.
 
-**Two entries now have no caller.** `ingest` and `authorize` are the only `task-knowledge` entries without a `CallerContext`. `authorize` is reached only from `src/app/api/agent/**`.
+**Two entries now have no caller.** `ingest` and `authorize` are the only `task-knowledge` entries without a `CallerContext`. `authorize` is reached only from `src/app/api/agent/**` via `src/server/agent-read.ts`.
 
 ## 4. Routes
 

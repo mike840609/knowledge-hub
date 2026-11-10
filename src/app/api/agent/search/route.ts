@@ -33,7 +33,7 @@ export async function GET(request: Request): Promise<Response> {
       };
     }
 
-    if (process.env.TASK_SEARCH_READ_ENABLED !== "true") throw new TaskSearchUnavailableError();
+    if (process.env.TASK_SEARCH_READ_ENABLED !== "true") throw new TaskSearchUnavailableError("Task search is not enabled on this Hub.");
     const list = await services.tasks.list(caller, space, { lifecycle: "ACTIVE", search: parseTaskSearchQuery({ q }) });
     return {
       kind,
