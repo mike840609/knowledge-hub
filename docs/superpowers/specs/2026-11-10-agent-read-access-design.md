@@ -1,6 +1,6 @@
 # Knowledge Hub — Agent Read Access Design
 
-**Status:** Design approved in conversation, 2026-11-10. Awaiting the owner's review of this document. Not built.
+**Status:** Implemented, 2026-11-10.
 **Scope:** Two agent commands, `/hub-search` and `/hub-read`, three CLI subcommands, three credential-authenticated read routes. Read only, the owner's My Space only.
 **Builds on:** [Task Knowledge Export](2026-11-04-task-knowledge-export-design.md) ("the export spec"). This document amends its §6 and §10; §8 below lists the edits.
 

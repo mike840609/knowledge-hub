@@ -47,6 +47,11 @@ describe("the Task export setup page", () => {
     expect(container.textContent).toContain("Treat this line as a secret");
   });
 
+  it("says the token also reads every document and task result in My Space", async () => {
+    await issueToken();
+    expect(container.textContent).toContain("The token can read every document and task result in your My Space, and add task results; it cannot change a document.");
+  });
+
   it("copies exactly the setup line from the code block's own button", async () => {
     await issueToken();
     const writeText = vi.fn(async () => {});

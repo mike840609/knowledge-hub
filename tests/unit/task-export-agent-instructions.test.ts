@@ -122,6 +122,15 @@ describe("the setup docs", () => {
     const block = /<!-- example-content -->\s*```json\n([\s\S]*?)```/.exec(text);
     expect(JSON.parse(block![1])).not.toHaveProperty("completedAt");
   });
+
+  it.each(["docs/task-export-setup.md", "docs/task-export-setup.zh-TW.md"])("%s names the read commands and carries its upgrade note", (doc) => {
+    const text = readFileSync(path.join(ROOT, doc), "utf8");
+    for (const command of ["knowledge-hub search", "knowledge-hub read", "knowledge-hub status"]) expect(text).toContain(command);
+    const note = doc.endsWith("zh-TW.md")
+      ? "從這個版本起，匯出用的 token 也能讀取你的 My Space，包含其中所有使用中的文件與任務結果。先前發出的 token 不需任何動作就會取得這項能力。如果某把 token 可能已經外洩，請到設定頁輪替它。"
+      : "From this release an export token can also read your My Space: every active document and task result in it. Tokens issued earlier gain this without any action. If a token may have been exposed, rotate it on the setup page.";
+    expect(text).toContain(note);
+  });
 });
 
 describe("knowledge-hub install-agent", () => {

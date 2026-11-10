@@ -177,20 +177,26 @@ pass.
   (`docs/superpowers/specs/2026-11-03-named-recipient-share-design.md`, deviation 2). Every other entry,
   and every write, requires one; `tests/unit/share-link-single-exception.test.ts`
   enforces it.
-  One write has no caller either, outside the share-link grant:
+  Two task-knowledge entries have no caller either, outside the share-link grant:
   `IngestTaskResultService.ingest`, reached only from
-  `POST /api/task-results/ingest`. Its authority is a Task Knowledge export
-  credential, which names one binding (the owner's My Space) and
-  permits only `task-result:create`; it is not a delegated human identity. Every
-  other task-knowledge entry takes a caller, and caller-less helpers under
+  `POST /api/task-results/ingest`, and `AgentReadAccessService.authorize`,
+  reached only from `src/app/api/agent/**`. Their authority is a Task Knowledge
+  export credential, which names one binding (the owner's My Space) and permits
+  `task-result:create`; for reads it also stands for the binding's owner inside
+  that one My Space, through the three `/api/agent/*` routes, and nowhere else.
+  Every other task-knowledge entry takes a caller, and caller-less helpers under
   `application/internal/` are imported only from `application/`
-  (`tests/unit/task-export-single-exception.test.ts`;
-  `docs/superpowers/specs/2026-11-04-task-knowledge-export-design.md` §3).
-  That route and `GET /cli/knowledge-hub.tgz` are exempt from the site password
-  and Google sign-in, each by exact pathname only (`src/lib/auth-paths.ts`,
-  `src/lib/site-password.ts`). The tarball serves no content: only the CLI and
-  its Skill, the same bytes for everyone, because `npm install` sends no session
-  (design, Amendment 2).
+  (`tests/unit/task-export-single-exception.test.ts`,
+  `tests/unit/agent-read-no-workspace-id.test.ts`;
+  `docs/superpowers/specs/2026-11-04-task-knowledge-export-design.md` §3,
+  `docs/superpowers/specs/2026-11-10-agent-read-access-design.md` §3).
+  `POST /api/task-results/ingest`, the three paths `/api/agent/search`,
+  `/api/agent/documents` and `/api/agent/tasks`, and `GET /cli/knowledge-hub.tgz`
+  are exempt from the site password and Google sign-in, each by exact pathname
+  only (`src/lib/auth-paths.ts`, `src/lib/site-password.ts`). The agent paths
+  authenticate by the export credential (agent read access design §4). The
+  tarball serves no content: only the CLI and its Skill, the same bytes for
+  everyone, because `npm install` sends no session (design, Amendment 2).
 - **`org_code` does not decide access.** It answers which company org a user
   belongs to; workspace membership answers what they can open. Cross-org
   membership is legal and same-org membership is not automatic.
