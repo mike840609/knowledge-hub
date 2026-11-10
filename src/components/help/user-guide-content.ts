@@ -1,6 +1,6 @@
 import type {GuideContent,GuideLocale,GuideSection} from "@/components/imports/import-guide-content";
 
-export type UserGuideAction = {target:"sample"|"sources"|"identity";label:string};
+export type UserGuideAction = {target:"sample"|"sources"|"identity"|"inbox"|"tasks"|"taskSetup";label:string};
 type GuideDetail = {title:string;items:string[];links?:UserGuideAction[]};
 type UserGuideSection = GuideSection & {details:GuideDetail[];links:UserGuideAction[]};
 type UserGuideContent = Omit<GuideContent,"sections"> & {sections:UserGuideSection[]};
@@ -9,7 +9,8 @@ function section(id:string,title:string,items:string[],details:GuideDetail[]=[],
   return {id,title,body:[{kind:"ul",items}],details,links};
 }
 
-export function userGuideContent(locale:GuideLocale):UserGuideContent {
+export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean}={}):UserGuideContent {
+  const taskSearch=options.taskSearch===true;
   if(locale==="zh-TW")return {
     title:"使用者操作手冊",
     intro:"My Space 個人工作區的日常操作。先看示意圖與實際畫面，再依需要展開細節；按鈕名稱與英文介面一致。",
@@ -72,6 +73,28 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
         "Search 的進階篩選可依路徑（例如 docs/runbooks）與更新日期（Updated from／Updated to）縮小範圍。",
         "Copy for Agent 只在 My Space 提供：選 1–20 份文件整理成一份 Markdown，方便貼給代理。",
       ]}]),
+      section("inbox","收件匣：討論、提及與分享",[
+        "Inbox 彙整你文件上的討論、你追蹤的討論，以及有人提及你的留言。",
+        "用 All／My documents／Following／Mentions 切換關係，再用 Status（Any status／Open／Resolved）與 Unread 縮小範圍。",
+        "點一列在右側閱讀整串討論並回覆或 Resolve；Open document 開原文。視窗較窄時，Inbox 是純清單，點列直接開文件。",
+        "Mark read 只處理那一則，Mark all read 清掉目前未讀，Refresh 重新載入索引。",
+        "Proposals（具名分享的加入請求，擁有者可 Approve／Decline）與 Shared with you（別人具名分享給你的文件與資料夾）會出現在同一頁；後者也列在 Shares。",
+      ],[
+        {title:"已讀、解決與未讀",items:[
+          "開啟討論會標為已讀，不代表你已回覆或解決。",
+          "之後有人回覆會再次變成未讀；側欄 Inbox 的數字是未讀項目（留言、提及、分享與提案）。",
+          "Resolve 是另一個動作，不會順便處理其他討論。",
+        ]},
+        {title:"失效連結與權限",items:[
+          "連結被撤銷或到期後，該則會顯示無法使用，也打不開內容。",
+          "回覆追蹤中的討論需要有效連結、已登入身分，且部署已啟用留言寫入。",
+          "Inbox 不會給你原本就打不開的文件權限。",
+        ]},
+        {title:"Inbox 與 Shares 的分工",items:[
+          "Inbox 是討論索引與通知；Shares 管理你自己建立的連結、期限與撤銷、已儲存分享，以及你追蹤的討論。",
+          "儲存分享保存的是連結，不是副本；移除它不會撤銷對方的連結。",
+        ]},
+      ],[{target:"inbox",label:"開啟 Inbox"}]),
       section("insights","Insights 的數字",[
         "從側欄 Insights 開啟統計；點 Recent changes 的 Added、Updated 或 Archived 可開啟對應的文章清單。",
         "用 Refresh 更新統計。Updated 是查詢時間；Last synced 才是成功同步時間。",
@@ -81,6 +104,34 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
         "新增、更新與封存各自計算期間內不同文章，同篇可跨分類；活躍文章總數不含草稿與封存內容。",
         "未讀數只計入有永久變更紀錄的目前同步版本；舊匯入缺少紀錄時會提示，不補造歷史。",
       ]}]),
+      section("tasks","Tasks：代理完成的任務",[
+        "在 Claude Code 或 OpenCode 完成任務後執行 /hub-export，再從側欄開啟 Tasks。",
+        "第一次使用：Set up export → 建立 binding → 複製一次性指令，在自己的機器執行。每台機器一個 binding；token 只顯示一次。",
+        "清單分 Active／Archived。每列顯示 Agent 與完成時間，超過一個版本時才顯示 revision；點開詳情會標明是哪個 binding 匯出的。",
+        "詳情包含 Summary、Verification、Findings／Decisions／Changes、References 與 Revisions。Verification 是代理回報的結果，不是 Hub 的認證。",
+        ...(taskSearch?["啟用搜尋時，每列還會顯示 verification 標記與命中的摘要片段。"]:[]),
+      ],[
+        {title:"References 與版本",items:[
+          "Wiki 路徑或文件 id 會在你的 My Space 內解析成連結；找不到標 not found，多個來源同名標 ambiguous。",
+          "檔案、commit 與 pull request 參照只是標籤；PR 只有在是 https 連結時才能開啟。",
+          "同一個任務再次匯出會建立新 revision；舊版仍可從 Revisions 閱讀。",
+          "封存後仍可閱讀，也能從同一頁還原。",
+          "超過 64 KiB 的內容會被拒絕，不會截斷。",
+          "只有完成的任務能匯出；代理不得編造測試、變更或參照。",
+        ]},
+        {title:"Token、binding 與撤銷",items:[
+          "每台機器建立一個 binding。一次性指令含 token，只顯示一次，請當成密鑰。",
+          "Rotate token 會讓舊 token 立即失效；Revoke 會停止該機器的匯出。",
+          "撤銷 binding 不會刪除已保存的 Task Results。",
+          "Task Results 只會出現在自己的 My Space，不會進到 Team 工作區。",
+        ]},
+        ...(taskSearch?[{title:"搜尋與篩選",items:[
+          "搜尋標題、摘要與 findings，命中的片段會標示出來。",
+          "可依 Agent（Claude Code／OpenCode）、Verification（Passed／Failed／Not run／Not applicable）與 Completed 日期縮小範圍。",
+          "套用的條件會變成可個別移除的 chip；Clear all 一次清空。條件會留在網址，可分享或加書籤。",
+          "日期依瀏覽器的 UTC 偏移送出，換時區可能差一天。",
+        ]}]:[]),
+      ],[{target:"tasks",label:"開啟 Tasks"},{target:"taskSetup",label:"設定 Task export"}]),
       section("sharing-export","分享、匯出與使用範圍",[
         "分享前確認內容可公開給連結持有人；對方免登入即可閱讀，也會看到文章後續變更。",
         "在文章的 Share link 管理期限與撤銷；到 Shares 查看 My shares、Saved shares，或在 Discussions 追蹤你參與的討論。",
@@ -160,6 +211,28 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
         "Advanced Search filters narrow results by path (for example docs/runbooks) and by update date (Updated from / Updated to).",
         "Copy for Agent, in My Space only, builds one Markdown bundle from 1–20 documents you select, ready to paste into an agent.",
       ]}]),
+      section("inbox","Inbox: discussions, mentions and shares",[
+        "Inbox collects discussions on your documents, discussions you follow, and comments that mention you.",
+        "Switch relationship with All / My documents / Following / Mentions; narrow with Status (Any status / Open / Resolved) and Unread.",
+        "Select a row to read the thread beside the list and Reply or Resolve; Open document opens the article. Below the split width, a row opens the document.",
+        "Mark read settles one item, Mark all read clears the current unread, and Refresh reloads the index.",
+        "Proposals (named-share requests an owner can Approve or Decline) and Shared with you (documents and folders shared with you by name) appear on the same page; Shared with you also lives in Shares.",
+      ],[
+        {title:"Read, resolve and unread",items:[
+          "Opening a discussion marks it read; it does not mean you replied or resolved it.",
+          "A later reply makes the discussion unread again. The sidebar's Inbox badge counts unread items — comments, mentions, shares and proposals.",
+          "Resolving is a separate action; it does not mark other discussions read.",
+        ]},
+        {title:"Dead links and permissions",items:[
+          "A revoked or expired link reads as unavailable and opens nothing.",
+          "Replying to a followed discussion needs a live link, a signed-in identity and enabled comment writes.",
+          "An Inbox entry never grants access to a document you could not already open.",
+        ]},
+        {title:"Inbox and Shares",items:[
+          "Inbox is the discussion index and notices; Shares manages your own links, expiry and revocation, saved shares and the discussions you follow.",
+          "Saving a share keeps the link, not a copy. Removing it does not revoke the sender's link.",
+        ]},
+      ],[{target:"inbox",label:"Open Inbox"}]),
       section("insights","Understand Insights",[
         "Open Insights from the sidebar; under Recent changes, Added, Updated or Archived opens the matching article list.",
         "Use Refresh for current statistics. Updated is the query time; Last synced is the successful sync time.",
@@ -169,6 +242,34 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
         "Added, updated and archived each count distinct articles in the period; one may appear in several categories. Active totals exclude drafts and archived content.",
         "Unread counts require recorded changes on the current synced revision. Missing legacy history is explained rather than invented.",
       ]}]),
+      section("tasks","Tasks: results from coding agents",[
+        "Finish a task in Claude Code or OpenCode, run /hub-export, then open Tasks from the sidebar.",
+        "First use: Set up export → create a binding → copy the one-time line and run it on your own machine. One binding per machine; the token is shown once.",
+        "The list has Active / Archived. Each row shows the agent and completion time, plus the revision when a task has more than one; it opens the detail that names the binding.",
+        "The detail shows Summary, Verification, Findings / Decisions / Changes, References and Revisions. Verification is what the agent reported, not a Hub certification.",
+        ...(taskSearch?["With search enabled, each result also shows the verification badge and a matched excerpt."]:[]),
+      ],[
+        {title:"References and revisions",items:[
+          "A Wiki path or document id resolves to a link inside your My Space; a path with no match reads not found, and one present in several sources reads ambiguous.",
+          "File, commit and pull-request references are labels; a pull request opens only when it is an https link.",
+          "Exporting the same task again creates a new revision; older revisions stay readable from Revisions.",
+          "Archived results stay readable and can be restored from the same detail.",
+          "Artifacts above 64 KiB are rejected, not truncated.",
+          "Only completed tasks can be exported. The agent must not invent tests, changes or references.",
+        ]},
+        {title:"Token, binding and revocation",items:[
+          "Create one binding per machine. The setup line carries the token and is shown only once; treat it as a secret.",
+          "Rotate token makes the old token useless at once; Revoke stops exports from that machine.",
+          "Revoking a binding does not delete Task Results already saved.",
+          "Task Results are visible only in your own My Space, not in a Team workspace.",
+        ]},
+        ...(taskSearch?[{title:"Search and filters",items:[
+          "Search title, summary and findings; matches are highlighted in the excerpt.",
+          "Narrow by Agent (Claude Code or OpenCode), Verification (Passed / Failed / Not run / Not applicable) and Completed dates.",
+          "Applied filters appear as chips you can remove one at a time; Clear all resets them. The URL keeps the criteria, so a filtered list can be shared or bookmarked.",
+          "Dates follow your browser's UTC offset, so another time zone can shift a result by a day.",
+        ]}]:[]),
+      ],[{target:"tasks",label:"Open Tasks"},{target:"taskSetup",label:"Set up export"}]),
       section("sharing-export","Share, export and workspace scope",[
         "Before sharing, confirm the content is suitable for link holders. Anyone holding a link can read without signing in; a link to specific people opens only for them, after signing in. Either sees later article changes.",
         "Manage expiry and revocation in Share link. Open Shares for My shares, Saved shares, or Discussions to follow the discussions you take part in.",

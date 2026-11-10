@@ -1,4 +1,4 @@
-import {ArrowDown, ArrowRight, Check, FileText, Folder, Star} from "lucide-react";
+import {ArrowDown, ArrowRight, Check, FileText, Folder, MessageSquareText, Star} from "lucide-react";
 import type {ReactNode} from "react";
 import type {GuideLocale} from "@/components/imports/import-guide-content";
 
@@ -55,6 +55,28 @@ export function UserGuideIllustration({sectionId,locale}:{sectionId:string;local
     </Figure>;
     case "sharing-export": return <Figure id={sectionId} title={t("Diagram · Read, discuss and save a shared article","示意圖 · 閱讀、留言與儲存分享")} note={t("Saving a share retains the link, not an article copy. Expiry and revocation still apply; it grants no workspace access.","儲存分享只保存連結，不複製文章；仍受期限與撤銷限制，也不會取得對方的工作區權限。") }>
       <Flow steps={[{title:"Share link",detail:t("Owner sets expiry or revokes","擁有者設定期限或撤銷")},{title:t("Open link","開啟連結"),detail:t("Read article and visible comments","免登入讀文章與公開留言")},{title:t("Sign in","登入"),detail:t("Select a passage to comment; reply or choose Save","選取段落即可留言；也可回覆或按 Save")}]}/>
+    </Figure>;
+    case "inbox": return <Figure id={sectionId} title={t("Diagram · One index, three relationships","示意圖 · 一個索引，三種關係")} note={t("Opening a discussion marks it read; resolving is separate. A dead link opens nothing.","開啟討論會標為已讀；Resolve 是另一個動作。失效連結不會開啟內容。") }>
+      <ul className="grid gap-4 border-b border-kh-border pb-4 sm:grid-cols-3">
+        {[
+          [t("My documents","你的文件"),t("Comments on documents you own","你擁有的文件上的留言")],
+          [t("Following","追蹤中"),t("Discussions you follow","你追蹤的討論")],
+          [t("Mentions","提及你"),t("Comments that name you","提到你的留言")],
+        ].map(([title,detail])=><li key={title}><p className={`${label} flex items-center gap-2`}><MessageSquareText className={icon} aria-hidden="true"/>{title}</p><p className="mt-1 text-body-sm text-kh-text-secondary">{detail}</p></li>)}
+      </ul>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div><p className={label}>{t("Mark read","標為已讀")}</p><p className="mt-1 text-body-sm text-kh-text-secondary">{t("Settles the notice; the discussion stays open.","處理通知，討論仍可繼續。")}</p></div>
+        <div className="border-t border-kh-border pt-3 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0"><p className={label}>{t("Resolve","解決")}</p><p className="mt-1 text-body-sm text-kh-text-secondary">{t("Closes the discussion without changing the article.","結束討論，不改文章。")}</p></div>
+      </div>
+    </Figure>;
+    case "tasks": return <Figure id={sectionId} title={t("Diagram · From a finished task to My Space","示意圖 · 從完成的任務到 My Space")} note={t("Results stay in your My Space; Verification is agent-reported, not certified by Hub.","結果只留在你的 My Space；Verification 是代理回報，不是 Hub 認證。") }>
+      <Flow steps={[
+        {title:t("Finish in the agent","在代理完成任務"),detail:t("Claude Code or OpenCode","Claude Code 或 OpenCode")},
+        {title:"/hub-export",detail:t("The agent writes the summary","代理整理結構化結果")},
+        {title:t("CLI uploads","CLI 上傳"),detail:t("One configured binding","用已設定的 binding")},
+        {title:"Tasks detail",detail:t("Read, switch revision, archive","閱讀、切換版本、封存")},
+      ]}/>
+      <p className="flex items-start gap-2 border-t border-kh-border pt-3 text-body-sm text-kh-text-secondary"><Check className={icon} aria-hidden="true"/>{t("Only completed tasks; the token is shown once at setup.","只有完成的任務；token 在設定時只顯示一次。")}</p>
     </Figure>;
     default:return null;
   }

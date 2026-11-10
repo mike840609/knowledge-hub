@@ -1,4 +1,5 @@
 import {mkdir} from "node:fs/promises";
+import {spawn} from "node:child_process";
 import {test,expect} from "./fixtures/test";
 
 test("Home help covers first import, repeat sync and recovery in both languages",async({page,request})=>{
@@ -16,9 +17,15 @@ test("Home help covers first import, repeat sync and recovery in both languages"
   await page.getByRole("navigation",{name:"手冊語言",exact:true}).getByRole("link",{name:"English",exact:true}).click();
   await expect(page.getByRole("heading",{name:"User guide",exact:true})).toBeVisible();
   await expect(page.locator("main[lang]")).toHaveAttribute("lang","en");
-  await expect(page.getByRole("figure")).toHaveCount(13);
+  await expect(page.getByRole("figure")).toHaveCount(19);
   await expect(page.getByRole("figure",{name:"Diagram · From folder to readable articles"})).toContainText("Choose folder");
   await expect(page.getByRole("heading",{name:"Daily sync: check, preview, apply",exact:true})).toBeAttached();
+  await expect(page.getByRole("heading",{name:"Inbox: discussions, mentions and shares",exact:true})).toBeAttached();
+  await expect(page.getByRole("heading",{name:"Tasks: results from coding agents",exact:true})).toBeAttached();
+  await expect(page.getByText("Search title, summary and findings",{exact:false})).toHaveCount(0);
+  await expect(page.getByRole("link",{name:"Open Inbox",exact:true})).toHaveAttribute("href",`/w/${ws}/inbox`);
+  await expect(page.getByRole("link",{name:"Open Tasks",exact:true})).toHaveAttribute("href",`/w/${ws}/tasks`);
+  await expect(page.getByRole("link",{name:"Set up export",exact:true})).toHaveAttribute("href",`/w/${ws}/tasks/setup`);
   await expect(page.getByRole("link",{name:"Try the sample wiki",exact:true})).toHaveAttribute("href",`/w/${ws}/sources/import#sample-wiki`);
   await expect(page.getByRole("link",{name:"Read the import preview guide",exact:true})).toHaveCount(0);
   await page.getByRole("link",{name:"Troubleshooting",exact:true}).click();
@@ -32,7 +39,11 @@ test("Home help covers first import, repeat sync and recovery in both languages"
   await page.getByRole("link",{name:"繁體中文",exact:true}).click();
   await expect(page.getByRole("heading",{name:"使用者操作手冊",exact:true})).toBeVisible();
   await expect(page.getByRole("heading",{name:"遇到問題時",exact:true})).toBeAttached();
-  await expect(page.getByRole("figure")).toHaveCount(13);
+  await expect(page.getByRole("heading",{name:"收件匣：討論、提及與分享",exact:true})).toBeAttached();
+  await expect(page.getByRole("heading",{name:"Tasks：代理完成的任務",exact:true})).toBeAttached();
+  await expect(page.getByRole("link",{name:"開啟 Inbox",exact:true})).toHaveAttribute("href",`/w/${ws}/inbox`);
+  await expect(page.getByRole("link",{name:"設定 Task export",exact:true})).toHaveAttribute("href",`/w/${ws}/tasks/setup`);
+  await expect(page.getByRole("figure")).toHaveCount(19);
   await expect(page.getByRole("figure",{name:"示意圖 · 每次更新都需要 Apply"})).toContainText("不會在背景自動同步");
   await expect(page.locator("details[open]")).toHaveCount(0);
   await expect(page.getByText(/規則在 Apply 成功後保存到來源/)).toBeHidden();
@@ -67,7 +78,13 @@ test("Home help covers first import, repeat sync and recovery in both languages"
   expect(chapterBox!.y).toBeLessThan(100);
   await page.locator("#sharing-export").evaluate(node=>node.scrollIntoView({block:"end"}));
   await expect(chapterNav.getByRole("link",{name:"分享與匯出",exact:true})).toHaveAttribute("aria-current","location");
+  await page.locator("#inbox").evaluate(node=>node.scrollIntoView({block:"start"}));
+  await expect(chapterNav.getByRole("link",{name:"收件匣",exact:true})).toHaveAttribute("aria-current","location");
+  await page.locator("#tasks").evaluate(node=>node.scrollIntoView({block:"start"}));
+  await expect(chapterNav.getByRole("link",{name:"Tasks",exact:true})).toHaveAttribute("aria-current","location");
   await page.setViewportSize({width:390,height:844});
+  await page.locator("#inbox").evaluate(node=>node.scrollIntoView({block:"start"}));
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.evaluate(()=>window.scrollTo(0,0));
   const contents=page.locator("summary").filter({hasText:"本頁章節"});
   await contents.click();
@@ -90,7 +107,7 @@ test("Home help covers first import, repeat sync and recovery in both languages"
     await page.setViewportSize({width,height:900});
     for(const theme of ["light","dark"]) {
       await page.evaluate(value=>document.documentElement.setAttribute("data-theme",value),theme);
-      for(const id of ["quick-start","sync","troubleshooting","reading","insights","sharing-export"]) {
+      for(const id of ["quick-start","sync","troubleshooting","reading","inbox","insights","tasks","sharing-export"]) {
         const figure=page.locator(`#${id} figure[aria-labelledby]`);
         await figure.scrollIntoViewIfNeeded();
         await expect(figure).toBeVisible();
@@ -100,5 +117,35 @@ test("Home help covers first import, repeat sync and recovery in both languages"
         if(output)await figure.screenshot({path:`${output}/${id}-${width}-${theme}.png`,animations:"disabled"});
       }
     }
+  }
+});
+
+test("a flag-on deployment shows the Task Search material",async({page})=>{
+  test.setTimeout(60_000);
+  const port=Number(process.env.KM_E2E_PORT??"3101")+18;
+  const origin="http://127.0.0.1:"+port;
+  let serverOutput="";
+  const server=spawn(process.execPath,["node_modules/next/dist/bin/next","start","--hostname","127.0.0.1","--port",String(port)],{
+    cwd:process.cwd(),env:{...process.env,NODE_ENV:"production",KM_IDENTITY_PROVIDER:"local",TASK_SEARCH_READ_ENABLED:"true",PORT:String(port)},stdio:["ignore","pipe","pipe"],
+  });
+  server.stdout?.on("data",chunk=>{serverOutput+=chunk.toString().slice(-2048);});
+  server.stderr?.on("data",chunk=>{serverOutput+=chunk.toString().slice(-2048);});
+  try {
+    const until=Date.now()+40_000;
+    while(Date.now()<until) {
+      if(server.exitCode!==null)throw new Error("Task Search guide server exited: "+serverOutput.slice(-1500));
+      try { await fetch(origin,{redirect:"manual"}); break; } catch { await new Promise(resolve=>setTimeout(resolve,350)); }
+    }
+    await page.goto(`${origin}/help?lang=en`);
+    await expect(page.getByRole("heading",{name:"Tasks: results from coding agents",exact:true})).toBeAttached();
+    await expect(page.getByText("With search enabled, each result also shows the verification badge and a matched excerpt.",{exact:true})).toBeAttached();
+    await expect(page.getByText("Search and filters",{exact:true})).toBeAttached();
+    await expect(page.getByRole("img",{name:/① Search title, summary and findings/}).first()).toBeAttached();
+    // The flag-on guide must show the search screen instead of the legacy list, never both.
+    await expect(page.getByRole("img",{name:/① Each row is one Task Result/})).toHaveCount(0);
+    // One list variant replaces the other, so the total stays 19 (8 diagrams + 11 screens).
+    await expect(page.getByRole("figure")).toHaveCount(19);
+  } finally {
+    server.kill("SIGTERM");
   }
 });
