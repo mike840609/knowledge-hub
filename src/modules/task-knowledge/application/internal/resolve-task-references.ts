@@ -29,7 +29,7 @@ export async function resolveTaskReferences(
   return resolved;
 }
 
-async function activeDocumentsAtPath(r: TaskKnowledgeRepositories, workspaceId: string, path: string): Promise<string[]> {
+export async function activeDocumentsAtPath(r: TaskKnowledgeRepositories, workspaceId: string, path: string): Promise<string[]> {
   const match = await r.entries.findActiveEntriesByPath(workspaceId, path);
   if (match.kind === "INVALID_PATH") return [];
   const active: string[] = [];

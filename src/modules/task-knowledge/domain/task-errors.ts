@@ -77,3 +77,19 @@ export class TaskSearchUnavailableError extends DomainError {
     this.name = "TaskSearchUnavailableError";
   }
 }
+
+/** A path named by an Agent matches several ACTIVE documents; the Agent must pick one by ID. */
+export class AgentDocumentAmbiguousError extends DomainError {
+  constructor(readonly candidateDocumentIds: readonly string[]) {
+    super("AMBIGUOUS", "More than one document has this path; read one by its document ID.");
+    this.name = "AgentDocumentAmbiguousError";
+  }
+}
+
+/** No ACTIVE document in the binding's My Space has this path. */
+export class AgentDocumentNotFoundError extends DomainError {
+  constructor() {
+    super("DOCUMENT_NOT_FOUND", "No document in this My Space has this path.");
+    this.name = "AgentDocumentNotFoundError";
+  }
+}
