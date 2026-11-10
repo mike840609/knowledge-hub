@@ -41,6 +41,28 @@ describe("code-review fixes: meaningful excerpts",()=>{
     expect(buildTaskSearchPreview(base, content, ["securething"])).toContain("securething");
   });
 
+  it("keeps the opening words when the match is already near the start",()=>{
+    const summary="The security audit is complete";
+    expect(buildTaskSearchPreview(summary,summary,["security"])).toBe(summary);
+  });
+  it("does not claim truncation when nothing was cut",()=>{
+    const summary="Alpha beta gamma delta security tail";
+    expect(buildTaskSearchPreview(summary,summary,["security"])).not.toMatch(/^…/);
+  });
+  it("backs off to a word boundary only when the window is cut",()=>{
+    const summary="prefix ".repeat(20)+"security audit";
+    const preview=buildTaskSearchPreview(summary,summary,["security"]);
+    expect(preview.startsWith("…")).toBe(true);
+    expect(preview).toContain("security audit");
+    expect(preview.length).toBeLessThanOrEqual(200);
+  });
+  it("ends a truncated preview on a word boundary",()=>{
+    const summary="security "+"word ".repeat(80);
+    const preview=buildTaskSearchPreview(summary,summary,["security"]);
+    expect(preview.endsWith("…")).toBe(true);
+    expect(preview.slice(0,-1).endsWith("word")).toBe(true);
+    expect(preview.length).toBeLessThanOrEqual(200);
+  });
   it("keeps the normal summary preview without a query and does not interpret HTML",()=>{
     expect(buildTaskSearchPreview("<script>alert(1)</script>","<script>alert(1)</script>",[])).toBe("<script>alert(1)</script>");
   });

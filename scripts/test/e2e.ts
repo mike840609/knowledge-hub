@@ -17,6 +17,7 @@ const environmentNames = [
   "KM_E2E_DB_HOST", "KM_E2E_DB_PORT", "KM_E2E_DB_USER", "KM_E2E_DB_PASSWORD", "KM_E2E_DB_NAME",
   "KM_LOCAL_IDENTITY_ENABLED", "KM_LOCAL_ID", "KM_LOCAL_EMP_ID", "KM_LOCAL_NAME", "KM_LOCAL_ORG_CODE",
   "KM_REVIEW_WRITES_ENABLED", "KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION", "KM_TEAM_WORKSPACES_ENABLED",
+  "TASK_SEARCH_READ_ENABLED",
 ];
 
 function createCancellation() {
@@ -136,6 +137,9 @@ async function main(): Promise<void> {
         NODE_ENV: "production",
         NEXT_TELEMETRY_DISABLED: "1",
         KM_IDENTITY_PROVIDER: "local", KM_REVIEW_WRITES_ENABLED: "true",
+        // Keep the default server on the legacy reader even when the caller's
+        // local .env enables search; the search spec starts its own flag-on server.
+        TASK_SEARCH_READ_ENABLED: "false",
         ...identity,
         KM_TEAM_WORKSPACES_ENABLED: teamMode,
         KM_E2E_PORT: e2ePort,

@@ -67,10 +67,24 @@ describe("Tasks-only compact search UI", () => {
     expect(html).toContain("Showing 1 task");
     expect(html).toContain("kh-tab-list");
     expect(html).toContain("border-kh-primary");
+    expect(html).toContain("data-list-row");
+    expect(html).toContain('data-status-kind="success"');
     expect(html).toContain("Fix Task Index");
     expect(html).toContain("Safety and indexing details");
     expect(html).toContain("Agent-reported");
     expect(html).toContain("revision 2");
+  });
+  it("renders the server's preview without trimming its leading context again", () => {
+    const html = renderToStaticMarkup(
+      <TaskSearchResults workspaceId="ws" query={parseTaskSearchQuery({ q: "security" })}
+        items={[{
+          taskResultId: "task-1", title: "Security review", summary: "…Checked the security audit",
+          agent: "opencode", completedAt: "2026-11-06T08:00:00Z",
+          verificationStatus: "passed", latestRevisionNo: 1, bindingLabel: "laptop", bindingStatus: "ACTIVE",
+        }]} nextCursor={null} hasTasksInLifecycle={true} />,
+    );
+    expect(html).toContain("Checked the");
+    expect(html).toContain("<mark");
   });
   it("shows a retryable timeout instead of an incorrect empty-state claim", () => {
     const html = renderToStaticMarkup(

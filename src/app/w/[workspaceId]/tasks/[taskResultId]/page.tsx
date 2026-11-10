@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/shell/page-header";
 import { TaskDetail } from "@/components/task-knowledge/task-detail";
+import { TaskLifecycleAction } from "@/components/task-knowledge/task-lifecycle-action";
 import { applicationServices } from "@/server/composition";
 import { DomainError } from "@/shared/domain/errors";
 
@@ -23,14 +24,21 @@ export default async function TaskResultPage({ params, searchParams }: Props) {
   }
   return (
     <main className="kh-page pb-6">
-      <PageHeader location="Tasks" locationHref={`/w/${workspaceId}/tasks`} title={detail.content.title} />
-      <TaskDetail
-        workspaceId={workspaceId}
-        detail={{
-          ...detail,
-          revisionHistory: detail.revisionHistory.map((item) => ({ revisionNo: item.revisionNo, createdAt: item.createdAt.toISOString() })),
-        }}
+      <PageHeader
+        location="Tasks"
+        locationHref={`/w/${workspaceId}/tasks`}
+        title={detail.content.title}
+        actions={<TaskLifecycleAction workspaceId={workspaceId} taskResultId={taskResultId} lifecycle={detail.lifecycle} />}
       />
+      <div className="mt-6">
+        <TaskDetail
+          workspaceId={workspaceId}
+          detail={{
+            ...detail,
+            revisionHistory: detail.revisionHistory.map((item) => ({ revisionNo: item.revisionNo, createdAt: item.createdAt.toISOString() })),
+          }}
+        />
+      </div>
     </main>
   );
 }

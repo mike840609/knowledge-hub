@@ -728,8 +728,13 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-tree-document-link, .kh-tree-folder-button { padding-inline-end: 48px; }
 }
 
-/* Search icon clearance: left inset + icon width + gutter, not spacing rhythm. */
-.kh-search-field { padding-inline-start: 2.25rem; }
+/* Search icon clearance: left inset + icon width + gutter, not spacing rhythm.
+   Keep a physical `padding-left` fallback for engines that do not support
+   logical properties; without it the icon can sit under the placeholder. */
+.kh-search-field {
+  padding-left: 2.5rem;
+  padding-inline-start: 2.5rem;
+}
 
 /* Review selections use existing light/dark document-highlight tokens. */
 ::highlight(document-review),

@@ -1,6 +1,6 @@
 # Task Search + Filters + List UX — Design Spec
 
-**Status:** Approved scope, implementation in progress on PR #336. Task 4–5 visual direction refined 2026-11-06; Tasks 3–6 are not yet complete.
+**Status:** Implemented. The search read path is behind `TASK_SEARCH_READ_ENABLED`; the follow-up UI refinement is in PR #338.
 **Area:** My Space → Tasks; read/discovery only. **Related:** [Task Knowledge Export design](2026-11-04-task-knowledge-export-design.md) and [implementation plan](../plans/2026-11-06-task-search-filters-list-ux.md).
 
 ## 1. Problem and outcome
@@ -96,6 +96,8 @@ Use existing Task List, EmptyState, Timestamp, search input, and native filter p
 ### 5.1 Tasks-only Linear-inspired layout contract (approved visual refinement)
 
 **Scope boundary.** Apply this only to `My Space → Tasks` when `TASK_SEARCH_READ_ENABLED=true`. Keep the existing PageHeader breadcrumb, “Set up export” action, App Shell, primary navigation/Sidebar, Task Detail and site-wide tokens untouched. While the flag is false, the legacy Tasks page, tabs, pagination and empty states remain unchanged. Follow the existing `frontend-design-language.md` contract (14px body, 12px caption, 6px control radius, restrained indigo/neutral hierarchy, subtle dividers, one shared focus treatment); do **not** introduce unrelated card designs, shadows, animation, new color tokens or a separate Tasks sub-navigation.
+
+**Follow-up scope (PR #338).** The Task list, Task detail and Task export setup pages were refined in the same follow-up at the product owner's request; the search contract above remains the authority for the enabled Tasks page. On an empty list the empty-state CTA is the single setup action, and the header action appears once there are tasks.
 
 **Visual topology, top to bottom:**
 

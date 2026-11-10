@@ -6,6 +6,8 @@ import { CopyCodeButton } from "@/components/knowledge/copy-code-button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Status } from "@/components/ui/status";
+import { Timestamp } from "@/components/ui/timestamp";
 
 type BindingView = {
   bindingId: string;
@@ -73,7 +75,9 @@ export function TaskExportSetup({ workspaceId, bindings }: { workspaceId: string
     <div className="max-w-panel space-y-6">
       {issued ? <Commands {...issued} /> : null}
       {error ? <p className="text-body text-kh-danger" role="alert">{error}</p> : null}
-      <form
+      <section className="space-y-3">
+        <h2 className="text-body font-medium text-kh-text">Create a binding</h2>
+        <form
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
@@ -86,39 +90,60 @@ export function TaskExportSetup({ workspaceId, bindings }: { workspaceId: string
         >
           <div className="space-y-1">
             <Label htmlFor="task-export-label">Label</Label>
-            <Input id="task-export-label" value={label} maxLength={200} required placeholder="work laptop" onChange={(event) => setLabel(event.target.value)} />
+            <Input id="task-export-label" value={label} maxLength={200} required placeholder="work laptop" aria-describedby="task-export-label-hint" onChange={(event) => setLabel(event.target.value)} />
+            <p id="task-export-label-hint" className="text-caption text-kh-text-muted">One binding per machine. For another machine, create another binding; rotating a token stops the machine that uses it.</p>
           </div>
           <Button type="submit" disabled={busy}>Create binding</Button>
-          <p className="text-caption text-kh-text-muted">One binding per machine. For another machine, create another binding; rotating a token stops the machine that uses it.</p>
         </form>
-      {bindings.length > 0 ? (
-        <ul className="divide-y divide-kh-border rounded-md border border-kh-border">
-          {bindings.map((binding) => (
-            <li key={binding.bindingId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-              <div className="min-w-0">
-                <p className="truncate text-body">{binding.label}</p>
-                <p className="text-caption text-kh-text-muted">
-                  {binding.status === "ACTIVE" ? "Active" : "Revoked"} · <span className="font-mono">{binding.bindingId}</span>
-                </p>
-              </div>
-              {binding.status === "ACTIVE" ? (
-                <div className="flex gap-2">
-                  <Button
-                    variant="secondary"
-                    disabled={busy}
-                    onClick={() => void act(async () => {
-                      const { token } = (await send(`${base}/${binding.bindingId}/credentials`, "POST")) as { token: string };
-                      setIssued({ bindingId: binding.bindingId, token });
-                    })}
-                  >
-                    Rotate token
-                  </Button>
-                  <Button variant="ghost" disabled={busy} onClick={() => setRevoking(binding)}>Revoke</Button>
+      </section>
+      <section className="space-y-2">
+        <h2 className="text-body font-medium text-kh-text">Bindings</h2>
+        {bindings.length === 0 ? (
+          <p className="text-body text-kh-text-muted">No bindings yet. Create one for each machine you export from.</p>
+        ) : (
+          <ul className="divide-y divide-kh-border">
+            {bindings.map((binding) => (
+              <li key={binding.bindingId} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+                <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
+                  <p className="truncate text-body font-medium text-kh-text">{binding.label}</p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-caption text-kh-text-muted">
+                    <Status kind={binding.status === "ACTIVE" ? "active" : "danger"}>{binding.status === "ACTIVE" ? "Active" : "Revoked"}</Status>
+                    <span aria-hidden="true">·</span>
+                    <span>Created <Timestamp value={binding.createdAt} variant="date" label="Created" /></span>
+                  </p>
                 </div>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+                {binding.status === "ACTIVE" ? (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      disabled={busy}
+                      onClick={() => void act(async () => {
+                        const { token } = (await send(`${base}/${binding.bindingId}/credentials`, "POST")) as { token: string };
+                        setIssued({ bindingId: binding.bindingId, token });
+                      })}
+                    >
+                      Rotate token
+                    </Button>
+                    <Button variant="ghost" disabled={busy} onClick={() => setRevoking(binding)}>Revoke</Button>
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      {bindings.length > 0 ? (
+        <details className="border-t border-kh-border pt-3">
+          <summary className="kh-focus-ring rounded-md text-caption text-kh-text-muted">Binding IDs</summary>
+          <dl className="mt-2 space-y-1 text-caption">
+            {bindings.map((binding) => (
+              <div key={binding.bindingId} className="flex gap-3">
+                <dt className="w-24 shrink-0 truncate text-kh-text-muted">{binding.label}</dt>
+                <dd className="break-all font-mono text-kh-text-muted">{binding.bindingId}</dd>
+              </div>
+            ))}
+          </dl>
+        </details>
       ) : null}
       <ConfirmDialog
         open={revoking !== null}
