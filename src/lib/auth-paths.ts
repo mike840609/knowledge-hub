@@ -4,11 +4,15 @@ const SHARED_READ = /^\/s\/[A-Za-z0-9_-]{1,128}$/;
 /** A shared page or its opening route, with a folder page's `?d=<id>` and nothing else (folder share spec §4). */
 const SHARED_RETURN = new RegExp(`^/s/[A-Za-z0-9_-]{1,128}(?:/open)?(?:\\?d=${SHARED_DOCUMENT_ID})?$`);
 const WORKSPACE_RETURN = /^\/w\/[A-Za-z0-9-]+(?:\/[A-Za-z0-9._~/-]*)?$/;
+/** The agent read routes, exempt by these exact pathnames only (agent read access design §4). */
+const AGENT_READ_PATHS = new Set(["/api/agent/search", "/api/agent/documents", "/api/agent/tasks"]);
 
 export function isGooglePublicPath(pathname: string): boolean {
   if (pathname === "/login" || pathname === "/api/health" || pathname === "/s") return true;
   // Exact pathname only: the route authenticates by its export credential (task knowledge export design §7).
   if (pathname === "/api/task-results/ingest") return true;
+  // Exact pathname only: the agent read routes authenticate by the same credential (agent read access design §4).
+  if (AGENT_READ_PATHS.has(pathname)) return true;
   // Exact pathname only: npm downloads the CLI without a session; it holds no data (design, Amendment 2).
   if (pathname === "/cli/knowledge-hub.tgz") return true;
   if (pathname.startsWith("/api/auth/")) return true;

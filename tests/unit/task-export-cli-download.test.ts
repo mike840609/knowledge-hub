@@ -68,8 +68,8 @@ describe("scripts/pack-cli.mjs", () => {
     }
   }, 60_000);
 
-  it("holds the CLI and the Skill an npm install needs", () => {
-    for (const file of ["package/package.json", "package/bin/knowledge-hub.mjs", "package/src/export.mjs", "package/agent/hub-export/SKILL.md", "package/agent/opencode/hub-export.md"]) {
+  it("holds the CLI and the Skills an npm install needs", () => {
+    for (const file of ["package/package.json", "package/bin/knowledge-hub.mjs", "package/src/export.mjs", "package/src/read.mjs", "package/agent/hub-export/SKILL.md", "package/agent/opencode/hub-export.md", "package/agent/hub-search/SKILL.md", "package/agent/hub-read/SKILL.md", "package/agent/opencode/hub-search.md", "package/agent/opencode/hub-read.md"]) {
       expect(listing).toContain(file);
     }
   });

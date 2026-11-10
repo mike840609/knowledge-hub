@@ -1,5 +1,6 @@
 import { createInterface } from "node:readline";
-import { checkHubUrl, configKey, IS_WINDOWS, keysUsingBinding, readCredential, writeConfig, writeCredential } from "./project-config.mjs";
+import { decodeExportProfile, EXIT, Refusal } from "./export.mjs";
+import { checkHubUrl, configKey, IS_WINDOWS, keysUsingBinding, readConfig, readCredential, writeConfig, writeCredential } from "./project-config.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -64,4 +65,22 @@ export async function configure(flags) {
   writeConfig(key, { hubUrl, bindingId, allowInsecureLocalhost });
   console.log(`Configured${flags.profile ? ` profile ${flags.profile}` : ""} to export with binding ${bindingId}, from every project on this machine.`);
   return 0;
+}
+
+/** Local config only: it contacts nothing and prints no credential. */
+export function status(flags) {
+  try {
+    flags = decodeExportProfile(flags);
+    const project = readConfig(configKey(flags.profile));
+    if (!project) throw new Refusal(`Export is not configured${flags.profile ? ` for profile ${flags.profile}` : ""}. Run the \`knowledge-hub configure\` command from the Knowledge Hub setup page first.`);
+    if (!readCredential(project.bindingId)) throw new Refusal(`No credential is stored for binding ${project.bindingId}. Run \`knowledge-hub configure --rotate ${project.bindingId}\`.`);
+    console.log(`Configured: binding ${project.bindingId} at ${project.hubUrl}.`);
+    return EXIT.OK;
+  } catch (error) {
+    if (error instanceof Refusal) {
+      console.error(error.message);
+      return EXIT.REFUSED;
+    }
+    throw error;
+  }
 }

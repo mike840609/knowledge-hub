@@ -1,3 +1,5 @@
+import type { UserIdentity } from "@/modules/identity/domain/user-identity";
+
 /**
  * Local views of Workspace, Source, SourceEntry and Document state. The
  * module never imports `sources`; the infrastructure adapter implements these.
@@ -41,4 +43,8 @@ export interface TaskEntryLookup {
 
 export interface TaskDocumentLookup {
   getState(documentId: string): Promise<TaskDocumentState | null>;
+}
+
+export interface TaskUserLookup {
+  getIdentity(userId: string): Promise<UserIdentity | null>;
 }

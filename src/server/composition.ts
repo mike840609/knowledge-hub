@@ -49,6 +49,7 @@ import { companySsoProviderName, companySsoRolloutHubUserIds, identityProviderKi
 import { HubIdentityResolver } from "@/modules/identity/application/hub-identity-resolver";
 import { establishTrustedCaller as establishTrustedCallerWith } from "@/server/trusted-caller";
 import { MariaDbTaskKnowledgeUnitOfWork } from "@/infrastructure/database/mariadb/task-knowledge-transaction";
+import { AgentReadAccessService } from "@/modules/task-knowledge/application/agent-read-access";
 import { ManageExportBindingService } from "@/modules/task-knowledge/application/manage-export-binding";
 import { TaskLifecycleService } from "@/modules/task-knowledge/application/manage-task-lifecycle";
 import { TaskResultReadService } from "@/modules/task-knowledge/application/read-task-results";
@@ -56,6 +57,7 @@ import { IngestTaskResultService } from "@/modules/task-knowledge/application/in
 import { importRuntimeConfig } from "@/server/import-config";
 import { createIdentityProvider } from "@/server/identity-provider-factory";
 import { closeDatabasePool, getDatabasePool } from "./database-pool";
+import { withSourcePaths } from "./agent-search";
 
 let services: ReturnType<typeof buildApplicationServices> | undefined;
 let companySessionReader: CompanySsoSessionReader | undefined;
@@ -184,6 +186,29 @@ export function shareReadService(): Pick<DocumentShareService, "readShared" | "r
  */
 export function taskIngestService(): Pick<IngestTaskResultService, "ingest"> {
   return new IngestTaskResultService(new MariaDbTaskKnowledgeUnitOfWork(getDatabasePool()));
+}
+
+/**
+ * `GET /api/agent/*` (agent read access design §4). Like taskIngestService it
+ * bypasses applicationServices(): the caller is an export credential, not a
+ * browser identity, so no identity provider is built.
+ */
+export function agentReadServices(): {
+  access: Pick<AgentReadAccessService, "authorize">;
+  search: Pick<KnowledgeSearchService, "search">;
+  context: Pick<AgentContextService, "build">;
+  tasks: Pick<TaskResultReadService, "list" | "get">;
+} {
+  const unitOfWork = new MariaDbUnitOfWork(getDatabasePool());
+  const taskUnitOfWork = new MariaDbTaskKnowledgeUnitOfWork(getDatabasePool());
+  return {
+    access: new AgentReadAccessService(taskUnitOfWork),
+    // A document hit must name its synced folder path where it has one; the
+    // search projection does not carry it (agent read access design §4).
+    search: withSourcePaths(new KnowledgeSearchService(unitOfWork, new WorkspaceQueryService(unitOfWork)), unitOfWork),
+    context: new AgentContextService(unitOfWork),
+    tasks: new TaskResultReadService(taskUnitOfWork),
+  };
 }
 
 /** Token-scoped public review projection, independent of identity-provider setup. */

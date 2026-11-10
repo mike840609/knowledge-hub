@@ -1,9 +1,13 @@
 # 任務匯出設定
 
 把用 Claude Code 或 OpenCode 完成的任務，存成 Knowledge Hub My Space 裡的任務結果。
-匯出只走一個受限的 binding：它只能把任務結果加進你自己的 My Space；只有在你要求時（`/hub-export`）才會送出。
+匯出只走一個受限的 binding：它只能把任務結果加進，並讀取使用中的文件與任務結果，而且僅限你自己的 My Space；它不能改變文件。只有在你要求時（`/hub-export`）才會送出。
 
 [English](task-export-setup.md)
+
+## 升級須知
+
+從這個版本起，匯出用的 token 也能讀取你的 My Space，包含其中所有使用中的文件與任務結果。先前發出的 token 不需任何動作就會取得這項能力。如果某把 token 可能已經外洩，請到設定頁輪替它。若要完全停止某把 token 的讀取，請到設定頁撤銷它；撤銷也會一併停止匯出。
 
 ## 1. 建立 binding
 
@@ -59,6 +63,38 @@ Agent 寫出的內容長這樣，完成時間由指令補上：
   ]
 }
 ```
+
+## 4. 搜尋與讀取 My Space
+
+同一把 token 也能讀取你的 My Space，包含其中所有使用中的文件與任務結果。當你要求時，
+Agent 會用這些指令（`/hub-search` 與 `/hub-read`）。它們只讀取，不會改變文件。
+
+- `knowledge-hub search <words>` 搜尋使用中的文件。加上 `--tasks` 則改為搜尋你的任務結果。
+  每筆結果會印出 ID、路徑（沒有路徑時為 `-`）、標題，以及縮排的摘要；`No results.`
+  是正常結果，結束碼仍是 0。
+- `knowledge-hub read <path-or-id>` 以來源路徑或文件 ID 印出一篇文件目前的 Markdown。
+  `knowledge-hub read --task <task-result-id>` 則以 JSON 印出一筆任務結果。
+- `knowledge-hub status` 只讀取這台機器的本機設定。它不連線、不印出密鑰；結束碼 0
+  表示 binding 與它的 token 都存在。
+
+範例：
+
+```bash
+knowledge-hub search "login redirect"
+knowledge-hub read architecture/auth.md
+knowledge-hub status
+```
+
+同一台機器上的第二個 binding，請在任一指令加上 `--profile <name>`。
+
+搜尋或讀取沒有成功時，結束碼的意義和匯出相同：
+
+| 結束碼 | 意義 | 該做什麼 |
+|---|---|---|
+| 0 | 完成；搜尋沒有結果也會明說 | 不用做任何事 |
+| 2 | 本機用法錯誤，或這台機器尚未設定 | 修正指令，或執行它印出的 `configure` 指令 |
+| 3 | 沒有可信的回應（網路、逾時、轉址、伺服器錯誤、任務搜尋未啟用） | 稍後再要求同樣的搜尋或讀取 |
+| 4 | 需要你的動作（token 被拒、路徑對到多篇文件、內容過大、找不到） | 照印出的下一步做 |
 
 ## 匯出沒有成功時
 

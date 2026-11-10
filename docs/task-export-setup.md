@@ -2,10 +2,15 @@
 
 Save a task you finished with Claude Code or OpenCode as a task result in your
 Knowledge Hub My Space. The export goes through one restricted binding: it can
-only add task results to your own My Space, and it is
-never sent unless you ask for it (`/hub-export`).
+add task results to, and read the active documents and task results of, only your
+own My Space; it cannot change a document. It is never sent unless you ask for
+it (`/hub-export`).
 
 [繁體中文](task-export-setup.zh-TW.md)
+
+## Upgrade note
+
+From this release an export token can also read your My Space: every active document and task result in it. Tokens issued earlier gain this without any action. If a token may have been exposed, rotate it on the setup page. To stop a token reading altogether, revoke it on the setup page; revoking also ends export.
 
 ## 1. Create a binding
 
@@ -78,6 +83,43 @@ The content the Agent writes looks like this; the command adds the completion ti
   ]
 }
 ```
+
+## 4. Search and read My Space
+
+The same token also reads your My Space: every active document and task result
+in it. The Agent uses these commands when you ask it to (`/hub-search` and
+`/hub-read`). They only read; they never change a document.
+
+- `knowledge-hub search <words>` searches active documents. Add `--tasks` to
+  search your task results instead. Each hit prints as an ID, a path (or `-`), a
+  title, and an indented snippet; `No results.` is a normal answer and still
+  exits 0.
+- `knowledge-hub read <path-or-id>` prints one document's current Markdown,
+  by source path or document ID. `knowledge-hub read --task <task-result-id>`
+  prints one task result as JSON.
+- `knowledge-hub status` reads this machine's local configuration only. It
+  contacts nothing and prints no secret; exit 0 means a binding and its token are
+  present.
+
+Examples:
+
+```bash
+knowledge-hub search "login redirect"
+knowledge-hub read architecture/auth.md
+knowledge-hub status
+```
+
+Add `--profile <name>` to any of them for a second binding on this machine.
+
+A search or read that does not go through exits with the same code meanings as
+an export:
+
+| Exit | Meaning | What to do |
+|---|---|---|
+| 0 | Done; a search with no hits says so | Nothing |
+| 2 | Local usage error, or this machine is not configured | Fix the command, or run the `configure` line it prints |
+| 3 | No trustworthy answer (network, timeout, redirect, server error, task search unavailable) | Ask for the same search or read again |
+| 4 | You must act (token refused, path matches several documents, content too large, not found) | Follow the printed next step |
 
 ## When an export does not go through
 

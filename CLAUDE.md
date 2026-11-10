@@ -83,9 +83,10 @@ These boundaries are enforced by `no-restricted-imports` in
   Workspace, Source, SourceEntry and Document data only through its own
   lookup ports (`ports/lookups.ts`). Path normalization that must match Folder
   Sync happens in the infrastructure adapter, which may use the `sources`
-  domain. Its export credential is a non-human principal limited to
-  `task-result:create`; it carries no human's identity and does not decide the
-  Phase 7 Agent-identity model (design §3, §10).
+  domain. Its export credential adds Task Results (`task-result:create`) and,
+  for reads only, stands for its binding's owner inside that one My Space; it
+  does not decide the Phase 7 Agent-identity model (design §3, §10; agent read
+  access design §2, §7).
 - `src/components/**` and `src/app/**` may not import `infrastructure/` or
   `mariadb`. Web adapters call application services through the composition
   root.
@@ -180,20 +181,26 @@ pass.
   (`docs/superpowers/specs/2026-11-03-named-recipient-share-design.md`, deviation 2). Every other entry,
   and every write, requires one; `tests/unit/share-link-single-exception.test.ts`
   enforces it.
-  One write has no caller either, outside the share-link grant:
+  Two task-knowledge entries have no caller either, outside the share-link grant:
   `IngestTaskResultService.ingest`, reached only from
-  `POST /api/task-results/ingest`. Its authority is a Task Knowledge export
-  credential, which names one binding (the owner's My Space) and
-  permits only `task-result:create`; it is not a delegated human identity. Every
-  other task-knowledge entry takes a caller, and caller-less helpers under
+  `POST /api/task-results/ingest`, and `AgentReadAccessService.authorize`,
+  reached only from `src/app/api/agent/**` via `src/server/agent-read.ts`. Their authority is a Task Knowledge
+  export credential, which names one binding (the owner's My Space) and permits
+  `task-result:create`; for reads it also stands for the binding's owner inside
+  that one My Space, through the three `/api/agent/*` routes, and nowhere else.
+  Every other task-knowledge entry takes a caller, and caller-less helpers under
   `application/internal/` are imported only from `application/`
-  (`tests/unit/task-export-single-exception.test.ts`;
-  `docs/superpowers/specs/2026-11-04-task-knowledge-export-design.md` §3).
-  That route and `GET /cli/knowledge-hub.tgz` are exempt from the site password
-  and Google sign-in, each by exact pathname only (`src/lib/auth-paths.ts`,
-  `src/lib/site-password.ts`). The tarball serves no content: only the CLI and
-  its Skill, the same bytes for everyone, because `npm install` sends no session
-  (design, Amendment 2).
+  (`tests/unit/task-export-single-exception.test.ts`,
+  `tests/unit/agent-read-no-workspace-id.test.ts`;
+  `docs/superpowers/specs/2026-11-04-task-knowledge-export-design.md` §3,
+  `docs/superpowers/specs/2026-11-10-agent-read-access-design.md` §3).
+  `POST /api/task-results/ingest`, the three paths `/api/agent/search`,
+  `/api/agent/documents` and `/api/agent/tasks`, and `GET /cli/knowledge-hub.tgz`
+  are exempt from the site password and Google sign-in, each by exact pathname
+  only (`src/lib/auth-paths.ts`, `src/lib/site-password.ts`). The agent paths
+  authenticate by the export credential (agent read access design §4). The
+  tarball serves no content: only the CLI and its Skill, the same bytes for
+  everyone, because `npm install` sends no session (design, Amendment 2).
 - **`org_code` does not decide access.** It answers which company org a user
   belongs to; workspace membership answers what they can open. Cross-org
   membership is legal and same-org membership is not automatic.

@@ -3,13 +3,16 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * Design §3 deviation 2: `IngestTaskResultService.ingest` is the one
- * task-knowledge entry that writes without a `CallerContext`; its authority is
- * the export credential. Three facts keep it the only one:
+ * Agent read access design §3: `IngestTaskResultService.ingest` and
+ * `AgentReadAccessService.authorize` are the only task-knowledge entries
+ * without a `CallerContext`; their authority is the export credential. Three
+ * facts keep them the only ones:
  *
  * - every public entry directly in `application/` takes a `CallerContext`,
- *   except `ingest`;
+ *   except `ingest` and `authorize`;
  * - only the ingest route calls `.ingest(` from the web layer;
+ * - `.authorize(` is called from the web layer only in `src/app/api/agent/`
+ *   and `src/server/agent-read.ts`;
  * - caller-less helpers under `application/internal/` are imported only from
  *   files directly in `application/`, so the web layer cannot reach one
  *   around the caller rule.
@@ -128,9 +131,9 @@ describe("the one caller-less task-knowledge write", () => {
     expect(scanned.flatMap((item) => item.arrowMembers)).toEqual([]);
   });
 
-  it("gives every public entry a CallerContext except IngestTaskResultService.ingest", () => {
+  it("gives every public entry a CallerContext except ingest and authorize", () => {
     const callerLess = scanned.flatMap((item) => item.entries.filter((entry) => !/:\s*CallerContext\b/.test(entry.parameters)).map((entry) => entry.name));
-    expect(callerLess).toEqual(["IngestTaskResultService.ingest"]);
+    expect(callerLess).toEqual(["AgentReadAccessService.authorize", "IngestTaskResultService.ingest"]);
   });
 
   it("is called from the web layer only by the ingest route", () => {
@@ -139,6 +142,29 @@ describe("the one caller-less task-knowledge write", () => {
       .filter((file) => /\.ingest\(/.test(readFileSync(file, "utf8")))
       .map((file) => path.relative(SRC, file).split(path.sep).join("/"));
     expect(callers).toEqual(["app/api/task-results/ingest/route.ts"]);
+  });
+
+  it("is called from the web layer only by the agent read entry points", () => {
+    const callers = ["server", "app", "components"]
+      .flatMap((dir) => filesUnder(path.join(SRC, dir)))
+      .filter((file) => /\.authorize\(/.test(readFileSync(file, "utf8")))
+      .map((file) => path.relative(SRC, file).split(path.sep).join("/"));
+    const outside = callers.filter((file) => !file.startsWith("app/api/agent/") && file !== "server/agent-read.ts");
+    expect(outside).toEqual([]);
+  });
+
+  it("keeps the agent read helpers inside the agent routes and their definitions", () => {
+    const webFiles = ["server", "app", "components"].flatMap((dir) => filesUnder(path.join(SRC, dir)));
+    const callers = (pattern: RegExp) => webFiles
+      .filter((file) => pattern.test(readFileSync(file, "utf8")))
+      .map((file) => path.relative(SRC, file).split(path.sep).join("/"));
+    const outside = (pattern: RegExp, allowed: string[]) =>
+      callers(pattern).filter((file) => !file.startsWith("app/api/agent/") && !allowed.includes(file));
+
+    // agent-read.ts defines agentScope and is the one caller of agentReadServices;
+    // composition.ts defines agentReadServices.
+    expect(outside(/\bagentScope\(/, ["server/agent-read.ts"])).toEqual([]);
+    expect(outside(/\bagentReadServices\(/, ["server/agent-read.ts", "server/composition.ts"])).toEqual([]);
   });
 
   it("keeps internal helpers reachable only from application/", () => {

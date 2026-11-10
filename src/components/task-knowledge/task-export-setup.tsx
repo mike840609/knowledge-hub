@@ -39,7 +39,7 @@ function Commands({ bindingId, token }: Issued) {
   return (
     <div className="space-y-3 rounded-md border border-kh-border p-4" role="status">
       <p className="text-body font-medium">Copy the setup line now. It carries the token and is shown only once.</p>
-      <p className="text-caption text-kh-text-muted">Run it once per machine. Treat this line as a secret: run it only on your own machine, and rotate the token if it was pasted anywhere else.</p>
+      <p className="text-caption text-kh-text-muted">Run it once per machine. Treat this line as a secret: run it only on your own machine, and rotate the token if it was pasted anywhere else. The token can read every document and task result in your My Space, and add task results; it cannot change a document.</p>
       <div data-code-block className="relative">
         <pre className="overflow-x-auto rounded-md bg-kh-bg-subtle p-3 pr-12 text-body-sm">{line}</pre>
         <CopyCodeButton />

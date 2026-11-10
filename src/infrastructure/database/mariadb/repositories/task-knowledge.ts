@@ -14,6 +14,7 @@ import type {
   TaskEntryMatch,
   TaskSourceLookup,
   TaskSourceState,
+  TaskUserLookup,
   TaskWorkspaceLookup,
   TaskWorkspaceState,
 } from "@/modules/task-knowledge/ports/lookups";
@@ -32,6 +33,7 @@ import type {
   TaskScope,
 } from "@/modules/task-knowledge/ports/task-export-store";
 import type { TaskKnowledgeRepositories } from "@/modules/task-knowledge/ports/unit-of-work";
+import type { UserIdentity } from "@/modules/identity/domain/user-identity";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { asDate, asNullableDate, asNumber, type DbRow, type QueryConnection } from "./shared";
 
@@ -443,6 +445,16 @@ class MariaDbTaskDocumentLookup implements TaskDocumentLookup {
   }
 }
 
+class MariaDbTaskUserLookup implements TaskUserLookup {
+  constructor(private readonly connection: QueryConnection) {}
+
+  async getIdentity(userId: string): Promise<UserIdentity | null> {
+    const rows = await this.connection.query<DbRow[]>("SELECT id, emp_id, name, org_code FROM users WHERE id = ?", [userId]);
+    const row = rows[0];
+    return row ? { id: asId(row.id), emp_id: String(row.emp_id), name: String(row.name), org_code: String(row.org_code) } : null;
+  }
+}
+
 export function createTaskKnowledgeRepositories(connection: QueryConnection): TaskKnowledgeRepositories {
   return {
     taskExports: new MariaDbTaskExportStore(connection),
@@ -450,5 +462,6 @@ export function createTaskKnowledgeRepositories(connection: QueryConnection): Ta
     sources: new MariaDbTaskSourceLookup(connection),
     entries: new MariaDbTaskEntryLookup(connection),
     documents: new MariaDbTaskDocumentLookup(connection),
+    users: new MariaDbTaskUserLookup(connection),
   };
 }

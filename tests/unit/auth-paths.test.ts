@@ -112,3 +112,18 @@ describe("the task export ingest exemption", () => {
     for (const path of nonExempt) expect(googleGate({ pathname: path, search: "", hasSession: false })).toEqual({ kind: "unauthorized" });
   });
 });
+
+describe("the agent read exemptions", () => {
+  const exempt = ["/api/agent/search", "/api/agent/documents", "/api/agent/tasks"];
+  const nonExempt = ["/api/agent/searchx", "/api/agent", "/api/agent/", "/api/agent/tasks/x"];
+
+  it("is a Google public path only by its exact pathname", () => {
+    for (const path of exempt) expect(isGooglePublicPath(path)).toBe(true);
+    for (const path of nonExempt) expect(isGooglePublicPath(path)).toBe(false);
+  });
+
+  it("lets the exact paths through the gate without a session, and no neighbour", () => {
+    for (const path of exempt) expect(googleGate({ pathname: path, search: "", hasSession: false })).toEqual({ kind: "allow" });
+    for (const path of nonExempt) expect(googleGate({ pathname: path, search: "", hasSession: false })).toEqual({ kind: "unauthorized" });
+  });
+});

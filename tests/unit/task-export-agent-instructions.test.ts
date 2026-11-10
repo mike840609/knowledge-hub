@@ -122,6 +122,15 @@ describe("the setup docs", () => {
     const block = /<!-- example-content -->\s*```json\n([\s\S]*?)```/.exec(text);
     expect(JSON.parse(block![1])).not.toHaveProperty("completedAt");
   });
+
+  it.each(["docs/task-export-setup.md", "docs/task-export-setup.zh-TW.md"])("%s names the read commands and carries its upgrade note", (doc) => {
+    const text = readFileSync(path.join(ROOT, doc), "utf8");
+    for (const command of ["knowledge-hub search", "knowledge-hub read", "knowledge-hub status"]) expect(text).toContain(command);
+    const note = doc.endsWith("zh-TW.md")
+      ? "從這個版本起，匯出用的 token 也能讀取你的 My Space，包含其中所有使用中的文件與任務結果。先前發出的 token 不需任何動作就會取得這項能力。如果某把 token 可能已經外洩，請到設定頁輪替它。"
+      : "From this release an export token can also read your My Space: every active document and task result in it. Tokens issued earlier gain this without any action. If a token may have been exposed, rotate it on the setup page.";
+    expect(text).toContain(note);
+  });
 });
 
 describe("knowledge-hub install-agent", () => {
@@ -131,31 +140,47 @@ describe("knowledge-hub install-agent", () => {
 
   const install = (...args: string[]) =>
     spawnSync(process.execPath, [CLI, "install-agent", ...args], { env: { NODE_ENV: "test", HOME: home, USERPROFILE: home, PATH: process.env.PATH ?? "" }, encoding: "utf8" });
-  const skillPath = () => path.join(home, ".claude/skills/hub-export/SKILL.md");
-  const adapterPath = () => path.join(home, ".config/opencode/commands/hub-export.md");
+  const names = ["hub-export", "hub-search", "hub-read"];
+  const skillPath = (name = "hub-export") => path.join(home, `.claude/skills/${name}/SKILL.md`);
+  const adapterPath = (name = "hub-export") => path.join(home, `.config/opencode/commands/${name}.md`);
+  const source = (file: string) => readFileSync(path.join(AGENT, file), "utf8");
+
+  it("writes the three Skills and their three adapters", () => {
+    expect(install().status).toBe(0);
+    for (const name of names) {
+      expect(existsSync(skillPath(name))).toBe(true);
+      expect(existsSync(adapterPath(name))).toBe(true);
+    }
+  });
 
   it("installs the Skill and the adapter, filling in the Skill's absolute path", () => {
     expect(install().status).toBe(0);
-    expect(readFileSync(skillPath(), "utf8")).toBe(skill());
-    const installed = readFileSync(adapterPath(), "utf8");
-    expect(installed).toContain(skillPath());
-    expect(installed).not.toContain("{{SKILL_PATH}}");
+    for (const name of names) {
+      expect(readFileSync(skillPath(name), "utf8")).toBe(source(`${name}/SKILL.md`));
+      const installed = readFileSync(adapterPath(name), "utf8");
+      expect(installed).toContain(skillPath(name));
+      expect(installed).not.toContain("{{SKILL_PATH}}");
+    }
   });
 
-  it("installs only the Skill with --claude, and the Skill too with --opencode alone", () => {
+  it("installs only the Skills with --claude, and the Skills too with --opencode alone", () => {
     expect(install("--claude").status).toBe(0);
-    expect(existsSync(skillPath())).toBe(true);
-    expect(existsSync(adapterPath())).toBe(false);
+    for (const name of names) {
+      expect(existsSync(skillPath(name))).toBe(true);
+      expect(existsSync(adapterPath(name))).toBe(false);
+    }
     rmSync(path.join(home, ".claude"), { recursive: true });
     expect(install("--opencode").status).toBe(0);
-    expect(existsSync(skillPath())).toBe(true);
-    expect(existsSync(adapterPath())).toBe(true);
+    for (const name of names) {
+      expect(existsSync(skillPath(name))).toBe(true);
+      expect(existsSync(adapterPath(name))).toBe(true);
+    }
   });
 
   it("is idempotent", () => {
     expect(install().status).toBe(0);
     expect(install().status).toBe(0);
-    expect(readFileSync(skillPath(), "utf8")).toBe(skill());
+    for (const name of names) expect(readFileSync(skillPath(name), "utf8")).toBe(source(`${name}/SKILL.md`));
   });
 
   it("refuses to overwrite a file the user changed, unless --force", () => {

@@ -1,4 +1,4 @@
-import type { TaskDocumentLookup, TaskEntryLookup, TaskSourceLookup, TaskWorkspaceLookup } from "./lookups";
+import type { TaskDocumentLookup, TaskEntryLookup, TaskSourceLookup, TaskUserLookup, TaskWorkspaceLookup } from "./lookups";
 import type { TaskExportStore } from "./task-export-store";
 
 export type TaskKnowledgeRepositories = {
@@ -7,6 +7,7 @@ export type TaskKnowledgeRepositories = {
   sources: TaskSourceLookup;
   entries: TaskEntryLookup;
   documents: TaskDocumentLookup;
+  users: TaskUserLookup;
 };
 
 /** One connection and one READ COMMITTED transaction for every repository. */
