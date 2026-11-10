@@ -33,8 +33,15 @@ export function notificationHref(entry: Entry): string | null {
   return entry.linkAvailable && entry.href ? entry.href : null;
 }
 
-/** What a proposal is about: the link's document, or its folder named as one, so the owner sees how wide the grant is. */
-const proposalTarget = (entry: Entry) => entry.targetKind === "FOLDER" ? `《${entry.documentTitle}》 folder` : `《${entry.documentTitle}》`;
+/** What a proposal is about: the link's document, or its folder or source named as one, so the owner sees how wide the grant is. */
+const proposalTarget = (entry: Entry) =>
+  entry.targetKind === "FOLDER" ? `《${entry.documentTitle}》 folder`
+  : entry.targetKind === "SOURCE" ? `《${entry.documentTitle}》 source`
+  : `《${entry.documentTitle}》`;
+
+/** How wide the grant is, as a noun: the proposed person is told what they are being let into. */
+const targetNoun = (entry: Entry) =>
+  entry.targetKind === "FOLDER" ? "a folder" : entry.targetKind === "SOURCE" ? "a source" : "a document";
 
 function proposalLine(entry: Entry): string {
   const target = proposalTarget(entry);
@@ -43,7 +50,7 @@ function proposalLine(entry: Entry): string {
     if (entry.proposalStatus === "DECLINED") return `You declined adding ${entry.personName ?? "someone"} to ${target}.`;
     return `${entry.authorName ?? "Someone"} wants to add ${entry.personName ?? "someone"} to ${target}`;
   }
-  if (entry.kind === "PROPOSAL_PENDING") return `${entry.authorName ?? "Someone"} mentioned you in ${target} — someone proposed sharing a document with you. Waiting for the owner.`;
+  if (entry.kind === "PROPOSAL_PENDING") return `${entry.authorName ?? "Someone"} mentioned you in ${target} — someone proposed sharing ${targetNoun(entry)} with you. Waiting for the owner.`;
   if (entry.proposalStatus === "APPROVED") return `The owner added ${entry.personName ?? "someone"} to ${target}.`;
   // Declined: the proposer's notice names the person; the proposed person's own does not, it is about them.
   return entry.personName ? `The owner declined adding ${entry.personName} to ${target}.` : `The owner declined sharing ${target} with you.`;
@@ -60,6 +67,10 @@ export function notificationLine(entry: Entry): string {
   return (entry.replyCount ?? 0) > 1 ? `${entry.replyCount} new replies · ${said}` : said;
 }
 
-/** A dead link's entry has no title of its own to show. */
-export const notificationTitle = (entry: Pick<ShareCommentNotificationView, "kind" | "linkAvailable" | "documentTitle">) =>
-  deadEntry(entry) ? (isLinkEntry(entry.kind) && !isSharedEntry(entry.kind) ? "A shared discussion" : "A shared document") : entry.documentTitle;
+/** A dead link's entry has no title of its own to show, only the width of what it used to open. */
+export const notificationTitle = (entry: Pick<ShareCommentNotificationView, "kind" | "linkAvailable" | "documentTitle" | "targetKind">) =>
+  deadEntry(entry)
+    ? (isLinkEntry(entry.kind) && !isSharedEntry(entry.kind)
+      ? "A shared discussion"
+      : entry.targetKind === "SOURCE" ? "A shared source" : entry.targetKind === "FOLDER" ? "A shared folder" : "A shared document")
+    : entry.documentTitle;

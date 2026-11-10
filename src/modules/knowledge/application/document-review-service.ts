@@ -616,7 +616,7 @@ export class DocumentReviewService {
     for (const { link, addedAt, readAt, target } of await this.judgedShares(r, caller.identity.id, unreadOnly)) {
       if (unreadOnly && !target) continue;
       const base = { id: `${SHARED_PREFIX}${link.id}`, workspaceId: "", documentId: "", sourceId: "", threadId: "", commentId: "", excerpt: "", createdAt: addedAt, threadStatus: "OPEN" as const, kind: "SHARED_WITH_YOU" as const };
-      if (!target) { views.push({ ...base, documentTitle: "", authorName: undefined, readAt: addedAt, linkAvailable: false }); continue; }
+      if (!target) { views.push({ ...base, documentTitle: "", authorName: undefined, readAt: addedAt, linkAvailable: false, targetKind: link.target.kind }); continue; }
       views.push({
         ...base, documentTitle: await namedShareTitle(r, caller, target), authorName: (await r.users.findById(link.createdBy))?.name, readAt, linkAvailable: true,
         ...(personal ? { href: hubSharePath(personal.id, link.token) } : {}),
@@ -674,7 +674,7 @@ export class DocumentReviewService {
         createdAt, readAt, threadStatus: "OPEN" as const, kind, proposalId: proposal.id,
       };
       // A dead entry names nothing, its status included (spec, "Inbox"); its kind still says which party's it is.
-      if (!target || !link) { views.push({ ...base, documentTitle: "", authorName: undefined, linkAvailable: false }); continue; }
+      if (!target || !link) { views.push({ ...base, documentTitle: "", authorName: undefined, linkAvailable: false, ...(link ? { targetKind: link.target.kind } : {}) }); continue; }
       views.push({
         ...base, proposalStatus: proposal.status, documentTitle: await namedShareTitle(r, caller, target), targetKind: link.target.kind, linkAvailable: true,
         authorName: kind === "PROPOSAL_DECIDED" ? undefined : await nameOf(proposal.proposedBy),
