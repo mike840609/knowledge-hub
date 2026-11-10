@@ -44,7 +44,7 @@ async function setup() {
   const alicePersonal = await uow.run((r) => r.workspaces.findPersonalByOwnerUserId(alice.id));
   const bobPersonal = await uow.run((r) => r.workspaces.findPersonalByOwnerUserId(bob.id));
   return {
-    caller, folderNodeId, firstId: first.documentId, secondId: second.documentId, alice, bob,
+    caller, sourceId, folderNodeId, firstId: first.documentId, secondId: second.documentId, alice, bob,
     aliceCaller: callerFromIdentity(alice), bobCaller: callerFromIdentity(bob),
     aliceWorkspaceId: alicePersonal!.id, bobWorkspaceId: bobPersonal!.id, hub,
     shares: new DocumentShareService(uow, new RandomShareTokenIssuer()), saved: new SavedShareService(uow),
@@ -52,6 +52,34 @@ async function setup() {
 }
 
 describe("SavedShareService.listNamedForRecipient", () => {
+  it.each(["archived", "expired"] as const)("omits a named Source when %s", async state => {
+    const f = await setup();
+    const link = await f.shares.createForSource(f.caller, { sourceId: f.sourceId, recipients: [f.alice.id] });
+    expect(await f.saved.listNamedForRecipient(f.aliceCaller, f.aliceWorkspaceId)).toEqual([expect.objectContaining({ linkId: link.id })]);
+    if (state === "archived") {
+      await pool.query("UPDATE knowledge_sources SET status='ARCHIVED', archived_at=NOW(6), archived_by=? WHERE id=?", [f.caller.identity.id, f.sourceId]);
+    } else {
+      const conn = await pool.getConnection();
+      try {
+        await conn.query("SET SESSION check_constraint_checks=OFF");
+        await conn.query("UPDATE document_share_links SET expires_at=? WHERE id=?", [new Date(0), link.id]);
+      } finally {
+        await conn.query("SET SESSION check_constraint_checks=ON");
+        conn.release();
+      }
+    }
+    expect(await f.saved.listNamedForRecipient(f.aliceCaller, f.aliceWorkspaceId)).toEqual([]);
+  });
+  it("lists a named Source by its name and drops it when revoked", async () => {
+    const f = await setup();
+    const source = await unitOfWork().run(r => r.sourcePolicy.findById(f.sourceId));
+    const link = await f.shares.createForSource(f.caller, { sourceId: f.sourceId, recipients: [f.alice.id] });
+    expect(await f.saved.listNamedForRecipient(f.aliceCaller, f.aliceWorkspaceId)).toEqual([
+      expect.objectContaining({ linkId: link.id, title: source!.name, href: `/w/${f.aliceWorkspaceId}/shares/${link.path.slice(3)}` }),
+    ]);
+    await f.shares.revoke(f.caller, link.id);
+    expect(await f.saved.listNamedForRecipient(f.aliceCaller, f.aliceWorkspaceId)).toEqual([]);
+  });
   it("lists the named shares that open now, newest first, with title, sender and link", async () => {
     const f = await setup();
     const one = await f.shares.create(f.caller, { documentId: f.firstId, recipients: [f.alice.id] });

@@ -109,11 +109,14 @@ pass.
   re-verify policy regardless of what the UI allowed. A UI selector is not an
   access check.
   A **document share link** is an owner-issued random UUIDv4, expiring,
-  revocable grant on a document **or a My Space folder**. A folder link grants
+  revocable grant on a document, a My Space folder **or a My Space Source**. A folder link grants
   read of the documents currently under that folder, re-derived on every
   request; the URL's document id (`?d=`) is navigation only, and an id not under
   the folder answers as a dead link does
-  (`docs/superpowers/specs/2026-10-29-folder-share-link-design.md`). The grant
+  (`docs/superpowers/specs/2026-10-29-folder-share-link-design.md`). A Source link
+  grants read of the documents currently in that Source, re-derived per request;
+  `?d=` is navigation only, and a Source page resolves links only to documents in
+  that Source (`docs/superpowers/specs/2026-11-05-source-share-link-design.md`). The grant
   has three narrow paths: anonymous current-document read via
   `/s/:token` and `DocumentShareService.readShared`, and review-record access
   via `/api/share-review/*`: query reads require a live token only; writes additionally require a trusted caller;

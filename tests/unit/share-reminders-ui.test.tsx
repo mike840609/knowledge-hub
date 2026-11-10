@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { requestShare } from "@/components/actions/action-menu";
 import { KnowledgeTree } from "@/components/knowledge/knowledge-tree";
 import { ShareLinkDialogHost } from "@/components/knowledge/share-link-dialog";
-import { SHARE_LINKS_CHANGED_EVENT, useSharedFolderIds } from "@/components/knowledge/shared-folders";
+import { SHARE_LINKS_CHANGED_EVENT, useSharedTargets } from "@/components/knowledge/shared-folders";
 import { ToastProvider } from "@/components/ui/toast";
 import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledge-query-service";
 
@@ -58,22 +58,23 @@ describe("the tree's share marker", () => {
   });
 });
 
-describe("useSharedFolderIds", () => {
+describe("useSharedTargets", () => {
   function Probe({ enabled }: { enabled: boolean }) {
-    const ids = useSharedFolderIds("w1", enabled);
-    return createElement("p", { "data-ids": [...ids].join(",") });
+    const { folderIds: ids, sourceIds } = useSharedTargets("w1", enabled);
+    return createElement("p", { "data-ids": [...ids].join(","), "data-sources": [...sourceIds].join(",") });
   }
   const seen = () => container.querySelector("p")!.getAttribute("data-ids");
 
   it("reads once, and again when the dialog says a link was made or revoked", async () => {
     let folders = [{ folderNodeId: "a", name: "A" }];
-    const fetchStub = vi.fn(async () => new Response(JSON.stringify({ folders }), { status: 200 }));
+    const fetchStub = vi.fn(async () => new Response(JSON.stringify({ folders, sources: [{ sourceId: "s1" }] }), { status: 200 }));
     vi.stubGlobal("fetch", fetchStub);
     act(() => root.render(createElement(Probe, { enabled: true })));
     await flush();
     expect(fetchStub).toHaveBeenCalledTimes(1);
     expect(fetchStub.mock.calls[0]).toEqual(["/api/workspaces/w1/shared-folders", { cache: "no-store" }]);
     expect(seen()).toBe("a");
+    expect(container.querySelector("p")!.getAttribute("data-sources")).toBe("s1");
     folders = [];
     act(() => { window.dispatchEvent(new Event(SHARE_LINKS_CHANGED_EVENT)); });
     await flush();
@@ -119,6 +120,62 @@ describe("useSharedFolderIds", () => {
   });
 });
 
+describe("shared target subscribers", () => {
+  function Probe({ workspaceId, enabled = true }: { workspaceId: string; enabled?: boolean }) {
+    const { folderIds, sourceIds } = useSharedTargets(workspaceId, enabled);
+    return createElement("p", { "data-folders": [...folderIds].join(","), "data-sources": [...sourceIds].join(",") }, sourceIds.has("secret") ? createElement("span", { "aria-label": "Shared" }) : null);
+  }
+  const rows = () => [...container.querySelectorAll("p")];
+  it("shares one request and broadcasts authoritative changes to both subscribers", async () => {
+    let sources = [{ sourceId: "a" }];
+    const fetcher = vi.fn(async () => Response.json({ folders: [], sources }));
+    vi.stubGlobal("fetch", fetcher);
+    act(() => root.render(createElement("div", null, createElement(Probe, { workspaceId: "dedupe" }), createElement(Probe, { workspaceId: "dedupe" }))));
+    await flush();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(rows().map(p => p.dataset.sources)).toEqual(["a", "a"]);
+    sources = [{ sourceId: "b" }];
+    act(() => window.dispatchEvent(new Event(SHARE_LINKS_CHANGED_EVENT)));
+    await flush();
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(rows().map(p => p.dataset.sources)).toEqual(["b", "b"]);
+  });
+  it("retains the last answer after failure and does not fetch when disabled", async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ folders: [{ folderNodeId: "f" }], sources: [{ sourceId: "a" }] })).mockResolvedValueOnce(new Response("", { status: 503 }));
+    vi.stubGlobal("fetch", fetcher);
+    act(() => root.render(createElement(Probe, { workspaceId: "failure", enabled: false })));
+    await flush();
+    expect(fetcher).not.toHaveBeenCalled();
+    act(() => root.render(createElement(Probe, { workspaceId: "failure" })));
+    await flush();
+    act(() => window.dispatchEvent(new Event(SHARE_LINKS_CHANGED_EVENT)));
+    await flush();
+    expect(rows()[0].dataset).toMatchObject({ folders: "f", sources: "a" });
+  });
+  it("never paints a late previous workspace response after switching", async () => {
+    let resolveOld!: (value: Response) => void;
+    const fetcher = vi.fn((url: string) => url.includes("old-workspace") ? new Promise<Response>(resolve => { resolveOld = resolve; }) : Promise.resolve(Response.json({ folders: [], sources: [] })));
+    vi.stubGlobal("fetch", fetcher);
+    act(() => root.render(createElement(Probe, { workspaceId: "old-workspace" })));
+    act(() => root.render(createElement(Probe, { workspaceId: "new-workspace" })));
+    await flush();
+    await act(async () => { resolveOld(Response.json({ folders: [], sources: [{ sourceId: "secret" }] })); });
+    expect(rows()[0].dataset.sources).toBe("");
+    expect(container.querySelector('[aria-label="Shared"]')).toBeNull();
+  });
+  it("ignores a pre-change request that finishes after the authoritative refresh", async () => {
+    let old!: (response: Response) => void;
+    const fetcher = vi.fn().mockImplementationOnce(() => new Promise<Response>(resolve => { old = resolve; })).mockResolvedValueOnce(Response.json({ folders: [], sources: [{ sourceId: "new" }] }));
+    vi.stubGlobal("fetch", fetcher);
+    act(() => root.render(createElement(Probe, { workspaceId: "race" })));
+    act(() => window.dispatchEvent(new Event(SHARE_LINKS_CHANGED_EVENT)));
+    await flush();
+    await act(async () => old(Response.json({ folders: [], sources: [{ sourceId: "old" }] })));
+    expect(rows()[0].dataset.sources).toBe("new");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("the share dialog", () => {
   const link = (id: string) => ({ id, label: null, path: `/s/${id}`, createdAt: "2026-10-29T00:00:00Z", expiresAt: "2026-11-29T00:00:00Z", revokedAt: null, active: true, totalViews: 0, lastViewedAt: null });
   function stubLinks(routes: Record<string, unknown>) {
@@ -149,6 +206,19 @@ describe("the share dialog", () => {
     expect(document.body.querySelector('[data-share-link="/s/L1"]')).not.toBeNull();
     expect(dialogText()).toContain("Share folder Handbook");
     expect(dialogText()).not.toContain("Also visible through");
+  });
+
+  it("retargets a document reminder to its shared source", async () => {
+    const fetchStub = stubLinks({
+      "/api/documents/d1/share-links": { links: [], viaSources: [{ sourceId: "s1", name: "Notes" }] },
+      "/api/sources/s1/share-links": { links: [] },
+    });
+    await open({ documentId: "d1" });
+    expect(dialogText()).toContain("Also visible through the shared source Notes");
+    await act(async () => { Array.from(document.body.querySelectorAll("button")).find(b => b.textContent === "Notes")!.click(); });
+    await flush();
+    expect(fetchStub).toHaveBeenCalledWith("/api/sources/s1/share-links", expect.anything());
+    expect(dialogText()).toContain("Share source Notes");
   });
 
   it("shows no such line for a document no shared folder reaches", async () => {

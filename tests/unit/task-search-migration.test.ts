@@ -4,7 +4,7 @@ import { migrations } from "@/infrastructure/database/mariadb/migrations";
 describe("task search projection migration contract", () => {
   it("registers the next unique migration after Task Knowledge Export", () => {
     expect(migrations.filter((item) => item.name === "task-result-search")).toHaveLength(1);
-    expect(migrations.at(-1)).toMatchObject({ version: 34, name: "task-result-search" });
+    expect(migrations.find((item) => item.name === "task-result-search")).toMatchObject({ version: 34, name: "task-result-search" });
     expect(new Set(migrations.map((m) => m.version)).size).toBe(migrations.length);
   });
 
@@ -14,7 +14,7 @@ describe("task search projection migration contract", () => {
   });
 
   it("creates one task-scoped, time-sortable row without duplicated owner authorization", () => {
-    const sql = migrations.at(-1)?.statements.join("\n") ?? "";
+    const sql = migrations.find((m) => m.name === "task-result-search")?.statements.join("\n") ?? "";
     expect(sql).toContain("CREATE TABLE task_result_search");
     expect(sql).toContain("task_result_id UUID NOT NULL");
     expect(sql).toContain("completed_at_epoch_ms BIGINT");

@@ -18,7 +18,7 @@ export type MentionPick = { id: string; name: string };
  * owner writes, adds them to it (`addsRecipient`).
  */
 type Candidate = { id: string; name: string; nameEn: string | null; empId: string; needsApproval?: boolean; addsRecipient?: boolean };
-type TargetKind = "DOCUMENT" | "FOLDER";
+type TargetKind = "DOCUMENT" | "FOLDER" | "SOURCE";
 /** A NAMED link handed over by its owner adds the people it does not name yet. */
 type MentionLink = { id: string; label: string | null; audience?: "LINK" | "NAMED"; targetKind?: TargetKind };
 
@@ -150,7 +150,7 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   const answeredEmpty = searchable && found?.query === query && found.candidates.length === 0;
   const hint = !open ? undefined : noLink ? NO_LINK_HINT : failure ?? (answeredEmpty ? NO_MATCH_HINT : undefined);
   const listed = candidates.length > 0;
-  const addsNote = `Adds them to this link${found?.targetKind === "FOLDER" ? " (whole folder)" : ""}`;
+  const addsNote = `Adds them to this link${found?.targetKind === "FOLDER" ? " (whole folder)" : found?.targetKind === "SOURCE" ? " (whole source)" : ""}`;
 
   // Keep the list mounted from its first appearance at this `@` until the trigger goes away: a
   // debounced query empties it between keystrokes, and remounting would replay the entrance on
@@ -227,7 +227,7 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   const mentions = mentionedIds(body, picks);
   const chosenLink = links?.find(link => link.id === linkId) ?? links?.[0];
   // Whether the people mentioned are already on the link is not known here; the label says what it does to those who are not.
-  const linkName = (link: MentionLink, index: number) => `${link.label || `Link ${index + 1}`}${link.audience === "NAMED" ? ` · ${ADDS_PEOPLE}${link.targetKind === "FOLDER" ? " (whole folder)" : ""}` : ""}`;
+  const linkName = (link: MentionLink, index: number) => `${link.label || `Link ${index + 1}`}${link.audience === "NAMED" ? ` · ${ADDS_PEOPLE}${link.targetKind === "FOLDER" ? " (whole folder)" : link.targetKind === "SOURCE" ? " (whole source)" : ""}` : ""}`;
   // A choice when there are several; a lone NAMED link is no choice, but the owner still sees that it adds people.
   const linkChoice: ReactNode = owner && mentions.length > 0 && links && (links.length > 1 ? <label className="flex items-center justify-end gap-2 text-caption text-kh-text-muted">
     Share via

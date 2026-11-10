@@ -20,9 +20,10 @@ import { linkLookupKey } from "../domain/link-graph";
 import { buildLinkResolver } from "../domain/link-resolution";
 import { MENTION_LIMIT } from "../domain/review-mention";
 import type { ShareProposal } from "../domain/share-proposal";
-import type { OpenFolderLink } from "../ports/document-share-link-repository";
+import { SHARED_TREE_MAX_DEPTH } from "../domain/tree-rules";
+import type { OpenFolderLink, OpenSourceLink } from "../ports/document-share-link-repository";
 import type { ShareTokenIssuer } from "../ports/share-token-issuer";
-import { openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
+import { openShareLinkTarget, reachableChain, reachableChainForSource } from "./internal/folder-link-reach";
 import { linkOrigin } from "./internal/link-origin";
 import { addNamedRecipients, appendRecipientEvent } from "./named-recipients";
 import type { TreeViewNode } from "../ports/tree-repository";
@@ -61,10 +62,10 @@ export type SharedDocumentView = {
   expiresAt: Date | null;
 };
 
-/** One node of a shared folder's subtree: names and icons only, never a body. */
+/** One node of a shared folder's or Source's tree: names and icons only, never a body. */
 export type SharedTreeNode = {
   id: string;
-  /** `null` for the shared folder's direct children. */
+  /** `null` for a direct child of the shared root (a folder or a Source). */
   parentId: string | null;
   kind: "FOLDER" | "DOCUMENT";
   name: string;
@@ -83,24 +84,30 @@ export type SharedFolderDocument = SharedDocumentView & {
 };
 
 /** Where `/s/:token/open` sends the caller: the named document when reachable, else the landing one. */
-export type SharedTargetView = ({ kind: "DOCUMENT"; documentId: string } | { kind: "FOLDER"; documentId: string | null }) & { audience: ShareAudience };
+export type SharedTargetView = ({ kind: "DOCUMENT"; documentId: string } | { kind: "FOLDER" | "SOURCE"; documentId: string | null }) & { audience: ShareAudience };
 
-export type SharedFolderView = {
-  kind: "FOLDER";
-  folderName: string;
+/** One tree view shared by folder and Source links: the shared root's name, its forest, and the document read. */
+export type SharedTreeView = {
+  kind: "FOLDER" | "SOURCE";
+  rootName: string;
   /** Depth-first in the owner's tree order. */
   tree: SharedTreeNode[];
-  /** `null` only when the folder holds no document. */
+  /** `null` only when the tree holds no document. */
   document: SharedFolderDocument | null;
   sharedByName: string;
   expiresAt: Date | null;
 };
 
+/** A folder link's view: the tree view with its root kind fixed. */
+export type SharedFolderView = SharedTreeView & { kind: "FOLDER" };
+/** A Source link's view: the tree view with its root kind fixed. */
+export type SharedSourceView = SharedTreeView & { kind: "SOURCE" };
+
 /**
  * `linkId` is on a NAMED read only, whose reader is a signed-in recipient or the owner: the Hub marks
  * their Inbox entry (`shared:<linkId>`) read with it. A LINK read serves anyone and names no link.
  */
-export type SharedView = (({ kind: "DOCUMENT" } & SharedDocumentView) | SharedFolderView) & { audience: ShareAudience; linkId?: string };
+export type SharedView = ({ kind: "DOCUMENT" } & SharedDocumentView | SharedFolderView | SharedSourceView) & { audience: ShareAudience; linkId?: string };
 
 export const SHARE_LINK_CREATED_EVENT = "DOCUMENT_SHARE_LINK_CREATED";
 export const SHARE_LINK_REVOKED_EVENT = "DOCUMENT_SHARE_LINK_REVOKED";
@@ -133,11 +140,18 @@ export class DocumentShareService {
 
   /** The owner's folders with a link open now, for the tree's marker (folder share spec §8). Owner of that My Space only. */
   async listOpenFolderLinks(caller: CallerContext, workspaceId: string): Promise<OpenFolderLink[]> {
+    return (await this.listOpenShareTargets(caller, workspaceId)).folders;
+  }
+
+  async listOpenShareTargets(caller: CallerContext, workspaceId: string): Promise<{ folders: OpenFolderLink[]; sources: OpenSourceLink[] }> {
     return this.unitOfWork.run(async r => {
       await r.workspaceAccess.requireWorkspaceRead(caller, workspaceId);
       const workspace = await r.workspaces.findById(workspaceId);
       if (!workspace || workspace.workspaceType !== "PERSONAL" || workspace.personalOwnerUserId !== caller.identity.id || workspace.lifecycleState !== "ACTIVE") throw new DocumentNotFoundError();
-      return r.shareLinks.listOpenFolderLinks(workspaceId, caller.identity.id, this.clock());
+      const now = this.clock();
+      const folders = await r.shareLinks.listOpenFolderLinks(workspaceId, caller.identity.id, now);
+      const sources = await r.shareLinks.listOpenSourceLinks(workspaceId, caller.identity.id, now);
+      return { folders, sources };
     });
   }
 
@@ -146,22 +160,30 @@ export class DocumentShareService {
    * now, reached through ACTIVE nodes only (folder share spec §8). Owner of the document's My Space only.
    */
   async foldersSharingDocument(caller: CallerContext, documentId: string): Promise<OpenFolderLink[]> {
+    return (await this.containersSharingDocument(caller, documentId)).folders;
+  }
+
+  async containersSharingDocument(caller: CallerContext, documentId: string): Promise<{ folders: OpenFolderLink[]; sources: OpenSourceLink[] }> {
     return this.unitOfWork.run(async r => {
       const { document, workspace } = await requireOwnedDocument(r, caller, documentId);
-      if (document.status !== "ACTIVE") return [];
+      if (document.status !== "ACTIVE") return { folders: [], sources: [] };
       const node = await r.tree.findByDocumentId(document.id);
-      if (!node) return [];
-      const open = new Map((await r.shareLinks.listOpenFolderLinks(workspace.id, caller.identity.id, this.clock())).map(folder => [folder.folderNodeId, folder]));
-      if (open.size === 0) return [];
+      if (!node) return { folders: [], sources: [] };
+      const now = this.clock();
+      const open = new Map((await r.shareLinks.listOpenFolderLinks(workspace.id, caller.identity.id, now)).map(folder => [folder.folderNodeId, folder]));
+      const sourceLinks = await r.shareLinks.listOpenSourceLinks(workspace.id, caller.identity.id, now);
+      const chain = await r.tree.listChain(node.id);
       const shared: OpenFolderLink[] = [];
       const seen = new Set<string>();
-      for (const [index, ancestor] of (await r.tree.listChain(node.id)).entries()) {
+      for (const [index, ancestor] of chain.entries()) {
         if (ancestor.status !== "ACTIVE" || seen.has(ancestor.id)) break;
         seen.add(ancestor.id);
         const folder = index > 0 ? open.get(ancestor.id) : undefined;
         if (folder) shared.push(folder);
       }
-      return shared;
+      const source = sourceLinks.find(item => item.sourceId === document.sourceId);
+      const reachable = source ? await reachableChainForSource(r, { id: source.sourceId, status: "ACTIVE" }, document) : null;
+      return { folders: shared, sources: source && reachable ? [source] : [] };
     });
   }
 
@@ -182,6 +204,16 @@ export class DocumentShareService {
       const target: ShareLinkTarget = { kind: "FOLDER", folderNodeId: node.id };
       const activeLinkCount = await repositories.shareLinks.countActiveByFolder(node.id, this.clock());
       return this.issueLink(repositories, caller, { target, targetStatus: node.status, source, workspace, activeLinkCount, input });
+    });
+  }
+
+  async createForSource(caller: CallerContext, input: { sourceId: string } & ShareCreateInput): Promise<ShareLinkView> {
+    return this.unitOfWork.run(async (repositories) => {
+      await syncCallerIdentity(repositories.users, caller);
+      const { source, workspace } = await lockOwnedSourceScope(repositories, caller, input.sourceId);
+      const target: ShareLinkTarget = { kind: "SOURCE", sourceId: source.id };
+      const activeLinkCount = await repositories.shareLinks.countActiveBySource(source.id, this.clock());
+      return this.issueLink(repositories, caller, { target, targetStatus: source.status, source, workspace, activeLinkCount, input });
     });
   }
 
@@ -265,6 +297,19 @@ export class DocumentShareService {
       if (!workspace || workspace.personalOwnerUserId !== caller.identity.id) throw new DocumentNotFoundError();
       requireFolder(node);
       return this.toViews(repositories, await repositories.shareLinks.listByFolder(node.id));
+    });
+  }
+
+  /** Mirrors `listForFolder` without a node-type check: a Source has no tree node. */
+  async listForSource(caller: CallerContext, sourceId: string): Promise<ShareLinkView[]> {
+    return this.unitOfWork.run(async (repositories) => {
+      await syncCallerIdentity(repositories.users, caller);
+      const source = await repositories.sourcePolicy.findById(sourceId);
+      if (!source) throw new DocumentNotFoundError();
+      await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
+      const workspace = await repositories.workspaces.findById(source.workspaceId);
+      if (!workspace || workspace.personalOwnerUserId !== caller.identity.id) throw new DocumentNotFoundError();
+      return this.toViews(repositories, await repositories.shareLinks.listBySource(source.id));
     });
   }
 
@@ -442,6 +487,7 @@ export class DocumentShareService {
     const { linkId, view } = await this.unitOfWork.run(async (repositories): Promise<{ linkId: string; view: SharedView }> => {
       const link = await repositories.shareLinks.findByToken(token);
       if (!link) throw new ShareLinkNotFoundError();
+      if (link.target.kind === "SOURCE") return { linkId: link.id, view: await readSharedSource(repositories, link, link.target.sourceId, documentId, now, viewerId) };
       if (link.target.kind === "FOLDER") return { linkId: link.id, view: await readSharedFolder(repositories, link, link.target.folderNodeId, documentId, now, viewerId) };
       if (documentId !== undefined) throw new ShareLinkNotFoundError();
       const document = await repositories.documents.findById(link.target.documentId);
@@ -487,6 +533,19 @@ export class DocumentShareService {
         await requireOpenLink(repositories, link, document, now, viewerId);
         return { kind: "DOCUMENT", documentId: document.id, audience: link.audience };
       }
+      if (link.target.kind === "SOURCE") {
+        const source = await repositories.sourcePolicy.findById(link.target.sourceId);
+        if (!source) throw new ShareLinkNotFoundError();
+        await requireOpenLink(repositories, link, { sourceId: source.id, status: source.status }, now, viewerId);
+        if (documentId !== undefined) {
+          const document = await repositories.documents.findById(documentId);
+          if (document && document.currentRevisionId !== null && await reachableChainForSource(repositories, source, document)) {
+            return { kind: "SOURCE", documentId: document.id, audience: link.audience };
+          }
+        }
+        const tree = sharedForest(await repositories.tree.listBySource(source.id), SHARED_TREE_MAX_DEPTH);
+        return { kind: "SOURCE", documentId: tree.find((node) => node.documentId !== null)?.documentId ?? null, audience: link.audience };
+      }
       const folder = await repositories.tree.findById(link.target.folderNodeId);
       if (!folder || folder.nodeType !== "FOLDER") throw new ShareLinkNotFoundError();
       await requireOpenLink(repositories, link, folder, now, viewerId);
@@ -530,6 +589,10 @@ async function requireExistingUsers(repositories: KnowledgeRepositories, ids: re
 
 /** Whether the link opens now for its owner, judged as a reader's link is: revoked, archived or out of reach does not. */
 async function linkOpensForOwner(repositories: KnowledgeRepositories, link: DocumentShareLink, now: Date, ownerId: string): Promise<boolean> {
+  if (link.target.kind === "SOURCE") {
+    const source = await repositories.sourcePolicy.findById(link.target.sourceId);
+    return !!source && !!await openShareLinkTarget(repositories, link, { sourceId: source.id, status: source.status }, now, ownerId);
+  }
   const target = link.target.kind === "DOCUMENT"
     ? await repositories.documents.findById(link.target.documentId)
     : await repositories.tree.findById(link.target.folderNodeId);
@@ -583,7 +646,7 @@ async function readSharedFolder(
   const sourceNodes = await repositories.tree.listSubtree(folder.sourceId, folder.id);
   const tree = sharedSubtree(sourceNodes, folder.id);
   const creator = await requireCreator(repositories, link);
-  const view = { kind: "FOLDER" as const, folderName: folder.name ?? "", tree, sharedByName: creator.name, expiresAt: link.expiresAt, audience: link.audience };
+  const view = { kind: "FOLDER" as const, rootName: folder.name ?? "", tree, sharedByName: creator.name, expiresAt: link.expiresAt, audience: link.audience };
   // An unreachable requested id is refused, never replaced by the landing document.
   const targetId = documentId ?? tree.find((node) => node.documentId !== null)?.documentId ?? null;
   if (targetId === null) return { ...view, document: null };
@@ -609,6 +672,58 @@ async function readSharedFolder(
       updatedAt: revision.createdAt,
       expiresAt: link.expiresAt,
       path: between.reverse().map((ancestor) => ({ id: ancestor.id, name: names.get(ancestor.id) ?? "" })),
+      links: await reachableLinks(repositories, workspaceId, document, revision.markdown, reachable),
+    },
+  };
+}
+
+/**
+ * A Source link's view (source share spec §3), called only from readShared. The tree is the Source's
+ * ACTIVE forest as it is now, capped at the depth the chain check can prove; the document shown is
+ * re-proven reachable through the stored chain (`reachableChainForSource`), never through the tree
+ * built here. Wikilinks resolve exactly as the owner's reader resolves them, then keep only targets
+ * whose document is in the forest's document set.
+ */
+async function readSharedSource(
+  repositories: KnowledgeRepositories,
+  link: DocumentShareLink,
+  sourceId: string,
+  documentId: string | undefined,
+  now: Date,
+  viewerId: string | null,
+): Promise<SharedSourceView & { audience: ShareAudience }> {
+  const source = await repositories.sourcePolicy.findById(sourceId);
+  if (!source) throw new ShareLinkNotFoundError();
+  const { workspaceId } = await requireOpenLink(repositories, link, { sourceId: source.id, status: source.status }, now, viewerId);
+  const sourceNodes = await repositories.tree.listBySource(source.id);
+  const tree = sharedForest(sourceNodes, SHARED_TREE_MAX_DEPTH);
+  const creator = await requireCreator(repositories, link);
+  const view = { kind: "SOURCE" as const, rootName: source.name, tree, sharedByName: creator.name, expiresAt: link.expiresAt, audience: link.audience };
+  // An unreachable requested id is refused, never replaced by the landing document.
+  const targetId = documentId ?? tree.find((node) => node.documentId !== null)?.documentId ?? null;
+  if (targetId === null) return { ...view, document: null };
+
+  const document = await repositories.documents.findById(targetId);
+  const chain = document && await reachableChainForSource(repositories, source, document);
+  if (!document || !chain) throw new ShareLinkNotFoundError();
+  const revision = await repositories.revisions.findCurrent(document.id);
+  if (!revision) throw new IntegrityViolationError("Document current revision is missing.");
+
+  const names = new Map(sourceNodes.map((candidate) => [candidate.id, candidate.name ?? ""]));
+  const reachable = new Set(tree.flatMap((candidate) => (candidate.documentId === null ? [] : [candidate.documentId])));
+  return {
+    ...view,
+    document: {
+      documentId: document.id,
+      revisionId: revision.id,
+      title: revision.title,
+      markdown: revision.markdown,
+      pageIcon: document.pageIcon ?? null,
+      sharedByName: creator.name,
+      updatedAt: revision.createdAt,
+      expiresAt: link.expiresAt,
+      // The Source itself is not in `path` (the page adds its name); ancestors run from the root down.
+      path: chain.slice(1).reverse().map((ancestor) => ({ id: ancestor.id, name: names.get(ancestor.id) ?? "" })),
       links: await reachableLinks(repositories, workspaceId, document, revision.markdown, reachable),
     },
   };
@@ -643,6 +758,48 @@ function sharedSubtree(nodes: readonly TreeViewNode[], folderId: string): Shared
       pageIcon: node.nodeType === "DOCUMENT" ? node.pageIcon ?? null : null,
     });
     pending.push(...[...(children.get(node.id) ?? [])].reverse());
+  }
+  return ordered;
+}
+
+/**
+ * A Source's ACTIVE nodes, depth-first, re-rooted at `parentId === null` (a Source has no root node).
+ * Siblings keep `listBySource`'s order (position, then id); an archived node and everything under it
+ * are absent, and nothing deeper than `maxDepth` (a top-level node is depth 0) is listed — the cap
+ * `listSubtree` uses, so every shown document is one the reachability check can still prove.
+ */
+export function sharedForest(nodes: readonly TreeViewNode[], maxDepth: number): SharedTreeNode[] {
+  const children = new Map<string | null, TreeViewNode[]>();
+  for (const node of nodes) {
+    if (!isShownInSharedTree(node)) continue;
+    const siblings = children.get(node.parentId);
+    if (siblings) siblings.push(node);
+    else children.set(node.parentId, [node]);
+  }
+  // Siblings come out in the owner's tree order (position, then id), whatever order the rows arrived in.
+  const bySiblingOrder = (a: TreeViewNode, b: TreeViewNode) => a.position - b.position || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  for (const siblings of children.values()) siblings.sort(bySiblingOrder);
+
+  const ordered: SharedTreeNode[] = [];
+  const pending: { node: TreeViewNode; depth: number }[] = [];
+  const seen = new Set<string>();
+  const roots = children.get(null) ?? [];
+  for (let index = roots.length - 1; index >= 0; index -= 1) pending.push({ node: roots[index], depth: 0 });
+  while (pending.length > 0) {
+    const { node, depth } = pending.pop()!;
+    if (seen.has(node.id)) continue;
+    seen.add(node.id);
+    ordered.push({
+      id: node.id,
+      parentId: node.parentId,
+      kind: node.nodeType,
+      name: (node.nodeType === "FOLDER" ? node.name : node.title) ?? "",
+      documentId: node.nodeType === "DOCUMENT" ? node.documentId : null,
+      pageIcon: node.nodeType === "DOCUMENT" ? node.pageIcon ?? null : null,
+    });
+    if (depth >= maxDepth) continue;
+    const kids = children.get(node.id) ?? [];
+    for (let index = kids.length - 1; index >= 0; index -= 1) pending.push({ node: kids[index], depth: depth + 1 });
   }
   return ordered;
 }
@@ -732,7 +889,9 @@ async function lockOwnedFolderScope(repositories: KnowledgeRepositories, caller:
 function lockLinkTargetScope(repositories: KnowledgeRepositories, caller: CallerContext, target: ShareLinkTarget) {
   return target.kind === "DOCUMENT"
     ? lockOwnedScope(repositories, caller, target.documentId)
-    : lockOwnedFolderScope(repositories, caller, target.folderNodeId);
+    : target.kind === "FOLDER"
+      ? lockOwnedFolderScope(repositories, caller, target.folderNodeId)
+      : lockOwnedSourceScope(repositories, caller, target.sourceId);
 }
 
 function requireFolder(node: { nodeType: "FOLDER" | "DOCUMENT" }): void {
@@ -740,7 +899,7 @@ function requireFolder(node: { nodeType: "FOLDER" | "DOCUMENT" }): void {
 }
 
 function targetPayload(target: ShareLinkTarget) {
-  return target.kind === "DOCUMENT" ? { documentId: target.documentId } : { folderNodeId: target.folderNodeId };
+  return target.kind === "DOCUMENT" ? { documentId: target.documentId } : target.kind === "FOLDER" ? { folderNodeId: target.folderNodeId } : { sourceId: target.sourceId };
 }
 
 function toView(link: DocumentShareLink, now: Date, totals: { totalViews: number; lastViewedAt: Date | null } | undefined, recipientCount: number | null): ShareLinkView {

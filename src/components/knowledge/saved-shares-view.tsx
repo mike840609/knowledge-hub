@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bookmark, Folder, Search } from "lucide-react";
+import { Bookmark, Database, Folder, Search } from "lucide-react";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SelectMenu } from "@/components/ui/select-menu";
@@ -37,7 +37,7 @@ export function SavedSharesView({ workspaceId,model,filterError,discussionsUnrea
     {/* Named shares sit above the whole list, so a search, a status or a later page shows only saved shares. */}
     {sharedWithYou.length>0&&!model.query.q&&model.query.status==="all"&&model.query.page===1&&<section aria-label="Shared with you" className="mt-4">
       <h2 className="text-body font-medium text-kh-text">Shared with you</h2>
-      <p className="text-caption text-kh-text-muted">Documents and folders shared with you by name. Nothing to save: they stay here while the link is open.</p>
+      <p className="text-caption text-kh-text-muted">Documents, folders and sources shared with you by name. Nothing to save: they stay here while the link is open.</p>
       <ul onKeyDown={navigateListRows} className="mt-2 space-y-2">{sharedWithYou.map(item=><li key={item.linkId} className="rounded-md border border-kh-border bg-kh-bg p-3 hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover">
         <Link prefetch={false} data-list-row className="kh-focus-ring block truncate rounded-md text-body font-medium text-kh-text hover:text-kh-link" href={item.href}>{item.title}</Link>
         <p className="truncate text-caption text-kh-text-muted">{item.sharedByName&&<>Shared by {item.sharedByName} · </>}<Timestamp value={item.addedAt}/></p>
@@ -55,7 +55,7 @@ export function SavedSharesView({ workspaceId,model,filterError,discussionsUnrea
     {items.length>0&&<div aria-hidden="true" className="mt-4 hidden grid-cols-[minmax(0,1fr)_7rem_7rem_5rem] gap-3 border-b border-kh-border px-3 py-2 text-caption text-kh-text-muted md:grid"><span>Title / shared by</span><span>Saved</span><span>Expires</span><span/></div>}
     <ul aria-label="Saved shares" onKeyDown={navigateListRows} className="mt-4 space-y-2 md:mt-0 md:space-y-0">{items.map(item=><li key={item.id} className="group rounded-md border border-kh-border bg-kh-bg p-3 hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover md:rounded-none md:border-x-0 md:border-t-0 md:py-2">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 md:grid-cols-[minmax(0,1fr)_7rem_7rem_5rem]">
-        <div className="min-w-0">{(()=>{const name=<>{item.kind==="FOLDER"&&<><Folder size={15} aria-hidden="true" className="shrink-0 text-kh-text-muted"/><span className="sr-only">Folder </span></>}<span className="min-w-0 truncate">{item.title}</span></>;return item.path?<Link prefetch={false} data-list-row className="kh-focus-ring flex min-w-0 items-center gap-1.5 rounded-md text-body font-medium text-kh-text hover:text-kh-link" href={item.path}>{name}</Link>:<span className="flex min-w-0 items-center gap-1.5 text-body font-medium text-kh-text">{name}</span>;})()}
+        <div className="min-w-0">{(()=>{const name=<>{item.kind==="SOURCE"&&<><Database size={15} aria-hidden="true" className="shrink-0 text-kh-text-muted"/><span className="sr-only">Source </span></>}{item.kind==="FOLDER"&&<><Folder size={15} aria-hidden="true" className="shrink-0 text-kh-text-muted"/><span className="sr-only">Folder </span></>}<span className="min-w-0 truncate">{item.title}</span></>;return item.path?<Link prefetch={false} data-list-row className="kh-focus-ring flex min-w-0 items-center gap-1.5 rounded-md text-body font-medium text-kh-text hover:text-kh-link" href={item.path}>{name}</Link>:<span className="flex min-w-0 items-center gap-1.5 text-body font-medium text-kh-text">{name}</span>;})()}
           <p className="truncate text-caption text-kh-text-muted">Shared by {item.sharedByName}</p>
           <p className="text-caption text-kh-text-muted">{item.status==="available"?<>Available{item.updatedAt&&<> · Updated <Timestamp value={item.updatedAt}/></>}</>:item.status==="expired"?"Expired":"Link unavailable"}</p>
         </div>

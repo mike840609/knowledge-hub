@@ -2,60 +2,86 @@
 
 import { useEffect, useState } from "react";
 
-/** Something about the owner's share links changed (a link made or revoked), so what the tree marks may have. */
+/** Something about the owner's share links changed, so the markers may have changed. */
 export const SHARE_LINKS_CHANGED_EVENT = "kh:share-links-changed";
 
 export function announceShareLinksChanged(): void {
   window.dispatchEvent(new Event(SHARE_LINKS_CHANGED_EVENT));
 }
 
-const NONE: ReadonlySet<string> = new Set();
+type Targets = { folderIds: ReadonlySet<string>; sourceIds: ReadonlySet<string> };
+const NONE: Targets = { folderIds: new Set(), sourceIds: new Set() };
+type Entry = {
+  value: Targets;
+  listeners: Set<(value: Targets) => void>;
+  inFlight: Promise<void> | null;
+  generation: number;
+  lastLoad: number;
+  cleanup: () => void;
+};
+const entries = new Map<string, Entry>();
 
-/**
- * The ids of the folders with a link open now, for the tree's marker (folder share spec §8): read once
- * when the workspace loads and again whenever the share dialog says a link was made or revoked. A
- * reminder, not a decision, so a failed read leaves the last answer rather than raising anything.
- */
-export function useSharedFolderIds(workspaceId: string, enabled: boolean): ReadonlySet<string> {
-  const [ids, setIds] = useState<ReadonlySet<string>>(NONE);
-  useEffect(() => {
-    if (!enabled) {
-      setIds(NONE);
-      return;
-    }
-    let live = true;
-    let latest = 0;
-    let lastLoad = 0;
-    const load = async () => {
-      lastLoad = Date.now();
-      const ticket = ++latest;
-      try {
-        const response = await fetch(`/api/workspaces/${workspaceId}/shared-folders`, { cache: "no-store" });
-        if (!response.ok) return;
-        const body = (await response.json()) as { folders?: { folderNodeId: string }[] };
-        if (live && ticket === latest && Array.isArray(body.folders)) setIds(new Set(body.folders.map((folder) => folder.folderNodeId)));
-      } catch {
-        // Keep the last answer.
-      }
+function subscribe(workspaceId: string, listener: (value: Targets) => void): () => void {
+  let entry = entries.get(workspaceId);
+  if (!entry) {
+    const current: Entry = { value: NONE, listeners: new Set(), inFlight: null, generation: 0, lastLoad: 0, cleanup: () => {} };
+    entry = current;
+    entries.set(workspaceId, current);
+    const load = (force = false) => {
+      if (!force && current.inFlight) return;
+      const generation = ++current.generation;
+      current.lastLoad = Date.now();
+      const request = (async () => {
+        try {
+          const response = await fetch(`/api/workspaces/${workspaceId}/shared-folders`, { cache: "no-store" });
+          if (!response.ok) return;
+          const body = (await response.json()) as { folders?: { folderNodeId: string }[]; sources?: { sourceId: string }[] };
+          if (entries.get(workspaceId) !== current || generation !== current.generation || !Array.isArray(body.folders)) return;
+          current.value = { folderIds: new Set(body.folders.map(folder => folder.folderNodeId)), sourceIds: new Set((body.sources ?? []).map(source => source.sourceId)) };
+          current.listeners.forEach(notify => notify(current.value));
+        } catch {
+          // A reminder is not a gate: retain the last successful answer.
+        } finally {
+          if (generation === current.generation) current.inFlight = null;
+        }
+      })();
+      current.inFlight = request;
     };
-    // A link can expire while the tab stays open; come back to the answer when the owner returns.
-    // Both signals are kept: visibilitychange covers a tab switch, focus covers returning from
-    // another application while the tab stayed visible. A return can produce both, so a read
-    // inside the cooldown is skipped rather than repeated.
+    const changed = () => load(true);
     const refresh = () => {
-      if (document.visibilityState !== "visible" || Date.now() - lastLoad < 1000) return;
-      void load();
+      if (document.visibilityState === "visible" && Date.now() - current.lastLoad >= 1000) load();
     };
-    void load();
-    window.addEventListener(SHARE_LINKS_CHANGED_EVENT, load);
+    window.addEventListener(SHARE_LINKS_CHANGED_EVENT, changed);
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
-    return () => {
-      live = false;
-      window.removeEventListener(SHARE_LINKS_CHANGED_EVENT, load);
+    current.cleanup = () => {
+      window.removeEventListener(SHARE_LINKS_CHANGED_EVENT, changed);
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
+    load();
+  }
+  entry.listeners.add(listener);
+  listener(entry.value);
+  const subscribed = entry;
+  return () => {
+    subscribed.listeners.delete(listener);
+    if (subscribed.listeners.size === 0) {
+      subscribed.cleanup();
+      if (entries.get(workspaceId) === subscribed) entries.delete(workspaceId);
+    }
+  };
+}
+
+/** Shared, workspace-scoped reminders; failed reads retain the last successful answer. */
+export function useSharedTargets(workspaceId: string, enabled: boolean): Targets {
+  const [snapshot, setSnapshot] = useState<{ workspaceId: string; value: Targets }>({ workspaceId, value: NONE });
+  useEffect(() => {
+    if (!enabled) {
+      setSnapshot({ workspaceId, value: NONE });
+      return;
+    }
+    return subscribe(workspaceId, value => setSnapshot({ workspaceId, value }));
   }, [workspaceId, enabled]);
-  return ids;
+  return enabled && snapshot.workspaceId === workspaceId ? snapshot.value : NONE;
 }

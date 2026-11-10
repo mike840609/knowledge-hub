@@ -25,7 +25,7 @@ export function InboxSharedWithYou({
   if (shared.length === 0) return null;
   return <section aria-label="Shared with you" className="space-y-2 border-b border-kh-border pb-4">
     <h2 className="text-body font-medium text-kh-text">Shared with you</h2>
-    <p className="text-body-sm text-kh-text-muted">Documents and folders shared with you by name. They also live in Shares.</p>
+    <p className="text-body-sm text-kh-text-muted">Documents, folders and sources shared with you by name. They also live in Shares.</p>
     <ul className="divide-y divide-kh-border">
       {shared.map(entry => {
         const href = notificationHref(entry);

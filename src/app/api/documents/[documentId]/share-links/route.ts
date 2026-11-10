@@ -20,6 +20,7 @@ export async function GET(_request: Request, context: ShareLinksRouteContext) {
     const { documentId } = await context.params;
     // Listed first: it refuses anyone but the owner, so `viaFolders` is never computed for a stranger.
     const links = await services.shares.list(caller, documentId);
-    return { links, viaFolders: await services.shares.foldersSharingDocument(caller, documentId), reviewReadAvailable: services.reviewReadAvailable, reviewWritesEnabled: reviewWritesEnabled() };
+    const { folders: viaFolders, sources: viaSources } = await services.shares.containersSharingDocument(caller, documentId);
+    return { links, viaFolders, viaSources, reviewReadAvailable: services.reviewReadAvailable, reviewWritesEnabled: reviewWritesEnabled() };
   });
 }

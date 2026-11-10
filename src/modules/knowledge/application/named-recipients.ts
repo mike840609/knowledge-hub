@@ -4,7 +4,7 @@ import { uuidv7 } from "@/shared/ids/uuidv7";
 import { MAX_NAMED_SHARE_RECIPIENTS, type DocumentShareLink } from "../domain/document-share-link";
 import type { KnowledgeRepositories } from "../ports/unit-of-work";
 import { followForMention } from "./follow-for-mention";
-import { openShareLinkTarget, reachableChain } from "./internal/folder-link-reach";
+import { openShareLinkTarget, reachableChain, reachableChainForSource } from "./internal/folder-link-reach";
 
 export const SHARE_RECIPIENT_ADDED_EVENT = "DOCUMENT_SHARE_RECIPIENT_ADDED";
 
@@ -98,6 +98,10 @@ async function linkOpensOnDocument(
 ): Promise<boolean> {
   const document = await documentFor(documentId);
   if (!document) return false;
+  if (link.target.kind === "SOURCE") {
+    const source = await r.sourcePolicy.findById(link.target.sourceId);
+    return !!source && !!await reachableChainForSource(r, source, document) && !!await openShareLinkTarget(r, link, { sourceId: source.id, status: source.status }, now, userId);
+  }
   if (link.target.kind === "DOCUMENT") return link.target.documentId === documentId && !!await openShareLinkTarget(r, link, document, now, userId);
   const folder = await r.tree.findById(link.target.folderNodeId);
   return !!folder && !!await reachableChain(r, folder, document) && !!await openShareLinkTarget(r, link, folder, now, userId);

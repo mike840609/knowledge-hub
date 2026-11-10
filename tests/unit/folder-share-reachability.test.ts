@@ -4,7 +4,7 @@ import { isReachableThroughFolder, type TreeChainNode } from "@/modules/knowledg
 const FOLDER = "folder-1";
 
 function node(id: string, parentId: string | null, nodeType: "FOLDER" | "DOCUMENT" = "FOLDER", status: "ACTIVE" | "ARCHIVED" = "ACTIVE"): TreeChainNode {
-  return { id, parentId, nodeType, status };
+  return { id, sourceId: "source", parentId, nodeType, status };
 }
 
 describe("isReachableThroughFolder", () => {

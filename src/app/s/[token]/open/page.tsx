@@ -29,7 +29,7 @@ export default async function OpenSharedDocument({ params, searchParams }: OpenS
   target ??= await sharedOpenTarget(token, requested, caller.identity.id);
   if (!target) notFound();
   if (target.audience === "NAMED") {
-    redirect(`${hubSharePath(personalWorkspace.id, token)}${target.kind === "FOLDER" && target.documentId ? `?d=${target.documentId}` : ""}`);
+    redirect(`${hubSharePath(personalWorkspace.id, token)}${target.kind !== "DOCUMENT" && target.documentId ? `?d=${target.documentId}` : ""}`);
   }
   // An empty folder has nothing to open in the Hub; the reader lands in their own home.
   redirect(target.documentId ? await sharePlatformDestination(caller, target.documentId, personalWorkspace.id, services.queries) : `/w/${personalWorkspace.id}/home`);

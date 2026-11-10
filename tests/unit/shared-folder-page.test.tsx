@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SharedDocumentView, SharedFolderView } from "@/modules/knowledge/application/document-share-service";
+import type { SharedDocumentView, SharedFolderView, SharedSourceView, SharedTreeNode } from "@/modules/knowledge/application/document-share-service";
 import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
 
 /** The page a folder link opens (folder share spec §4, §5). */
@@ -26,19 +26,28 @@ const ids = {
   review: "0192f3a4-0000-7000-8000-000000000003",
   faq: "0192f3a4-0000-7000-8000-000000000004",
 };
+const tree: SharedTreeNode[] = [
+  { id: "n-welcome", parentId: null, kind: "DOCUMENT", name: "Welcome", documentId: ids.welcome, pageIcon: null },
+  { id: "n-eng", parentId: null, kind: "FOLDER", name: "Engineering", documentId: null, pageIcon: null },
+  { id: "n-setup", parentId: "n-eng", kind: "DOCUMENT", name: "Dev setup", documentId: ids.setup, pageIcon: "🛠" },
+  { id: "n-review", parentId: "n-eng", kind: "DOCUMENT", name: "Code review", documentId: ids.review, pageIcon: null },
+  { id: "n-hr", parentId: null, kind: "FOLDER", name: "HR", documentId: null, pageIcon: null },
+  { id: "n-faq", parentId: null, kind: "DOCUMENT", name: "FAQ", documentId: ids.faq, pageIcon: null },
+];
 const folderView = (document: SharedFolderView["document"]): SharedFolderView => ({
   kind: "FOLDER",
-  folderName: "Onboarding",
+  rootName: "Onboarding",
   sharedByName: "Mike",
   expiresAt: new Date("2026-11-27T00:00:00Z"),
-  tree: [
-    { id: "n-welcome", parentId: null, kind: "DOCUMENT", name: "Welcome", documentId: ids.welcome, pageIcon: null },
-    { id: "n-eng", parentId: null, kind: "FOLDER", name: "Engineering", documentId: null, pageIcon: null },
-    { id: "n-setup", parentId: "n-eng", kind: "DOCUMENT", name: "Dev setup", documentId: ids.setup, pageIcon: "🛠" },
-    { id: "n-review", parentId: "n-eng", kind: "DOCUMENT", name: "Code review", documentId: ids.review, pageIcon: null },
-    { id: "n-hr", parentId: null, kind: "FOLDER", name: "HR", documentId: null, pageIcon: null },
-    { id: "n-faq", parentId: null, kind: "DOCUMENT", name: "FAQ", documentId: ids.faq, pageIcon: null },
-  ],
+  tree,
+  document,
+});
+const sourceView = (document: SharedSourceView["document"]): SharedSourceView => ({
+  kind: "SOURCE",
+  rootName: "Team Wiki",
+  sharedByName: "Mike",
+  expiresAt: new Date("2026-11-27T00:00:00Z"),
+  tree,
   document,
 });
 const setup = {
@@ -56,7 +65,7 @@ const setup = {
 
 const render = async (d?: string | string[], token = "tok") => renderToStaticMarkup(await SharedPage({ params: Promise.resolve({ token }), searchParams: Promise.resolve(d === undefined ? {} : { d }) }));
 /** `/s/:token` reads only a LINK: a NAMED link never opens there without a viewer. */
-const shared = (view: SharedFolderView | ({ kind: "DOCUMENT" } & SharedDocumentView) | null) => fixture.getShared.mockResolvedValue(view && { ...view, audience: "LINK" });
+const shared = (view: SharedFolderView | SharedSourceView | ({ kind: "DOCUMENT" } & SharedDocumentView) | null) => fixture.getShared.mockResolvedValue(view && { ...view, audience: "LINK" });
 
 beforeEach(() => { fixture.getShared.mockReset(); vi.stubEnv("KM_PUBLIC_ORIGIN", ""); });
 afterEach(() => vi.unstubAllEnvs());
@@ -141,6 +150,9 @@ describe("a folder link's page", () => {
     expect(html).not.toContain("<article");
     expect(html).not.toContain("data-review-panel");
     expect(html).toContain("Onboarding");
+    // The folder keeps its Folder icon in the tree header, never the Source's Database.
+    expect(html).toContain("lucide-folder shrink-0");
+    expect(html).not.toContain("lucide-database");
   });
 
   it.each(["x", "", ids.setup.toUpperCase(), [ids.setup, ids.faq]])("is not available for a malformed `?d=` %j, and reads nothing", async (d) => {
@@ -151,6 +163,33 @@ describe("a folder link's page", () => {
   it("is not available when the service refuses the document", async () => {
     shared(null);
     await expect(render(ids.setup)).rejects.toThrow("notFound");
+  });
+});
+
+describe("a Source link's page", () => {
+  it("reads the document named by `?d=`, as navigation the service judges", async () => {
+    shared(sourceView(setup));
+    await render(ids.setup);
+    expect(fixture.getShared).toHaveBeenCalledWith("tok", ids.setup);
+  });
+
+  it("renders the Source name in the breadcrumb and tree header, with a Database icon, not a Folder", async () => {
+    shared(sourceView(setup));
+    const html = await render(ids.setup);
+    const crumbs = html.match(/<nav aria-label="Breadcrumb"[^>]*>(.*?)<\/nav>/)![1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    expect(crumbs).toBe("Team Wiki / Engineering / Dev setup");
+    expect(html).toContain('aria-label="Team Wiki"');
+    expect(html).toContain("lucide-database");
+    expect(html).not.toContain("lucide-folder shrink-0");
+  });
+
+  it("says an empty Source has no documents yet, and draws no article", async () => {
+    shared({ ...sourceView(null), tree: [] });
+    const html = await render();
+    expect(html).toContain("This source has no documents yet.");
+    expect(html).not.toContain("This folder has no documents yet.");
+    expect(html).not.toContain("<article");
+    expect(html).toContain("Team Wiki");
   });
 });
 

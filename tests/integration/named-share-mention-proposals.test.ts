@@ -63,7 +63,7 @@ async function setup() {
   const ownerReply = (threadId: string, mentions: string[]) => review().replyForOwner(ownerCaller, {
     documentId: doc.documentId, threadId, body: "Owner answers", idempotencyKey: randomUUID(), mentions, mentionLinkId: link.id,
   });
-  return { tag, owner, ownerCaller, workspaceId: workspace.id, doc, alice, aliceCaller, bob, carol, link, token, start, reply, ownerStart, ownerReply };
+  return { tag, owner, ownerCaller, sourceId, workspaceId: workspace.id, doc, alice, aliceCaller, bob, carol, link, token, start, reply, ownerStart, ownerReply };
 }
 type Fixture = Awaited<ReturnType<typeof setup>>;
 
@@ -103,6 +103,19 @@ async function expectShutOut(f: Fixture, user: UserIdentity) {
 }
 
 describe("a recipient mentioning someone the NAMED link does not name", () => {
+  it("proposes an outsider on a Source link and opens it after approval", async () => {
+    const f = await setup();
+    const link = await shares().createForSource(f.ownerCaller, { sourceId: f.sourceId, recipients: [f.alice.id] });
+    const token = link.path.slice(3);
+    const block = projectReviewBlocks(MARKDOWN)[0];
+    const anchor: ReviewAnchor = { schemaVersion: 1, blockPath: block.path, blockKind: block.kind, startUtf16: 2, endUtf16: 16, exact: "secret passage", prefix: "A ", suffix: " here." };
+    await review().createForLink(f.aliceCaller, { token, documentId: f.doc.documentId, expectedRevisionId: f.doc.revisionId, anchor, body: "Question", idempotencyKey: randomUUID(), mentions: [f.carol.id] });
+    const [proposal] = await shares().listProposals(f.ownerCaller, link.id);
+    expect((await proposals(link.id)).map(p => p.status)).toEqual(["PENDING"]);
+    expect((await review().listUnreadForOwner(f.ownerCaller)).notifications).toContainEqual(expect.objectContaining({ kind: "PROPOSAL_REQUEST", targetKind: "SOURCE", linkAvailable: true }));
+    await shares().approveProposal(f.ownerCaller, link.id, proposal.id);
+    await expect(shares().readShared(token, { viewerId: f.carol.id, recordView: false })).resolves.toMatchObject({ kind: "SOURCE" });
+  });
   it("stores the comment, the mention and one PENDING proposal, and grants nothing", async () => {
     const f = await setup();
     const thread = await f.start(f.aliceCaller, [f.carol.id]);

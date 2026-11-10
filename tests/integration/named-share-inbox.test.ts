@@ -47,7 +47,7 @@ async function setup() {
   const shares = new DocumentShareService(uow, new RandomShareTokenIssuer());
   const review = new DocumentReviewService(uow);
   const alicePersonal = await uow.run((r) => r.workspaces.findPersonalByOwnerUserId(alice.id));
-  return { owner, caller, folderNodeId, documentId: doc.documentId, alice, bob, aliceCaller: callerFromIdentity(alice), bobCaller: callerFromIdentity(bob), aliceWorkspaceId: alicePersonal!.id, shares, review, hub };
+  return { owner, caller, sourceId, folderNodeId, documentId: doc.documentId, alice, bob, aliceCaller: callerFromIdentity(alice), bobCaller: callerFromIdentity(bob), aliceWorkspaceId: alicePersonal!.id, shares, review, hub };
 }
 type Fixture = Awaited<ReturnType<typeof setup>>;
 
@@ -139,6 +139,44 @@ describe("a folder shared with a named recipient", () => {
     await f.shares.revoke(f.caller, view.id);
     expect(await shared(f)).toEqual([]);
     expect(await badge(f)).toBe(0);
+  });
+});
+
+describe("a Source shared with a named recipient", () => {
+  it.each(["archived", "expired"] as const)("hides the unread share and names nothing in activity when %s", async state => {
+    const f = await setup();
+    const link = await f.shares.createForSource(f.caller, { sourceId: f.sourceId, recipients: [f.alice.id] });
+    const source = await unitOfWork().run(r => r.sourcePolicy.findById(f.sourceId));
+    expect(await shared(f)).toEqual([expect.objectContaining({ id: `shared:${link.id}`, documentTitle: source!.name, authorName: f.owner.name })]);
+    expect(await badge(f)).toBe(1);
+    if (state === "archived") {
+      await pool.query("UPDATE knowledge_sources SET status='ARCHIVED', archived_at=NOW(6), archived_by=? WHERE id=?", [f.owner.id, f.sourceId]);
+    } else {
+      const conn = await pool.getConnection();
+      try {
+        await conn.query("SET SESSION check_constraint_checks=OFF");
+        await conn.query("UPDATE document_share_links SET expires_at=? WHERE id=?", [new Date(0), link.id]);
+      } finally {
+        await conn.query("SET SESSION check_constraint_checks=ON");
+        conn.release();
+      }
+    }
+    expect(await shared(f)).toEqual([]);
+    expect(await badge(f)).toBe(0);
+    const activity = (await f.review.listActivityForOwner(f.aliceCaller)).notifications.filter(n => n.kind === "SHARED_WITH_YOU");
+    expect(activity).toEqual([expect.objectContaining({ id: `shared:${link.id}`, linkAvailable: false, documentTitle: "", authorName: undefined })]);
+    expect(activity[0]).not.toHaveProperty("href");
+  });
+  it("names the Source in Inbox and names nothing after revocation", async () => {
+    const f = await setup();
+    const source = await unitOfWork().run(r => r.sourcePolicy.findById(f.sourceId));
+    const link = await f.shares.createForSource(f.caller, { sourceId: f.sourceId, recipients: [f.alice.id] });
+    expect(await shared(f)).toEqual([expect.objectContaining({ documentTitle: source!.name, href: `/w/${f.aliceWorkspaceId}/shares/${link.path.slice(3)}` })]);
+    await f.shares.revoke(f.caller, link.id);
+    expect(await shared(f)).toEqual([]);
+    expect((await f.review.listActivityForOwner(f.aliceCaller)).notifications.filter(n => n.kind === "SHARED_WITH_YOU")).toEqual([
+      expect.objectContaining({ linkAvailable: false, documentTitle: "", authorName: undefined }),
+    ]);
   });
 });
 

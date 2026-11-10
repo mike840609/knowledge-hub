@@ -29,11 +29,14 @@ describe("what a proposal entry says", () => {
   it("the owner's request names proposer, person and what the link opens, then reads as a decision", () => {
     expect(notificationLine(entry())).toBe("Dana wants to add Lee to 《Quarterly plan》");
     expect(notificationLine(entry({ targetKind: "FOLDER", documentTitle: "Plans" }))).toBe("Dana wants to add Lee to 《Plans》 folder");
+    expect(notificationLine(entry({ targetKind: "SOURCE", documentTitle: "Notes" }))).toBe("Dana wants to add Lee to 《Notes》 source");
     expect(notificationLine(entry({ proposalStatus: "APPROVED" }))).toBe("You approved adding Lee to 《Quarterly plan》.");
     expect(notificationLine(entry({ proposalStatus: "DECLINED" }))).toBe("You declined adding Lee to 《Quarterly plan》.");
   });
   it("the proposed person, while pending, learns only who and where", () => {
     expect(notificationLine(pending())).toBe("Dana mentioned you in 《Quarterly plan》 — someone proposed sharing a document with you. Waiting for the owner.");
+    expect(notificationLine(pending({ targetKind: "FOLDER", documentTitle: "Plans" }))).toBe("Dana mentioned you in 《Plans》 folder — someone proposed sharing a folder with you. Waiting for the owner.");
+    expect(notificationLine(pending({ targetKind: "SOURCE", documentTitle: "Notes" }))).toBe("Dana mentioned you in 《Notes》 source — someone proposed sharing a source with you. Waiting for the owner.");
   });
   it("the proposed person, declined, is told so without a name", () => {
     expect(notificationLine(decided("DECLINED", { personName: undefined }))).toBe("The owner declined sharing 《Quarterly plan》 with you.");
@@ -42,6 +45,7 @@ describe("what a proposal entry says", () => {
     expect(notificationLine(decided("APPROVED"))).toBe("The owner added Lee to 《Quarterly plan》.");
     expect(notificationLine(decided("DECLINED"))).toBe("The owner declined adding Lee to 《Quarterly plan》.");
     expect(notificationLine(decided("DECLINED", { targetKind: "FOLDER", documentTitle: "Plans" }))).toBe("The owner declined adding Lee to 《Plans》 folder.");
+    expect(notificationLine(decided("APPROVED", { targetKind: "SOURCE", documentTitle: "Notes" }))).toBe("The owner added Lee to 《Notes》 source.");
   });
   it("labels each kind, and a decided request by its decision", () => {
     expect(notificationLabel(entry())).toBe("Wants to add someone");

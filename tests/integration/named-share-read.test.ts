@@ -6,6 +6,7 @@ import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction
 import { RandomShareTokenIssuer } from "@/infrastructure/security/random-share-token-issuer";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
+import { DocumentReviewService } from "@/modules/knowledge/application/document-review-service";
 import { DocumentShareService } from "@/modules/knowledge/application/document-share-service";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import type { DocumentShareLink, ShareAudience } from "@/modules/knowledge/domain/document-share-link";
@@ -143,7 +144,7 @@ describe("a NAMED folder link", () => {
     const { folderLink, recipient, owner, inside } = await setup();
     for (const viewerId of [recipient, owner.id]) {
       const view = await service().readShared(folderLink.token, { viewerId, documentId: inside.documentId });
-      expect(view).toMatchObject({ kind: "FOLDER", folderName: "Shared", audience: "NAMED", document: { documentId: inside.documentId, title: "Inside" } });
+      expect(view).toMatchObject({ kind: "FOLDER", rootName: "Shared", audience: "NAMED", document: { documentId: inside.documentId, title: "Inside" } });
       expect(await service().readSharedTarget(folderLink.token, { viewerId, documentId: inside.documentId })).toEqual({ kind: "FOLDER", documentId: inside.documentId, audience: "NAMED" });
     }
   });
@@ -163,6 +164,47 @@ describe("a NAMED folder link", () => {
     await service().revoke(caller, folderLink.id);
     await expect(service().readShared(folderLink.token, { viewerId: owner.id })).rejects.toMatchObject(notFound);
     await expect(service().readSharedTarget(folderLink.token, { viewerId: owner.id })).rejects.toMatchObject(notFound);
+  });
+});
+
+describe("a NAMED source link", () => {
+  async function sourceSetup() {
+    const s = await setup();
+    const link = await service().createForSource(s.caller, { sourceId: s.sourceId, recipients: [s.recipient] });
+    return { ...s, link, token: link.path.slice("/s/".length) };
+  }
+  const review = () => new DocumentReviewService(unitOfWork());
+  const callerOf = (id: string) => callerFromIdentity({ id, emp_id: `NAMED-READ-${id}`, name: "Reader", org_code: "SHARE" });
+
+  it("refuses a caller-less, malformed and unlisted reader, with and without a document id, as a dead link does", async () => {
+    const { token, stranger, inside } = await sourceSetup();
+    for (const options of [{}, { viewerId: null }, { viewerId: "not-a-uuid" }, { viewerId: stranger }]) {
+      await expect(service().readShared(token, options)).rejects.toMatchObject(notFound);
+      await expect(service().readShared(token, { ...options, documentId: inside.documentId })).rejects.toMatchObject(notFound);
+      await expect(service().readSharedTarget(token, options)).rejects.toMatchObject(notFound);
+      await expect(service().readSharedTarget(token, { ...options, documentId: inside.documentId })).rejects.toMatchObject(notFound);
+    }
+  });
+
+  it("refuses a caller-less review query for a document in the Source", async () => {
+    const { token, inside } = await sourceSetup();
+    await expect(review().queryForLink(null, token, inside.documentId)).rejects.toMatchObject(notFound);
+    await expect(review().queryForLink(null, token)).rejects.toMatchObject(notFound);
+  });
+
+  it("refuses a review query from a signed-in reader who is not listed", async () => {
+    const { token, stranger, inside } = await sourceSetup();
+    await expect(review().queryForLink(callerOf(stranger), token, inside.documentId)).rejects.toMatchObject(notFound);
+  });
+
+  it("opens the document inside the Source for a recipient and for the owner", async () => {
+    const { token, recipient, owner, inside } = await sourceSetup();
+    for (const viewerId of [recipient, owner.id]) {
+      const view = await service().readShared(token, { viewerId, documentId: inside.documentId });
+      expect(view).toMatchObject({ kind: "SOURCE", audience: "NAMED", document: { documentId: inside.documentId, title: "Inside" } });
+      expect(await service().readSharedTarget(token, { viewerId, documentId: inside.documentId })).toEqual({ kind: "SOURCE", documentId: inside.documentId, audience: "NAMED" });
+      await expect(review().queryForLink(callerOf(viewerId), token, inside.documentId)).resolves.toMatchObject({ threads: [] });
+    }
   });
 });
 

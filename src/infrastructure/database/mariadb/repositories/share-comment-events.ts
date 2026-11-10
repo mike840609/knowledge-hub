@@ -30,8 +30,8 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
    * Counts visible, non-retracted link-origin comments without loading comment bodies or
    * truncating at the 100-entry unread Inbox preview limit.
    *
-   * One row per document, except that comments made through a folder link count under that link:
-   * a folder row has no document of its own. Either way the newest unread thread is picked, so the
+   * One row per document, except that comments made through a folder or Source link count under that link:
+   * a container row has no document of its own. Either way the newest unread thread is picked, so the
    * Shares badge opens its discussion.
    */
   async listUnreadCountsByRecipient(recipientUserId: string): Promise<ShareDocumentUnreadCount[]> {
@@ -44,7 +44,7 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
                                    ORDER BY e.created_at DESC, e.id DESC) AS row_num
          FROM share_comment_events e
          JOIN workspaces w ON w.id = e.workspace_id
-         LEFT JOIN document_share_links l ON l.id = e.origin_share_link_id AND l.folder_node_id IS NOT NULL
+         LEFT JOIN document_share_links l ON l.id = e.origin_share_link_id AND (l.folder_node_id IS NOT NULL OR l.source_id IS NOT NULL)
          JOIN document_review_threads t ON t.id = e.thread_id
          JOIN document_review_comments c ON c.id = e.comment_id
          WHERE w.personal_owner_user_id = ? AND w.workspace_type = 'PERSONAL'

@@ -40,10 +40,10 @@ export async function generateMetadata(props: SharedPageProps): Promise<Metadata
   };
 }
 
-/** The document being read, else the folder's name (folder share spec §4). */
+/** The document being read, else the shared root's name (folder share spec §4; source share spec §4). */
 function sharedTitle(shared: SharedView): string {
   if (shared.kind === "DOCUMENT") return shared.title;
-  return shared.document ? shared.document.title : shared.folderName;
+  return shared.document ? shared.document.title : shared.rootName;
 }
 
 /** The query a Hub entry carries back to the page read. */
@@ -68,10 +68,10 @@ function platformEntry(returnTo: string): string {
 export default async function SharedPage(props: SharedPageProps) {
   const { token, shared } = await readPage(props);
   if (!shared) notFound();
-  if (shared.kind === "FOLDER") {
+  if (shared.kind !== "DOCUMENT") {
     const documentId = shared.document?.documentId;
     const named = documentId ? `?d=${documentId}` : "";
-    return <SharedFolderPage token={token} folder={shared} platformEntry={platformEntry(`/s/${token}/open${named}`)} signInHref={signInHref(`/s/${token}${named}`)} />;
+    return <SharedFolderPage token={token} shared={shared} platformEntry={platformEntry(`/s/${token}/open${named}`)} signInHref={signInHref(`/s/${token}${named}`)} />;
   }
   // A full browser navigation to the protected origin lets the company Gateway initiate SSO.
   // The public /s/* routes are exempt from that login challenge.

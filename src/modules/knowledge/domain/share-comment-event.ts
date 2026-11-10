@@ -28,7 +28,7 @@ export type ShareCommentNotificationView = {
    */
   kind?: "OWNER" | "FOLLOW" | "MENTION" | "SHARED_WITH_YOU" | "PROPOSAL_REQUEST" | "PROPOSAL_PENDING" | "PROPOSAL_DECIDED";
   token?: string; replyCount?: number; linkAvailable?: boolean; href?: string;
-  proposalId?: string; proposalStatus?: ShareProposalStatus; personName?: string; shareLinkId?: string; targetKind?: "DOCUMENT" | "FOLDER";
+  proposalId?: string; proposalStatus?: ShareProposalStatus; personName?: string; shareLinkId?: string; targetKind?: "DOCUMENT" | "FOLDER" | "SOURCE";
 };
 /** `shared:<linkId>` is the Inbox id of a named share, as `follow:` and `mention:` are of theirs. */
 export const SHARED_PREFIX = "shared:";

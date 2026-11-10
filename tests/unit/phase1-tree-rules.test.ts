@@ -2,15 +2,22 @@ import { describe, expect, it } from "vitest";
 import {
   assignContiguousPositions,
   collectAncestors,
+  MAX_TREE_CHAIN_LENGTH,
   normalizeFolderName,
   normalizeTreePosition,
   orderSiblingsByPosition,
+  SHARED_TREE_MAX_DEPTH,
   wouldCreateCycle,
 } from "@/modules/knowledge/domain/tree-rules";
 
 type MiniNode = { id: string; parentId: string | null; position: number };
 
 describe("pure tree rules", () => {
+  it("caps shared tree depth two levels below the chain guard", () => {
+    expect(SHARED_TREE_MAX_DEPTH).toBe(MAX_TREE_CHAIN_LENGTH - 2);
+    expect(SHARED_TREE_MAX_DEPTH).toBe(998);
+  });
+
   it("rejects blank folder names and trims surrounding whitespace", () => {
     expect(normalizeFolderName("  Architecture  ")).toBe("Architecture");
     expect(() => normalizeFolderName("")).toThrowError("Folder name must be a non-empty string.");

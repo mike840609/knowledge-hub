@@ -104,6 +104,27 @@ describe("share-link API (share-link spec §9.4)", () => {
 });
 
 describe("folder share-link API", () => {
+  it("returns open folder and source reminders on the workspace and document routes", async () => {
+    const { caller, folderNodeId, documentId } = await mySpaceDocument();
+    as(caller);
+    const uow = new MariaDbUnitOfWork(pool);
+    const { sourceId, workspaceId } = await uow.run(async r => {
+      const node = (await r.tree.findById(folderNodeId))!;
+      return { sourceId: node.sourceId, workspaceId: (await r.sourcePolicy.findById(node.sourceId))!.workspaceId };
+    });
+    const shares = injected.shares as DocumentShareService;
+    const workspace = () => sharedFolders(new Request("http://hub.test"), { params: Promise.resolve({ workspaceId }) });
+    const document = () => listLinks(new Request("http://hub.test"), documentParams(documentId));
+    expect((await (await document()).json()).viaSources ?? []).toEqual([]);
+    await shares.createForFolder(caller, { folderNodeId });
+    const link = await shares.createForSource(caller, { sourceId });
+    expect(await (await workspace()).json()).toMatchObject({ folders: [{ folderNodeId }], sources: [{ sourceId }] });
+    expect((await (await document()).json()).viaSources).toEqual([expect.objectContaining({ sourceId })]);
+    await shares.revoke(caller, link.id);
+    expect((await (await document()).json()).viaSources ?? []).toEqual([]);
+    as(fixtureCaller());
+    expect((await document()).status).toBe(404);
+  });
   it("creates a folder link with 201 and a path, and lists it", async () => {
     const { caller, folderNodeId } = await mySpaceDocument();
     as(caller);
@@ -148,16 +169,16 @@ describe("folder share-link API", () => {
     const listFolders = async () => sharedFolders(new Request("http://hub.test"), { params: Promise.resolve({ workspaceId }) });
     const viaFolders = async () => (await (await listLinks(new Request("http://hub.test"), documentParams(inside.documentId))).json()).viaFolders;
 
-    expect(await (await listFolders()).json()).toEqual({ folders: [] });
+    expect(await (await listFolders()).json()).toEqual({ folders: [], sources: [] });
     expect(await viaFolders()).toEqual([]);
     const { link } = await (await createFolderLink(post({}), nodeParams(folderNodeId))).json();
     const listed = await listFolders();
     expect(listed.headers.get("cache-control")).toBe("private, no-store");
-    expect(await listed.json()).toEqual({ folders: [{ folderNodeId, name: "Api Folder" }] });
+    expect(await listed.json()).toEqual({ folders: [{ folderNodeId, name: "Api Folder" }], sources: [] });
     expect(await viaFolders()).toEqual([{ folderNodeId, name: "Api Folder" }]);
 
     await revokeLink(new Request("http://hub.test", { method: "POST" }), { params: Promise.resolve({ linkId: link.id }) });
-    expect(await (await listFolders()).json()).toEqual({ folders: [] });
+    expect(await (await listFolders()).json()).toEqual({ folders: [], sources: [] });
     expect(await viaFolders()).toEqual([]);
 
     as(fixtureCaller());

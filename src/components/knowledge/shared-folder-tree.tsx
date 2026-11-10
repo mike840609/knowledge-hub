@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from "react";
-import { ChevronRight, FileText, Folder, FolderTree } from "lucide-react";
+import { ChevronRight, Database, FileText, Folder, FolderTree } from "lucide-react";
 import type { SharedTreeNode } from "@/modules/knowledge/application/document-share-service";
 import { sharedFolderHref } from "@/lib/share-paths";
 import { buttonClasses } from "@/components/ui/button";
@@ -21,7 +21,7 @@ function foldersAbove(nodes: readonly SharedTreeNode[], documentId: string | nul
   return path;
 }
 
-type Disclosure = { navId: string; buttonRef: RefObject<HTMLButtonElement | null>; open: boolean; setOpen: Dispatch<SetStateAction<boolean>> };
+type Disclosure = { navId: string; buttonRef: RefObject<HTMLButtonElement | null>; open: boolean; setOpen: Dispatch<SetStateAction<boolean>>; rootKind: "FOLDER" | "SOURCE" };
 const DisclosureContext = createContext<Disclosure | null>(null);
 
 function useDisclosure(): Disclosure {
@@ -35,21 +35,21 @@ function useDisclosure(): Disclosure {
  * for each document, so the button can live in that panel's bar while the tree itself (the folders a
  * reader opened, and where they scrolled it) is never drawn again as the reader moves.
  */
-export function SharedFolderTreeScope({ children }: { children: ReactNode }) {
+export function SharedFolderTreeScope({ children, rootKind = "FOLDER" }: { children: ReactNode; rootKind?: "FOLDER" | "SOURCE" }) {
   const navId = useId();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  const value = useMemo(() => ({ navId, buttonRef, open, setOpen }), [navId, open]);
+  const value = useMemo(() => ({ navId, buttonRef, open, setOpen, rootKind }), [navId, open, rootKind]);
   return <DisclosureContext.Provider value={value}>{children}</DisclosureContext.Provider>;
 }
 
 /** Below `sm`, the bar's button that shows the tree over the page. */
 export function SharedFolderTreeButton() {
-  const { navId, buttonRef, open, setOpen } = useDisclosure();
+  const { navId, buttonRef, open, setOpen, rootKind } = useDisclosure();
   return (
     <button ref={buttonRef} type="button" aria-expanded={open} aria-controls={navId} onClick={() => setOpen((current) => !current)} className={buttonClasses({ variant: "ghost", icon: true, className: "-ms-2 sm:hidden" })}>
       <FolderTree className="size-4" aria-hidden="true" />
-      <span className="sr-only">Folder contents</span>
+      <span className="sr-only">{rootKind === "SOURCE" ? "Source contents" : "Folder contents"}</span>
     </button>
   );
 }
@@ -64,7 +64,7 @@ export function SharedFolderTreeButton() {
  * document's path start open, the others closed, and a document reached another way (a tree click,
  * an in-folder link) opens its path without closing what the reader opened.
  */
-export function SharedFolderTree({ token, nodes, currentDocumentId, folderName, pagePath }: { token: string; nodes: SharedTreeNode[]; currentDocumentId: string | null; folderName: string; pagePath?: string }) {
+export function SharedFolderTree({ token, nodes, currentDocumentId, rootName, rootKind, pagePath }: { token: string; nodes: SharedTreeNode[]; currentDocumentId: string | null; rootName: string; rootKind: "FOLDER" | "SOURCE"; pagePath?: string }) {
   const { navId, buttonRef, open, setOpen } = useDisclosure();
   const navRef = useRef<HTMLElement>(null);
   const [expanded, setExpanded] = useState(() => new Set(foldersAbove(nodes, currentDocumentId)));
@@ -118,19 +118,20 @@ export function SharedFolderTree({ token, nodes, currentDocumentId, folderName, 
       ref={navRef}
       id={navId}
       tabIndex={-1}
-      aria-label={folderName}
+      aria-label={rootName}
       className={`kh-shared-folder-tree fixed inset-x-0 top-14 z-30 max-h-[70vh] overflow-y-auto border-b border-kh-border bg-kh-bg p-3 shadow-popover sm:bottom-0 sm:right-auto sm:max-h-none sm:w-[var(--kh-tree-rail)] sm:border-b-0 sm:border-r sm:bg-kh-bg-explorer sm:shadow-none ${open ? "" : "max-sm:hidden"}`}
     >
       <p className="flex kh-rail-row min-w-0 items-center gap-2 px-2 kh-rail-text font-semibold text-kh-text">
-        <Folder size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
-        <span className="truncate">{folderName}</span>
+        {rootKind === "SOURCE" ? <Database size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : <Folder size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
+        <span className="truncate">{rootName}</span>
       </p>
-      <Branch parentId={null} tree={children} expanded={expanded} toggle={toggle} token={token} pagePath={pagePath} currentDocumentId={currentDocumentId} onNavigate={() => setOpen(false)} />
+      <Branch rootKind={rootKind} parentId={null} tree={children} expanded={expanded} toggle={toggle} token={token} pagePath={pagePath} currentDocumentId={currentDocumentId} onNavigate={() => setOpen(false)} />
     </nav>
   );
 }
 
-function Branch({ parentId, tree, expanded, toggle, token, pagePath, currentDocumentId, onNavigate }: {
+function Branch({ rootKind, parentId, tree, expanded, toggle, token, pagePath, currentDocumentId, onNavigate }: {
+  rootKind?: "FOLDER" | "SOURCE";
   parentId: string | null;
   tree: Children;
   expanded: ReadonlySet<string>;
@@ -142,7 +143,7 @@ function Branch({ parentId, tree, expanded, toggle, token, pagePath, currentDocu
 }) {
   const nodes = tree.get(parentId) ?? [];
   const nested = parentId === null ? "" : "ml-3 border-l border-kh-border pl-2";
-  if (nodes.length === 0) return <p className={`flex kh-rail-row items-center px-2 kh-rail-text text-kh-text-muted ${nested}`}>Empty folder</p>;
+  if (nodes.length === 0) return <p className={`flex kh-rail-row items-center px-2 kh-rail-text text-kh-text-muted ${nested}`}>Empty {parentId === null && rootKind === "SOURCE" ? "source" : "folder"}</p>;
   return (
     <ul className={nested}>
       {nodes.map((node) => {

@@ -84,8 +84,8 @@ describe("documentReachesFolder", () => {
   const folder = { id: "folder", nodeType: "FOLDER" as const, sourceId: "source" };
   const document = { sourceId: "source", status: "ACTIVE" as const };
   const chain = [
-    { id: "node", parentId: "folder", nodeType: "DOCUMENT" as const, status: "ACTIVE" as const },
-    { id: "folder", parentId: null, nodeType: "FOLDER" as const, status: "ACTIVE" as const },
+    { id: "node", sourceId: "source", parentId: "folder", nodeType: "DOCUMENT" as const, status: "ACTIVE" as const },
+    { id: "folder", sourceId: "source", parentId: null, nodeType: "FOLDER" as const, status: "ACTIVE" as const },
   ];
 
   it("is true only for an ACTIVE document of the folder's Source whose chain reaches the folder", () => {

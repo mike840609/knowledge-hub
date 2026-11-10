@@ -11,7 +11,7 @@ export type SavedShareSnapshot = {
   title: string | null; sharedByName: string | null;
 };
 export type SavedShareRecord = { id: string; userId: string; shareLinkId: string; savedTitle: string; savedSharedByName: string; savedExpiresAt: Date; savedAt: Date; updatedAt: Date; removedAt: Date | null };
-export type SavedShareView = { id: string; kind: "DOCUMENT" | "FOLDER"; title: string; sharedByName: string; savedAt: Date; expiresAt: Date | null; updatedAt: Date | null; status: "available" | "expired" | "unavailable"; path: string | null };
+export type SavedShareView = { id: string; kind: "DOCUMENT" | "FOLDER" | "SOURCE"; title: string; sharedByName: string; savedAt: Date; expiresAt: Date | null; updatedAt: Date | null; status: "available" | "expired" | "unavailable"; path: string | null };
 /** A NAMED share the reader is on that opens now; nothing is saved, so there is no expiry or removal. */
 export type NamedShareView = { linkId: string; title: string; sharedByName: string; addedAt: Date; href: string };
 export type SavedShareState = { saved: boolean; id: string | null; workspaceId: string };
