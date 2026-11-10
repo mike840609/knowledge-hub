@@ -1,5 +1,18 @@
 import { ValidationError } from "./errors";
 
+/** Deeper than any real tree; a cycle (a defect) ends here instead of looping. MariaDB's default
+ * `max_recursive_iterations` is 1000, so the guard stays just under it. */
+export const MAX_TREE_CHAIN_LENGTH = 1000;
+
+/**
+ * The deepest a shared tree lists, counting a top-level node (a folder's direct child, or a Source's
+ * root-level node) as depth 0. `listSubtree` stops at this depth because a chain of `MAX_TREE_CHAIN_LENGTH`
+ * nodes reaches a shared folder at most `MAX_TREE_CHAIN_LENGTH - 1` hops up; a Source's forest has no
+ * folder anchor, so it applies the same cap rather than listing nodes the reachability check must refuse
+ * (source share spec §3).
+ */
+export const SHARED_TREE_MAX_DEPTH = MAX_TREE_CHAIN_LENGTH - 2;
+
 export type TreeLink = {
   id: string;
   parentId: string | null;

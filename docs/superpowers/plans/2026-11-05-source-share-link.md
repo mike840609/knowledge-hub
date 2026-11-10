@@ -35,7 +35,7 @@
 ### Task 1: Schema, link target type, reachability rule
 
 **Files:**
-- Create: `src/infrastructure/database/mariadb/migrations/033-source-share-links.ts`
+- Create: `src/infrastructure/database/mariadb/migrations/035-source-share-links.ts`
 - Modify: `src/infrastructure/database/mariadb/migrations/index.ts` (register)
 - Modify: `src/modules/knowledge/domain/document-share-link.ts`
 - Modify: `src/modules/knowledge/application/internal/folder-link-reach.ts`
@@ -66,7 +66,7 @@
   - a repeated id cycle → `false` (the function must not trust the array to be acyclic)
 - [ ] **Step 2: Run** `npx vitest run --config vitest.config.ts tests/unit/source-share-reachability.test.ts` — Expected: FAIL (`isReachableThroughSource` not exported).
 - [ ] **Step 3: Implement** the union, `TreeChainNode.sourceId`, and `isReachableThroughSource` in `document-share-link.ts`; add `documentReachesSource` and `reachableChainForSource` beside `documentReachesFolder`/`reachableChain` in `internal/folder-link-reach.ts`. Walk in order; every node must be ACTIVE, carry the link's `sourceId`, and not repeat; succeed only when a node has `parentId === null`. Update `assertShareLinkCreation`'s `targetKind` and its two messages.
-- [ ] **Step 4: Migration 033** (`sourceShareLinksMigration`, name `"source-share-links"`), three statements:
+- [ ] **Step 4: Migration 035** (`sourceShareLinksMigration`, name `"source-share-links"`), three statements:
   ```sql
   ALTER TABLE document_share_links DROP CONSTRAINT ck_share_links_one_target;
 

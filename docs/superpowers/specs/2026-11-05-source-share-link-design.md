@@ -118,7 +118,7 @@ Extend `document_share_links`; do not add a parallel table. Downstream rows
 already point at the link id, so threads, comments, follows, saved shares, view
 counts and comment events need no new columns.
 
-Migration 033 (additive, forward-only), three statements in this order:
+Migration 035 (additive, forward-only), three statements in this order:
 
 ```sql
 ALTER TABLE document_share_links DROP CONSTRAINT ck_share_links_one_target;

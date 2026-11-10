@@ -20,6 +20,7 @@ import { linkLookupKey } from "../domain/link-graph";
 import { buildLinkResolver } from "../domain/link-resolution";
 import { MENTION_LIMIT } from "../domain/review-mention";
 import type { ShareProposal } from "../domain/share-proposal";
+import { SHARED_TREE_MAX_DEPTH } from "../domain/tree-rules";
 import type { OpenFolderLink, OpenSourceLink } from "../ports/document-share-link-repository";
 import type { ShareTokenIssuer } from "../ports/share-token-issuer";
 import { openShareLinkTarget, reachableChain, reachableChainForSource } from "./internal/folder-link-reach";
@@ -107,15 +108,6 @@ export type SharedSourceView = SharedTreeView & { kind: "SOURCE" };
  * their Inbox entry (`shared:<linkId>`) read with it. A LINK read serves anyone and names no link.
  */
 export type SharedView = ({ kind: "DOCUMENT" } & SharedDocumentView | SharedFolderView | SharedSourceView) & { audience: ShareAudience; linkId?: string };
-
-/**
- * The deepest a shared tree lists, counting a top-level node (a folder's direct child, or a Source's
- * root-level node) as depth 0. `listSubtree` stops at this depth because a chain of `MAX_CHAIN_LENGTH`
- * (1000) nodes reaches a shared folder at most `MAX_CHAIN_LENGTH - 1` hops up; a Source's forest has no
- * folder anchor, so it applies the same cap rather than listing nodes the reachability check must refuse
- * (source share spec §3).
- */
-export const SHARED_TREE_MAX_DEPTH = 998;
 
 export const SHARE_LINK_CREATED_EVENT = "DOCUMENT_SHARE_LINK_CREATED";
 export const SHARE_LINK_REVOKED_EVENT = "DOCUMENT_SHARE_LINK_REVOKED";

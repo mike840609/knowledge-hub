@@ -1,5 +1,6 @@
 import type { TreeChainNode } from "@/modules/knowledge/domain/document-share-link";
 import type { KnowledgeTreeNode } from "@/modules/knowledge/domain/tree-node";
+import { MAX_TREE_CHAIN_LENGTH } from "@/modules/knowledge/domain/tree-rules";
 import type { DocumentSummary, TreeRepository, TreeViewNode } from "@/modules/knowledge/ports/tree-repository";
 import type { QueryConnection, DbRow } from "./shared";
 import { affectedRows, asDate, asNumber, asRequiredString, insertBatches, valueRows } from "./shared";
@@ -28,10 +29,6 @@ function mapDocumentSummary(row: DbRow): DocumentSummary {
 const DOCUMENT_ID_CHUNK = 500;
 
 const POSITION_BATCH = 500;
-
-/** Deeper than any real tree; a cycle (a defect) ends here instead of looping. MariaDB's default
- * `max_recursive_iterations` is 1000, so the guard stays just under it. */
-const MAX_CHAIN_LENGTH = 1000;
 
 function placeholders(count: number): string {
   return Array(count).fill("?").join(", ");
@@ -163,10 +160,10 @@ export class MariaDbTreeRepository implements TreeRepository {
        LEFT JOIN knowledge_documents d ON d.id = n.document_id AND d.source_id = n.source_id
        LEFT JOIN knowledge_revisions r ON r.id = d.current_revision_id AND r.document_id = d.id
        ORDER BY n.position, n.id`,
-      // Depth 0 is already one hop below the folder. A chain of MAX_CHAIN_LENGTH nodes reaches a
-      // folder at most MAX_CHAIN_LENGTH - 1 hops up, so the tree lists nothing deeper than that:
+      // Depth 0 is already one hop below the folder. A chain of MAX_TREE_CHAIN_LENGTH nodes reaches a
+      // folder at most MAX_TREE_CHAIN_LENGTH - 1 hops up, so the tree lists nothing deeper than that:
       // every node it shows is one the reachability check can open.
-      [folderNodeId, sourceId, sourceId, MAX_CHAIN_LENGTH - 2],
+      [folderNodeId, sourceId, sourceId, MAX_TREE_CHAIN_LENGTH - 2],
     );
     return rows.map((row) => ({ ...mapNode(row), title: row.title === null ? null : String(row.title), pageIcon: row.document_page_icon === null || row.document_page_icon === undefined ? null : String(row.document_page_icon), documentStatus: row.document_status === null ? null : String(row.document_status) as "ACTIVE" | "ARCHIVED", currentRevisionId: row.document_current_revision_id === null || row.document_current_revision_id === undefined ? null : String(row.document_current_revision_id) }));
   }
@@ -238,7 +235,7 @@ export class MariaDbTreeRepository implements TreeRepository {
            WHERE parent.source_id = ? AND chains.depth < ?
          )
          SELECT root, id, parent_id, source_id, node_type, status FROM chains ORDER BY root, depth`,
-        [...batch, sourceId, sourceId, MAX_CHAIN_LENGTH - 1],
+        [...batch, sourceId, sourceId, MAX_TREE_CHAIN_LENGTH - 1],
       );
       for (const row of rows) {
         const root = String(row.root);
@@ -260,7 +257,7 @@ export class MariaDbTreeRepository implements TreeRepository {
          WHERE chain.depth < ?
        )
        SELECT id, parent_id, source_id, node_type, status FROM chain ORDER BY depth LIMIT ?`,
-      [nodeId, MAX_CHAIN_LENGTH - 1, MAX_CHAIN_LENGTH],
+      [nodeId, MAX_TREE_CHAIN_LENGTH - 1, MAX_TREE_CHAIN_LENGTH],
     );
     return rows.map((row) => ({
       id: String(row.id),
