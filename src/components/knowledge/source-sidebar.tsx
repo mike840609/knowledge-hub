@@ -356,7 +356,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
           });
           return (
             <section key={candidate.id} aria-label={`${candidate.name} documents`}>
-              <RowContextMenu as="div" actions={sourceActions} onRun={runAction} className="flex items-center gap-1">
+              <RowContextMenu as="div" actions={sourceActions} onRun={runAction} className="group flex items-center gap-1">
                 <button type="button" aria-expanded={open} aria-controls={`collection-${candidate.id}`} aria-describedby={readOnly ? readOnlyDescriptionId : undefined} onClick={() => setExpanded((previous) => ({ ...previous, [candidate.id]: !open }))} title={readOnly ? `${candidate.name} · ${READ_ONLY_DESCRIPTION}` : candidate.name} className="group kh-control flex kh-rail-row min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left kh-rail-text font-medium text-kh-text hover:bg-kh-bg-hover kh-focus-ring">
                   {/* One slot, Notion-style: the source's mark at rest, its chevron on hover (where hover exists) or keyboard focus. */}
                   <span className="relative size-3.5 shrink-0 text-kh-text-muted" aria-hidden="true">
@@ -371,7 +371,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                   {canShareSources && candidate.status === "ACTIVE" && sourceIds.has(candidate.id) ? <Share2 size={14} aria-label="Shared" className="shrink-0 text-kh-text-muted" /> : null}
                   {candidate.status === "ARCHIVED" ? <Status kind="archived" className="ml-auto text-caption font-normal text-kh-text-muted">Archived</Status> : null}
                 </button>
-                <RowActionsTrigger actions={sourceActions} onRun={runAction} label={candidate.name} />
+                <RowActionsTrigger actions={sourceActions} onRun={runAction} label={candidate.name} className="kh-row-action" />
                 {isNotes && canCreate ? <div className="flex items-center">{addFolder}{addNote}</div> : null}
               </RowContextMenu>
               <div id={`collection-${candidate.id}`} hidden={!open} className="mt-1 pl-2">
