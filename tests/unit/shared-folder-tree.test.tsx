@@ -40,7 +40,7 @@ afterEach(async () => {
 });
 
 /** As the page draws it: the button in the bar, the tree beside it, one scope over both. */
-const page = (tree: SharedTreeNode[], currentDocumentId: string | null, rootKind: "FOLDER" | "SOURCE" = "FOLDER") => <SharedFolderTreeScope><SharedFolderTreeButton /><SharedFolderTree token="tok" nodes={tree} currentDocumentId={currentDocumentId} rootName="Onboarding" rootKind={rootKind} /></SharedFolderTreeScope>;
+const page = (tree: SharedTreeNode[], currentDocumentId: string | null, rootKind: "FOLDER" | "SOURCE" = "FOLDER") => <SharedFolderTreeScope rootKind={rootKind}><SharedFolderTreeButton /><SharedFolderTree token="tok" nodes={tree} currentDocumentId={currentDocumentId} rootName="Onboarding" rootKind={rootKind} /></SharedFolderTreeScope>;
 const show = (currentDocumentId: string | null) => act(async () => root.render(page(nodes, currentDocumentId)));
 const folder = (name: string) => [...container.querySelectorAll<HTMLButtonElement>("nav button[aria-expanded]")].find(button => button.textContent?.trim() === name)!;
 /** What a link is called aloud: its text without the icon beside it. */
@@ -123,6 +123,12 @@ describe("on a phone, the tree is behind a button in the bar", () => {
     expect(button.textContent).toContain("Folder contents");
     await act(async () => button.click());
     expect(button.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("names a Source's tree as the source's contents, never a folder's", async () => {
+    await act(async () => root.render(page(nodes, null, "SOURCE")));
+    expect(disclosure().textContent).toContain("Source contents");
+    expect(disclosure().textContent).not.toContain("Folder contents");
   });
 
   it("closes on Escape and gives focus back to its button", async () => {

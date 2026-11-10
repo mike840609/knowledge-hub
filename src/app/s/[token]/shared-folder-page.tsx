@@ -63,7 +63,7 @@ export function SharedFolderPage({ token, shared, platformEntry, signInHref, pag
     return (
       <Root className={rootClass}>
         <SharedSkipLink />
-        <SharedFolderTreeScope>
+        <SharedFolderTreeScope rootKind={shared.kind}>
           <div className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-kh-border bg-kh-bg px-4">
             {lead}
             {/* -me-3 takes back the last button's padding, so its label ends on the bar's edge. */}
@@ -86,7 +86,7 @@ export function SharedFolderPage({ token, shared, platformEntry, signInHref, pag
     <Root className={rootClass}>
       <SharedSkipLink />
       {/* The bar is the panel's, inside the body beside the tree; it reaches back over the tree's column (globals.css). */}
-      <SharedFolderTreeScope>
+      <SharedFolderTreeScope rootKind={shared.kind}>
         {/* Before the panel, as it was the bar's first part: the rail still comes first in focus order. */}
         {tree}
         <div className="kh-share-folder-body">

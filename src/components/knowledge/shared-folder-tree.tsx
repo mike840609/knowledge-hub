@@ -21,7 +21,7 @@ function foldersAbove(nodes: readonly SharedTreeNode[], documentId: string | nul
   return path;
 }
 
-type Disclosure = { navId: string; buttonRef: RefObject<HTMLButtonElement | null>; open: boolean; setOpen: Dispatch<SetStateAction<boolean>> };
+type Disclosure = { navId: string; buttonRef: RefObject<HTMLButtonElement | null>; open: boolean; setOpen: Dispatch<SetStateAction<boolean>>; rootKind: "FOLDER" | "SOURCE" };
 const DisclosureContext = createContext<Disclosure | null>(null);
 
 function useDisclosure(): Disclosure {
@@ -35,21 +35,21 @@ function useDisclosure(): Disclosure {
  * for each document, so the button can live in that panel's bar while the tree itself (the folders a
  * reader opened, and where they scrolled it) is never drawn again as the reader moves.
  */
-export function SharedFolderTreeScope({ children }: { children: ReactNode }) {
+export function SharedFolderTreeScope({ children, rootKind = "FOLDER" }: { children: ReactNode; rootKind?: "FOLDER" | "SOURCE" }) {
   const navId = useId();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  const value = useMemo(() => ({ navId, buttonRef, open, setOpen }), [navId, open]);
+  const value = useMemo(() => ({ navId, buttonRef, open, setOpen, rootKind }), [navId, open, rootKind]);
   return <DisclosureContext.Provider value={value}>{children}</DisclosureContext.Provider>;
 }
 
 /** Below `sm`, the bar's button that shows the tree over the page. */
 export function SharedFolderTreeButton() {
-  const { navId, buttonRef, open, setOpen } = useDisclosure();
+  const { navId, buttonRef, open, setOpen, rootKind } = useDisclosure();
   return (
     <button ref={buttonRef} type="button" aria-expanded={open} aria-controls={navId} onClick={() => setOpen((current) => !current)} className={buttonClasses({ variant: "ghost", icon: true, className: "-ms-2 sm:hidden" })}>
       <FolderTree className="size-4" aria-hidden="true" />
-      <span className="sr-only">Folder contents</span>
+      <span className="sr-only">{rootKind === "SOURCE" ? "Source contents" : "Folder contents"}</span>
     </button>
   );
 }

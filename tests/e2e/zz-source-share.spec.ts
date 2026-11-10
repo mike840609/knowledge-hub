@@ -55,7 +55,17 @@ test.describe("source share link", () => {
     const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
     await expect(explorer.getByRole("img", { name: "Shared" })).toBeVisible(ROUND_TRIP);
     await explorer.getByRole("button", { name: `Share source ${name}` }).click();
-    await expect(page.getByRole("dialog", { name: `Share source ${name}` }).locator("[data-share-link]")).toContainText("for readers", ROUND_TRIP);
+    const sidebarDialog = page.getByRole("dialog", { name: `Share source ${name}` });
+    await expect(sidebarDialog.locator("[data-share-link]")).toContainText("for readers", ROUND_TRIP);
+    // The sidebar is an entry point of its own: make a link here, then revoke it so the
+    // Sources-page link stays the only one this source has.
+    await sidebarDialog.getByLabel(/Label/).fill("from sidebar");
+    await sidebarDialog.getByRole("button", { name: "Create link" }).click();
+    const fromSidebar = sidebarDialog.locator("[data-share-link]").filter({ hasText: "from sidebar" });
+    await expect(fromSidebar).toBeVisible(ROUND_TRIP);
+    await fromSidebar.getByRole("button", { name: "Revoke", exact: true }).click();
+    await fromSidebar.getByRole("button", { name: "Confirm revoke" }).click();
+    await expect(sidebarDialog.locator("[data-share-link]").filter({ hasText: "from sidebar" })).toHaveCount(0, ROUND_TRIP);
     await page.keyboard.press("Escape");
 
     const base = phase3UnconfiguredOrigin();
@@ -87,7 +97,7 @@ test.describe("source share link", () => {
       for (const id of [outsideId, foreign.documentId, "junk"]) expect(await unavailable(reader, `${base}${path}?d=${id}`)).toBe(unknown);
       await reader.setViewportSize({ width: 390, height: 844 });
       await reader.goto(`${base}${path}?d=${introId}`);
-      const disclosure = reader.getByRole("button", { name: "Folder contents" });
+      const disclosure = reader.getByRole("button", { name: "Source contents" });
       await expect(disclosure).toBeVisible(ROUND_TRIP);
       await expect(tree).toBeHidden();
       await disclosure.click();
