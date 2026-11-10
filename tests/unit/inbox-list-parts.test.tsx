@@ -124,7 +124,7 @@ it("renders the shared section and marks a shared row read", async () => {
   const entry = sharedEntry();
   await act(async () => root.render(<InboxSharedWithYou workspaceId="me" shared={[entry]} busy={false} onMarkRead={onMarkRead} />));
   expect(host.textContent).toContain("Shared with you");
-  expect(host.textContent).toContain("Documents and folders shared with you by name. They also live in Shares.");
+  expect(host.textContent).toContain("Documents, folders and sources shared with you by name. They also live in Shares.");
   expect(host.textContent).toContain("Dana shared this with you");
   expect(host.querySelector("a")?.getAttribute("href")).toBe("/w/me/shares/tok");
   expect(host.querySelector("a[href='/w/me/shares?tab=saved']")).not.toBeNull();
