@@ -4,11 +4,13 @@ import { PersonalService } from "@/modules/personal/application/personal-service
 const userId = "0199f500-0000-7000-8000-0000000005a2";
 const workspaceId = "0199f500-0000-7000-8000-0000000005a1";
 const caller = { identity: { id: userId }, validatedExternalGroupIds: [] } as never;
+const repositories = {
+  workspaceMemberships: { find: async () => ({ role: "OWNER" }) },
+  workspaces: { findById: async () => ({ personalOwnerUserId: userId }) },
+};
 const uow = {
-  run: async (work: (repositories: unknown) => unknown) => work({
-    workspaceMemberships: { find: async () => ({ role: "OWNER" }) },
-    workspaces: { findById: async () => ({ personalOwnerUserId: userId }) },
-  }),
+  run: async (work: (repositories: unknown) => unknown) => work(repositories),
+  read: async (work: (repositories: unknown) => unknown) => work(repositories),
 };
 const item = (key: string) => ({ key, value: { favorite: true }, version: 1, updatedAt: "2026-10-24T00:00:00.000Z" });
 const favorite = (id: string) => item(`favorite:${id}`);

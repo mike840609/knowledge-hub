@@ -10,7 +10,7 @@ function fixture(overrides: Record<string, unknown> = {}, membership: string | n
     workspaces: { findById: vi.fn().mockResolvedValue({ workspaceType: "PERSONAL", lifecycleState: "ACTIVE", personalOwnerUserId: "owner", ...overrides }) },
     workspaceMemberships: { find: vi.fn().mockResolvedValue(membership ? { role: membership } : null) },
   } as unknown as WorkspaceRepositories;
-  const uow: WorkspaceUnitOfWork = { run: async (work) => work(repositories) };
+  const uow: WorkspaceUnitOfWork = { run: async (work) => work(repositories), read: async (work) => work(repositories) };
   return { store, service: new PersonalPreferencesService(store as PersonalStore, uow) };
 }
 describe("personal preference persistence boundary", () => {

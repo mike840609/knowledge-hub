@@ -15,6 +15,9 @@ function stubUow(candidates: string[]): { uow: SourceUnitOfWork; runCalls: numbe
       } as unknown as SourceRepositories;
       return work(repositories);
     },
+    async read<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
+      return uow.run(work);
+    },
     async runWithCreatorQuotaLock<T>(
       _creatorId: string,
       _timeoutSeconds: number,

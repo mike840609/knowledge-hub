@@ -49,7 +49,7 @@ describe("foundation domain rules", () => {
         revisions: { findCurrent: async () => ({ id: "r", documentId: "d", revisionNo: 1, title: "t", markdown: "m", metadata: {}, contentHash: "h", createdBy: "u", createdAt: new Date() }), insert: async () => calls.push("insert"), nextRevisionNumber: async () => 2 },
         tree: {},
       } as unknown as KnowledgeRepositories;
-    const fakeUow: KnowledgeUnitOfWork = { run: async (work) => work(fakeRepositories) };
+    const fakeUow: KnowledgeUnitOfWork = { run: async (work) => work(fakeRepositories), read: async (work) => work(fakeRepositories) };
     const hub = new HubKnowledgeCommandServiceImpl(fakeUow);
     const error = await hub.createRevision(caller, { documentId: "d", expectedCurrentRevisionId: "r", title: "new", markdown: "m", metadata: {} }).then(
       (): null => null,

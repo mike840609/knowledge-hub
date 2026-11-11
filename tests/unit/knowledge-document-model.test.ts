@@ -59,7 +59,10 @@ function fakeServices(overrides: {
   const services = {
     establishTrustedCaller: vi.fn(async () => ({ caller })),
     queries: { getDocument, listRevisionSummaries, listRevisions, getRevision },
-    unitOfWork: { run: vi.fn(async (work: (repositories: unknown) => unknown) => work({ entries: { findByDocumentId: findEntry } })) },
+    unitOfWork: {
+      run: vi.fn(async (work: (repositories: unknown) => unknown) => work({ entries: { findByDocumentId: findEntry } })),
+      read: vi.fn(async (work: (repositories: unknown) => unknown) => work({ entries: { findByDocumentId: findEntry } })),
+    },
   } as unknown as Services;
   vi.mocked(applicationServices).mockReturnValue(services);
   return { findEntry, getDocument, getRevision, listRevisionSummaries, listRevisions };

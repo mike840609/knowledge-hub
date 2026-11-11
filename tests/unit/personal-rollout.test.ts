@@ -19,7 +19,7 @@ describe("personal rollout boundaries", () => {
   });
   it("denies creation and lifecycle operations even to an otherwise privileged caller", async () => {
     const run = vi.fn();
-    const service = new TeamWorkspaceService({ run } as WorkspaceUnitOfWork);
+    const service = new TeamWorkspaceService({ run, read: run } as unknown as WorkspaceUnitOfWork);
     await expect(service.createTeamWorkspace(caller, { name: "Team" })).rejects.toMatchObject({ code: "TEAM_CREATION_DENIED" });
     await expect(service.renameTeamWorkspace(caller, "team", "Renamed")).rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND" });
     await expect(service.archiveTeamWorkspace(caller, "team")).rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND" });

@@ -45,6 +45,10 @@ describe("who started a sync run", () => {
           syncRuns: { listBySourceId: async () => [run("1", CALLER), run("2", TEAMMATE), run("3", TEAMMATE), run("4", GONE)] },
           users: { findByIds, findById },
         }),
+        read: async (work: (repositories: unknown) => unknown) => work({
+          syncRuns: { listBySourceId: async () => [run("1", CALLER), run("2", TEAMMATE), run("3", TEAMMATE), run("4", GONE)] },
+          users: { findByIds, findById },
+        }),
       },
     };
 

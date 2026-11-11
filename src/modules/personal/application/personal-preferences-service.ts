@@ -9,7 +9,7 @@ export class PersonalPreferencesService {
   constructor(private readonly store: PersonalStore, private readonly uow: WorkspaceUnitOfWork) {}
   private async authorize(caller: CallerContext, workspaceId: string, key: string) {
     if (!/^prefs:[a-z-]{1,40}$/.test(key)) throw new DomainError("INVALID_REQUEST", "Invalid preference key.");
-    await this.uow.run(async (r) => {
+    await this.uow.read(async (r) => {
       const workspace = await r.workspaces.findById(workspaceId);
       if (workspace?.workspaceType !== "PERSONAL" || workspace.lifecycleState !== "ACTIVE" || workspace.personalOwnerUserId !== caller.identity.id)
         throw new DomainError("WORKSPACE_NOT_FOUND", "Personal workspace unavailable.");

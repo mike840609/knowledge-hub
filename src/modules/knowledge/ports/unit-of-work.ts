@@ -62,4 +62,6 @@ export type KnowledgeRepositories = {
 
 export interface KnowledgeUnitOfWork {
   run<T>(work: (repositories: KnowledgeRepositories) => Promise<T>): Promise<T>;
+  /** SELECT-only work, without the BEGIN/COMMIT of `run`. */
+  read<T>(work: (repositories: KnowledgeRepositories) => Promise<T>): Promise<T>;
 }

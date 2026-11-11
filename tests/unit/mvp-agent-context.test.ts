@@ -18,12 +18,12 @@ it("formats saved revisions with provenance and pinned links and bounds UTF-8 by
 it("does not return partial context for a foreign workspace even when both are readable", async () => {
   const read = vi.fn(async () => {});
   const r = { users: { upsertIdentity: vi.fn() }, workspaceAccess: { requireWorkspaceRead: read, requireMembership: read }, workspaces: { findById: vi.fn(async () => ({ workspaceType: "PERSONAL", personalOwnerUserId: id, lifecycleState: "ACTIVE" })) }, documents: { findById: vi.fn(async () => ({ id, sourceId: id, status: "ACTIVE" })) }, sourcePolicy: { findById: vi.fn(async () => ({ id, workspaceId: "other", status: "ACTIVE" })) }, revisions: { findCurrent: vi.fn() }, links: { loadCatalog: async () => [], loadValidEdges: async () => [] } } as unknown as KnowledgeRepositories;
-  await expect(new AgentContextService({ run: work => work(r) }).build(caller, id, [id])).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
+  await expect(new AgentContextService({ run: work => work(r), read: work => work(r) }).build(caller, id, [id])).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
   expect(r.revisions.findCurrent).not.toHaveBeenCalled();
 });
 it("refuses an archived document placement before reading its body", async () => {
   const read = vi.fn(async () => {});
   const r = { users: { upsertIdentity: vi.fn() }, workspaceAccess: { requireWorkspaceRead: read, requireMembership: read }, workspaces: { findById: vi.fn(async () => ({ workspaceType: "PERSONAL", personalOwnerUserId: id, lifecycleState: "ACTIVE" })) }, documents: { findById: vi.fn(async () => ({ id, sourceId: id, status: "ACTIVE" })) }, sourcePolicy: { findById: vi.fn(async () => ({ id, workspaceId: id, status: "ACTIVE", name: "Wiki" })) }, tree: { listBySource: vi.fn(async () => [{ id, sourceId: id, documentId: id, nodeType: "DOCUMENT", parentId: null, status: "ARCHIVED" }]) }, revisions: { findCurrent: vi.fn(async () => ({ id, revisionNo: 1, title: "A", markdown: "secret", createdAt: new Date() })) }, linkedEntries: { findByDocumentId: vi.fn(async () => null) }, links: { loadCatalog: async () => [], loadValidEdges: async () => [] } } as unknown as KnowledgeRepositories;
-  await expect(new AgentContextService({ run: work => work(r) }).build(caller, id, [id])).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
+  await expect(new AgentContextService({ run: work => work(r), read: work => work(r) }).build(caller, id, [id])).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
   expect(r.revisions.findCurrent).not.toHaveBeenCalled();
 });

@@ -10,13 +10,13 @@ import type { SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
  */
 export function withSourcePaths(
   search: Pick<KnowledgeSearchService, "search">,
-  unitOfWork: Pick<SourceUnitOfWork, "run">,
+  unitOfWork: Pick<SourceUnitOfWork, "read">,
 ): Pick<KnowledgeSearchService, "search"> {
   return {
     search: async (caller, input) => {
       const result = await search.search(caller, input);
       if (!result.hits.length) return result;
-      const entries = await unitOfWork.run((repositories) =>
+      const entries = await unitOfWork.read((repositories) =>
         repositories.entries.findByDocumentIds(result.hits.map((hit) => hit.documentId)));
       const paths = new Map(entries.flatMap((entry) =>
         entry.documentId === null ? [] : [[entry.documentId, entry.sourcePath] as const]));

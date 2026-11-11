@@ -85,6 +85,10 @@ class MissingSourceUnitOfWork implements SourceUnitOfWork {
     return this.inner.run((repositories) => work(this.withMissingSource(repositories)));
   }
 
+  read<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
+    return this.inner.read((repositories) => work(this.withMissingSource(repositories)));
+  }
+
   runWithCreatorQuotaLock<T>(
     creatorId: string,
     timeoutSeconds: number,

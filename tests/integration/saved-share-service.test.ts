@@ -121,7 +121,7 @@ it("never snapshots a private title published between validation and metadata ca
  const raced=new SavedShareService({run:work=>reader.uow.run(r=>work({...r,
   revisions:new Proxy(r.revisions,{get(target,key){const value=Reflect.get(target,key);if(key==="findCurrent")return async(id:string)=>{await revokeAndEdit();return target.findCurrent(id);};return typeof value==="function"?value.bind(target):value;}}),
   savedShares:new Proxy(r.savedShares,{get(target,key){const value=Reflect.get(target,key);if(key==="findSnapshotByToken"&&typeof value==="function")return async(token:string)=>{const snapshot=await value.call(target,token);await revokeAndEdit();return snapshot;};return typeof value==="function"?value.bind(target):value;}}),
- }))},()=>owner.now);
+ })),read:work=>reader.uow.read(work)},()=>owner.now);
  await raced.save(reader.caller,owner.token);expect(mutated).toBe(true);
  const list=await reader.saved.list(reader.caller,reader.workspace.id,{});expect(list.items[0]).toMatchObject({title:"Saved %_! guide",status:"unavailable",path:null});
  expect((await reader.saved.list(reader.caller,reader.workspace.id,{q:"Private after revoke"})).items).toHaveLength(0);

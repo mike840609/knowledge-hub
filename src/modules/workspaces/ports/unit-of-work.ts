@@ -16,4 +16,6 @@ export type WorkspaceRepositories = {
 
 export interface WorkspaceUnitOfWork {
   run<T>(work: (repositories: WorkspaceRepositories) => Promise<T>): Promise<T>;
+  /** SELECT-only work, without the BEGIN/COMMIT of `run`. */
+  read<T>(work: (repositories: WorkspaceRepositories) => Promise<T>): Promise<T>;
 }

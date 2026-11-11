@@ -15,7 +15,10 @@ beforeEach(() => {
     workspaceAdmin: { navigation: async () => ({ items: [workspace] }), workspaceState: async () => ({ actions: { canSearch: true } }) },
     queries: { listSources: async () => [], listDocumentSummaries: listDocuments },
     search: { search }, personalPreferences: { get: async () => ({ value: { completed: true } }) },
-    unitOfWork: { run: async (work: (repositories: unknown) => unknown) => work({ entries: { findByDocumentIds: async () => [] } }) },
+    unitOfWork: {
+      run: async (work: (repositories: unknown) => unknown) => work({ entries: { findByDocumentIds: async () => [] } }),
+      read: async (work: (repositories: unknown) => unknown) => work({ entries: { findByDocumentIds: async () => [] } }),
+    },
   } as unknown as ReturnType<typeof ApplicationServices>);
 });
 it("detects an empty workspace before the first query without executing search", async () => {

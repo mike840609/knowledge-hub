@@ -72,7 +72,7 @@ export async function getSearchPageModel(workspaceId: string, input: SearchPageI
     });
     if (input.scope === "workspace" && input.q.trim()) await recordOnboardingStep(services.personalPreferences, caller, workspaceId, "search");
     if (!result.hits.length) return { ...base, ...(!result.tooLong ? await emptyState() : {}), result, timedOut: false };
-    const locations=await services.unitOfWork.run(r=>r.entries.findByDocumentIds(result.hits.map(hit=>hit.documentId)));
+    const locations=await services.unitOfWork.read(r=>r.entries.findByDocumentIds(result.hits.map(hit=>hit.documentId)));
     const paths=new Map(locations.map(e=>[e.documentId,e.sourcePath]));
     return { ...base, result:{...result,hits:result.hits.map(hit=>({...hit,sourcePath:paths.get(hit.documentId)}))}, timedOut: false };
   } catch (error) {

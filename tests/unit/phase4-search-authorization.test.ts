@@ -53,7 +53,7 @@ function fakeWorkspaceUnitOfWork(): WorkspaceUnitOfWork {
     auditEvents: {},
     identityLinks: {},
   } as unknown as WorkspaceRepositories;
-  return { run: (work) => work(repositories) };
+  return { run: (work) => work(repositories), read: (work) => work(repositories) };
 }
 
 function fakeKnowledgeUnitOfWork(searchSpy: (criteria: KnowledgeSearchCriteria) => void): KnowledgeUnitOfWork {
@@ -68,7 +68,7 @@ function fakeKnowledgeUnitOfWork(searchSpy: (criteria: KnowledgeSearchCriteria) 
       }),
     },
   } as unknown as KnowledgeRepositories;
-  return { run: (work) => work(repositories) };
+  return { run: (work) => work(repositories), read: (work) => work(repositories) };
 }
 
 describe("KnowledgeSearchService all-scope authorization filter (U5)", () => {

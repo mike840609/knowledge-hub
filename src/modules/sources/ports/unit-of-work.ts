@@ -36,6 +36,8 @@ export type SourceRepositories = KnowledgeRepositories & {
 
 export interface SourceUnitOfWork {
   run<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T>;
+  /** SELECT-only work, without the BEGIN/COMMIT of `run`. */
+  read<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T>;
   /**
    * Serializes import quota checks per creator across the full transaction.
    * The creator lock is acquired on the backing connection before the
