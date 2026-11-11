@@ -135,6 +135,9 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
         case "move":
           requestMove({ sourceId: effect.sourceId, label: effect.label, node: effect.node });
           return;
+        case "share-source":
+          requestShare({ sourceId: effect.sourceId, name: effect.label });
+          return;
         case "folder-command":
           switch (effect.command) {
             case "folder.rename":

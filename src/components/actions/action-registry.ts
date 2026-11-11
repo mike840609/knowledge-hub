@@ -48,6 +48,7 @@ export type ActionId =
   | "folder.rename"
   | "folder.move"
   | "folder.share"
+  | "source.share"
   | "folder.archive"
   | "folder.restore";
 
@@ -125,6 +126,8 @@ export type ActionEffect =
    * inside that folder otherwise. `sourceId` is the parent's, or null for the default source.
    */
   | { kind: "create-folder"; sourceId: string | null; parentId: string | null; parentLabel: string | null }
+  /** Opens the share dialog for a whole Source's live tree. */
+  | { kind: "share-source"; sourceId: string; label: string }
   | { kind: "folder-command"; command: FolderCommand; nodeId: string; sourceId: string; label: string }
   /** Asks for a place — a folder, or the top level — and moves the node there, last. */
   | { kind: "move"; sourceId: string; label: string; node: { type: "document"; documentId: string } | { type: "folder"; nodeId: string } };
@@ -195,6 +198,9 @@ export type FolderTarget = {
   sourceStatus: "ACTIVE" | "ARCHIVED";
 };
 
+/** A Source header row's own target; sharing it is the owner's act on an active source of their My Space. */
+export type SourceTarget = { sourceId: string; label: string; status: "ACTIVE" | "ARCHIVED" };
+
 export type ActionContext = {
   workspaceId: string;
   workspaceType: "PERSONAL" | "TEAM";
@@ -218,6 +224,8 @@ export type ActionContext = {
   target?: ActionTarget;
   /** A folder row's own target; a surface has a document or a folder to describe, not both. */
   folder?: FolderTarget;
+  /** A source header row's target. */
+  source?: SourceTarget;
 };
 
 /**
@@ -234,7 +242,7 @@ export type ActionContext = {
  * still be refused by the server, because knowing an ID is not authorization.
  */
 export function availableActions(context: ActionContext): readonly Action[] {
-  const { workspaceId, can, confirmed, target, folder } = context;
+  const { workspaceId, can, confirmed, target, folder, source } = context;
   const archived = context.includeArchived === true;
   const suffix = archived ? "?includeArchived=true" : "";
   const actions: Action[] = [];
@@ -540,6 +548,20 @@ export function availableActions(context: ActionContext): readonly Action[] {
       section: "edit",
       surfaces: ["row"],
       effect: { kind: "folder-command", command: "folder.share", nodeId: folder.nodeId, sourceId: folder.sourceId, label: folder.label },
+    });
+  }
+
+  // Same gate as the folder's, one level up (source share spec): the owner, confirmed, on an active source.
+  if (source && context.workspaceType === "PERSONAL" && context.isPersonalOwner && confirmed && source.status === "ACTIVE") {
+    actions.push({
+      id: "source.share",
+      label: "Share link…",
+      group: "folder",
+      icon: "share",
+      keywords: ["link", "share", "copy link", "public", source.label],
+      section: "edit",
+      surfaces: ["row"],
+      effect: { kind: "share-source", sourceId: source.sourceId, label: source.label },
     });
   }
 

@@ -11,7 +11,7 @@ vi.mock('next/link',()=>({default:({children,...props}:React.ComponentProps<'a'>
 vi.mock('@/components/shell/use-workspace-authorization',()=>({useWorkspaceAuthorization:()=>({access:{actions:{},workspace:{type:'PERSONAL'}},confirmed:true})}));
 vi.mock('@/components/knowledge/use-document-shortcuts',()=>({useDocumentShortcuts:()=>({shortcuts:{favorites:shortcuts.current.favorites,recent:shortcuts.current.recent},ready:shortcuts.current.ready,update:vi.fn()}),documentShortcutKey:(s:string,d:string)=>`${s}:${d}`}));
 vi.mock('@/components/knowledge/use-tree-mutations',()=>({useTreeMutations:()=>({})}));
-vi.mock('@/components/actions/action-menu',()=>({useActionRunner:()=>vi.fn()}));
+vi.mock('@/components/actions/action-menu',async(orig)=>({...await orig<object>(),useActionRunner:()=>vi.fn()}));
 vi.mock('@/components/actions/action-registry',()=>({actionsFor:()=>[]}));
 vi.mock('@/components/knowledge/knowledge-tree',()=>({KnowledgeTree:()=>null}));
 vi.mock('@/components/ui/tooltip',()=>({Tooltip:({children}:{children:React.ReactNode})=>children}));

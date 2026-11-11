@@ -706,7 +706,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
 
   it("puts the actions in the sections the design names", () => {
     const sectionById = Object.fromEntries(
-      [...availableActions(context({ ...personal, target: target(), folder: folder() })), ...availableActions(context({ ...personal, target: target({ status: "ARCHIVED" }), folder: folder({ status: "ARCHIVED" }) }))]
+      [...availableActions(context({ ...personal, target: target(), folder: folder() })), ...availableActions(context({ ...personal, target: target({ status: "ARCHIVED" }), folder: folder({ status: "ARCHIVED" }) })), ...availableActions(context({ ...personal, source: { sourceId: "s1", label: "Notes", status: "ACTIVE" } }))]
         .filter((action) => action.surfaces.includes("row"))
         .map((action) => [action.id, action.section]),
     );
@@ -719,6 +719,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
       "document.duplicate": "edit",
       "document.move": "edit",
       "folder.share": "edit",
+      "source.share": "edit",
       "folder.new-document": "edit",
       "folder.new-folder": "edit",
       "folder.rename": "edit",
@@ -855,5 +856,24 @@ describe("action registry — the row menu's sections (frontend-design-language 
       "document.move",
       "document.archive",
     ]);
+  });
+});
+
+describe("action registry — source.share", () => {
+  const offered = (ctx: ActionContext) => ids(availableActions(ctx)).includes("source.share");
+  const source = (status: "ACTIVE" | "ARCHIVED" = "ACTIVE") => ({ sourceId: "s1", label: "Notes", status });
+  it("is offered to the confirmed owner on an active source, and asks the dialog for the source", () => {
+    const ctx = context({ workspaceType: "PERSONAL", isPersonalOwner: true, confirmed: true, source: source() });
+    expect(offered(ctx)).toBe(true);
+    expect(availableActions(ctx).find((a) => a.id === "source.share")?.effect).toEqual({ kind: "share-source", sourceId: "s1", label: "Notes" });
+  });
+  it.each([
+    ["an archived source", { source: source("ARCHIVED") }],
+    ["a non-owner", { isPersonalOwner: false }],
+    ["an unconfirmed caller", { confirmed: false }],
+    ["a team workspace", { workspaceType: "TEAM" as const }],
+    ["no source", { source: undefined }],
+  ])("is not offered for %s", (_, override) => {
+    expect(offered(context({ workspaceType: "PERSONAL", isPersonalOwner: true, confirmed: true, source: source(), ...override }))).toBe(false);
   });
 });
