@@ -1,4 +1,4 @@
-import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
+import { readAsCaller, syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import type { WorkspaceAccessPolicy } from "../ports/workspace-access-policy";
 import type { WorkspaceGroupMappingRepository } from "../ports/workspace-group-mapping-repository";
@@ -20,7 +20,7 @@ export class WorkspaceQueryService {
   constructor(private readonly unitOfWork: WorkspaceUnitOfWork) {}
 
   async listWorkspaces(caller: CallerContext): Promise<WorkspaceView[]> {
-    return this.unitOfWork.run(async (repositories) => {
+    return readAsCaller(this.unitOfWork, caller, async (repositories) => {
       await syncCallerIdentity(repositories.users, caller);
       const accessible = new Map<string, Workspace>();
       for (const workspace of await repositories.workspaces.listForUser(caller.identity.id)) {

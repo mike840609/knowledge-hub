@@ -1,4 +1,4 @@
-import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
+import { readAsCaller, syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import {
   DomainError,
@@ -66,7 +66,7 @@ export interface KnowledgeQueryService {
   getSource(caller: CallerContext, sourceId: string, input?: { includeArchived?: boolean }): Promise<SourceView>;
   listTree(caller: CallerContext, sourceId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeTreeItem[]>;
   getDocument(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<{ documentId: string; sourceId: string; workspaceId: string; status: "ACTIVE" | "ARCHIVED"; pageIcon: string | null; currentRevision: KnowledgeRevisionView }>;
-  /** Where each readable document lives, in one transaction and without its revision; unreadable IDs are absent. */
+  /** Where each readable document lives, in one unit of work and without its revision; unreadable IDs are absent. */
   locateDocuments(caller: CallerContext, documentIds: readonly string[], input?: { includeArchived?: boolean }): Promise<Map<string, { sourceId: string; workspaceId: string }>>;
   getCurrentRevision(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionView>;
   getRevision(caller: CallerContext, documentId: string, revisionNo: number, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionView>;
@@ -133,7 +133,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
   }
 
   async listDocumentSummaries(caller: CallerContext, workspaceId: string, input: { includeArchived?: boolean; excludeArchivedAncestors?: boolean } = {}): Promise<DocumentSummary[]> {
-    return this.unitOfWork.run(async (repositories) => {
+    return readAsCaller(this.unitOfWork, caller, async (repositories) => {
       await syncCallerIdentity(repositories.users, caller);
       await repositories.workspaceAccess.requireWorkspaceRead(caller, workspaceId);
       return input.excludeArchivedAncestors
@@ -148,7 +148,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
     documentIds: readonly string[],
     input: { includeArchived?: boolean } = {},
   ): Promise<DocumentSummary[]> {
-    return this.unitOfWork.run(async (repositories) => {
+    return readAsCaller(this.unitOfWork, caller, async (repositories) => {
       await syncCallerIdentity(repositories.users, caller);
       await repositories.workspaceAccess.requireWorkspaceRead(caller, workspaceId);
       return repositories.tree.listDocumentsByIds(workspaceId, documentIds, input.includeArchived ?? false);
@@ -156,7 +156,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
   }
 
   async listSources(caller: CallerContext, workspaceId: string, input: { includeArchived?: boolean } = {}): Promise<SourceView[]> {
-    return this.unitOfWork.run(async (repositories) => {
+    return readAsCaller(this.unitOfWork, caller, async (repositories) => {
       await syncCallerIdentity(repositories.users, caller);
       await repositories.workspaceAccess.requireMembership(caller, workspaceId);
       const policies = await repositories.sourcePolicy.listByWorkspaceId(workspaceId, input);
@@ -165,7 +165,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
   }
 
   async getSource(caller: CallerContext, sourceId: string, input: { includeArchived?: boolean } = {}): Promise<SourceView> {
-    return this.unitOfWork.run(async (repositories) => {
+    return readAsCaller(this.unitOfWork, caller, async (repositories) => {
       await syncCallerIdentity(repositories.users, caller);
       const policy = await requireSourcePolicy(repositories, sourceId);
       await repositories.workspaceAccess.requireMembership(caller, policy.workspaceId);
@@ -176,7 +176,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
 
   async listTree(caller: CallerContext, sourceId: string, input: { includeArchived?: boolean } = {}): Promise<KnowledgeTreeItem[]> {
     const includeArchived = input.includeArchived ?? false;
-    return this.unitOfWork.run(async (repositories) => {
+    return readAsCaller(this.unitOfWork, caller, async (repositories) => {
       await syncCallerIdentity(repositories.users, caller);
       const policy = await requireSourcePolicy(repositories, sourceId);
       await repositories.workspaceAccess.requireMembership(caller, policy.workspaceId);
@@ -194,7 +194,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
     documentId: string,
     input: { includeArchived?: boolean } = {},
   ): Promise<{ documentId: string; sourceId: string; workspaceId: string; status: "ACTIVE" | "ARCHIVED"; pageIcon: string | null; currentRevision: KnowledgeRevisionView }> {
-    return this.unitOfWork.run(async (repositories) => {
+    return readAsCaller(this.unitOfWork, caller, async (repositories) => {
       const { document, policy } = await requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
       const current = await repositories.revisions.findCurrent(document.id);
       if (!current) throw new IntegrityViolationError("Document current revision is missing.");
@@ -210,7 +210,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
   }
 
   async locateDocuments(caller: CallerContext, documentIds: readonly string[], input: { includeArchived?: boolean } = {}): Promise<Map<string, { sourceId: string; workspaceId: string }>> {
-    return this.unitOfWork.run(async (repositories) => {
+    return readAsCaller(this.unitOfWork, caller, async (repositories) => {
       const found = new Map<string, { sourceId: string; workspaceId: string }>();
       for (const documentId of new Set(documentIds)) {
         try {
@@ -225,7 +225,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
   }
 
   async getCurrentRevision(caller: CallerContext, documentId: string, input: { includeArchived?: boolean } = {}): Promise<KnowledgeRevisionView> {
-    return this.unitOfWork.run(async (repositories) => {
+    return readAsCaller(this.unitOfWork, caller, async (repositories) => {
       const { document } = await requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
       const current = await repositories.revisions.findCurrent(document.id);
       if (!current) throw new IntegrityViolationError("Document current revision is missing.");
@@ -234,7 +234,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
   }
 
   async getRevision(caller: CallerContext, documentId: string, revisionNo: number, input: { includeArchived?: boolean } = {}): Promise<KnowledgeRevisionView> {
-    return this.unitOfWork.run(async (repositories) => {
+    return readAsCaller(this.unitOfWork, caller, async (repositories) => {
       const { document } = await requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
       const revision = await repositories.revisions.findByRevisionNo(document.id, revisionNo);
       if (!revision) throw new RevisionNotFoundError();
@@ -243,7 +243,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
   }
 
   async listRevisions(caller: CallerContext, documentId: string, input: { includeArchived?: boolean } = {}): Promise<KnowledgeRevisionView[]> {
-    return this.unitOfWork.run(async (repositories) => {
+    return readAsCaller(this.unitOfWork, caller, async (repositories) => {
       const { document } = await requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
       const revisions = await repositories.revisions.listByDocument(document.id);
       return revisions.map(toRevisionView);
@@ -251,7 +251,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
   }
 
   async listRevisionSummaries(caller: CallerContext, documentId: string, input: { includeArchived?: boolean } = {}): Promise<KnowledgeRevisionSummary[]> {
-    return this.unitOfWork.run(async (repositories) => {
+    return readAsCaller(this.unitOfWork, caller, async (repositories) => {
       const { document } = await requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
       return repositories.revisions.listSummariesByDocument(document.id);
     });
@@ -259,7 +259,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
 
   async getAncestors(caller: CallerContext, nodeId: string, input: { includeArchived?: boolean } = {}): Promise<KnowledgeTreeItem[]> {
     const includeArchived = input.includeArchived ?? false;
-    return this.unitOfWork.run(async (repositories) => {
+    return readAsCaller(this.unitOfWork, caller, async (repositories) => {
       await syncCallerIdentity(repositories.users, caller);
       const node = await repositories.tree.findById(nodeId);
       if (!node) throw new TreeNodeNotFoundError();

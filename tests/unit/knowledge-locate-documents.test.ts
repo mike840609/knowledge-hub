@@ -26,18 +26,22 @@ function service(overrides: { findDocument?: (id: string) => Promise<unknown> } 
     },
     revisions,
   };
-  const uow = { run: vi.fn(async (work: (r: unknown) => unknown) => work(repositories)) };
+  const uow = {
+    run: vi.fn(async (work: (r: unknown) => unknown) => work(repositories)),
+    read: vi.fn(async (work: (r: unknown) => unknown) => work(repositories)),
+  };
   return { queries: new KnowledgeQueryServiceImpl(uow as never), uow, revisions, repositories };
 }
 
-it("locates readable documents in one transaction without reading a revision", async () => {
+it("locates readable documents in one read without reading a revision", async () => {
   const { queries, uow, revisions } = service();
   const found = await queries.locateDocuments(caller, ["mine", "archived"], { includeArchived: true });
   expect([...found]).toEqual([
     ["mine", { sourceId: "srcA", workspaceId: "wsA" }],
     ["archived", { sourceId: "srcA", workspaceId: "wsA" }],
   ]);
-  expect(uow.run).toHaveBeenCalledTimes(1);
+  expect(uow.read).toHaveBeenCalledTimes(1);
+  expect(uow.run).not.toHaveBeenCalled();
   expect(revisions.findCurrent).not.toHaveBeenCalled();
 });
 

@@ -63,7 +63,10 @@ describe("authorized metadata-only home query", () => {
   it("does not retrieve summaries when workspace read is refused", async () => {
     const fetch = vi.fn(async () => []);
     const repo = { users: { upsertIdentity: vi.fn() }, workspaceAccess: { requireWorkspaceRead: vi.fn(async () => { throw new Error("refused"); }) }, tree: { listDocumentsByWorkspace: fetch } } as unknown as KnowledgeRepositories;
-    const uow = { run: async (work: (r: KnowledgeRepositories) => Promise<unknown>) => work(repo) } as KnowledgeUnitOfWork;
+    const uow = {
+      run: async (work: (r: KnowledgeRepositories) => Promise<unknown>) => work(repo),
+      read: async (work: (r: KnowledgeRepositories) => Promise<unknown>) => work(repo),
+    } as KnowledgeUnitOfWork;
     await expect(new KnowledgeQueryServiceImpl(uow).listDocumentSummaries(caller, "w")).rejects.toThrow("refused");
     expect(fetch).not.toHaveBeenCalled();
   });

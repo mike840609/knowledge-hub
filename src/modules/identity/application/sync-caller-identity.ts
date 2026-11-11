@@ -12,3 +12,8 @@ export async function syncCallerIdentity(users: Pick<UserRepository, "upsertIden
   if (caller.identitySynced) return;
   await users.upsertIdentity(caller.identity);
 }
+
+/** SELECT-only work for a caller: without a transaction when the identity is already synced (nothing can write), inside one otherwise (the upsert must roll back with a failed read). */
+export function readAsCaller<R, T>(unitOfWork: { read<U>(work: (r: R) => Promise<U>): Promise<U>; run<U>(work: (r: R) => Promise<U>): Promise<U> }, caller: CallerContext, work: (repositories: R) => Promise<T>): Promise<T> {
+  return caller.identitySynced ? unitOfWork.read(work) : unitOfWork.run(work);
+}

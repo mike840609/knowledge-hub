@@ -42,7 +42,10 @@ function queryService(upsertIdentity: () => Promise<void>): KnowledgeQueryServic
     workspaceAccess: { requireMembership: async () => undefined },
     sourcePolicy: { listByWorkspaceId: async () => [] },
   };
-  return new KnowledgeQueryServiceImpl({ run: async (work) => work(repositories as never) } as KnowledgeUnitOfWork);
+  return new KnowledgeQueryServiceImpl({
+    run: async (work) => work(repositories as never),
+    read: async (work) => work(repositories as never),
+  } as KnowledgeUnitOfWork);
 }
 
 describe("syncing the caller's identity", () => {
