@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="src/app/icon.svg" alt="Knowledge Hub logo" width="88" height="88">
-
-# Knowledge Hub
+<img src="docs/images/banner.svg" alt="Knowledge Hub — Markdown notes, connected and shared." width="100%">
 
 **將 Markdown 筆記變成可閱讀、可連結、可分享的知識空間。**
 
