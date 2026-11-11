@@ -1,13 +1,18 @@
 <div align="center">
 
-<img src="docs/images/banner.svg" alt="Knowledge Hub — Markdown notes, connected and shared." width="100%">
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/banner-dark.svg">
+    <img src="docs/images/banner-light.svg" alt="Knowledge Hub — Markdown notes, connected and shared." width="100%">
+  </picture>
+</h1>
 
 **Turn Markdown notes into a knowledge workspace you can read, connect, and share.**
 
 [![CI](https://img.shields.io/github/actions/workflow/status/mike840609/knowledge-hub/phase2-dev-gate.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI)](https://github.com/mike840609/knowledge-hub/actions/workflows/phase2-dev-gate.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0-orange?style=flat-square)](package.json)
-[![Node.js](https://img.shields.io/badge/node-20.19%E2%80%9324-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white)](.node-version)
+[![Version](https://img.shields.io/github/package-json/v/mike840609/knowledge-hub?style=flat-square&color=orange)](package.json)
+[![Node.js](https://img.shields.io/badge/node-20.19%E2%80%9324-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 <br>
 [![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=flat-square&logo=nextdotjs&logoColor=white)](https://nextjs.org)
 [![React](https://img.shields.io/badge/React-19-149ECA?style=flat-square&logo=react&logoColor=white)](https://react.dev)
@@ -23,6 +28,8 @@
 
 <img src="docs/images/document-reader.jpg" alt="Markdown reader with explorer, outline, resolved links, and backlinks" width="900">
 
+<sub>The document reader: explorer, on-page outline, resolved wikilinks, backlinks, and a clear read-only cue for synced folders.</sub>
+
 </div>
 
 ---
@@ -32,7 +39,7 @@ Knowledge Hub is an open-source, self-hosted knowledge workspace. Write notes in
 Your content stays in plain Markdown — no particular note-taking app, wiki generator, or external knowledge platform required.
 
 > [!NOTE]
-> Knowledge Hub is at **0.1.0 and under active development**. The personal workspace, **My Space**, is available by default; Team workspaces are opt-in. Development uses a local demo identity, and production deployments must integrate a trusted identity provider — see [Deployment](#deployment).
+> Knowledge Hub is at **0.1.0 and under active development**. The personal workspace, **My Space**, is available by default; Team workspace navigation and access are disabled by default and can be enabled by an administrator. Development uses a local demo identity, and production deployments must integrate a trusted identity provider — see [Deployment](#deployment).
 
 ## Highlights
 
@@ -59,7 +66,7 @@ Your content stays in plain Markdown — no particular note-taking app, wiki gen
   <tr>
     <td width="50%" valign="top">
       <img src="docs/images/source-history.jpg" alt="Markdown folder source overview and sync history">
-      <p><b>Sources and sync history</b> — review a folder's ownership and history, then <b>Update from folder</b> to review changes. A Source can be shared as one link that never exposes its settings, history or assets.</p>
+      <p><b>Sources and sync history</b> — review a folder's ownership and history, then use <b>Update from folder</b> to select the source folder again and review changes. A Source can be shared as one link that never exposes its settings, history or assets.</p>
     </td>
     <td width="50%" valign="top">
       <img src="docs/images/knowledge-graph.jpg" alt="Knowledge graph connecting the sample handbook and related notes">
@@ -153,7 +160,7 @@ If pnpm is unavailable, run `rm -rf node_modules .next && npm ci` instead of `pn
 
 ### User guide
 
-Open the account menu at the bottom of the sidebar and select **Help & guides** (`/help`; the folder format reference is at `/help#format-reference`). The in-app English and Traditional Chinese manual covers first import, repeat sync, permissions and recovery, reading, search, Insights, sharing, discussions and export. Preview and sync errors link to the relevant sections.
+Open the account menu at the bottom of the sidebar and select **Help & guides** (`/help`, the same address for everyone; the folder format reference is at `/help#format-reference`). The in-app English and Traditional Chinese manual covers first import, repeat sync, permissions and recovery, reading, search, Insights, sharing, discussions and export. Preview and sync errors link to the relevant sections. The **Import folder → Read the guide** path continues to cover Markdown structure, `knowledge_id` and configured import limits.
 
 Both languages live in `src/components/help/user-guide-content.ts`; update them together when workflows change.
 
@@ -202,7 +209,7 @@ npm run start
 
 - **Single operator on Vercel** — follow the [Vercel + Layerbase runbook](docs/operations/vercel-layerbase.md). It keeps the local identity provider behind an optional site password, runs migrations during production builds, and disables preview deployments. Do not use it for a shared or company deployment.
 - **Public demo** — the same runbook documents [Google demo login](docs/operations/vercel-layerbase.md#google-demo-login): set `KM_IDENTITY_PROVIDER=google` and the `AUTH_*` variables. It is additive; the local and company-SSO paths are unchanged.
-- **Company SSO** — implement a trusted [`CompanySsoSessionReader`](src/modules/identity/ports/company-sso-session-reader.ts) and register it through [`configureCompanySsoSessionReader`](src/server/composition.ts) before application services are created. Setting `KM_IDENTITY_PROVIDER=company-sso` alone provides no login page or identity service.
+- **Company SSO** — the application provides a generic `company-sso` adapter contract. Implement a trusted [`CompanySsoSessionReader`](src/modules/identity/ports/company-sso-session-reader.ts) and register it through [`configureCompanySsoSessionReader`](src/server/composition.ts) before application services are created. Setting `KM_IDENTITY_PROVIDER=company-sso` alone does not provide an OAuth/OIDC login page or identity service.
 
 <details>
 <summary><b>Company SSO integration details</b></summary>
@@ -217,7 +224,7 @@ Shared-page **Open in Knowledge Hub** and **Get started** links navigate to `KM_
 
 - Separate database credentials, backups, HTTPS, and a trusted session integration. Never expose example development credentials or test settings.
 - The `start` script binds to `127.0.0.1`, suitable for a reverse proxy on the same host. Container deployments need an appropriate bind address in their startup command.
-- **Try with a sample wiki** fetches static files from `/sample-wiki/*`, so a reverse proxy or SSO allow-list must serve that path to signed-in users. The URLs are absolute, so a Next.js `basePath` is not supported.
+- **Try with a sample wiki** fetches static files from `/sample-wiki/*` (`manifest.json` and the Markdown files), so a reverse proxy or SSO allow-list must serve that path to signed-in users. The URLs are absolute, so a Next.js `basePath` is not supported.
 - Before upgrading an existing database, read the [workspace governance cutover guide](docs/operations/phase3-workspace-governance-cutover.md); some migrations enforce data readiness gates. Use the [document link index rollout guide](docs/operations/document-link-index-rollout.md) to backfill or repair links with `npm run db:reindex-document-links`, and [Team workspace availability](docs/operations/team-workspaces-availability.md) for feature flag operations.
 
 ### Document review deployment
@@ -376,17 +383,19 @@ make test-mermaid-assumptions
 
 ## Documentation
 
-English is the primary documentation language. Each project Markdown guide links to its Traditional Chinese companion (`*.zh-TW.md`). Some originally English historical documents keep their full English technical text beneath a Chinese reading guide; those companions say so explicitly.
+English is the primary documentation language. Each project Markdown guide links to its Traditional Chinese companion (`*.zh-TW.md`). Some originally English historical documents keep their full English technical text beneath a Chinese reading guide; those companions say so explicitly. Historical records preserve the technical context of their original date; consult the current canonical documents for present behavior.
 
 - [Operations guides](docs/operations/) — database upgrades, Team availability, deployment, and index maintenance
 - [Design specifications](docs/superpowers/specs/) and [implementation plans](docs/superpowers/plans/) — behavior contracts and design decisions
 - [Verification records](docs/superpowers/verification/) — testing and inspection evidence for individual features
 - [Phase roadmap](docs/superpowers/roadmaps/2026-09-10-knowledge-hub-phase-roadmap.md), [action model](docs/superpowers/specs/2026-09-21-action-model-spec.md), [keyboard shortcuts](docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md), [row keyboard actions](docs/superpowers/specs/2026-10-02-row-keyboard-actions-design.md), and the undated [frontend design language](docs/superpowers/specs/frontend-design-language.md), updated in place
 
-Historical designs and roadmaps preserve development context and may describe features that are unimplemented or have since changed. Current source code and tests define shipped behavior.
+Historical designs and roadmaps preserve development context and may describe features that are unimplemented or have since changed. Current source code and tests define shipped behavior; the feature table above provides an overview for users.
+
+### Current canonical documents
 
 <details>
-<summary><b>Current canonical documents</b></summary>
+<summary><b>Show the canonical documents table</b></summary>
 
 These documents define the core contracts and their implementation plans. Later focused specifications record additions; dated verification records describe evidence at that point in time.
 
@@ -436,7 +445,7 @@ These documents define the core contracts and their implementation plans. Later 
 
 Contributions are welcome. Read the [contributing guide](CONTRIBUTING.md) to report issues, propose features, and submit pull requests, and use [GitHub Issues](https://github.com/mike840609/knowledge-hub/issues) for general questions and feature requests.
 
-Please report security vulnerabilities privately as described in [SECURITY.md](SECURITY.md), not in public issues.
+Please report security vulnerabilities privately as described in [SECURITY.md](SECURITY.md), not in public issues; it also covers deployment considerations.
 
 ## License
 

@@ -1,13 +1,18 @@
 <div align="center">
 
-<img src="docs/images/banner.svg" alt="Knowledge Hub — Markdown notes, connected and shared." width="100%">
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/banner-dark.svg">
+    <img src="docs/images/banner-light.svg" alt="Knowledge Hub：連結並分享你的 Markdown 筆記" width="100%">
+  </picture>
+</h1>
 
 **將 Markdown 筆記變成可閱讀、可連結、可分享的知識空間。**
 
 [![CI](https://img.shields.io/github/actions/workflow/status/mike840609/knowledge-hub/phase2-dev-gate.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI)](https://github.com/mike840609/knowledge-hub/actions/workflows/phase2-dev-gate.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0-orange?style=flat-square)](package.json)
-[![Node.js](https://img.shields.io/badge/node-20.19%E2%80%9324-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white)](.node-version)
+[![Version](https://img.shields.io/github/package-json/v/mike840609/knowledge-hub?style=flat-square&color=orange)](package.json)
+[![Node.js](https://img.shields.io/badge/node-20.19%E2%80%9324-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 <br>
 [![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=flat-square&logo=nextdotjs&logoColor=white)](https://nextjs.org)
 [![React](https://img.shields.io/badge/React-19-149ECA?style=flat-square&logo=react&logoColor=white)](https://react.dev)
@@ -23,6 +28,8 @@
 
 <img src="docs/images/document-reader.jpg" alt="包含文件瀏覽器、大綱、已解析連結與反向連結的 Markdown 閱讀頁" width="900">
 
+<sub>文件閱讀頁：文件瀏覽器、頁內大綱、已解析 wikilinks、反向連結，並清楚標示同步來源的唯讀狀態。</sub>
+
 </div>
 
 ---
@@ -32,7 +39,7 @@ Knowledge Hub 是開源、可自行部署的知識工作空間。你可以直接
 內容始終是純 Markdown，不需要綁定特定筆記軟體、Wiki generator 或外部知識平台。
 
 > [!NOTE]
-> 目前版本為 **0.1.0，持續開發中**。預設提供個人工作空間 **My Space**；Team workspace 需另外開啟。開發模式使用本機示範身分，正式部署必須整合可信任的身分提供者，詳見[部署](#部署)。
+> 目前版本為 **0.1.0，持續開發中**。預設提供個人工作空間 **My Space**；Team workspace 的導覽與存取預設關閉，可由管理者開啟。開發模式使用本機示範身分，正式部署必須整合可信任的身分提供者，詳見[部署](#部署)。
 
 ## 特色
 
@@ -59,7 +66,7 @@ Knowledge Hub 是開源、可自行部署的知識工作空間。你可以直接
   <tr>
     <td width="50%" valign="top">
       <img src="docs/images/source-history.jpg" alt="Markdown folder 來源與同步紀錄">
-      <p><b>來源與同步歷史</b>：查看資料夾的來源管理方式與同步紀錄，再由 <b>Update from folder</b> 檢查變更。來源可整個分享為一個連結，且不會公開其設定、歷史或資產。</p>
+      <p><b>來源與同步歷史</b>：查看資料夾的來源管理方式與同步紀錄，再由 <b>Update from folder</b> 重新選取來源資料夾並檢查變更。來源可整個分享為一個連結，且不會公開其設定、歷史或資產。</p>
     </td>
     <td width="50%" valign="top">
       <img src="docs/images/knowledge-graph.jpg" alt="連結範例手冊與相關筆記的知識圖譜">
@@ -153,7 +160,7 @@ pnpm run dev
 
 ### 使用者操作手冊
 
-從側欄底部的帳號選單選擇 **Help & guides**（`/help`；資料夾格式參考位於 `/help#format-reference`）。站內手冊提供英文與繁體中文，涵蓋首次匯入、日常同步、授權與錯誤恢復、閱讀、搜尋、Insights、分享、討論與匯出。匯入預覽與同步錯誤會連到對應章節。
+從側欄底部的帳號選單選擇 **Help & guides**（`/help`，所有人共用同一個網址；資料夾格式參考位於 `/help#format-reference`）。站內手冊提供英文與繁體中文，涵蓋首次匯入、日常同步、授權與錯誤恢復、閱讀、搜尋、Insights、分享、討論與匯出。匯入預覽與同步錯誤會連到對應章節；**Import folder → Read the guide** 仍涵蓋 Markdown 結構、`knowledge_id` 與匯入限制。
 
 兩種語言都在 `src/components/help/user-guide-content.ts`；操作流程變更時請一併更新。
 
@@ -202,7 +209,7 @@ npm run start
 
 - **單人操作的 Vercel 部署**：參考 [Vercel + Layerbase runbook](docs/operations/vercel-layerbase.zh-TW.md)。這條路徑刻意保留 local identity 並以選用的站台密碼保護，於 production build 時執行 migration，同時關閉 preview deployment。請勿用於共用或公司部署。
 - **公開 demo**：同一份 runbook 記錄了 [Google demo login](docs/operations/vercel-layerbase.zh-TW.md#google-demo-login)：設定 `KM_IDENTITY_PROVIDER=google` 與 `AUTH_*` 變數即可。這是額外的 provider，local 與 company-SSO 路徑不受影響。
-- **公司 SSO**：實作可信任的 [`CompanySsoSessionReader`](src/modules/identity/ports/company-sso-session-reader.ts)，並在建立 application services 前以 [`configureCompanySsoSessionReader`](src/server/composition.ts) 接入。單純設定 `KM_IDENTITY_PROVIDER=company-sso` 不會提供登入頁面或身分服務。
+- **公司 SSO**：應用提供通用的 `company-sso` adapter contract。部署者須實作可信任的 [`CompanySsoSessionReader`](src/modules/identity/ports/company-sso-session-reader.ts)，並在建立 application services 前以 [`configureCompanySsoSessionReader`](src/server/composition.ts) 接入。單純設定 `KM_IDENTITY_PROVIDER=company-sso` 不會自動提供 OAuth／OIDC 登入頁面或身分服務。
 
 <details>
 <summary><b>公司 SSO 整合細節</b></summary>
@@ -217,8 +224,8 @@ reader 必須在回傳的 subject、員工編號、姓名、組織代碼與群�
 
 - 配置獨立資料庫憑證、資料備份、HTTPS 與可信任的 session 整合。勿公開使用範例開發憑證或測試設定。
 - `start` script 綁定 `127.0.0.1`，可搭配同機 reverse proxy；容器部署需自行調整啟動指令的 bind address。
-- **Try with a sample wiki** 會從 `/sample-wiki/*` 取得靜態檔案，反向代理或 SSO 允許清單必須讓已登入的使用者存取這個路徑。這些網址是絕對路徑，因此不支援 Next.js `basePath`。
-- 既有資料庫升級前請先閱讀 [Workspace governance cutover](docs/operations/phase3-workspace-governance-cutover.md)，部分 migration 有資料 readiness gate。文件連結索引可依 [rollout 文件](docs/operations/document-link-index-rollout.md) 使用 `npm run db:reindex-document-links` 回填或修復；Team 開關操作見 [Team workspace availability](docs/operations/team-workspaces-availability.md)。
+- **Try with a sample wiki** 會從 `/sample-wiki/*` 取得靜態檔案（`manifest.json` 與各個 Markdown 檔），反向代理或 SSO 允許清單必須讓已登入的使用者存取這個路徑。這些網址是絕對路徑，因此不支援 Next.js `basePath`。
+- 既有資料庫升級前請先閱讀 [Workspace governance cutover](docs/operations/phase3-workspace-governance-cutover.zh-TW.md)，部分 migration 有資料 readiness gate。文件連結索引可依 [rollout 文件](docs/operations/document-link-index-rollout.zh-TW.md) 使用 `npm run db:reindex-document-links` 回填或修復；Team 開關操作見 [Team workspace availability](docs/operations/team-workspaces-availability.zh-TW.md)。
 
 ### 文件評論部署
 
@@ -226,7 +233,7 @@ reader 必須在回傳的 subject、員工編號、姓名、組織代碼與群�
 
 [Inline review design](docs/superpowers/specs/2026-10-09-shared-personal-document-inline-review-design.md) · [Implementation plan](docs/superpowers/plans/2026-10-09-shared-personal-document-inline-review.md) · [Verification](docs/superpowers/verification/2026-10-09-shared-personal-document-inline-review.md)
 
-## 技術與架構
+## 架構
 
 | 層次 | 技術 |
 | --- | --- |
@@ -376,17 +383,19 @@ make test-mermaid-assumptions
 
 ## 文件
 
-專案文件以英文為主。每份專案 Markdown 指南都有相鄰的 `*.zh-TW.md` 中文版本。部分原本以英文撰寫的歷史文件，在中文閱讀導引下保留完整英文技術原文，並明確註明。
+專案文件以英文為主。每份專案 Markdown 指南都有相鄰的 `*.zh-TW.md` 中文版本，並在標題下方提供雙向語言連結。部分原本以英文撰寫的歷史文件，在中文閱讀導引下保留完整英文技術原文，並明確註明。歷史紀錄保存當時的技術背景；目前行為請以 canonical 文件為準。
 
 - [操作文件](docs/operations/)：資料庫升級、Team 開關、部署與索引維護
 - [設計規格](docs/superpowers/specs/)與[實作計畫](docs/superpowers/plans/)：詳細行為契約與決策背景
 - [驗證紀錄](docs/superpowers/verification/)：各功能的測試與檢查證據
 - [階段路線圖](docs/superpowers/roadmaps/2026-09-10-knowledge-hub-phase-roadmap.md)、[動作模型](docs/superpowers/specs/2026-09-21-action-model-spec.md)、[快捷鍵](docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md)、[列鍵盤操作](docs/superpowers/specs/2026-10-02-row-keyboard-actions-design.md)，以及持續原地更新、不附日期的[前端設計語言](docs/superpowers/specs/frontend-design-language.md)
 
-歷史設計與 roadmap 保存開發背景，可能包含尚未實作或已調整的構想。可用功能以目前原始碼與測試為準。
+歷史設計與 roadmap 保存開發背景，可能包含尚未實作或已調整的構想。可用功能以目前原始碼與測試為準；README 的功能表提供使用者入口。
+
+### 目前的 canonical 文件
 
 <details>
-<summary><b>目前的 canonical 文件</b></summary>
+<summary><b>展開 canonical 文件總表</b></summary>
 
 這些文件定義核心契約與實作計畫；後續專項規格記錄新增功能，附日期的驗證紀錄描述當時的執行證據。
 
@@ -436,7 +445,7 @@ make test-mermaid-assumptions
 
 歡迎貢獻。請先閱讀[貢獻指南](CONTRIBUTING.zh-TW.md)了解如何回報問題、提出功能與送出 Pull Request；一般問題與功能建議請使用 [GitHub Issues](https://github.com/mike840609/knowledge-hub/issues)。
 
-安全性漏洞請依 [SECURITY.zh-TW.md](SECURITY.zh-TW.md) 私下回報，不要開公開 issue。
+安全性漏洞請依 [SECURITY.zh-TW.md](SECURITY.zh-TW.md) 私下回報，不要開公開 issue；該文件也說明部署注意事項。
 
 ## 授權
 
