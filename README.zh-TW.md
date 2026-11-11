@@ -272,41 +272,13 @@ docs/                設計、操作與驗證文件
 
 ## 開發與測試
 
-| 指令 | 用途 |
-| --- | --- |
-| `make dev` | 啟動本機開發伺服器 |
-| `make dev-reviewer` | 以另一個本機使用者在 port 3001 啟動第二台伺服器，用來試[兩個人的流程](docs/development/two-person-demo.zh-TW.md) |
-| `make build`／`make start` | 建置／執行 production build（需身分整合） |
-| `make db-up`／`make db-down`／`make db-logs` | 啟動、停止與查看資料庫 logs；`db-down` 保留 volume |
-| `make db-migrate`／`make db-seed` | 更新 schema／載入開發 fixtures |
-| `make db-reindex-links` | 回填或修復衍生文件連結索引 |
-| `make test-unit` | 不需資料庫的單元測試 |
-| `make test-integration` | 資料庫整合測試；runner 建立與清除隔離資料庫 |
-| `make browsers` | 首次安裝 E2E 使用的 Chromium |
-| `make test-e2e` | 建立隔離資料庫、production build 並執行瀏覽器測試 |
-| `make guide-screenshots` | 從 sample wiki 重新產生站內手冊截圖 |
-| `make test-mermaid-assumptions` | 在 Chromium 檢查 reader 對 Mermaid 的假設；變更版本前後都要跑 |
-| `make verify` | Unit tests、TypeScript、lint 與 build |
-| `make help` | 完整 make 指令列表 |
-
 ```bash
-make verify
-make test-integration
-make browsers
-npm run test:e2e:smoke
-npm run test:e2e:smoke:personal
+make verify            # 單元測試、TypeScript、lint 與 build
+make test-integration  # 在隔離資料庫上執行 MariaDB 整合測試
+make test-e2e          # 在隔離資料庫上建置 production 並執行 Playwright
 ```
 
-完整 E2E 預設開啟 Team；另以個人模式檢查預設 rollout：
-
-```bash
-npm run test:e2e
-KM_E2E_PERSONAL_ONLY=true npm run test:e2e -- personal-workspace.spec.ts
-```
-
-測試 runner 自行管理測試模式與所需伺服器，不沿用 `.env` 的 Team 預設值。報告輸出至 `playwright-report/e2e-runs/<suite>/<UUID>/` 與 `test-results/`，不提交至 Git。會產生比較截圖的 spec 也會寫到 `test-results/ui-comparisons/`；`docs/ui-comparisons/` 下已追蹤的 before／after 證據只在 `KM_UPDATE_UI_COMPARISONS=1` 時重寫。覆蓋範圍見 [E2E coverage matrix](docs/superpowers/verification/2026-10-02-e2e-coverage-matrix.md)。
-
-工具鏈細節（[本機 pnpm](docs/development/maintainers.zh-TW.md#本機-pnpm)、[Next.js patch](docs/development/maintainers.zh-TW.md#nextjs-patch)、[Mermaid 版本](docs/development/maintainers.zh-TW.md#mermaid-版本)）見[維護者指南](docs/development/maintainers.zh-TW.md)。
+`make help` 列出所有指令。完整指令表、測試資料庫、E2E 模式與報告見[本機設定與驗證](docs/development/local-setup.zh-TW.md#make-指令)；工具鏈細節（[本機 pnpm](docs/development/maintainers.zh-TW.md#本機-pnpm)、[Next.js patch](docs/development/maintainers.zh-TW.md#nextjs-patch)、[Mermaid 版本](docs/development/maintainers.zh-TW.md#mermaid-版本)）見[維護者指南](docs/development/maintainers.zh-TW.md)。
 
 ## 疑難排解
 
