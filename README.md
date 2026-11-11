@@ -1,95 +1,108 @@
+<div align="center">
+
+<img src="src/app/icon.svg" alt="Knowledge Hub logo" width="88" height="88">
+
 # Knowledge Hub
-
-**English** | [繁體中文](README.zh-TW.md)
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-20.19–24-339933.svg)](package.json)
 
 **Turn Markdown notes into a knowledge workspace you can read, connect, and share.**
 
-Knowledge Hub is an open-source, self-hosted knowledge workspace. Write notes in your browser or import an existing Markdown folder or LLM Wiki. Find content through search, follow links and backlinks, explore a knowledge graph, discuss shared documents, and export what you need. Content stays in Markdown without requiring a particular note-taking app, wiki generator, or external knowledge platform.
+[![CI](https://img.shields.io/github/actions/workflow/status/mike840609/knowledge-hub/phase2-dev-gate.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI)](https://github.com/mike840609/knowledge-hub/actions/workflows/phase2-dev-gate.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.1.0-orange?style=flat-square)](package.json)
+[![Node.js](https://img.shields.io/badge/node-20.19%E2%80%9324-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white)](.node-version)
+<br>
+[![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=flat-square&logo=nextdotjs&logoColor=white)](https://nextjs.org)
+[![React](https://img.shields.io/badge/React-19-149ECA?style=flat-square&logo=react&logoColor=white)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![MariaDB](https://img.shields.io/badge/MariaDB-10.11-003545?style=flat-square&logo=mariadb&logoColor=white)](https://mariadb.org)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 
-The current version is **0.1.0 and under active development**. A personal workspace, **My Space**, is available by default. Team workspace navigation and access are disabled by default and can be enabled by an administrator. Development uses a local demo identity; production deployments require integration with a trusted identity provider. See [Deployment](#deployment).
+**English** · [繁體中文](README.zh-TW.md)
 
-[Quick start](#quick-start) · [Features](#features) · [Configuration](#configuration) · [Development and testing](#development-and-testing) · [Contributing](CONTRIBUTING.md) · [License](#license)
+[Quick start](#quick-start) · [Features](#features) · [Configuration](#configuration) · [Deployment](#deployment) · [Development](#development-and-testing) · [Contributing](CONTRIBUTING.md)
 
-## User guide
+<br>
 
-Open the account menu at the bottom of the sidebar and select **Help & guides** (`/help`, the same address for everyone; its last part, the folder format reference, is `/help#format-reference`).
-The in-app English and Traditional Chinese manual covers first import, repeat sync,
-permissions and recovery, reading, search, Insights, sharing, discussions and export.
-Preview and sync errors link to the relevant sections. The **Import folder → Read the guide**
-path continues to cover Markdown structure, `knowledge_id` and configured import limits.
+<img src="docs/images/document-reader.jpg" alt="Markdown reader with explorer, outline, resolved links, and backlinks" width="900">
 
-Maintain both languages in `src/components/help/user-guide-content.ts` when workflows change.
+</div>
+
+---
+
+Knowledge Hub is an open-source, self-hosted knowledge workspace. Write notes in the browser, or import an existing Markdown folder or LLM Wiki. Find content through search, follow links and backlinks, explore a knowledge graph, discuss shared documents, and export what you need.
+
+Your content stays in plain Markdown — no particular note-taking app, wiki generator, or external knowledge platform required.
+
+> [!NOTE]
+> Knowledge Hub is at **0.1.0 and under active development**. The personal workspace, **My Space**, is available by default; Team workspaces are opt-in. Development uses a local demo identity, and production deployments must integrate a trusted identity provider — see [Deployment](#deployment).
+
+## Highlights
+
+- **Markdown in, Markdown out** — import folders with a reviewable Preview → Apply flow, and export individual files or a whole My Space as a ZIP.
+- **Connected knowledge** — `[[wikilinks]]`, relative `.md` links, backlinks, and workspace and local graphs.
+- **Fast retrieval** — workspace search with source, path and date filters, plus a `⌘K` / `Ctrl+K` palette.
+- **Share and discuss** — expiring, revocable read-only links for documents, folders and Sources, with passage-level discussions.
+- **Agent-ready** — Copy for Agent, and scoped read APIs that follow the same access rules as the web app.
+- **Self-hosted** — a Next.js server and MariaDB that you run and own.
 
 ## Screenshots
 
-Captured on **October 29, 2026 (Asia/Taipei)** from a fresh production build of commit [`ba699b4e`](https://github.com/mike840609/knowledge-hub/commit/ba699b4e37ed5fdc22f3633e468aff6ef5a1704d), using a dedicated demo account, the bundled English sample wiki, and synthetic notes. The desktop layout shown uses a **1440 × 900** viewport; the explorer becomes a drawer below 1280px, and the navigation moves into the Menu drawer below 1024px. See the [capture provenance](docs/images/README.md) for build, dataset and verification details.
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/personal-home.jpg" alt="Home with recent documents, discussions, favorites, search, and a new-note action">
+      <p><b>Personal home</b> — drafts, recent documents, discussions and favorites, with Search and New note in reach.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/search.jpg" alt="Search results for leave with source and path shown for each match">
+      <p><b>Search</b> — search the whole workspace and narrow results by source, path and update date.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/source-history.jpg" alt="Markdown folder source overview and sync history">
+      <p><b>Sources and sync history</b> — review a folder's ownership and history, then <b>Update from folder</b> to review changes. A Source can be shared as one link that never exposes its settings, history or assets.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/knowledge-graph.jpg" alt="Knowledge graph connecting the sample handbook and related notes">
+      <p><b>Knowledge graph</b> — explore links between documents, find a note, and filter by source or unresolved targets.</p>
+    </td>
+  </tr>
+</table>
 
-### Personal home
-
-Home brings drafts, recent documents, discussions and favorites together, with Search and New note in reach.
-
-![Home with recent documents, discussions, favorites, search, and a new-note action](docs/images/personal-home.jpg)
-
-### Document reader
-
-Read Markdown with the document explorer, an on-page outline, resolved wikilinks, backlinks, and a clear read-only cue for synced folders.
-
-![Markdown reader with explorer, outline, resolved links, and backlinks](docs/images/document-reader.jpg)
-
-### Search
-
-Search the whole workspace and narrow results by source, path and update date.
-
-![Search results for leave with source and path shown for each match](docs/images/search.jpg)
-
-### Sources and sync history
-
-Review a Markdown folder's ownership and sync history, then use **Update from folder** to select the source folder again and review changes.
-
-A Source can be shared as one link: it opens the Source's current document tree and never exposes its settings, sync history, or assets.
-
-![Markdown folder source overview and sync history](docs/images/source-history.jpg)
-
-### Knowledge graph
-
-Explore links between documents, find a note, and filter the graph by source or unresolved targets.
-
-![Knowledge graph connecting the sample handbook and related notes](docs/images/knowledge-graph.jpg)
+<sub>Captured on October 29, 2026 (Asia/Taipei) from a production build of commit <a href="https://github.com/mike840609/knowledge-hub/commit/ba699b4e37ed5fdc22f3633e468aff6ef5a1704d"><code>ba699b4e</code></a> at 1440 × 900, using a demo account, the bundled English sample wiki and synthetic notes. Below 1280px the explorer becomes a drawer; below 1024px navigation moves into the Menu drawer. See the <a href="docs/images/README.md">capture provenance</a>.</sub>
 
 ## Features
 
 | Feature | What it provides |
 | --- | --- |
-| Personal workspace | My Space, Home, Inbox, personal notes, drafts, favorites, and recently read documents; reading history stays on the device |
-| Inbox | Unread updates and activity; at wide widths the selected discussion opens beside the list for reply, resolve and hide |
-| Markdown editing | Rendered editing and Markdown source modes, slash insertions, tables, toggles, callouts, code blocks, an outline, and keyboard shortcuts |
-| Drafts and revisions | Account-backed autosave, local recovery on failure, immutable revision history, comparison and restore, and stale-editor conflict checks |
-| Import and sync | Import a Markdown folder through Preview → Apply; select the folder again to review later changes; exclude paths, inspect source health, and rename a source |
-| Organization | Document and folder trees, move, rename, archive, and restore; source-managed content is read-only in the Hub |
-| Search and retrieval | Workspace search with source, path and date filters; quick search and recent documents in the `⌘K` / `Ctrl+K` palette; saved searches |
-| Knowledge links | `[[wikilinks]]`, relative `.md` links, backlinks, and workspace and local graphs |
-| Discussions | Owner discussions beside the passage, comments on shared pages, replies, resolve and hide, unread notifications, and followed discussions |
-| Sharing | Anonymous read-only My Space document links with expiry and revocation; permanent links named for chosen signed-in people; recipient-owned saved shares; owner moderation |
-| Export | Individual Markdown downloads and a My Space ZIP with directory structure and a stable ID/path manifest |
-| Agent context | Copy for Agent and workspace-scoped read/context APIs that follow the application's access rules, including discussions |
-| Team workspaces (opt-in) | Workspace administration, membership, roles and capabilities, external group mapping, and audit records |
+| **Personal workspace** | My Space, Home, Inbox, personal notes, drafts, favorites, and recently read documents; reading history stays on the device |
+| **Inbox** | Unread updates and activity; at wide widths the selected discussion opens beside the list for reply, resolve and hide |
+| **Markdown editing** | Rendered editing and Markdown source modes, slash insertions, tables, toggles, callouts, code blocks, an outline, and keyboard shortcuts |
+| **Drafts and revisions** | Account-backed autosave, local recovery on failure, immutable revision history, comparison and restore, and stale-editor conflict checks |
+| **Import and sync** | Import a Markdown folder through Preview → Apply; select the folder again to review later changes; exclude paths, inspect source health, and rename a source |
+| **Organization** | Document and folder trees, move, rename, archive, and restore; source-managed content is read-only in the Hub |
+| **Search and retrieval** | Workspace search with source, path and date filters; quick search and recent documents in the `⌘K` / `Ctrl+K` palette; saved searches |
+| **Knowledge links** | `[[wikilinks]]`, relative `.md` links, backlinks, and workspace and local graphs |
+| **Discussions** | Owner discussions beside the passage, comments on shared pages, replies, resolve and hide, unread notifications, and followed discussions |
+| **Sharing** | Anonymous read-only My Space document links with expiry and revocation; permanent links named for chosen signed-in people; recipient-owned saved shares; owner moderation |
+| **Export** | Individual Markdown downloads and a My Space ZIP with directory structure and a stable ID/path manifest |
+| **Agent context** | Copy for Agent and workspace-scoped read/context APIs that follow the application's access rules, including discussions |
+| **Team workspaces** *(opt-in)* | Workspace administration, membership, roles and capabilities, external group mapping, and audit records |
 
 ### Content ownership
 
-- **Folder Sync (`SOURCE_MANAGED`)**: the original folder is the source of truth. Edit the original Markdown files, generate a new preview, and apply it. Hub does not directly edit synced content or monitor your local folder in the background.
-- **Web Create / individual Upload (`HUB_MANAGED`)**: Hub manages the content after creation or upload. Edit it in the browser; saving creates a new revision.
+- **Folder Sync (`SOURCE_MANAGED`)** — the original folder is the source of truth. Edit the original Markdown files, generate a new preview, and apply it. The Hub does not edit synced content directly or watch your local folder in the background.
+- **Web Create / individual Upload (`HUB_MANAGED`)** — the Hub manages the content after creation or upload. Edit it in the browser; saving creates a new revision.
 
-A preview is a fixed staged snapshot. Resolve blocking diagnostics before applying it. If the source version changes, Apply returns a conflict and you must generate a new preview.
+A preview is a fixed, staged snapshot. Resolve blocking diagnostics before applying it. If the source version changes, Apply returns a conflict and you must generate a new preview.
 
 ### Current limitations and future direction
 
-- Assets store metadata and references only; there is no binary attachment storage service yet. Local images and attachments are not guaranteed to open online.
+- Assets store metadata and references only; there is no binary attachment storage yet. Local images and attachments are not guaranteed to open online.
 - ZIP exports include the latest saved versions of archived documents, but exclude drafts, revision history, and attachment bytes. The limit is 64 MiB / 9,999 documents.
-- Documents use archive and restore for their lifecycle; there is no general end-user permanent deletion flow.
-- Search is currently keyword-based. An MCP server, semantic/hybrid retrieval, and advanced agent memory are future directions, not shipped features.
+- Documents use archive and restore for their lifecycle; there is no general end-user permanent deletion.
+- Search is keyword-based. An MCP server, semantic/hybrid retrieval, and advanced agent memory are future directions, not shipped features.
 - Team workspaces display **Coming soon** by default. Enabling the feature flag does not complete production identity integration.
 - Discussion writes are separately gated by `KM_REVIEW_WRITES_ENABLED`. Existing discussion reads and owner moderation remain available when writes are off.
 - Hiding a discussion does not physically erase stored data.
@@ -98,11 +111,12 @@ A preview is a fixed staged snapshot. Resolve blocking diagnostics before applyi
 
 ### Prerequisites
 
-- Node.js **20.19.0 or later, below 25**. [`.node-version`](.node-version) specifies 24.19.0.
-- pnpm 12 for local development. `pnpm-workspace.yaml` and `pnpm-lock.yaml` are committed; see [Local pnpm](#local-pnpm).
-- npm as the fallback when pnpm is unavailable, using `package-lock.json`. CI, Vercel, and deployment always use npm.
-- Docker and Docker Compose v2 with support for `up --wait`, to run MariaDB 10.11.
-- `make` and Git. If `make` is unavailable, use the pnpm steps below; the npm fallback is in [Local pnpm](#local-pnpm).
+| Requirement | Notes |
+| --- | --- |
+| Node.js **≥ 20.19.0, < 25** | [`.node-version`](.node-version) specifies 24.19.0 |
+| pnpm 12 | Default for local development; npm is the fallback (see [Local pnpm](#local-pnpm)) |
+| Docker + Compose v2 | Must support `up --wait`; runs MariaDB 10.11 |
+| `make`, Git | Without `make`, use the steps below |
 
 ```bash
 git clone https://github.com/mike840609/knowledge-hub.git
@@ -113,9 +127,10 @@ make dev
 
 Open **http://127.0.0.1:3000/** to enter My Space.
 
-`make bootstrap` uses pnpm when pnpm 12 is installed and falls back to `npm ci`. It installs dependencies, copies `.env.example` if `.env` does not exist, starts the database, runs migrations, and loads development fixtures. An existing `.env` is preserved. The example database credentials are for local development only.
+`make bootstrap` uses pnpm when pnpm 12 is installed and falls back to `npm ci`. It installs dependencies, copies `.env.example` to `.env` if none exists (an existing `.env` is preserved), starts the database, runs migrations, and loads development fixtures. The example database credentials are for local development only.
 
-### Without make
+<details>
+<summary><b>Without make</b></summary>
 
 ```bash
 pnpm install
@@ -128,43 +143,25 @@ pnpm run dev
 
 If pnpm is unavailable, run `rm -rf node_modules .next && npm ci` instead of `pnpm install`.
 
-### Local pnpm
-
-pnpm 12 is the default local package manager; `pnpm-workspace.yaml` and `pnpm-lock.yaml` are committed. npm is the fallback when pnpm is unavailable, and remains the package manager for CI, Vercel, and deployment (`npm ci`, `package-lock.json`). Install pnpm with `brew install pnpm` (or `npm install -g pnpm@12`) and confirm `pnpm -v` reports 12.x.
-
-The committed `pnpm-workspace.yaml` carries three required settings:
-
-```yaml
-packageImportMethod: clone-or-copy
-publicHoistPattern:
-  - '*'
-allowBuilds:
-  esbuild: true
-  fsevents: true
-  unrs-resolver: true
-```
-
-`packageImportMethod: clone-or-copy` is required: without it pnpm may hardlink packages from the shared store, and `patch-package` would then modify that store for every project that uses it. The `pnpm store status` note below only holds with this setting. `publicHoistPattern` matches the root hoisting this repository currently relies on: it imports `mdast-util-to-hast`, `mdast-util-gfm`, and `@next/eslint-plugin-next` without declaring them; declaring them is the durable fix. `allowBuilds` names the dependencies allowed to run build scripts; if pnpm warns that build scripts were ignored (or reports `ERR_PNPM_IGNORED_BUILDS` with `strictDepBuilds`), add the named package after confirming it is expected, or run `pnpm approve-builds`. If you created either file locally before it was tracked, remove its `.git/info/exclude` entry so Git picks up the committed copy.
-
-Install with `pnpm install`; it runs the same `patch-package` postinstall as npm. On filesystems with clone/reflink support (APFS, Btrfs), worktrees also share disk blocks; on copy-only filesystems pnpm falls back to copies and the disk saving shrinks.
-
-The npm fallback needs the npm layout: `rm -rf node_modules .next && npm ci`. Switch back with `rm -rf node_modules .next && pnpm install`; the layouts are not interchangeable.
-
-When dependencies change, keep both lockfiles in step. `package-lock.json` is what CI, Vercel, and deployment resolve, so refresh it first with `npm install --package-lock-only`, then derive `pnpm-lock.yaml` with `pnpm import && pnpm install`, and commit both lockfiles. `pnpm import` prefers the versions recorded in `package-lock.json`; confirm `next` still resolves to 15.5.25 while `patches/next+15.5.25.patch` is in use.
-
-Do not pass `--ignore-scripts` to `pnpm install`: it skips both the dependency build scripts and the `postinstall` that applies the Next.js patch. If you already did, a plain `pnpm install` reports "Already up to date" and does not rerun the root `postinstall`; run `pnpm install --force` (or `rm -rf node_modules .next && pnpm install`). To restore the skipped dependency builds and the patch separately, run `pnpm rebuild && pnpm exec patch-package`. In a patched layout, `pnpm store status` exits non-zero with `ERR_PNPM_MODIFIED_DEPENDENCY` for `next`; that is expected, and with `clone-or-copy` the shared store itself is not changed.
+</details>
 
 ### Your first workflow
 
-1. Choose **New note** to write a note, or **Import folder** to bring in a Markdown folder. The import page links to the in-app folder format guide and offers **Try with a sample wiki**: it imports a ready-made folder (English or Traditional Chinese, from `public/sample-wiki/`) through the normal Preview → Apply flow.
-2. For imports, review additions, updates, archives, and diagnostics in Preview before applying changes.
-3. Use `[[Document title]]` in editable notes to link documents, then open Graph to explore relationships.
+1. Choose **New note** to write a note, or **Import folder** to bring in a Markdown folder. The import page links to the folder format guide and offers **Try with a sample wiki**, which imports a ready-made folder (English or Traditional Chinese, from `public/sample-wiki/`) through the normal Preview → Apply flow.
+2. For imports, review additions, updates, archives, and diagnostics in Preview before applying.
+3. Use `[[Document title]]` in editable notes to link documents, then open **Graph** to explore relationships.
 4. Save a note before creating a read-only share link or downloading its Markdown.
 5. When your local source changes, select the folder again and follow Preview → Apply.
 
+### User guide
+
+Open the account menu at the bottom of the sidebar and select **Help & guides** (`/help`; the folder format reference is at `/help#format-reference`). The in-app English and Traditional Chinese manual covers first import, repeat sync, permissions and recovery, reading, search, Insights, sharing, discussions and export. Preview and sync errors link to the relevant sections.
+
+Both languages live in `src/components/help/user-guide-content.ts`; update them together when workflows change.
+
 ## Configuration
 
-See [`.env.example`](.env.example) for local development settings and import limits. Restart the application after changing server environment settings.
+See [`.env.example`](.env.example) for local settings and import limits. Restart the application after changing server environment settings.
 
 | Setting | Purpose / default |
 | --- | --- |
@@ -181,17 +178,17 @@ See [`.env.example`](.env.example) for local development settings and import lim
 | `KM_IMPORT_*` | Import file counts, sizes, batch limits, and snapshot quotas |
 | `KM_TEST_DB_*` / `KM_E2E_DB_PREFIX` | Isolated test database settings; the test account must be able to create and drop databases with the designated prefixes |
 
-Default import limits include 20,000 manifest entries, 3.5 MiB per Markdown file, and 256 MiB of Markdown in total. See `.env.example` for the full limits. Snapshot retention is 2 hours for BUILDING, 30 minutes for READY, and 24 hours for STALE/APPLIED. The server deletes expired staging data in the background when someone starts an import, at most once every 10 minutes per process. To clean up on demand, for example on an instance nobody imports into, run:
+Default import limits include 20,000 manifest entries, 3.5 MiB per Markdown file, and 256 MiB of Markdown in total. Snapshot retention is 2 hours for `BUILDING`, 30 minutes for `READY`, and 24 hours for `STALE` / `APPLIED`. The server deletes expired staging data in the background when someone starts an import, at most once every 10 minutes per process. To clean up on demand (for example, on an instance nobody imports into):
 
 ```bash
 npx tsx scripts/db/cleanup-import-snapshots.ts
 ```
 
-This cleanup removes import staging data only, preserving canonical document history.
+This removes import staging data only and preserves canonical document history.
 
 ## Deployment
 
-Knowledge Hub runs a Next.js server with MariaDB. `compose.yaml` currently provides a development database, not a complete production deployment.
+Knowledge Hub runs a Next.js server with MariaDB. `compose.yaml` provides a development database, not a complete production deployment.
 
 ```bash
 npm ci
@@ -200,27 +197,38 @@ npm run build
 npm run start
 ```
 
-**Complete identity integration before running in production.** `npm run start` runs in production mode, which rejects the default Local identity provider. `KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION` is for testing and must not be used as a production deployment method.
+> [!IMPORTANT]
+> **Complete identity integration before running in production.** `npm run start` runs in production mode, which rejects the default Local identity provider. `KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION` exists for testing and must not be used as a deployment method.
 
-For a **single-operator** deployment on Vercel with a Layerbase MariaDB, follow the [Vercel + Layerbase runbook](docs/operations/vercel-layerbase.md). That path deliberately keeps the local identity provider behind an optional site password, runs migrations during production builds, and disables preview deployments. Do not apply it to a shared or company deployment.
+**Deployment paths**
 
-For a **public demo**, the runbook also documents [Google demo login](docs/operations/vercel-layerbase.md#google-demo-login): set `KM_IDENTITY_PROVIDER=google` and the `AUTH_*` variables. It is an additive provider; the local and company-SSO paths are unchanged.
+- **Single operator on Vercel** — follow the [Vercel + Layerbase runbook](docs/operations/vercel-layerbase.md). It keeps the local identity provider behind an optional site password, runs migrations during production builds, and disables preview deployments. Do not use it for a shared or company deployment.
+- **Public demo** — the same runbook documents [Google demo login](docs/operations/vercel-layerbase.md#google-demo-login): set `KM_IDENTITY_PROVIDER=google` and the `AUTH_*` variables. It is additive; the local and company-SSO paths are unchanged.
+- **Company SSO** — implement a trusted [`CompanySsoSessionReader`](src/modules/identity/ports/company-sso-session-reader.ts) and register it through [`configureCompanySsoSessionReader`](src/server/composition.ts) before application services are created. Setting `KM_IDENTITY_PROVIDER=company-sso` alone provides no login page or identity service.
 
-The application provides a generic `company-sso` adapter contract. Deployers must implement a trusted [`CompanySsoSessionReader`](src/modules/identity/ports/company-sso-session-reader.ts) and register it through [`configureCompanySsoSessionReader`](src/server/composition.ts) before application services are created. The reader must return the company account name as `account` and the optional English display name as `name_en` alongside the subject, employee id, name, org code, and group IDs. Setting `KM_IDENTITY_PROVIDER=company-sso` alone does not provide an OAuth/OIDC login page or identity service. Shared-page “Open in Knowledge Hub” and “Get started” links navigate to `KM_PUBLIC_ORIGIN` with a full browser navigation when configured, allowing the company Gateway at that origin to challenge anonymous users for SSO. The entry URL carries `returnTo=/s/:token/open`; the Gateway must preserve this query string through SSO. After authentication, the Hub accepts only a share-opening path and resumes the existing link-validity and document-access checks. Invalid or absent continuation parameters use the ordinary home destination. Without `KM_PUBLIC_ORIGIN`, these links retain the local `/s/:token/open` flow.
+<details>
+<summary><b>Company SSO integration details</b></summary>
 
-Configure separate database credentials, backups, HTTPS, and a trusted session integration. The `start` script binds to `127.0.0.1`, suitable for a reverse proxy on the same host. Container deployments need an appropriate bind address in their startup command. Do not expose example development credentials or test settings in production.
+The reader must return the company account name as `account` and the optional English display name as `name_en`, alongside the subject, employee id, name, org code, and group IDs.
 
-The import page's "Try with a sample wiki" fetches static files from `/sample-wiki/*` (`manifest.json` and the Markdown files), so a reverse proxy or SSO allow-list must serve that path to signed-in users. The URLs are absolute, so deploying under a Next.js `basePath` is not supported.
+Shared-page **Open in Knowledge Hub** and **Get started** links navigate to `KM_PUBLIC_ORIGIN` with a full browser navigation when it is configured, so the company Gateway at that origin can challenge anonymous users for SSO. The entry URL carries `returnTo=/s/:token/open`; the Gateway must preserve this query string through SSO. After authentication, the Hub accepts only a share-opening path and resumes the existing link-validity and document-access checks. Invalid or absent continuation parameters fall back to the ordinary home destination. Without `KM_PUBLIC_ORIGIN`, these links keep the local `/s/:token/open` flow.
 
-Before upgrading an existing database, read the [workspace governance cutover guide](docs/operations/phase3-workspace-governance-cutover.md); some migrations enforce data readiness gates. Follow the [document link index rollout guide](docs/operations/document-link-index-rollout.md) to backfill or repair links with `npm run db:reindex-document-links`. See [Team workspace availability](docs/operations/team-workspaces-availability.md) for feature flag operations.
+</details>
+
+**Production checklist**
+
+- Separate database credentials, backups, HTTPS, and a trusted session integration. Never expose example development credentials or test settings.
+- The `start` script binds to `127.0.0.1`, suitable for a reverse proxy on the same host. Container deployments need an appropriate bind address in their startup command.
+- **Try with a sample wiki** fetches static files from `/sample-wiki/*`, so a reverse proxy or SSO allow-list must serve that path to signed-in users. The URLs are absolute, so a Next.js `basePath` is not supported.
+- Before upgrading an existing database, read the [workspace governance cutover guide](docs/operations/phase3-workspace-governance-cutover.md); some migrations enforce data readiness gates. Use the [document link index rollout guide](docs/operations/document-link-index-rollout.md) to backfill or repair links with `npm run db:reindex-document-links`, and [Team workspace availability](docs/operations/team-workspaces-availability.md) for feature flag operations.
 
 ### Document review deployment
 
-Discussions are stored separately from Markdown and Folder Sync. `KM_REVIEW_WRITES_ENABLED` defaults off; existing discussion reads and owner moderation remain available while new threads and replies are disabled. Behind a Gateway or reverse proxy, set `KM_PUBLIC_ORIGIN` to the origin browsers use (for example `https://km.example.com`); without it every discussion request is refused as cross-origin. Company SSO/Gateway and login continuation require separate corporate integration evidence before production writes are enabled. Hiding content does not physically erase stored data.
+Discussions are stored separately from Markdown and Folder Sync. `KM_REVIEW_WRITES_ENABLED` defaults to off; existing discussion reads and owner moderation remain available while new threads and replies are disabled. Behind a Gateway or reverse proxy, set `KM_PUBLIC_ORIGIN` to the origin browsers use (for example `https://km.example.com`); without it every discussion request is refused as cross-origin. Company SSO/Gateway and login continuation require separate corporate integration evidence before production writes are enabled. Hiding content does not physically erase stored data.
 
 [Inline review design](docs/superpowers/specs/2026-10-09-shared-personal-document-inline-review-design.md) · [Implementation plan](docs/superpowers/plans/2026-10-09-shared-personal-document-inline-review.md) · [Verification](docs/superpowers/verification/2026-10-09-shared-personal-document-inline-review.md)
 
-## Technology and architecture
+## Architecture
 
 | Layer | Technology |
 | --- | --- |
@@ -231,7 +239,7 @@ Discussions are stored separately from Markdown and Folder Sync. `KM_REVIEW_WRIT
 | Database | MariaDB 10.11 |
 | Testing | Vitest, Playwright |
 
-The application is a modular monolith with five core modules: `identity`, `workspaces`, `sources`, `knowledge`, and `personal`. Web pages and APIs share application services.
+The application is a modular monolith. Its modules — `identity`, `workspaces`, `sources`, `knowledge`, `personal` and `task-knowledge` — keep domain rules free of I/O, and web pages and APIs share the same application services. Module boundaries are enforced by lint rules.
 
 ```text
 User → WorkspaceMembership → Workspace
@@ -242,7 +250,7 @@ User → WorkspaceMembership → Workspace
                                             └── KnowledgeRevision (immutable)
 ```
 
-A workspace is both a knowledge container and the basic access boundary. Organizational attributes do not directly grant access, and knowing a document ID does not authorize reading it. Public share links are explicitly created, revocable read-only entry points for individual documents.
+A workspace is both a knowledge container and the basic access boundary. Organizational attributes do not grant access, and knowing a document ID does not authorize reading it. Public share links are explicitly created, revocable, read-only entry points.
 
 ```text
 src/app/             Next.js pages and HTTP routes
@@ -264,7 +272,7 @@ docs/                Design, operations, and verification records
 | `make dev` | Start the local development server |
 | `make dev-reviewer` | Start a second server as another local user on port 3001, for [two-person flows](docs/development/two-person-demo.md) |
 | `make build` / `make start` | Build / serve a production build (requires identity integration) |
-| `make db-up` / `make db-down` / `make db-logs` | Start, stop, or inspect database logs; `db-down` preserves the volume |
+| `make db-up` / `make db-down` / `make db-logs` | Start, stop, or inspect the database; `db-down` preserves the volume |
 | `make db-migrate` / `make db-seed` | Update the schema / load development fixtures |
 | `make db-reindex-links` | Backfill or repair the derived document link index |
 | `make test-unit` | Unit tests without a database |
@@ -291,50 +299,96 @@ npm run test:e2e
 KM_E2E_PERSONAL_ONLY=true npm run test:e2e -- personal-workspace.spec.ts
 ```
 
-The test runner manages its own mode and required servers rather than inheriting the Team default from `.env`. Reports are written to `playwright-report/e2e-runs/<suite>/<UUID>/` and `test-results/`, and are excluded from Git. Specs that take comparison screenshots write them to `test-results/ui-comparisons/` too; the tracked before/after evidence under `docs/ui-comparisons/` is rewritten only with `KM_UPDATE_UI_COMPARISONS=1`. See the [E2E coverage matrix](docs/superpowers/verification/2026-10-02-e2e-coverage-matrix.md) for coverage details.
+The test runner manages its own mode and required servers rather than inheriting the Team default from `.env`. Reports are written to `playwright-report/e2e-runs/<suite>/<UUID>/` and `test-results/`, and are excluded from Git. Specs that take comparison screenshots also write them to `test-results/ui-comparisons/`; the tracked before/after evidence under `docs/ui-comparisons/` is rewritten only with `KM_UPDATE_UI_COMPARISONS=1`. See the [E2E coverage matrix](docs/superpowers/verification/2026-10-02-e2e-coverage-matrix.md).
+
+### Local pnpm
+
+pnpm 12 is the default local package manager; `pnpm-workspace.yaml` and `pnpm-lock.yaml` are committed. npm is the fallback when pnpm is unavailable, and remains the package manager for CI, Vercel, and deployment (`npm ci`, `package-lock.json`). Install pnpm with `brew install pnpm` (or `npm install -g pnpm@12`) and confirm `pnpm -v` reports 12.x.
+
+<details>
+<summary><b>Required settings, lockfiles, and install caveats</b></summary>
+
+The committed `pnpm-workspace.yaml` carries three required settings:
+
+```yaml
+packageImportMethod: clone-or-copy
+publicHoistPattern:
+  - '*'
+allowBuilds:
+  esbuild: true
+  fsevents: true
+  unrs-resolver: true
+```
+
+- `packageImportMethod: clone-or-copy` is required: without it pnpm may hardlink packages from the shared store, and `patch-package` would then modify that store for every project that uses it. The `pnpm store status` note below only holds with this setting.
+- `publicHoistPattern` matches the root hoisting this repository relies on: it imports `mdast-util-to-hast`, `mdast-util-gfm`, and `@next/eslint-plugin-next` without declaring them; declaring them is the durable fix.
+- `allowBuilds` names the dependencies allowed to run build scripts. If pnpm warns that build scripts were ignored (or reports `ERR_PNPM_IGNORED_BUILDS` with `strictDepBuilds`), add the named package after confirming it is expected, or run `pnpm approve-builds`.
+
+If you created either file locally before it was tracked, remove its `.git/info/exclude` entry so Git picks up the committed copy.
+
+Install with `pnpm install`; it runs the same `patch-package` postinstall as npm. On filesystems with clone/reflink support (APFS, Btrfs), worktrees also share disk blocks; on copy-only filesystems pnpm falls back to copies and the disk saving shrinks.
+
+The npm fallback needs the npm layout: `rm -rf node_modules .next && npm ci`. Switch back with `rm -rf node_modules .next && pnpm install`; the layouts are not interchangeable.
+
+**When dependencies change**, keep both lockfiles in step. `package-lock.json` is what CI, Vercel, and deployment resolve, so refresh it first with `npm install --package-lock-only`, then derive `pnpm-lock.yaml` with `pnpm import && pnpm install`, and commit both. `pnpm import` prefers the versions recorded in `package-lock.json`; confirm `next` still resolves to 15.5.25 while `patches/next+15.5.25.patch` is in use.
+
+**Do not pass `--ignore-scripts`** to `pnpm install`: it skips both the dependency build scripts and the `postinstall` that applies the Next.js patch. If you already did, a plain `pnpm install` reports "Already up to date" and does not rerun the root `postinstall`; run `pnpm install --force` (or `rm -rf node_modules .next && pnpm install`). To restore the skipped dependency builds and the patch separately, run `pnpm rebuild && pnpm exec patch-package`. In a patched layout, `pnpm store status` exits non-zero with `ERR_PNPM_MODIFIED_DEPENDENCY` for `next`; that is expected, and with `clone-or-copy` the shared store itself is not changed.
+
+</details>
 
 ### Next.js patch
 
-The `pnpm install` (or `npm ci`) postinstall step uses `patch-package` to apply [`patches/next+15.5.25.patch`](patches/next+15.5.25.patch). It fixes two bugs in Next.js's bundled React (`19.2.0-canary-0bdb9206-20250818`). The first is lost render pings during page navigation. The second makes the page crash with "Application error" (React #310, "Rendered more hooks than during the previous render", thrown from Next's `Router`) when a redirect or other error lands during render while another navigation is still loading. An example is clicking a document while "Browse documents" is still redirecting. Without the fix, React's error recovery commits the Router half-rendered; the patch adds the one condition from [facebook/react#36911](https://github.com/facebook/react/pull/36911) to the four `react-dom` client and profiling builds. Keep install scripts enabled; after an npm install made with `--ignore-scripts`, run `npm ci`; after a pnpm one, run `pnpm install --force` (a plain `pnpm install` will not rerun the root `postinstall` on an up-to-date tree). To restore only the patch, use `pnpm exec patch-package` on a pnpm layout or `npx patch-package` on an npm layout.
+The install postinstall step uses `patch-package` to apply [`patches/next+15.5.25.patch`](patches/next+15.5.25.patch), which fixes two bugs in Next.js's bundled React (`19.2.0-canary-0bdb9206-20250818`):
+
+1. Lost render pings during page navigation.
+2. A page crash with "Application error" (React #310, "Rendered more hooks than during the previous render", thrown from Next's `Router`) when a redirect or other error lands during render while another navigation is still loading — for example, clicking a document while "Browse documents" is still redirecting. Without the fix, React's error recovery commits the Router half-rendered; the patch adds the one condition from [facebook/react#36911](https://github.com/facebook/react/pull/36911) to the four `react-dom` client and profiling builds.
+
+<details>
+<summary><b>Restoring, verifying, and upgrading</b></summary>
+
+Keep install scripts enabled. After an npm install made with `--ignore-scripts`, run `npm ci`; after a pnpm one, run `pnpm install --force` (a plain `pnpm install` will not rerun the root `postinstall` on an up-to-date tree). To restore only the patch, use `pnpm exec patch-package` on a pnpm layout or `npx patch-package` on an npm layout.
 
 The second fix was checked against the upstream diff of #36911, and [vercel/next.js#95368](https://github.com/vercel/next.js/pull/95368) brings it into Next canary (React `ec0fca31-20260701`). The issues those PRs reference (vercel/next.js#63121 and #78396, facebook/react#33580) were read only as summaries and were not reproduced here. The `experimental` React channel under `next/dist/compiled/react-dom-experimental` is unpatched: it is only loaded when experimental React features are enabled in `next.config.ts`, which this project does not do.
 
 When upgrading Next.js, check whether the patch is still required: [`vendored-react-ping-fix.test.ts`](tests/unit/vendored-react-ping-fix.test.ts) checks the bundled source for both fixes, and passes without the patch once Next bundles a React that already has them. [`router-redirect-during-navigation.spec.ts`](tests/e2e/router-redirect-during-navigation.spec.ts) reproduces the crash in the browser; evidence is in the [verification record](docs/superpowers/verification/2026-10-06-react-310-redirect-recovery-verification.md). After updating or removing the patch, clear `.next/cache` before rebuilding.
 
+</details>
+
 ### Mermaid version
 
-`mermaid` is pinned to `~12.2.0`. The reader draws a diagram only if its type is on a list, with a list of config keys a diagram's own text may not set and a sanitiser configuration of its own ([`mermaid-queue.ts`](src/components/knowledge/mermaid-queue.ts)); each of the three is there because of what that version was seen to do in a browser. Before changing the version, and again after, run:
+`mermaid` is pinned to `~12.2.0`. The reader draws a diagram only if its type is on an allow-list, with a list of config keys a diagram's own text may not set and a sanitiser configuration of its own ([`mermaid-queue.ts`](src/components/knowledge/mermaid-queue.ts)); each exists because of what that version was seen to do in a browser. Before changing the version, and again after, run:
 
 ```bash
 make test-mermaid-assumptions
 ```
 
-[`scripts/test/mermaid-assumptions.mjs`](scripts/test/mermaid-assumptions.mjs) lays every listed type out in Chromium with hostile text, under the production policy's fetch directives, and exits non-zero when an assumption no longer holds. It is not part of `make verify` or CI. The [spec](docs/superpowers/specs/2026-10-13-reader-mermaid-design.md) says what each assumption guards.
+[`scripts/test/mermaid-assumptions.mjs`](scripts/test/mermaid-assumptions.mjs) lays every listed type out in Chromium with hostile text, under the production policy's fetch directives, and exits non-zero when an assumption no longer holds. It is not part of `make verify` or CI. The [spec](docs/superpowers/specs/2026-10-13-reader-mermaid-design.md) explains what each assumption guards.
 
 ## Troubleshooting
 
-- **Database connection fails**: check Docker, `make db-logs`, and the credentials in `.env`. The local database uses port 3307, the development server uses 3000, and E2E defaults to 3101.
-- **Team navigation is unavailable**: Coming soon is the default. Set `KM_TEAM_WORKSPACES_ENABLED=true` and restart.
-- **Production identity error**: Local identity does not provide production login. Integrate an SSO session reader or use the documented Google demo provider.
-- **Import cannot be applied**: resolve blockers in Preview. A 409 version conflict requires a new preview; there is no Force Apply.
-- **Links or graph entries are missing**: ensure migrations are complete, then run `make db-reindex-links`. Fix wikilinks in synced documents at the original source.
-- **Comments cannot be added**: set `KM_REVIEW_WRITES_ENABLED=true` and restart. Behind a Gateway, also set `KM_PUBLIC_ORIGIN`; without it discussion requests are refused as cross-origin.
-- **Resetting development data**: `make db-reset` deletes the development database volume and all its contents. Back up anything you need before running it.
+| Symptom | Fix |
+| --- | --- |
+| Database connection fails | Check Docker, `make db-logs`, and the credentials in `.env`. The local database uses port 3307, the dev server 3000, and E2E 3101 by default. |
+| Team navigation is unavailable | **Coming soon** is the default. Set `KM_TEAM_WORKSPACES_ENABLED=true` and restart. |
+| Production identity error | Local identity does not provide production login. Integrate an SSO session reader or use the documented Google demo provider. |
+| Import cannot be applied | Resolve blockers in Preview. A 409 version conflict requires a new preview; there is no Force Apply. |
+| Links or graph entries are missing | Ensure migrations are complete, then run `make db-reindex-links`. Fix wikilinks in synced documents at the original source. |
+| Comments cannot be added | Set `KM_REVIEW_WRITES_ENABLED=true` and restart. Behind a Gateway, also set `KM_PUBLIC_ORIGIN`. |
+| Resetting development data | `make db-reset` deletes the development database volume and all its contents. Back up anything you need first. |
 
-## Documentation and participation
+## Documentation
 
-English is the primary documentation language. Each project Markdown guide includes a link to its Traditional Chinese companion (`*.zh-TW.md`). Some originally English historical documents retain their full English technical text beneath a Chinese reading guide; those companions state this explicitly. Historical records preserve the technical context of their original date; consult the current canonical documents for present behavior.
+English is the primary documentation language. Each project Markdown guide links to its Traditional Chinese companion (`*.zh-TW.md`). Some originally English historical documents keep their full English technical text beneath a Chinese reading guide; those companions say so explicitly.
 
-- [Contributing guide](CONTRIBUTING.md): report issues, propose features, and submit pull requests.
-- [Security reporting](SECURITY.md): private vulnerability reporting and deployment considerations.
-- [Operations guides](docs/operations/): database upgrades, Team availability, deployment, and index maintenance.
-- [Design specifications](docs/superpowers/specs/) and [implementation plans](docs/superpowers/plans/): detailed behavior contracts and design decisions.
-- [Verification records](docs/superpowers/verification/): testing and inspection evidence for individual features.
-- [GitHub Issues](https://github.com/mike840609/knowledge-hub/issues): general questions and feature requests.
+- [Operations guides](docs/operations/) — database upgrades, Team availability, deployment, and index maintenance
+- [Design specifications](docs/superpowers/specs/) and [implementation plans](docs/superpowers/plans/) — behavior contracts and design decisions
+- [Verification records](docs/superpowers/verification/) — testing and inspection evidence for individual features
+- [Phase roadmap](docs/superpowers/roadmaps/2026-09-10-knowledge-hub-phase-roadmap.md), [action model](docs/superpowers/specs/2026-09-21-action-model-spec.md), [keyboard shortcuts](docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md), [row keyboard actions](docs/superpowers/specs/2026-10-02-row-keyboard-actions-design.md), and the undated [frontend design language](docs/superpowers/specs/frontend-design-language.md), updated in place
 
-Historical designs and roadmaps preserve development context and may describe features that are unimplemented or have since changed. Current source code and tests define shipped behavior; the feature table above provides an overview for users.
+Historical designs and roadmaps preserve development context and may describe features that are unimplemented or have since changed. Current source code and tests define shipped behavior.
 
-### Current canonical documents
+<details>
+<summary><b>Current canonical documents</b></summary>
 
 These documents define the core contracts and their implementation plans. Later focused specifications record additions; dated verification records describe evidence at that point in time.
 
@@ -378,8 +432,14 @@ These documents define the core contracts and their implementation plans. Later 
 | Inbox split view | [Spec](docs/superpowers/specs/2026-10-29-inbox-split-view-design.md) | — | A list and the selected discussion beside it at 75rem; narrower windows keep the list. |
 | Users account | [Spec](docs/superpowers/specs/2026-10-29-users-account-design.md) | [Plan](docs/superpowers/plans/2026-10-29-users-account.md) | Company SSO account and optional English name stored for future mention autocomplete. |
 
-Also consult the [phase roadmap](docs/superpowers/roadmaps/2026-09-10-knowledge-hub-phase-roadmap.md), [action model](docs/superpowers/specs/2026-09-21-action-model-spec.md), [keyboard shortcuts](docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md), [row keyboard actions](docs/superpowers/specs/2026-10-02-row-keyboard-actions-design.md), and the undated [frontend design language](docs/superpowers/specs/frontend-design-language.md), which is updated in place.
+</details>
+
+## Contributing
+
+Contributions are welcome. Read the [contributing guide](CONTRIBUTING.md) to report issues, propose features, and submit pull requests, and use [GitHub Issues](https://github.com/mike840609/knowledge-hub/issues) for general questions and feature requests.
+
+Please report security vulnerabilities privately as described in [SECURITY.md](SECURITY.md), not in public issues.
 
 ## License
 
-Knowledge Hub is licensed under the **[MIT License](LICENSE)**. You may use, modify, and distribute it, retaining the original copyright and license notices when redistributing. Third-party dependencies retain their respective licenses.
+Knowledge Hub is released under the [MIT License](LICENSE). You may use, modify, and distribute it, retaining the original copyright and license notices when redistributing. Third-party dependencies retain their respective licenses.

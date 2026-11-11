@@ -1,77 +1,94 @@
+<div align="center">
+
+<img src="src/app/icon.svg" alt="Knowledge Hub logo" width="88" height="88">
+
 # Knowledge Hub
-
-[English](README.md) | **繁體中文**
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-20.19–24-339933.svg)](package.json)
 
 **將 Markdown 筆記變成可閱讀、可連結、可分享的知識空間。**
 
-Knowledge Hub 是開源、可自行部署的知識工作空間。你可以直接在瀏覽器撰寫筆記，也可以匯入既有的 Markdown folder／LLM Wiki，透過搜尋、雙向連結與圖譜探索內容，在分享文件上討論，並匯出需要的內容。內容保留 Markdown 格式，不需要綁定特定筆記軟體、Wiki generator 或外部知識平台。
+[![CI](https://img.shields.io/github/actions/workflow/status/mike840609/knowledge-hub/phase2-dev-gate.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI)](https://github.com/mike840609/knowledge-hub/actions/workflows/phase2-dev-gate.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.1.0-orange?style=flat-square)](package.json)
+[![Node.js](https://img.shields.io/badge/node-20.19%E2%80%9324-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white)](.node-version)
+<br>
+[![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=flat-square&logo=nextdotjs&logoColor=white)](https://nextjs.org)
+[![React](https://img.shields.io/badge/React-19-149ECA?style=flat-square&logo=react&logoColor=white)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![MariaDB](https://img.shields.io/badge/MariaDB-10.11-003545?style=flat-square&logo=mariadb&logoColor=white)](https://mariadb.org)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 
-目前版本為 **0.1.0，持續開發中**。預設提供個人工作空間 **My Space**；Team workspace 的導覽與存取預設關閉，可由管理者開啟。開發模式使用本機示範身分；正式多使用者部署需要整合可信任的身分提供者，詳見[部署](#部署)。
+[English](README.md) · **繁體中文**
 
-[快速開始](#快速開始) · [功能](#功能) · [設定](#設定) · [開發與測試](#開發與測試) · [參與貢獻](CONTRIBUTING.zh-TW.md) · [授權](#授權)
+[快速開始](#快速開始) · [功能](#功能) · [設定](#設定) · [部署](#部署) · [開發](#開發與測試) · [參與貢獻](CONTRIBUTING.zh-TW.md)
 
-## 使用者操作手冊
+<br>
 
-從側欄底部的帳號選單選擇 **Help & guides**（`/help`，所有人共用同一個網址；最後的資料夾格式參考是 `/help#format-reference`），可切換英文與繁體中文。
+<img src="docs/images/document-reader.jpg" alt="包含文件瀏覽器、大綱、已解析連結與反向連結的 Markdown 閱讀頁" width="900">
 
-手冊涵蓋首次匯入、日常同步、授權與錯誤恢復、閱讀、搜尋、Insights、分享、討論與匯出。匯入預覽與同步錯誤會連到對應章節；**Import folder → Read the guide** 仍涵蓋 Markdown 結構、`knowledge_id` 與匯入限制。
+</div>
 
-操作流程變更時，請同步維護 `src/components/help/user-guide-content.ts` 的兩種語言。
+---
+
+Knowledge Hub 是開源、可自行部署的知識工作空間。你可以直接在瀏覽器撰寫筆記，也可以匯入既有的 Markdown folder／LLM Wiki，透過搜尋、雙向連結與圖譜探索內容，在分享文件上討論，並匯出需要的內容。
+
+內容始終是純 Markdown，不需要綁定特定筆記軟體、Wiki generator 或外部知識平台。
+
+> [!NOTE]
+> 目前版本為 **0.1.0，持續開發中**。預設提供個人工作空間 **My Space**；Team workspace 需另外開啟。開發模式使用本機示範身分，正式部署必須整合可信任的身分提供者，詳見[部署](#部署)。
+
+## 特色
+
+- **Markdown 進、Markdown 出**：以可檢查的 Preview → Apply 流程匯入資料夾，可匯出單篇或整個 My Space ZIP。
+- **知識互相連結**：`[[wikilink]]`、相對 `.md` 連結、反向連結，以及 Workspace／Local graph。
+- **快速檢索**：Workspace 搜尋支援來源、路徑與日期篩選，並有 `⌘K`／`Ctrl+K` 指令面板。
+- **分享與討論**：文件、資料夾與來源皆可建立可到期、可撤銷的唯讀連結，並在段落上討論。
+- **為 Agent 準備**：Copy for Agent，以及與網頁版遵循相同存取規則的範圍化讀取 API。
+- **自行部署**：Next.js server 加 MariaDB，由你掌控與擁有。
 
 ## 介面預覽
 
-以下截圖於 **2026 年 10 月 29 日（Asia/Taipei）**，從 commit [`ba699b4e`](https://github.com/mike840609/knowledge-hub/commit/ba699b4e37ed5fdc22f3633e468aff6ef5a1704d) 的全新 production build 擷取，使用獨立展示帳號、內附英文 sample wiki 與合成筆記。畫面為 **1440 × 900** 桌面版；視窗窄於 1280px 時文件瀏覽器改為抽屜，窄於 1024px 時導覽移入 Menu 抽屜。建置、資料集與驗證細節見[截圖來源紀錄](docs/images/README.md)。
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/personal-home.jpg" alt="包含最近文件、討論、收藏、搜尋與新增筆記的 Home">
+      <p><b>個人首頁</b>：集中草稿、最近文件、討論與收藏，Search 與 New note 就在手邊。</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/search.jpg" alt="搜尋 leave 的結果，每筆顯示來源與原始路徑">
+      <p><b>搜尋</b>：搜尋整個工作空間，並依來源、路徑與更新日期縮小範圍。</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/source-history.jpg" alt="Markdown folder 來源與同步紀錄">
+      <p><b>來源與同步歷史</b>：查看資料夾的來源管理方式與同步紀錄，再由 <b>Update from folder</b> 檢查變更。來源可整個分享為一個連結，且不會公開其設定、歷史或資產。</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/knowledge-graph.jpg" alt="連結範例手冊與相關筆記的知識圖譜">
+      <p><b>知識圖譜</b>：探索文件間的連結、查找筆記，並依來源或未解析目標篩選。</p>
+    </td>
+  </tr>
+</table>
 
-### 個人首頁
-
-Home 集中草稿、最近文件、討論與收藏，Search 與 New note 就在手邊。
-
-![包含最近文件、討論、收藏、搜尋與新增筆記的 Home](docs/images/personal-home.jpg)
-
-### 文件閱讀
-
-閱讀 Markdown，使用文件瀏覽器、頁內大綱、已解析 wikilinks、反向連結，並清楚標示同步來源的唯讀狀態。
-
-![包含文件瀏覽器、大綱、已解析連結與反向連結的 Markdown 閱讀頁](docs/images/document-reader.jpg)
-
-### 搜尋
-
-搜尋整個工作空間，並依來源、路徑與更新日期縮小範圍。
-
-![搜尋 leave 的結果，每筆顯示來源與原始路徑](docs/images/search.jpg)
-
-### 來源與同步歷史
-
-查看 Markdown folder 的來源管理方式與同步紀錄，再由 **Update from folder** 重新選取來源資料夾並檢查變更。
-
-![Markdown folder 來源與同步紀錄](docs/images/source-history.jpg)
-
-### 知識圖譜
-
-探索文件間的連結、查找筆記，並依來源或未解析目標篩選圖譜。
-
-![連結範例手冊與相關筆記的知識圖譜](docs/images/knowledge-graph.jpg)
+<sub>截圖於 2026 年 10 月 29 日（Asia/Taipei）從 commit <a href="https://github.com/mike840609/knowledge-hub/commit/ba699b4e37ed5fdc22f3633e468aff6ef5a1704d"><code>ba699b4e</code></a> 的 production build 以 1440 × 900 擷取，使用展示帳號、內附英文 sample wiki 與合成筆記。視窗窄於 1280px 時文件瀏覽器改為抽屜，窄於 1024px 時導覽移入 Menu 抽屜。詳見<a href="docs/images/README.md">截圖來源紀錄</a>。</sub>
 
 ## 功能
 
 | 功能 | 說明 |
 | --- | --- |
-| 個人工作空間 | My Space、Home、Inbox、個人筆記、草稿、收藏與最近閱讀；最近閱讀保留於裝置 |
-| Inbox | 未讀更新與活動；視窗夠寬時，選取的討論會顯示在列表旁，可直接回覆、解決與隱藏 |
-| Markdown 編輯 | 渲染式編輯與 Markdown 原始碼模式、slash 插入、表格、toggle、callout、程式碼區塊、文件大綱與鍵盤快捷鍵 |
-| 草稿與版本 | 帳號草稿自動保存、失敗時本機恢復副本、不可變版本歷史、版本比較與還原、過期編輯衝突檢查 |
-| 匯入與同步 | Markdown folder 經 Preview → Apply 匯入；再次選取來源資料夾檢查後續變更；可排除路徑、查看來源健康與重新命名來源 |
-| 文件整理 | 文件／資料夾樹、移動、更名、封存與還原；來源管理的內容在 Hub 內為唯讀 |
-| 搜尋與檢索 | Workspace 搜尋，支援來源、路徑與日期篩選；`⌘K`／`Ctrl+K` 快速搜尋與最近文件；可儲存搜尋 |
-| 知識連結 | `[[wikilink]]`、相對 `.md` 連結、Backlinks、Workspace／Local graph |
-| 討論 | 擁有者在段落旁討論、分享頁留言、回覆、解決與隱藏、未讀通知與追蹤中的討論 |
-| 分享 | My Space 匿名唯讀文件連結，可設期限與撤銷；收件者可將分享存到 Shares；擁有者可管理與隱藏留言 |
-| 匯出 | 單篇 Markdown 下載、My Space ZIP 匯出，保留目錄與穩定 ID/path manifest |
-| Agent context | Copy for Agent 與 Workspace 範圍的讀取／context API，沿用應用存取規則並包含討論 |
-| Team workspace（需開啟） | Workspace 管理、membership、角色與能力、外部群組映射及 audit |
+| **個人工作空間** | My Space、Home、Inbox、個人筆記、草稿、收藏與最近閱讀；最近閱讀保留於裝置 |
+| **Inbox** | 未讀更新與活動；視窗夠寬時，選取的討論會顯示在列表旁，可直接回覆、解決與隱藏 |
+| **Markdown 編輯** | 渲染式編輯與 Markdown 原始碼模式、slash 插入、表格、toggle、callout、程式碼區塊、文件大綱與鍵盤快捷鍵 |
+| **草稿與版本** | 帳號草稿自動保存、失敗時本機恢復副本、不可變版本歷史、版本比較與還原、過期編輯衝突檢查 |
+| **匯入與同步** | Markdown folder 經 Preview → Apply 匯入；再次選取來源資料夾檢查後續變更；可排除路徑、查看來源健康與重新命名來源 |
+| **文件整理** | 文件／資料夾樹、移動、更名、封存與還原；來源管理的內容在 Hub 內為唯讀 |
+| **搜尋與檢索** | Workspace 搜尋，支援來源、路徑與日期篩選；`⌘K`／`Ctrl+K` 快速搜尋與最近文件；可儲存搜尋 |
+| **知識連結** | `[[wikilink]]`、相對 `.md` 連結、Backlinks、Workspace／Local graph |
+| **討論** | 擁有者在段落旁討論、分享頁留言、回覆、解決與隱藏、未讀通知與追蹤中的討論 |
+| **分享** | My Space 匿名唯讀文件連結，可設期限與撤銷；只限指定已登入人員開啟的永久連結；收件者可將分享存到 Shares；擁有者可管理與隱藏留言 |
+| **匯出** | 單篇 Markdown 下載、My Space ZIP 匯出，保留目錄與穩定 ID/path manifest |
+| **Agent context** | Copy for Agent 與 Workspace 範圍的讀取／context API，沿用應用存取規則並包含討論 |
+| **Team workspace** *（需開啟）* | Workspace 管理、membership、角色與能力、外部群組映射及 audit |
 
 ### 內容由誰管理？
 
@@ -86,7 +103,7 @@ Preview 是固定的 staged snapshot。阻擋性診斷必須先處理；若來�
 - ZIP 匯出包含封存文件的最新已存版本，不包含草稿、版本歷史或附件 bytes；上限 64 MiB／9,999 份文件。
 - 文件以封存／還原管理生命週期，沒有一般使用者的永久刪除流程。
 - 搜尋目前以關鍵字為主。MCP server、semantic／hybrid retrieval 與進階 Agent memory 是未來方向，並非現有功能。
-- Team 預設顯示 Coming soon。開啟開關不等於完成正式部署的身分整合。
+- Team 預設顯示 **Coming soon**。開啟開關不等於完成正式部署的身分整合。
 - 討論寫入由 `KM_REVIEW_WRITES_ENABLED` 另外控制；關閉時仍可讀取既有討論及由擁有者管理留言。
 - 隱藏討論不等同實際刪除已儲存的資料。
 
@@ -94,11 +111,12 @@ Preview 是固定的 staged snapshot。阻擋性診斷必須先處理；若來�
 
 ### 前置需求
 
-- Node.js **20.19.0 以上、25 以下**；[`.node-version`](.node-version) 指定 24.19.0。
-- 本機開發使用 pnpm 12；`pnpm-workspace.yaml` 與 `pnpm-lock.yaml` 已提交，見[本機 pnpm](#本機-pnpm)。
-- pnpm 無法使用時以 npm 作為備援（使用 `package-lock.json`）。CI、Vercel 與部署一律使用 npm。
-- Docker 與 Docker Compose v2（需支援 `up --wait`），用來執行 MariaDB 10.11。
-- `make` 與 Git。沒有 `make` 時可使用下方 pnpm 步驟；npm 備援見[本機 pnpm](#本機-pnpm)。
+| 需求 | 說明 |
+| --- | --- |
+| Node.js **≥ 20.19.0、< 25** | [`.node-version`](.node-version) 指定 24.19.0 |
+| pnpm 12 | 本機開發預設；npm 為備援（見[本機 pnpm](#本機-pnpm)） |
+| Docker + Compose v2 | 需支援 `up --wait`；用來執行 MariaDB 10.11 |
+| `make`、Git | 沒有 `make` 時使用下方步驟 |
 
 ```bash
 git clone https://github.com/mike840609/knowledge-hub.git
@@ -109,9 +127,10 @@ make dev
 
 開啟 **http://127.0.0.1:3000/**，進入 My Space。
 
-`make bootstrap` 會在偵測到 pnpm 12 時使用 pnpm，否則退回 `npm ci`。它會安裝依賴、在 `.env` 不存在時複製 `.env.example`、啟動資料庫、執行 migration 並載入開發 fixtures。既有 `.env` 會保留。範例資料庫憑證只供本機開發。
+`make bootstrap` 會在偵測到 pnpm 12 時使用 pnpm，否則退回 `npm ci`。它會安裝依賴、在 `.env` 不存在時複製 `.env.example`（既有 `.env` 會保留）、啟動資料庫、執行 migration 並載入開發 fixtures。範例資料庫憑證只供本機開發。
 
-### 不使用 make
+<details>
+<summary><b>不使用 make</b></summary>
 
 ```bash
 pnpm install
@@ -124,39 +143,21 @@ pnpm run dev
 
 若 pnpm 無法使用，請改用 `rm -rf node_modules .next && npm ci` 取代 `pnpm install`。
 
-### 本機 pnpm
-
-pnpm 12 是本機預設的套件管理器；`pnpm-workspace.yaml` 與 `pnpm-lock.yaml` 已提交。pnpm 無法使用時以 npm 作為備援；CI、Vercel 與部署仍一律使用 npm（`npm ci`、`package-lock.json`）。請以 `brew install pnpm`（或 `npm install -g pnpm@12`）安裝，並確認 `pnpm -v` 回報 12.x。
-
-已提交的 `pnpm-workspace.yaml` 含三項必要設定：
-
-```yaml
-packageImportMethod: clone-or-copy
-publicHoistPattern:
-  - '*'
-allowBuilds:
-  esbuild: true
-  fsevents: true
-  unrs-resolver: true
-```
-
-`packageImportMethod: clone-or-copy` 是必要的：若省略，pnpm 可能從共用 store hardlink 套件，`patch-package` 就會修改該 store，影響所有使用它的專案。下方的 `pnpm store status` 說明只在這個設定成立時有效。`publicHoistPattern` 對應此 repository 目前依賴的 root hoisting：它匯入 `mdast-util-to-hast`、`mdast-util-gfm` 與 `@next/eslint-plugin-next` 時並未宣告這些依賴；正式解是把這些依賴宣告進 `package.json`。`allowBuilds` 列出允許執行 build script 的依賴；若 pnpm 警告有 build script 被忽略（或在啟用 `strictDepBuilds` 時回報 `ERR_PNPM_IGNORED_BUILDS`），確認該套件確實需要後再加入，或執行 `pnpm approve-builds`。若你曾在這兩個檔案被追蹤前於本機建立它們，請移除其 `.git/info/exclude` 條目，讓 Git 採用已提交的版本。
-
-以 `pnpm install` 安裝，會執行與 npm 相同的 `patch-package` postinstall。若檔案系統支援 clone/reflink（APFS、Btrfs），worktree 之間也會共用磁碟區塊；若只能 copy，pnpm 會退回複製，節省空間會縮小。
-
-npm 備援需要 npm layout：`rm -rf node_modules .next && npm ci`。要切回 pnpm 則執行 `rm -rf node_modules .next && pnpm install`；兩種 layout 不能互換。
-
-相依套件變更時要讓兩個 lockfile 保持同步。CI、Vercel 與部署以 `package-lock.json` 解析，因此先以 `npm install --package-lock-only` 更新它，再以 `pnpm import && pnpm install` 產生 `pnpm-lock.yaml`，兩個 lockfile 一起提交。`pnpm import` 會優先採用 `package-lock.json` 記錄的版本；`patches/next+15.5.25.patch` 仍在使用時，請確認 `next` 仍解析為 15.5.25。
-
-不要對 `pnpm install` 加上 `--ignore-scripts`：它會同時跳過依賴的 build scripts 與套用 Next.js patch 的 `postinstall`。若已經加了，單純重跑 `pnpm install` 會回報「Already up to date」，不會重跑根目錄的 `postinstall`；請執行 `pnpm install --force`（或 `rm -rf node_modules .next && pnpm install`）。若只要分開補跑，先 `pnpm rebuild` 補回被跳過的依賴 build，再 `pnpm exec patch-package` 還原 patch。在已套用 patch 的安裝中，`pnpm store status` 會以非零狀態回報 `next`（`ERR_PNPM_MODIFIED_DEPENDENCY`）；這是預期行為，在 `clone-or-copy` 下共用的 store 本身沒有被改動。
+</details>
 
 ### 第一次使用
 
-1. 選擇 **New note** 建立筆記，或 **Import folder** 匯入 Markdown 資料夾。匯入頁面附有站內資料夾格式指南，也提供 **Try with a sample wiki**：可匯入一份現成的資料夾（英文或繁體中文，位於 `public/sample-wiki/`），並走一般的 Preview → Apply 流程。
+1. 選擇 **New note** 建立筆記，或 **Import folder** 匯入 Markdown 資料夾。匯入頁面附有資料夾格式指南，也提供 **Try with a sample wiki**：可匯入一份現成的資料夾（英文或繁體中文，位於 `public/sample-wiki/`），並走一般的 Preview → Apply 流程。
 2. 匯入時檢查 Preview 的新增、更新、封存與診斷，再套用變更。
-3. 在可編輯的筆記中使用 `[[文件標題]]` 連結其他文件；到 Graph 查看關係。
-4. 儲存筆記後可使用文件分享選單建立唯讀連結，或下載 Markdown。
+3. 在可編輯的筆記中使用 `[[文件標題]]` 連結其他文件，再到 **Graph** 查看關係。
+4. 儲存筆記後才能建立唯讀分享連結或下載 Markdown。
 5. 本機來源有變動時，重新選取資料夾並走 Preview → Apply 流程。
+
+### 使用者操作手冊
+
+從側欄底部的帳號選單選擇 **Help & guides**（`/help`；資料夾格式參考位於 `/help#format-reference`）。站內手冊提供英文與繁體中文，涵蓋首次匯入、日常同步、授權與錯誤恢復、閱讀、搜尋、Insights、分享、討論與匯出。匯入預覽與同步錯誤會連到對應章節。
+
+兩種語言都在 `src/components/help/user-guide-content.ts`；操作流程變更時請一併更新。
 
 ## 設定
 
@@ -177,7 +178,7 @@ npm 備援需要 npm layout：`rm -rf node_modules .next && npm ci`。要切回 
 | `KM_IMPORT_*` | 匯入檔案數、大小、batch 與 snapshot quota |
 | `KM_TEST_DB_*`／`KM_E2E_DB_PREFIX` | 隔離測試資料庫設定；測試帳號需可建立與刪除指定 prefix 的資料庫 |
 
-匯入預設上限為 20,000 個 manifest entries、單篇 Markdown 3.5 MiB、Markdown 總量 256 MiB。完整上限以 `.env.example` 為準。Snapshot retention：BUILDING 2 小時、READY 30 分鐘、STALE／APPLIED 24 小時。有人開始匯入時，伺服器會在背景清除過期的 staging，每個程序最多每 10 分鐘一次。若要立即清除（例如沒有人在匯入的站台），可執行：
+匯入預設上限為 20,000 個 manifest entries、單篇 Markdown 3.5 MiB、Markdown 總量 256 MiB。Snapshot retention：`BUILDING` 2 小時、`READY` 30 分鐘、`STALE`／`APPLIED` 24 小時。有人開始匯入時，伺服器會在背景清除過期的 staging，每個程序最多每 10 分鐘一次。若要立即清除（例如沒有人在匯入的站台），可執行：
 
 ```bash
 npx tsx scripts/db/cleanup-import-snapshots.ts
@@ -187,7 +188,7 @@ npx tsx scripts/db/cleanup-import-snapshots.ts
 
 ## 部署
 
-Knowledge Hub 採用 Next.js server 與 MariaDB；`compose.yaml` 目前只提供開發資料庫，不是完整的正式部署方案。
+Knowledge Hub 採用 Next.js server 與 MariaDB；`compose.yaml` 只提供開發資料庫，不是完整的正式部署方案。
 
 ```bash
 npm ci
@@ -196,19 +197,30 @@ npm run build
 npm run start
 ```
 
-**正式環境需要先完成身分整合。** `npm run start` 使用 production 模式，預設的 Local identity 會被拒絕。`KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION` 是測試用途，請勿將其作為正式部署方式。
+> [!IMPORTANT]
+> **正式環境需要先完成身分整合。** `npm run start` 使用 production 模式，預設的 Local identity 會被拒絕。`KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION` 僅供測試，請勿作為部署方式。
 
-若是**單人操作**的部署，可參考 [Vercel + Layerbase runbook](docs/operations/vercel-layerbase.zh-TW.md)：這條路徑刻意保留 local identity，並以選用的站台密碼保護，於 production build 時執行 migration，同時關閉 preview deployment。請勿將此方式用於共用或公司部署。
+**部署方式**
 
-若要架設**公開 demo**，同一份 runbook 也記錄了 [Google demo login](docs/operations/vercel-layerbase.zh-TW.md#google-demo-login)：設定 `KM_IDENTITY_PROVIDER=google` 與 `AUTH_*` 變數即可。這是額外的 provider，local 與 company-SSO 路徑完全不受影響。
+- **單人操作的 Vercel 部署**：參考 [Vercel + Layerbase runbook](docs/operations/vercel-layerbase.zh-TW.md)。這條路徑刻意保留 local identity 並以選用的站台密碼保護，於 production build 時執行 migration，同時關閉 preview deployment。請勿用於共用或公司部署。
+- **公開 demo**：同一份 runbook 記錄了 [Google demo login](docs/operations/vercel-layerbase.zh-TW.md#google-demo-login)：設定 `KM_IDENTITY_PROVIDER=google` 與 `AUTH_*` 變數即可。這是額外的 provider，local 與 company-SSO 路徑不受影響。
+- **公司 SSO**：實作可信任的 [`CompanySsoSessionReader`](src/modules/identity/ports/company-sso-session-reader.ts)，並在建立 application services 前以 [`configureCompanySsoSessionReader`](src/server/composition.ts) 接入。單純設定 `KM_IDENTITY_PROVIDER=company-sso` 不會提供登入頁面或身分服務。
 
-目前提供通用的 `company-sso` adapter contract，部署者必須實作可信任的 [`CompanySsoSessionReader`](src/modules/identity/ports/company-sso-session-reader.ts)，並在建立 application services 前接入 [`configureCompanySsoSessionReader`](src/server/composition.ts)。reader 必須在回傳的 subject、員工編號、姓名、組織代碼與群組 ID 之外，一併回傳公司帳號名稱 `account` 與選填的英文顯示名稱 `name_en`。單純設定 `KM_IDENTITY_PROVIDER=company-sso` 不會自動提供 OAuth／OIDC 登入頁面或身分服務。分享頁的「Open in Knowledge Hub」與「Get started」連結在設定 `KM_PUBLIC_ORIGIN` 後，會以完整瀏覽器導覽前往該 origin，讓公司 Gateway 對匿名使用者發起 SSO。入口網址會帶 `returnTo=/s/:token/open`；Gateway 必須在 SSO 流程中保留這個 query string。驗證完成後，Hub 只接受開啟分享的路徑，並重跑既有的連結有效性與文件存取檢查。無效或缺少 continuation 參數時，會回到一般 home 目的地；未設定 `KM_PUBLIC_ORIGIN` 時，這些連結維持本機 `/s/:token/open` 流程。
+<details>
+<summary><b>公司 SSO 整合細節</b></summary>
 
-部署時需配置獨立資料庫憑證、資料備份、HTTPS 與可信任的 session 整合。`start` script 綁定 `127.0.0.1`，可搭配同機 reverse proxy；容器部署需自行調整啟動介面的 bind address。勿將範例開發資料庫憑證或測試設定公開使用。
+reader 必須在回傳的 subject、員工編號、姓名、組織代碼與群組 ID 之外，一併回傳公司帳號名稱 `account` 與選填的英文顯示名稱 `name_en`。
 
-匯入頁的「Try with a sample wiki」會從 `/sample-wiki/*` 取得靜態檔案（`manifest.json` 與各個 Markdown 檔），反向代理或 SSO 允許清單必須讓已登入的使用者存取這個路徑。這些網址是絕對路徑，因此不支援以 Next.js `basePath` 部署。
+分享頁的 **Open in Knowledge Hub** 與 **Get started** 連結在設定 `KM_PUBLIC_ORIGIN` 後，會以完整瀏覽器導覽前往該 origin，讓公司 Gateway 對匿名使用者發起 SSO。入口網址會帶 `returnTo=/s/:token/open`；Gateway 必須在 SSO 流程中保留這個 query string。驗證完成後，Hub 只接受開啟分享的路徑，並重跑既有的連結有效性與文件存取檢查。無效或缺少 continuation 參數時，會回到一般 home 目的地；未設定 `KM_PUBLIC_ORIGIN` 時，這些連結維持本機 `/s/:token/open` 流程。
 
-既有資料庫升級請先閱讀 [Workspace governance cutover](docs/operations/phase3-workspace-governance-cutover.md)，部分 migration 有資料 readiness gate。文件連結索引可依 [rollout 文件](docs/operations/document-link-index-rollout.md) 使用 `npm run db:reindex-document-links` 回填或修復。Team 開關操作見 [Team workspace availability](docs/operations/team-workspaces-availability.md)。
+</details>
+
+**上線檢查清單**
+
+- 配置獨立資料庫憑證、資料備份、HTTPS 與可信任的 session 整合。勿公開使用範例開發憑證或測試設定。
+- `start` script 綁定 `127.0.0.1`，可搭配同機 reverse proxy；容器部署需自行調整啟動指令的 bind address。
+- **Try with a sample wiki** 會從 `/sample-wiki/*` 取得靜態檔案，反向代理或 SSO 允許清單必須讓已登入的使用者存取這個路徑。這些網址是絕對路徑，因此不支援 Next.js `basePath`。
+- 既有資料庫升級前請先閱讀 [Workspace governance cutover](docs/operations/phase3-workspace-governance-cutover.md)，部分 migration 有資料 readiness gate。文件連結索引可依 [rollout 文件](docs/operations/document-link-index-rollout.md) 使用 `npm run db:reindex-document-links` 回填或修復；Team 開關操作見 [Team workspace availability](docs/operations/team-workspaces-availability.md)。
 
 ### 文件評論部署
 
@@ -227,7 +239,7 @@ npm run start
 | 資料庫 | MariaDB 10.11 |
 | 測試 | Vitest、Playwright |
 
-應用採 modular monolith，核心模組為 `identity`、`workspaces`、`sources`、`knowledge` 與 `personal`。Web 與 API 共用 application services。
+應用採 modular monolith，模組為 `identity`、`workspaces`、`sources`、`knowledge`、`personal` 與 `task-knowledge`；domain 規則不含 I/O，Web 頁面與 API 共用同一組 application services。模組邊界由 lint 規則強制。
 
 ```text
 User → WorkspaceMembership → Workspace
@@ -238,7 +250,7 @@ User → WorkspaceMembership → Workspace
                                             └── KnowledgeRevision (immutable)
 ```
 
-Workspace 是知識容器與基本存取邊界。使用者的組織屬性不直接授予存取權；知道文件 ID 也不代表有權讀取。公開分享連結是明確建立、可撤銷的單篇唯讀入口。
+Workspace 是知識容器與基本存取邊界。使用者的組織屬性不直接授予存取權；知道文件 ID 也不代表有權讀取。公開分享連結是明確建立、可撤銷的唯讀入口。
 
 ```text
 src/app/             Next.js pages 與 HTTP routes
@@ -289,13 +301,58 @@ KM_E2E_PERSONAL_ONLY=true npm run test:e2e -- personal-workspace.spec.ts
 
 測試 runner 自行管理測試模式與所需伺服器，不沿用 `.env` 的 Team 預設值。報告輸出至 `playwright-report/e2e-runs/<suite>/<UUID>/` 與 `test-results/`，不提交至 Git。會產生比較截圖的 spec 也會寫到 `test-results/ui-comparisons/`；`docs/ui-comparisons/` 下已追蹤的 before／after 證據只在 `KM_UPDATE_UI_COMPARISONS=1` 時重寫。覆蓋範圍見 [E2E coverage matrix](docs/superpowers/verification/2026-10-02-e2e-coverage-matrix.md)。
 
+### 本機 pnpm
+
+pnpm 12 是本機預設的套件管理器；`pnpm-workspace.yaml` 與 `pnpm-lock.yaml` 已提交。pnpm 無法使用時以 npm 作為備援；CI、Vercel 與部署仍一律使用 npm（`npm ci`、`package-lock.json`）。請以 `brew install pnpm`（或 `npm install -g pnpm@12`）安裝，並確認 `pnpm -v` 回報 12.x。
+
+<details>
+<summary><b>必要設定、lockfile 與安裝注意事項</b></summary>
+
+已提交的 `pnpm-workspace.yaml` 含三項必要設定：
+
+```yaml
+packageImportMethod: clone-or-copy
+publicHoistPattern:
+  - '*'
+allowBuilds:
+  esbuild: true
+  fsevents: true
+  unrs-resolver: true
+```
+
+- `packageImportMethod: clone-or-copy` 是必要的：若省略，pnpm 可能從共用 store hardlink 套件，`patch-package` 就會修改該 store，影響所有使用它的專案。下方的 `pnpm store status` 說明只在這個設定成立時有效。
+- `publicHoistPattern` 對應此 repository 目前依賴的 root hoisting：它匯入 `mdast-util-to-hast`、`mdast-util-gfm` 與 `@next/eslint-plugin-next` 時並未宣告這些依賴；正式解是把這些依賴宣告進 `package.json`。
+- `allowBuilds` 列出允許執行 build script 的依賴；若 pnpm 警告有 build script 被忽略（或在啟用 `strictDepBuilds` 時回報 `ERR_PNPM_IGNORED_BUILDS`），確認該套件確實需要後再加入，或執行 `pnpm approve-builds`。
+
+若你曾在這兩個檔案被追蹤前於本機建立它們，請移除其 `.git/info/exclude` 條目，讓 Git 採用已提交的版本。
+
+以 `pnpm install` 安裝，會執行與 npm 相同的 `patch-package` postinstall。若檔案系統支援 clone/reflink（APFS、Btrfs），worktree 之間也會共用磁碟區塊；若只能 copy，pnpm 會退回複製，節省空間會縮小。
+
+npm 備援需要 npm layout：`rm -rf node_modules .next && npm ci`。要切回 pnpm 則執行 `rm -rf node_modules .next && pnpm install`；兩種 layout 不能互換。
+
+**相依套件變更時**要讓兩個 lockfile 保持同步。CI、Vercel 與部署以 `package-lock.json` 解析，因此先以 `npm install --package-lock-only` 更新它，再以 `pnpm import && pnpm install` 產生 `pnpm-lock.yaml`，兩個 lockfile 一起提交。`pnpm import` 會優先採用 `package-lock.json` 記錄的版本；`patches/next+15.5.25.patch` 仍在使用時，請確認 `next` 仍解析為 15.5.25。
+
+**不要對 `pnpm install` 加上 `--ignore-scripts`**：它會同時跳過依賴的 build scripts 與套用 Next.js patch 的 `postinstall`。若已經加了，單純重跑 `pnpm install` 會回報「Already up to date」，不會重跑根目錄的 `postinstall`；請執行 `pnpm install --force`（或 `rm -rf node_modules .next && pnpm install`）。若只要分開補跑，先 `pnpm rebuild` 補回被跳過的依賴 build，再 `pnpm exec patch-package` 還原 patch。在已套用 patch 的安裝中，`pnpm store status` 會以非零狀態回報 `next`（`ERR_PNPM_MODIFIED_DEPENDENCY`）；這是預期行為，在 `clone-or-copy` 下共用的 store 本身沒有被改動。
+
+</details>
+
 ### Next.js patch
 
-`pnpm install`（或 `npm ci`）的 postinstall 會使用 `patch-package` 套用 [`patches/next+15.5.25.patch`](patches/next+15.5.25.patch)，修正內附 React（`19.2.0-canary-0bdb9206-20250818`）的兩個問題：一是頁面導覽時遺失 render ping；二是另一個導覽仍在載入時，若有 redirect 或其他錯誤在 render 中送達（例如「Browse documents」還在轉址時就點了另一份文件），React 的錯誤復原會把 Next 的 `Router` 只 render 一半就 commit，下一次 render 拋出 React #310（Rendered more hooks than during the previous render），整頁變成「Application error」。此修正即 [facebook/react#36911](https://github.com/facebook/react/pull/36911) 的那一個條件，套用於四個 `react-dom` client 與 profiling build。請勿跳過 install scripts；若 npm 安裝時用了 `--ignore-scripts`，請執行 `npm ci`；若 pnpm 安裝時用了，請執行 `pnpm install --force`（單純重跑 `pnpm install` 不會在已是最新的目錄重跑根目錄 `postinstall`）。若只要還原 patch，pnpm layout 使用 `pnpm exec patch-package`，npm layout 使用 `npx patch-package`。
+安裝時的 postinstall 會使用 `patch-package` 套用 [`patches/next+15.5.25.patch`](patches/next+15.5.25.patch)，修正 Next.js 內附 React（`19.2.0-canary-0bdb9206-20250818`）的兩個問題：
+
+1. 頁面導覽時遺失 render ping。
+2. 另一個導覽仍在載入時，若有 redirect 或其他錯誤在 render 中送達（例如「Browse documents」還在轉址時就點了另一份文件），React 的錯誤復原會把 Next 的 `Router` 只 render 一半就 commit，下一次 render 拋出 React #310（Rendered more hooks than during the previous render），整頁變成「Application error」。此修正即 [facebook/react#36911](https://github.com/facebook/react/pull/36911) 的那一個條件，套用於四個 `react-dom` client 與 profiling build。
+
+<details>
+<summary><b>還原、驗證與升級</b></summary>
+
+請勿跳過 install scripts。若 npm 安裝時用了 `--ignore-scripts`，請執行 `npm ci`；若 pnpm 安裝時用了，請執行 `pnpm install --force`（單純重跑 `pnpm install` 不會在已是最新的目錄重跑根目錄 `postinstall`）。若只要還原 patch，pnpm layout 使用 `pnpm exec patch-package`，npm layout 使用 `npx patch-package`。
 
 第二個修正已對照 #36911 的上游 diff；[vercel/next.js#95368](https://github.com/vercel/next.js/pull/95368) 將它帶進 Next canary（React `ec0fca31-20260701`）。這兩個 PR 引用的 issue（vercel/next.js#63121、#78396，facebook/react#33580）只讀過摘要，未在此重現。`next/dist/compiled/react-dom-experimental` 的 experimental React 未修補：只有在 `next.config.ts` 啟用 experimental React 功能時才會載入，本專案沒有啟用。
 
 升級 Next.js 時請確認此 patch 是否仍需要：[`vendored-react-ping-fix.test.ts`](tests/unit/vendored-react-ping-fix.test.ts) 檢查內附原始碼中的兩個修正，在 Next 內附的 React 已含這些修正時，不靠 patch 也會通過；[`router-redirect-during-navigation.spec.ts`](tests/e2e/router-redirect-during-navigation.spec.ts) 在瀏覽器中重現這個崩潰，證據見[驗證紀錄](docs/superpowers/verification/2026-10-06-react-310-redirect-recovery-verification.md)。更新或移除後清掉 `.next/cache` 再 build。
+
+</details>
 
 ### Mermaid 版本
 
@@ -309,28 +366,29 @@ make test-mermaid-assumptions
 
 ## 疑難排解
 
-- **資料庫連線失敗**：確認 Docker 運行、`make db-logs` 與 `.env` 憑證。本機 DB 使用 3307，開發 Web 使用 3000，E2E 預設使用 3101。
-- **Team 入口無法使用**：預設 Coming soon；設定 `KM_TEAM_WORKSPACES_ENABLED=true` 並重啟。
-- **production 身分錯誤**：Local identity 不提供正式部署登入；需接入 SSO session reader，或使用文件中的 Google demo provider。
-- **匯入無法 Apply**：先處理 Preview 的 blockers；409 版本衝突需重建 Preview，沒有 Force Apply。
-- **連結或圖譜缺少資料**：確認 migrations 已完成，再執行 `make db-reindex-links`；同步文件的 wikilink 問題請回來源修改。
-- **無法新增留言**：設定 `KM_REVIEW_WRITES_ENABLED=true` 並重啟。若在 Gateway 之後，還要設定 `KM_PUBLIC_ORIGIN`；否則討論請求會被視為跨來源而拒絕。
-- **需要重建本機示範資料**：`make db-reset` 會刪除開發資料庫 volume 及其中全部內容，執行前先備份。
+| 狀況 | 處理方式 |
+| --- | --- |
+| 資料庫連線失敗 | 確認 Docker 運行、`make db-logs` 與 `.env` 憑證。本機 DB 使用 3307，開發 Web 使用 3000，E2E 預設使用 3101。 |
+| Team 入口無法使用 | 預設為 **Coming soon**；設定 `KM_TEAM_WORKSPACES_ENABLED=true` 並重啟。 |
+| production 身分錯誤 | Local identity 不提供正式部署登入；需接入 SSO session reader，或使用文件中的 Google demo provider。 |
+| 匯入無法 Apply | 先處理 Preview 的 blockers；409 版本衝突需重建 Preview，沒有 Force Apply。 |
+| 連結或圖譜缺少資料 | 確認 migrations 已完成，再執行 `make db-reindex-links`；同步文件的 wikilink 問題請回來源修改。 |
+| 無法新增留言 | 設定 `KM_REVIEW_WRITES_ENABLED=true` 並重啟。若在 Gateway 之後，還要設定 `KM_PUBLIC_ORIGIN`。 |
+| 需要重建本機示範資料 | `make db-reset` 會刪除開發資料庫 volume 及其中全部內容，執行前先備份。 |
 
-## 文件與參與
+## 文件
 
-專案文件以英文為主。每份專案 Markdown 指南都有相鄰的 `*.zh-TW.md` 中文版本，並在標題下方提供雙向語言連結。部分原本以英文撰寫的歷史文件，在中文閱讀導引下保留完整英文技術原文，並明確註明。歷史紀錄保存當時的技術背景；目前行為請以 canonical 文件為準。
+專案文件以英文為主。每份專案 Markdown 指南都有相鄰的 `*.zh-TW.md` 中文版本。部分原本以英文撰寫的歷史文件，在中文閱讀導引下保留完整英文技術原文，並明確註明。
 
-- [貢獻指南](CONTRIBUTING.zh-TW.md)：回報問題、提出功能與送出 Pull Request。
-- [安全性回報](SECURITY.zh-TW.md)：私下回報漏洞與部署注意事項。
-- [操作文件](docs/operations/)：資料庫升級、Team 開關、部署與索引維護。
-- [設計規格](docs/superpowers/specs/)與[實作計畫](docs/superpowers/plans/)：詳細行為契約與決策背景。
-- [驗證紀錄](docs/superpowers/verification/)：各功能的測試與檢查證據。
-- [GitHub Issues](https://github.com/mike840609/knowledge-hub/issues)：一般問題與功能建議。
+- [操作文件](docs/operations/)：資料庫升級、Team 開關、部署與索引維護
+- [設計規格](docs/superpowers/specs/)與[實作計畫](docs/superpowers/plans/)：詳細行為契約與決策背景
+- [驗證紀錄](docs/superpowers/verification/)：各功能的測試與檢查證據
+- [階段路線圖](docs/superpowers/roadmaps/2026-09-10-knowledge-hub-phase-roadmap.md)、[動作模型](docs/superpowers/specs/2026-09-21-action-model-spec.md)、[快捷鍵](docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md)、[列鍵盤操作](docs/superpowers/specs/2026-10-02-row-keyboard-actions-design.md)，以及持續原地更新、不附日期的[前端設計語言](docs/superpowers/specs/frontend-design-language.md)
 
-歷史設計與 roadmap 保存開發背景，可能包含尚未實作或已調整的構想。可用功能以目前原始碼與測試為準；README 的功能表提供使用者入口。
+歷史設計與 roadmap 保存開發背景，可能包含尚未實作或已調整的構想。可用功能以目前原始碼與測試為準。
 
-### 目前的 canonical 文件
+<details>
+<summary><b>目前的 canonical 文件</b></summary>
 
 這些文件定義核心契約與實作計畫；後續專項規格記錄新增功能，附日期的驗證紀錄描述當時的執行證據。
 
@@ -374,8 +432,14 @@ make test-mermaid-assumptions
 | Inbox 分割檢視 | [規格](docs/superpowers/specs/2026-10-29-inbox-split-view-design.md) | — | 視窗達 75rem 時，列表與選取的討論並排；較窄時維持列表。 |
 | 使用者 account | [規格](docs/superpowers/specs/2026-10-29-users-account-design.md) | [計畫](docs/superpowers/plans/2026-10-29-users-account.md) | 儲存 Company SSO 的 account 與選填英文名稱，供未來的 mention autocomplete 使用。 |
 
-另見[階段路線圖](docs/superpowers/roadmaps/2026-09-10-knowledge-hub-phase-roadmap.md)、[動作模型](docs/superpowers/specs/2026-09-21-action-model-spec.md)、[快捷鍵](docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md)、[列鍵盤操作](docs/superpowers/specs/2026-10-02-row-keyboard-actions-design.md)，以及持續原地更新、不附日期的[前端設計語言](docs/superpowers/specs/frontend-design-language.md)。
+</details>
+
+## 參與貢獻
+
+歡迎貢獻。請先閱讀[貢獻指南](CONTRIBUTING.zh-TW.md)了解如何回報問題、提出功能與送出 Pull Request；一般問題與功能建議請使用 [GitHub Issues](https://github.com/mike840609/knowledge-hub/issues)。
+
+安全性漏洞請依 [SECURITY.zh-TW.md](SECURITY.zh-TW.md) 私下回報，不要開公開 issue。
 
 ## 授權
 
-Knowledge Hub 以 **[MIT License](LICENSE)** 授權，可使用、修改與散布。再散布時請保留原始版權與授權聲明。第三方依賴保留各自的授權條款。
+Knowledge Hub 以 [MIT License](LICENSE) 授權，可使用、修改與散布。再散布時請保留原始版權與授權聲明。第三方依賴保留各自的授權條款。
