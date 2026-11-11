@@ -102,14 +102,22 @@ export const getWorkspaceShellModel = cache(async (
 ): Promise<WorkspaceShellModel | null> => {
   const services = applicationServices();
   const { caller, identity } = await services.establishTrustedCaller();
-  const navigation = await services.workspaceAdmin.navigation(caller);
+  // Both reads authorize this caller themselves; the access read is discarded if
+  // the navigation list shows no such workspace.
+  const [navigation, accessResult] = await Promise.all([
+    services.workspaceAdmin.navigation(caller),
+    services.workspaceAdmin
+      .workspaceState(caller, workspaceId)
+      .then((access) => ({ access }))
+      .catch((error: unknown) => ({ error })),
+  ]);
   const workspaces = navigation.items;
   const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
   if (!workspace) return null;
-  const access = await services.workspaceAdmin.workspaceState(caller, workspaceId);
+  if ("error" in accessResult) throw accessResult.error;
   return {
     navigation,
-    access,
+    access: accessResult.access,
     identityId: identity.id,
     identityName: identity.name,
     identityEmpId: identity.emp_id,
@@ -128,13 +136,17 @@ const loadKnowledgeExplorerModel = cache(async (
   const services = applicationServices();
   const { caller } = await services.establishTrustedCaller();
   try {
-    const workspaces = await services.workspaces.listWorkspaces(caller);
+    // Each call authorizes the caller on its own and needs only the route ids, so
+    // none waits for another; the checks below still run in their original order.
+    const [workspaces, source, sources, tree] = await Promise.all([
+      services.workspaces.listWorkspaces(caller),
+      services.queries.getSource(caller, sourceId, { includeArchived }),
+      services.queries.listSources(caller, workspaceId, { includeArchived }),
+      services.queries.listTree(caller, sourceId, { includeArchived }),
+    ]);
     if (!workspaces.some((workspace) => workspace.id === workspaceId)) return null;
-    const source = await services.queries.getSource(caller, sourceId, { includeArchived });
     if (source.workspaceId !== workspaceId) return null;
-    const sources = await services.queries.listSources(caller, workspaceId, { includeArchived });
     if (!sources.some((candidate) => candidate.id === sourceId)) return null;
-    const tree = await services.queries.listTree(caller, sourceId, { includeArchived });
     const ordered = sortSourcesByName(sources);
     // Source headers are cheap; only the current source's tree enters the initial payload.
     const collections = [{ source, tree }];
