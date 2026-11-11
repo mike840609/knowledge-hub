@@ -32,7 +32,8 @@ npx vitest run --config vitest.config.ts -t "<test name>"
 applied by `postinstall`) with two fixes. Symptoms of it being missing: a navigation
 that "finishes loading and never appears", and "Application error: a client-side
 exception" (React #310) after a click that lands while a server `redirect()` is still
-loading. See README's patch section before touching either the patch or the Next
+loading. See the maintainer guide's patch section
+(`docs/development/maintainers.md#nextjs-patch`) before touching either the patch or the Next
 version, and clear `.next/cache` after changing it.
 
 CI (`.github/workflows/phase2-dev-gate.yml`) runs four jobs on every PR to
@@ -48,7 +49,8 @@ package manager for CI, Vercel, and deployment (`npm ci`, `package-lock.json`); 
 
 When dependencies change, refresh `package-lock.json` first (`npm install --package-lock-only`),
 then `pnpm import && pnpm install`, and commit both lockfiles. Setup, settings, layout
-switching, and caveats are in the README's [Local pnpm](README.md#local-pnpm). Keep the
+switching, and caveats are in the maintainer guide's
+[Local pnpm](docs/development/maintainers.md#local-pnpm). Keep the
 `patch-package` postinstall and never pass `--ignore-scripts` to `pnpm install`.
 
 ## Architecture
@@ -303,7 +305,8 @@ docs/superpowers/
 ```
 
 Current behaviour is defined by the canonical phase spec plus its
-implementation plan, listed in README's "Current canonical documents" table.
+implementation plan, listed in the "Current canonical documents" table of
+`docs/development/maintainers.md` (keep its `.zh-TW.md` companion in step).
 Documents marked *architecture history* record why a decision changed and are
 **not** a patch layer to apply on top of canonical docs — read the canonical
 spec for what to do now, history only for why.

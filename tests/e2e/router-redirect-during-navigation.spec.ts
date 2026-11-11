@@ -6,7 +6,7 @@ import { stageReadingFolder } from "./fixtures/folder-reading";
 // during render in a Retry lane. If the reader has meanwhile clicked another document whose response
 // is still loading, Next 15.5.25's vendored React commits the Router half-rendered during error
 // recovery, and its next render throws #310: "Application error" for the whole page
-// (patches/next+15.5.25.patch, README "Next.js patch"; tests/unit/vendored-react-ping-fix.test.ts).
+// (patches/next+15.5.25.patch, docs/development/maintainers.md "Next.js patch"; tests/unit/vendored-react-ping-fix.test.ts).
 //
 // The order a slow server or network produces is enforced in the browser, by events rather than
 // timers, so a slow runner cannot skip the race:
