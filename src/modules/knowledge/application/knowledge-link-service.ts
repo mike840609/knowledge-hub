@@ -1,4 +1,4 @@
-import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
+import { readAsCaller, syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { IntegrityViolationError, RevisionNotFoundError } from "../domain/errors";
 import { extractDocumentLinks, type LinkKind } from "../domain/document-links";
@@ -144,7 +144,7 @@ export class KnowledgeLinkServiceImpl implements KnowledgeLinkService {
     documentId: string,
     input: { revisionNo?: number; includeArchived?: boolean; localGraphDepth?: 1 | 2 } = {},
   ): Promise<DocumentLinkView> {
-    return this.unitOfWork.run(async (repositories) => {
+    return readAsCaller(this.unitOfWork, caller, async (repositories) => {
       const { document, policy } = await requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
       const workspaceId = policy.workspaceId;
       const revision = input.revisionNo === undefined
@@ -224,7 +224,7 @@ export class KnowledgeLinkServiceImpl implements KnowledgeLinkService {
   }
 
   async listLinkTargets(caller: CallerContext, workspaceId: string): Promise<LinkTargetsView> {
-    return this.unitOfWork.run(async (repositories) => {
+    return readAsCaller(this.unitOfWork, caller, async (repositories) => {
       await syncCallerIdentity(repositories.users, caller);
       await repositories.workspaceAccess.requireMembership(caller, workspaceId);
       const limit = this.options.linkTargetLimit ?? LINK_TARGET_LIMIT;
@@ -246,7 +246,7 @@ export class KnowledgeLinkServiceImpl implements KnowledgeLinkService {
   }
 
   async getWorkspaceGraph(caller: CallerContext, workspaceId: string, input: GraphOptions = {}): Promise<WorkspaceGraphView> {
-    return this.unitOfWork.run(async (repositories) => {
+    return readAsCaller(this.unitOfWork, caller, async (repositories) => {
       await syncCallerIdentity(repositories.users, caller);
       await repositories.workspaceAccess.requireMembership(caller, workspaceId);
       const catalog = await repositories.links.loadCatalog(workspaceId);
@@ -259,7 +259,7 @@ export class KnowledgeLinkServiceImpl implements KnowledgeLinkService {
   }
 
   async getLocalGraph(caller: CallerContext, documentId: string, input: { depth?: 1 | 2 } = {}): Promise<LocalGraphView> {
-    return this.unitOfWork.run(async (repositories) => {
+    return readAsCaller(this.unitOfWork, caller, async (repositories) => {
       const { document, policy } = await requireVisibleDocument(repositories, caller, documentId, false);
       const workspaceId = policy.workspaceId;
       const catalog = await repositories.links.loadCatalog(workspaceId);

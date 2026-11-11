@@ -1,4 +1,4 @@
-import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
+import { readAsCaller, syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { evaluateWorkspaceCapabilities } from "@/modules/workspaces/application/workspace-authorization";
 import type { WorkspaceQueryService } from "@/modules/workspaces/application/workspace-query-service";
@@ -48,10 +48,10 @@ export class KnowledgeSearchService {
     if (parsed.tooLong || (parsed.terms.length === 0 && !hasSearchFilters(filters) && !input.sourceId)) {
       return { terms: parsed.terms, hits: [], page, hasNext: false, tooLong: parsed.tooLong };
     }
-    // The accessible list is read outside the search transaction, exactly as
+    // The accessible list is read outside the search unit of work, exactly as
     // the existing read models do; capabilities are then re-checked per row.
     const accessible = input.scope.kind === "all" ? await this.workspaces.listWorkspaces(caller) : [];
-    return this.unitOfWork.run(async (repositories) => {
+    return readAsCaller(this.unitOfWork, caller, async (repositories) => {
       await syncCallerIdentity(repositories.users, caller);
       const workspaceIds = input.scope.kind === "workspace"
         ? await scopedWorkspace(repositories, caller, input.scope.workspaceId)
