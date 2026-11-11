@@ -35,6 +35,9 @@ function counting(): KnowledgeUnitOfWork & { runs: number } {
       wrapper.runs += 1;
       return inner.run(work);
     },
+    read<T>(work: (repositories: KnowledgeRepositories) => Promise<T>): Promise<T> {
+      return inner.read(work);
+    },
   };
   return wrapper;
 }

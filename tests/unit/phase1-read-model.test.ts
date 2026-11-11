@@ -116,7 +116,7 @@ function fakeUnitOfWork(options: FakeOptions = {}): KnowledgeUnitOfWork {
     },
     linkedEntries: {},
   } as unknown as KnowledgeRepositories;
-  return { run: async (work) => work(repositories) };
+  return { run: async (work) => work(repositories), read: async (work) => work(repositories) };
 }
 
 describe("knowledge read models", () => {
@@ -166,7 +166,7 @@ describe("knowledge read models", () => {
       workspaceAccess: { requireMembership: async () => undefined },
       linkedEntries: {},
     } as unknown as KnowledgeRepositories;
-    const queries = new KnowledgeQueryServiceImpl({ run: async (work) => work(repositories) });
+    const queries = new KnowledgeQueryServiceImpl({ run: async (work) => work(repositories), read: async (work) => work(repositories) });
     await expect(queries.getDocument(agentCaller, "document-1")).resolves.toMatchObject({ documentId: "document-1", workspaceId: sourceRow.workspaceId });
     await expect(queries.listSources(agentCaller, sourceRow.workspaceId)).resolves.toHaveLength(1);
   });

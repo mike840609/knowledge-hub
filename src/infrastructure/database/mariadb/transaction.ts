@@ -28,6 +28,24 @@ export class MariaDbUnitOfWork implements KnowledgeUnitOfWork, SourceUnitOfWork,
     }
   }
 
+  /**
+   * SELECT-only work on a pooled connection, without a transaction. The
+   * session is READ COMMITTED, so each statement already takes its own
+   * snapshot: a transaction would buy no consistency here and costs two
+   * round trips (BEGIN and COMMIT).
+   */
+  async read<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
+    const connection = await this.pool.getConnection();
+    try {
+      return await work(createRepositories(connection));
+    } catch (error) {
+      if (error instanceof DomainError) throw error;
+      throw mapDatabaseError(error);
+    } finally {
+      connection.release();
+    }
+  }
+
   async runWithCreatorQuotaLock<T>(
     creatorId: string,
     timeoutSeconds: number,

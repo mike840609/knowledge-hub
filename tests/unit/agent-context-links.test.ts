@@ -118,7 +118,7 @@ function serviceRepos(markdown: string, targets: string[]) {
 describe("AgentContextService links", () => {
   it("still copies a document that fits alone, saying the map was omitted", async () => {
     const r = serviceRepos("x".repeat(256 * 1024 - 2000), Array.from({ length: 40 }, (_, i) => `Missing ${i}`));
-    const result = await new AgentContextService({ run: work => work(r) }).build(caller, A, [A]);
+    const result = await new AgentContextService({ run: work => work(r), read: work => work(r) }).build(caller, A, [A]);
     expect(result.documentCount).toBe(1);
     expect(result.linkCount).toBe(0);
     expect(result.markdown).toContain("The link map was omitted: with it, the selected content would exceed 256 KiB.");
@@ -128,7 +128,7 @@ describe("AgentContextService links", () => {
 
   it("still fails loudly when the content alone exceeds the cap", async () => {
     const r = serviceRepos("x".repeat(256 * 1024), ["Missing"]);
-    await expect(new AgentContextService({ run: work => work(r) }).build(caller, A, [A])).rejects.toThrow(/exceeds 256 KiB/);
+    await expect(new AgentContextService({ run: work => work(r), read: work => work(r) }).build(caller, A, [A])).rejects.toThrow(/exceeds 256 KiB/);
   });
 
   it("emits the map for a single document with only broken links", async () => {
@@ -150,7 +150,7 @@ describe("AgentContextService links", () => {
         loadValidEdges: vi.fn(async () => [{ documentId: A, links: [{ kind: "WIKI", target: "Missing", fragment: null, alias: null }] }]),
       },
     } as unknown as KnowledgeRepositories;
-    const result = await new AgentContextService({ run: work => work(r) }).build(caller, A, [A]);
+    const result = await new AgentContextService({ run: work => work(r), read: work => work(r) }).build(caller, A, [A]);
     expect(result.markdown).toContain('"to":"Missing","toId":null,"missing":true');
     expect(result.linkCount).toBe(1);
   });

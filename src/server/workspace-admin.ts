@@ -86,13 +86,13 @@ export class WorkspaceAdminService {
     };
   }
   async workspaceState(caller: CallerContext, workspaceId: string): Promise<WorkspaceAccessView> {
-    return this.unitOfWork.run(async repositories => {
+    return this.unitOfWork.read(async repositories => {
       const { workspace, capabilities, actions } = await readState(repositories, caller, workspaceId);
       return { workspace: navigationItem(workspace), isPersonalOwner: workspace.workspaceType === "PERSONAL" && workspace.personalOwnerUserId === caller.identity.id, effectiveCapabilities: [...capabilities], actions };
     });
   }
   async teamView(caller: CallerContext, workspaceId: string): Promise<TeamWorkspaceView> {
-    return this.unitOfWork.run(async repositories => {
+    return this.unitOfWork.read(async repositories => {
       const { workspace, capabilities, actions } = await readState(repositories, caller, workspaceId, true);
       const membership = await repositories.workspaceMemberships.find(workspaceId, caller.identity.id);
       return { id: workspace.id, name: workspace.name, lifecycleState: workspace.lifecycleState ?? "ACTIVE", caller: { directRole: membership?.role ?? null, effectiveCapabilities: [...capabilities] }, actions, grantOptions: grantOptions(actions) };
@@ -103,10 +103,10 @@ export class WorkspaceAdminService {
     if (!caller.identity.id || caller.personalWorkspaceOnly) throw new InsufficientWorkspaceCapabilityError();
     const normalized = query.trim();
     if (!normalized) return [];
-    return this.unitOfWork.run(async repositories => (await repositories.users.searchExisting(normalized.slice(0, 200), limit)).map(user => ({ id: user.id, name: user.name, empId: user.emp_id, nameEn: user.nameEn })));
+    return this.unitOfWork.read(async repositories => (await repositories.users.searchExisting(normalized.slice(0, 200), limit)).map(user => ({ id: user.id, name: user.name, empId: user.emp_id, nameEn: user.nameEn })));
   }
   async listMembers(caller: CallerContext, workspaceId: string): Promise<MemberAdminView[]> {
-    return this.unitOfWork.run(async repositories => {
+    return this.unitOfWork.read(async repositories => {
       const { capabilities, actions } = await readState(repositories, caller, workspaceId, true);
       const options = grantOptions(actions).newMemberAssignableRoles;
       const owners = await repositories.workspaceMemberships.countDirectOwners(workspaceId);
@@ -129,7 +129,7 @@ export class WorkspaceAdminService {
     });
   }
   async listGroups(caller: CallerContext, workspaceId: string): Promise<GroupAdminView[]> {
-    return this.unitOfWork.run(async repositories => {
+    return this.unitOfWork.read(async repositories => {
       const { actions } = await readState(repositories, caller, workspaceId, true);
       const options = grantOptions(actions).newGroupAssignableRoles;
       return (await repositories.groupMappings.listByWorkspace(workspaceId)).map(mapping => {
@@ -139,7 +139,7 @@ export class WorkspaceAdminService {
     });
   }
   async listAudit(caller: CallerContext, workspaceId: string, cursor?: string): Promise<AuditPage> {
-    return this.unitOfWork.run(async repositories => {
+    return this.unitOfWork.read(async repositories => {
       const { actions } = await readState(repositories, caller, workspaceId, true);
       if (!actions.canReadAudit) throw new InsufficientWorkspaceCapabilityError();
       const events = await repositories.auditEvents.listPage(workspaceId, cursor, 51);

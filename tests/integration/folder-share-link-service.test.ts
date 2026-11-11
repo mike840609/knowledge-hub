@@ -8,6 +8,7 @@ import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
 import { DocumentShareService } from "@/modules/knowledge/application/document-share-service";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
+import type { KnowledgeRepositories } from "@/modules/knowledge/ports/unit-of-work";
 import { ApplyFolderImportService } from "@/modules/sources/application/apply-folder-import";
 import { CreateFolderImportService } from "@/modules/sources/application/create-folder-import";
 import { ensureDefaultHubSource } from "@/modules/sources/application/ensure-default-hub-source";
@@ -170,10 +171,11 @@ describe("DocumentShareService.createForFolder (folder share links §8)", () => 
     const { caller, folderNodeId } = await mySpaceFolder();
     const inner = new MariaDbUnitOfWork(pool);
     const failing = {
-      run: <T,>(work: Parameters<typeof inner.run<T>>[0]) => inner.run((repositories) => work({
+      run: <T,>(work: (repositories: KnowledgeRepositories) => Promise<T>) => inner.run((repositories) => work({
         ...repositories,
         auditEvents: new Proxy(repositories.auditEvents, { get: (target, property, receiver) => (property === "append" ? async () => { throw new Error("audit unavailable"); } : Reflect.get(target, property, receiver)) }),
       })),
+      read: <T,>(work: (repositories: KnowledgeRepositories) => Promise<T>) => inner.read(work),
     };
     await expect(new DocumentShareService(failing, new RandomShareTokenIssuer()).createForFolder(caller, { folderNodeId })).rejects.toThrow();
     expect(await linkRows(folderNodeId)).toBe(0);

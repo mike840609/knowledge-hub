@@ -59,7 +59,10 @@ function fakeServices() {
         { id: HUB_SOURCE_ID, workspaceId: WORKSPACE_ID, name: "Hub", sourceType: "HUB", status: "ACTIVE", ownership: "HUB_MANAGED", syncVersion: 0 },
       ]),
     },
-    unitOfWork: { run: vi.fn(async (work: (repositories: unknown) => unknown) => work(repositories)) },
+    unitOfWork: {
+      run: vi.fn(async (work: (repositories: unknown) => unknown) => work(repositories)),
+      read: vi.fn(async (work: (repositories: unknown) => unknown) => work(repositories)),
+    },
   } as unknown as Services;
   vi.mocked(applicationServices).mockReturnValue(services);
   return { listLatestBySourceIds, listLatestAppliedBySourceIds, findLatestReadyIdsBySourceForCreator, listBySourceId, findLatestReadyIdBySourceForCreator };

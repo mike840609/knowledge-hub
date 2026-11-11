@@ -98,6 +98,14 @@ function lockRecorder(inner: KnowledgeUnitOfWork) {
         return value;
       },
     }))),
+    read: work => inner.read(r => work(new Proxy(r, {
+      get(object, property) {
+        const value = Reflect.get(object, property, object);
+        if (property === "sourcePolicy") return spying(value, "lockById");
+        if (property === "workspaces") return spying(value, "lockSharedById");
+        return value;
+      },
+    }))),
   };
   return { uow, taken };
 }
@@ -114,6 +122,12 @@ function queryRecorder(inner: KnowledgeUnitOfWork) {
   });
   const uow: KnowledgeUnitOfWork = {
     run: work => inner.run(r => work(new Proxy(r, {
+      get(object, property) {
+        const value = Reflect.get(object, property, object);
+        return value !== null && typeof value === "object" ? spying(value, String(property)) : value;
+      },
+    }))),
+    read: work => inner.read(r => work(new Proxy(r, {
       get(object, property) {
         const value = Reflect.get(object, property, object);
         return value !== null && typeof value === "object" ? spying(value, String(property)) : value;

@@ -87,6 +87,10 @@ class AdvanceVersionOnPhaseBEntry implements SourceUnitOfWork {
     return this.inner.run(work);
   }
 
+  read<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
+    return this.inner.read(work);
+  }
+
   async runWithCreatorQuotaLock<T>(creatorId: string, timeoutSeconds: number, work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
     await this.inner.run((repositories) => repositories.sources.guardAndAdvanceVersion(this.sourceId, this.basedOnVersion, fixtureIdentity.id));
     return this.inner.runWithCreatorQuotaLock(creatorId, timeoutSeconds, work);
@@ -115,6 +119,10 @@ class CountingCanonicalLoad implements SourceUnitOfWork {
     return this.inner.run((repositories) => work(this.wrap(repositories)));
   }
 
+  read<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
+    return this.inner.read((repositories) => work(this.wrap(repositories)));
+  }
+
   runWithCreatorQuotaLock<T>(creatorId: string, timeoutSeconds: number, work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
     return this.inner.runWithCreatorQuotaLock(creatorId, timeoutSeconds, (repositories) => work(this.wrap(repositories)));
   }
@@ -126,6 +134,10 @@ class FillQuotaOnPhaseBEntry implements SourceUnitOfWork {
 
   run<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
     return this.inner.run(work);
+  }
+
+  read<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
+    return this.inner.read(work);
   }
 
   async runWithCreatorQuotaLock<T>(creatorId: string, timeoutSeconds: number, work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {

@@ -10,7 +10,7 @@ import { markdownTooLarge } from "@/lib/markdown-limits";
 export class PersonalService {
   constructor(private readonly store: PersonalStore, private readonly queries: KnowledgeQueryService, private readonly uow: WorkspaceUnitOfWork) {}
   private async authorize(caller: CallerContext, workspaceId: string, key?: string) {
-    await this.uow.run(async r => {
+    await this.uow.read(async r => {
       requireWorkspaceRead(await evaluateWorkspaceCapabilities(r, caller, workspaceId));
       const workspace = await r.workspaces.findById(workspaceId);
       if (workspace?.personalOwnerUserId !== caller.identity.id) throw new DomainError("WORKSPACE_NOT_FOUND", "Personal workspace unavailable.");

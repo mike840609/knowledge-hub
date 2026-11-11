@@ -27,6 +27,7 @@ function withSourceLockHook(base: KnowledgeUnitOfWork, hook: SourceLockHook): Kn
         lockById: (sourceId) => hook(sourceId, () => repositories.sourcePolicy.lockById(sourceId)),
       },
     })),
+    read: <T>(work: (repositories: KnowledgeRepositories) => Promise<T>) => base.read(work),
   };
 }
 

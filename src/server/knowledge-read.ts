@@ -54,7 +54,7 @@ export async function getKnowledgeDocumentModel(
       // Read by id only here, after getDocument has let this caller see the
       // document. A path is a caption: failing to read it must not fail the page.
       services.unitOfWork
-        .run(async (repositories) => (await repositories.entries.findByDocumentId(documentId))?.sourcePath ?? null)
+        .read(async (repositories) => (await repositories.entries.findByDocumentId(documentId))?.sourcePath ?? null)
         .catch(() => null),
     ]);
     return {

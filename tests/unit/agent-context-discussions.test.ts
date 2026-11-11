@@ -30,7 +30,7 @@ function service(threads: ReviewThread[], comments: ReviewComment[], markdown = 
     reviewThreads: { listByDocument: async (documentId: string) => threads.filter(t => t.documentId === documentId) },
     reviewComments: { listByThreads },
   } as unknown as KnowledgeRepositories;
-  return Object.assign(new AgentContextService({ run: work => work(r) }), { listByThreads, findById });
+  return Object.assign(new AgentContextService({ run: work => work(r), read: work => work(r) }), { listByThreads, findById });
 }
 it("exports open and resolved discussions under their document with ordered replies and attribution", async () => {
   const svc = service([thread("open"), thread("resolved", { documentId: otherId, status: "RESOLVED" })], [

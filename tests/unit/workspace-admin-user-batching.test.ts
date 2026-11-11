@@ -57,7 +57,10 @@ function fakeUnitOfWork() {
       ]),
     },
   };
-  const uow = { run: async (work: (repositories: unknown) => unknown) => work(repositories) } as unknown as WorkspaceUnitOfWork;
+  const uow = {
+    run: async (work: (repositories: unknown) => unknown) => work(repositories),
+    read: async (work: (repositories: unknown) => unknown) => work(repositories),
+  } as unknown as WorkspaceUnitOfWork;
   return { uow, findByIds, findById };
 }
 

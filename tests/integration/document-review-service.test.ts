@@ -117,7 +117,7 @@ describe("document review security, idempotency and moderation",()=>{
  });
  it("rolls moderation back when its audit cannot persist",async()=>{
   const f=await fixture();const t=await f.service.createForLink(f.viewer,f.input);
-  const failing:KnowledgeUnitOfWork={run:work=>f.uow.run(r=>work({...r,auditEvents:new Proxy(r.auditEvents,{get:(target,property,receiver)=>property==="append"?async()=>{throw new Error("audit failed");}:Reflect.get(target,property,receiver)})}))};
+  const failing:KnowledgeUnitOfWork={run:work=>f.uow.run(r=>work({...r,auditEvents:new Proxy(r.auditEvents,{get:(target,property,receiver)=>property==="append"?async()=>{throw new Error("audit failed");}:Reflect.get(target,property,receiver)})})),read:work=>f.uow.read(work)};
   await expect(new DocumentReviewService(failing).setVisibility(f.caller,{documentId:f.documentId,threadId:t.id,visibility:"HIDDEN"})).rejects.toThrow();
   expect((await f.uow.run(r=>r.reviewThreads.findById(t.id)))?.visibility).toBe("VISIBLE");
  });

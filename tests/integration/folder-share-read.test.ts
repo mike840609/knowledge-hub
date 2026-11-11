@@ -44,6 +44,12 @@ function queryRecorder(inner: KnowledgeUnitOfWork) {
         return value !== null && typeof value === "object" ? spying(value, String(property)) : value;
       },
     }))),
+    read: work => inner.read(r => work(new Proxy(r, {
+      get(object, property) {
+        const value = Reflect.get(object, property, object);
+        return value !== null && typeof value === "object" ? spying(value, String(property)) : value;
+      },
+    }))),
   };
   return { uow, calls };
 }
@@ -56,6 +62,9 @@ function counting(): KnowledgeUnitOfWork & { runs: number } {
     run<T>(work: (repositories: KnowledgeRepositories) => Promise<T>): Promise<T> {
       wrapper.runs += 1;
       return inner.run(work);
+    },
+    read<T>(work: (repositories: KnowledgeRepositories) => Promise<T>): Promise<T> {
+      return inner.read(work);
     },
   };
   return wrapper;

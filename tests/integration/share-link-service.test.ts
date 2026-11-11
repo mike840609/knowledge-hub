@@ -65,6 +65,9 @@ function overriding(override: (repositories: KnowledgeRepositories) => Partial<K
       wrapper.runs += 1;
       return inner.run((repositories) => work({ ...repositories, ...override(repositories) }));
     },
+    read<T>(work: (repositories: KnowledgeRepositories) => Promise<T>): Promise<T> {
+      return inner.read((repositories) => work({ ...repositories, ...override(repositories) }));
+    },
   };
   return wrapper;
 }

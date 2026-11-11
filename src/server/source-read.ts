@@ -53,7 +53,7 @@ export async function getSourceListModel(workspaceId: string): Promise<SourceLis
     if (isHiddenReadFailure(error)) return null;
     throw error;
   }
-  const items = await services.unitOfWork.run(async (repositories) => {
+  const items = await services.unitOfWork.read(async (repositories) => {
     // All sources (including archived) keep their latest run; HUB sources have
     // no sync runs or import previews, so those two lookups skip them.
     const scopedSources = sources.filter((source) => source.sourceType !== "HUB");
@@ -107,7 +107,7 @@ export async function getSourceDetailModel(
     if (!actions.canInspectSources) return null;
     const source = await services.queries.getSource(caller, sourceId, { includeArchived: true });
     if (source.workspaceId !== workspaceId) return null;
-    const { runs, runActors } = await services.unitOfWork.run(async (repositories) => {
+    const { runs, runActors } = await services.unitOfWork.read(async (repositories) => {
       const runs = await repositories.syncRuns.listBySourceId(sourceId, SOURCE_RUN_DETAIL_LIMIT);
       const actorIds = [...new Set(runs.map((run) => run.triggeredBy))].filter((id) => id !== caller.identity.id);
       const actorNames = new Map((await repositories.users.findByIds(actorIds)).map((user) => [user.id, user.name]));

@@ -328,6 +328,7 @@ describe("Phase 3 real request adapters with a trusted test session reader", () 
             },
           },
         })),
+        read: (work) => services.unitOfWork.read(work),
       };
       const revocation = new TeamGovernanceService(revocationUow).removeGroupMapping(owner, workspace.id, "writers");
       await grantRemoved.promise;
@@ -343,6 +344,7 @@ describe("Phase 3 real request adapters with a trusted test session reader", () 
             },
           }),
         })),
+        read: (work) => services.unitOfWork.read(work),
       };
       // Attach rejection assertions before releasing the transaction. The
       // writer must wait on the parent row and see the committed revocation.

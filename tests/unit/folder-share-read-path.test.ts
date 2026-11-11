@@ -81,7 +81,7 @@ function repositories(nodes: readonly TreeViewNode[], markdown: string) {
 }
 
 function service(store: KnowledgeRepositories) {
-  return new DocumentShareService({ run: (work) => work(store) }, { issue: () => "unused" }, () => now);
+  return new DocumentShareService({ run: (work) => work(store), read: (work) => work(store) }, { issue: () => "unused" }, () => now);
 }
 
 describe("a folder link's document read", () => {

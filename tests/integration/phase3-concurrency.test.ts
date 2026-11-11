@@ -246,6 +246,7 @@ describe("Phase 3 canonical import/content lock hierarchy (Task 10)", () => {
         quotaTransactions += 1;
         return base.runWithCreatorQuotaLock(creatorId, timeoutSeconds, work);
       },
+      read: (work) => base.read(work),
     };
     const entry = markdownEntry("m1", "docs/readme.md", "# Readme\n\nbody\n");
     const result = await new CreateFolderImportService(countingUow, { limits: DEFAULT_IMPORT_LIMITS }).createResync(ownerCaller(), {
