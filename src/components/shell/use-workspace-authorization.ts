@@ -63,16 +63,19 @@ export function useWorkspaceAuthorizationRefresh(initialAccess: WorkspaceAccessV
     const abort = new AbortController();
     controller.current = abort;
     try {
-      const navResponse = await fetch("/api/workspaces", { cache: "no-store", signal: abort.signal });
+      // Navigation is a projection, not the authorization authority. A focus
+      // refresh can race SSO/group/navigation data and momentarily omit an
+      // otherwise accessible Workspace. Always verify the current Workspace
+      // directly before treating an omission as revocation. Neither read
+      // depends on the other, so issue both at once.
+      const [navResponse, response] = await Promise.all([
+        fetch("/api/workspaces", { cache: "no-store", signal: abort.signal }),
+        fetch(`/api/workspaces/${workspaceId}`, { cache: "no-store", signal: abort.signal }),
+      ]);
       if (!navResponse.ok) throw new Error("Could not refresh workspace navigation.");
       const nav = await navResponse.json() as WorkspaceNavigationModel;
       const mySpace = nav.items.find((item) => item.type === "PERSONAL");
       if (!mySpace) throw new Error("Personal workspace unavailable.");
-      // Navigation is a projection, not the authorization authority. A focus
-      // refresh can race SSO/group/navigation data and momentarily omit an
-      // otherwise accessible Workspace. Always verify the current Workspace
-      // directly before treating an omission as revocation.
-      const response = await fetch(`/api/workspaces/${workspaceId}`, { cache: "no-store", signal: abort.signal });
       if (!response.ok && response.status !== 404) throw new Error("Could not refresh workspace access.");
       const fresh = response.ok ? await response.json() as WorkspaceAccessView : null;
       if (request !== generation.current) return;
