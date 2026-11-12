@@ -68,6 +68,27 @@ make test-mermaid-assumptions
 
 Migration runner 只向前執行。失敗或未知的 ledger row 是硬性錯誤；調查已記錄的診斷後，重建可拋棄資料庫或明確修復該 migration。
 
+測試 runner 自行管理測試模式與所需伺服器，不沿用 `.env` 的 Team 預設值。報告輸出至 `playwright-report/e2e-runs/<suite>/<UUID>/` 與 `test-results/`，不提交至 Git。會產生比較截圖的 spec 也會寫到 `test-results/ui-comparisons/`；`docs/ui-comparisons/` 下已追蹤的 before／after 證據只在 `KM_UPDATE_UI_COMPARISONS=1` 時重寫。覆蓋範圍見 [E2E coverage matrix](../../docs/superpowers/verification/2026-10-02-e2e-coverage-matrix.md)。
+
+## Make 指令
+
+| 指令 | 用途 |
+| --- | --- |
+| `make dev` | 啟動本機開發伺服器 |
+| `make dev-reviewer` | 以另一個本機使用者在 port 3001 啟動第二台伺服器，用來試[兩個人的流程](two-person-demo.zh-TW.md) |
+| `make build`／`make start` | 建置／執行 production build（需身分整合） |
+| `make db-up`／`make db-down`／`make db-logs` | 啟動、停止與查看資料庫 logs；`db-down` 保留 volume |
+| `make db-migrate`／`make db-seed` | 更新 schema／載入開發 fixtures |
+| `make db-reindex-links` | 回填或修復衍生文件連結索引 |
+| `make test-unit` | 不需資料庫的單元測試 |
+| `make test-integration` | 資料庫整合測試；runner 建立與清除隔離資料庫 |
+| `make browsers` | 首次安裝 E2E 使用的 Chromium |
+| `make test-e2e` | 建立隔離資料庫、production build 並執行瀏覽器測試 |
+| `make guide-screenshots` | 從 sample wiki 重新產生站內手冊截圖 |
+| `make test-mermaid-assumptions` | 在 Chromium 檢查 reader 對 Mermaid 的假設；變更版本前後都要跑 |
+| `make verify` | Unit tests、TypeScript、lint 與 build |
+| `make help` | 完整 make 指令列表 |
+
 ## 目前範圍
 
 應用目前提供個人工作空間（Home、Inbox（視窗夠寬時選取討論在列表旁）、草稿、收藏、最近文件）、folder 匯入與同步、搜尋與 command palette、wikilinks 與反向連結、知識圖譜、渲染編輯與 Markdown 原始碼編輯、版本歷史、分享與討論、已儲存的分享、匯出、Copy for Agent，以及需開啟的 Team workspace 介面。

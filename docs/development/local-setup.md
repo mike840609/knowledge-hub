@@ -68,6 +68,27 @@ make test-mermaid-assumptions
 
 The migration runner is forward-only. A failed or unknown ledger row is a hard error; rebuild the disposable database or repair the migration explicitly after investigating the recorded diagnostic.
 
+The test runner manages its own mode and required servers rather than inheriting the Team default from `.env`. Reports are written to `playwright-report/e2e-runs/<suite>/<UUID>/` and `test-results/`, and are excluded from Git. Specs that take comparison screenshots also write them to `test-results/ui-comparisons/`; the tracked before/after evidence under `docs/ui-comparisons/` is rewritten only with `KM_UPDATE_UI_COMPARISONS=1`. See the [E2E coverage matrix](../../docs/superpowers/verification/2026-10-02-e2e-coverage-matrix.md).
+
+## Make commands
+
+| Command | Purpose |
+| --- | --- |
+| `make dev` | Start the local development server |
+| `make dev-reviewer` | Start a second server as another local user on port 3001, for [two-person flows](two-person-demo.md) |
+| `make build` / `make start` | Build / serve a production build (requires identity integration) |
+| `make db-up` / `make db-down` / `make db-logs` | Start, stop, or inspect the database; `db-down` preserves the volume |
+| `make db-migrate` / `make db-seed` | Update the schema / load development fixtures |
+| `make db-reindex-links` | Backfill or repair the derived document link index |
+| `make test-unit` | Unit tests without a database |
+| `make test-integration` | Database integration tests; the runner creates and removes isolated databases |
+| `make browsers` | Install Chromium for E2E tests on first use |
+| `make test-e2e` | Provision an isolated database, build production assets, and run browser tests |
+| `make guide-screenshots` | Regenerate the in-app user guide screenshots from the sample wiki |
+| `make test-mermaid-assumptions` | Check in Chromium what the reader assumes of Mermaid; run before changing its version |
+| `make verify` | Unit tests, TypeScript, lint, and build |
+| `make help` | List all make commands |
+
 ## Current scope
 
 The application currently provides the personal workspace (Home, Inbox with the selected discussion beside the list at wide widths, drafts, favorites, recent documents), folder import and sync, search and the command palette, wikilinks and backlinks, the knowledge graph, rendered and Markdown-source editing, revision history, sharing and discussions, saved shares, export, Copy for Agent, and the opt-in Team workspace surface.
