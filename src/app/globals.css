@@ -743,6 +743,13 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   color: var(--kh-selected-text);
 }
 
+/* The ⌘K preview's query terms, drawn like the result rows' <mark> (HighlightedSearchText). */
+::highlight(search-preview) {
+  background-color: var(--kh-highlight);
+  color: var(--kh-text);
+  text-decoration: underline 2px var(--kh-primary);
+}
+
 ::highlight(document-review-active) {
   background-color: var(--kh-primary);
   color: var(--kh-on-primary);

@@ -18,6 +18,8 @@ import {
 } from "@/components/actions/action-registry";
 import { prioritizePaletteActions } from "@/lib/palette-actions";
 import { HighlightedSearchText } from "./highlighted-search-text";
+import { SearchPreview } from "./search-preview";
+import { useIsWide } from "@/components/knowledge/use-is-wide";
 import { parseSearchQuery } from "@/modules/knowledge/domain/search-query";
 import { plainSearchSnippet } from "@/lib/search-snippet";
 import { documentIdInPath, recentDocumentIds, toggleFavoriteDocument } from "@/lib/document-shortcuts";
@@ -156,6 +158,19 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   }, [recentRows.length]);
   const activeRow = rows[activeIndex];
 
+  // Wide windows split the palette: results on the left, the active document previewed on the right. Narrow
+  // ones keep the single list, and never fetch a preview nobody can see. Always split while wide, whether or
+  // not anything is previewable yet: a palette that resized itself as results came and went would move both
+  // its edges on every keystroke.
+  const split = useIsWide();
+  // An action row previews nothing. With no row at all — a search in flight — the previewed document stays,
+  // rather than blanking on every keystroke.
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  useEffect(() => {
+    if (activeRow?.kind === "hit") setPreviewId(activeRow.hit.documentId);
+    else if (activeRow || !loading) setPreviewId(null);
+  }, [activeRow, loading]);
+
   // Page actions use the palette or explicit controls; typing never invokes them.
   useEffect(() => {
     if (!enabled) {
@@ -276,7 +291,15 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
         {hit.pageIcon ? <span className="shrink-0 text-body leading-none" aria-hidden="true">{hit.pageIcon}</span> : <FileText size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
         <span className="min-w-0 flex-1">
           <span className={`block truncate text-body font-medium ${index === activeIndex ? "text-kh-selected-text" : "text-kh-text"}`}><HighlightedSearchText text={hit.title} terms={terms} /></span>
-          <span className="block truncate text-caption text-kh-text-muted">{hit.sourceName}{hit.snippet ? <> · <HighlightedSearchText text={plainSearchSnippet(hit.snippet, hit.snippetClipped)} terms={terms} /></> : null}</span>
+          {/* Split, the matched passage has lines of its own; in the narrow list it stays one line, beside the source. */}
+          {split ? (
+            <>
+              <span className="block truncate text-caption text-kh-text-muted">{hit.sourceName}</span>
+              {hit.snippet ? <span className="mt-0.5 line-clamp-2 text-body-sm text-kh-text-muted"><HighlightedSearchText text={plainSearchSnippet(hit.snippet, hit.snippetClipped)} terms={terms} /></span> : null}
+            </>
+          ) : (
+            <span className="block truncate text-caption text-kh-text-muted">{hit.sourceName}{hit.snippet ? <> · <HighlightedSearchText text={plainSearchSnippet(hit.snippet, hit.snippetClipped)} terms={terms} /></> : null}</span>
+          )}
         </span>
       </span>
     </button>
@@ -305,7 +328,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
       }}>
         <Dialog.Portal>
           <Dialog.Backdrop className={dialogBackdropClasses("z-50")} />
-          <Dialog.Popup className={`${dialogSurfaceClasses} top-[min(14vh,120px)] z-[60] flex max-h-[75vh] w-[min(640px,calc(100vw-24px))] flex-col overflow-hidden`}>
+          <Dialog.Popup className={`${dialogSurfaceClasses} top-[min(14vh,120px)] z-[60] flex max-h-[75vh] flex-col overflow-hidden ${split ? "h-[75vh] w-[min(1080px,calc(100vw-48px))]" : "w-[min(640px,calc(100vw-24px))]"}`}>
             <Dialog.Title className="sr-only">Search and actions</Dialog.Title>
             <div className="flex items-center gap-3 border-b border-kh-border px-4">
               <Search className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
@@ -344,7 +367,8 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                 <X className="h-4 w-4" aria-hidden="true" />
               </Dialog.Close>
             </div>
-            <div className="min-h-0 overflow-y-auto p-2">
+            <div className="flex min-h-0 flex-1">
+            <div className={`min-h-0 overflow-y-auto p-2 ${split ? "w-[400px] shrink-0 border-r border-kh-border" : "flex-1"}`}>
               <ul id="quick-search-results" role="listbox" aria-label="Actions and documents" aria-busy={recentsPending} className="space-y-0.5">
                 {recentRows.map((row, position) => {
                   if (row.kind !== "hit") return null;
@@ -407,9 +431,15 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                   {/* The previous query's answer, until this one's arrives: inert, so neither pointer nor Tab reaches it. */}
                   <ul inert aria-hidden="true" data-stale-results className="space-y-0.5 opacity-50">
                     {hits.map((hit) => (
-                      <li key={hit.documentId} className="rounded-md px-3 py-2">
-                        <span className="block truncate text-body font-medium text-kh-text">{hit.title}</span>
-                        <span className="block truncate text-caption text-kh-text-muted">{hit.sourceName}</span>
+                      // The same lines and width as a live row (its icon's space kept), so the list keeps its
+                      // height while the next answer is awaited.
+                      <li key={hit.documentId} className="flex gap-2 rounded-md px-3 py-2">
+                        <span className="w-[14px] shrink-0" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-body font-medium text-kh-text">{hit.title}</span>
+                          <span className="block truncate text-caption text-kh-text-muted">{hit.sourceName}</span>
+                          {split && hit.snippet ? <span data-stale-snippet className="mt-0.5 line-clamp-2 text-body-sm text-kh-text-muted">{plainSearchSnippet(hit.snippet, hit.snippetClipped)}</span> : null}
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -420,6 +450,12 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
               {/* Said even when actions matched: otherwise a query that hits an
                   action but no document looks like a search that never ran. */}
               {!loading && !message && trimmed && hits.length === 0 && matched.length > 0 ? <p role="status" className="px-3 py-2 text-body-sm text-kh-text-muted">No matching documents.</p> : null}
+            </div>
+            {split ? (
+              <div className="min-w-0 flex-1">
+                <SearchPreview documentId={previewId} terms={terms} onLeave={() => setOpen(false)} />
+              </div>
+            ) : null}
             </div>
             {/* Only with a query: without one this is the "Open full search"
                 row again. ↵ is shown only when Enter would really do this,

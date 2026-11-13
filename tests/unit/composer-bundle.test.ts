@@ -99,3 +99,23 @@ describe("what the reader sends to the browser for a diagram", () => {
     expect([...reachable(entry, false).packages].filter((name) => /^mermaid(\/|$)/.test(name))).toEqual([]);
   });
 });
+
+describe("what the ⌘K palette sends to every workspace page", () => {
+  // The palette is mounted by the workspace topbar, so its static imports are in every workspace page's
+  // first load. Its preview imports the reader's renderer only when a preview is first shown.
+  const entry = path.join("src", "components", "search", "quick-search.tsx");
+  const firstLoad = reachable(entry, false);
+  const names = [...firstLoad.files].map((file) => path.basename(file));
+
+  it("is really being read: the static walk reaches the preview, and the full walk the renderer", () => {
+    expect(names).toContain("search-preview.tsx");
+    expect([...reachable(entry).files].map((file) => path.basename(file))).toContain("markdown-renderer.tsx");
+  });
+
+  it("sends no Markdown stack, highlighter or diagram code in the first load", () => {
+    for (const forbidden of ["markdown-renderer.tsx", "markdown-base.tsx", "code-highlight.ts", "mermaid-block.tsx", "review-selection.ts"]) {
+      expect(names, forbidden).not.toContain(forbidden);
+    }
+    expect([...firstLoad.packages].filter((name) => /^(react-markdown|remark-gfm|lowlight|highlight\.js|mermaid)(\/|$)/.test(name))).toEqual([]);
+  });
+});

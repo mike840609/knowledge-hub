@@ -1,6 +1,7 @@
 import { projectReviewBlocks, type CanonicalReviewBlock } from "@/modules/knowledge/domain/review-anchor";
 import { REVIEW_LIMITS, type ReviewAnchor } from "@/modules/knowledge/domain/document-review";
 import { REVIEW_ITEM_PARAGRAPH, REVIEW_PATH, reviewPathKey } from "@/shared/markdown/remark-review-paths";
+import { NOT_TEXT } from "./not-text";
 
 /**
  * The element each block of the Markdown is drawn as. The renderer says which on the element
@@ -35,7 +36,6 @@ function blocksByPath(markdown: string) {
  * behind and are accepted; a `<br>` that opens or ends a paragraph, or ends a cell, stays raw
  * source and is refused.
  */
-const NOT_TEXT = '.sr-only,[aria-hidden="true"],[role="img"],[data-footnote-ref],sup[data-type="footnote_reference"],span[data-type="html"][data-value^="<!--"][data-value$="-->"]';
 
 /** Match the renderer's visible Markdown text: what `NOT_TEXT` names is left out. */
 function readableText(node: HTMLElement | DocumentFragment): string {
