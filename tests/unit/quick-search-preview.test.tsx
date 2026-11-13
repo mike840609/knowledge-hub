@@ -221,10 +221,20 @@ it("leaves out text a reader does not see, and text whose lower case changes its
 
 describe("SearchPreview", () => {
   let highlighted: number[];
+  let cleared: string[];
   beforeEach(() => {
     highlighted = [];
+    cleared = [];
     vi.stubGlobal("Highlight", class { constructor(...ranges: Range[]) { highlighted.push(ranges.length); } });
-    vi.stubGlobal("CSS", { highlights: { set: () => {}, delete: () => {} } });
+    vi.stubGlobal("CSS", { highlights: { set: () => {}, delete: (name: string) => { cleared.push(name); } } });
+  });
+
+  it("clears its marks when the document goes away", async () => {
+    await show("doc-a");
+    await wait(200);
+    expect(cleared).toEqual([]);
+    await show(null);
+    expect(cleared).toEqual(["search-preview"]);
   });
   const show = (documentId: string | null) =>
     act(async () => root.render(<SearchPreview documentId={documentId} terms={["deploy"]} onLeave={() => {}} />));

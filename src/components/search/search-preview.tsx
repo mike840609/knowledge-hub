@@ -31,12 +31,16 @@ export function SearchPreview({ documentId, terms, onLeave }: { documentId: stri
   const cache = useRef(new Map<string, Preview>());
   const [shown, setShown] = useState<Shown | null>(null);
   const [Renderer, setRenderer] = useState<Renderer | null>(null);
+  // A chunk that cannot load (a page older than the latest deploy) would otherwise leave the pane loading.
+  const [rendererFailed, setRendererFailed] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let live = true;
     void import("@/components/knowledge/markdown-renderer").then((module) => {
       if (live) setRenderer(() => module.MarkdownRenderer);
+    }).catch(() => {
+      if (live) setRendererFailed(true);
     });
     return () => { live = false; };
   }, []);
@@ -114,7 +118,7 @@ export function SearchPreview({ documentId, terms, onLeave }: { documentId: stri
           <FileText size={20} aria-hidden="true" />
           <p>Select a document to preview</p>
         </div>
-      ) : current?.failed ? (
+      ) : current?.failed || rendererFailed ? (
         <p className="text-body text-kh-text-muted">This document cannot be previewed.</p>
       ) : preview && Renderer ? (
         <>
