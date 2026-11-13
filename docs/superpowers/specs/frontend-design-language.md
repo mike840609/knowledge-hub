@@ -1316,6 +1316,22 @@ previous query, so they are never a row: Enter, a click or Tab cannot reach
 one. The skeleton remains for the first answer, when there is nothing to keep
 (`tests/unit/quick-search-pending-results.test.tsx`).
 
+**On a wide window the palette is split, and stays split.** From `lg` (1024px)
+it is `min(1080px, 100vw − 48px)` wide and 75vh tall: the rows in a 400px left
+column, each with its matched passage on up to two lines, and the active
+document read on the right through the peek route's `?brief` read, with the
+query's terms drawn by `::highlight(search-preview)` and the first one scrolled
+to. It splits whether or not anything is previewable yet — an action row or an
+empty answer shows a placeholder — because a centred popup that changed width
+as results came and went would move both its edges on every keystroke. While
+the next answer is awaited, with no row active, the previewed document stays,
+like the rows; under an action row there is only the placeholder. Below `lg`
+it is the single 640px list, its rows as before (the passage on the source's
+line), and fetches no preview (`tests/unit/quick-search-preview.test.tsx`).
+The preview imports the reader's renderer when it is first shown: the palette
+is in every workspace page's first load and the renderer is not
+(`tests/unit/composer-bundle.test.ts`).
+
 **The document skeleton is kept knowing what it costs.** Measured, opening a
 document takes 383ms at p50, of which about 250ms is the skeleton rather than
 the work: the data is there at ~130ms, the main thread records no long tasks
