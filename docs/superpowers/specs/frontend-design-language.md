@@ -867,6 +867,16 @@ open, and the keys are the editor's. An empty paragraph the caret is in reads
 `Type "/" for commands` in muted text; an empty document keeps its own
 sentence instead.
 
+**A block can be chosen from the keyboard** (editor Notion-parity spec,
+decisions 6-8; `editor/notion-keys.ts`). Escape in the text, with no menu open,
+selects the current top-level block as a node selection, drawn `kh-bg-selected`
+at the `sm` radius with no outline (`.kh-editor > .ProseMirror-selectednode`);
+Escape again returns to the text. The block menu, the `[[` and `/` lists and the
+toolbar's link field take Escape first. A selected block is the current block
+for `Mod-Shift-ArrowUp/Down` (move) and `Mod-d` (duplicate), which run the same
+commands as the menu's Move and Duplicate. No colour, radius or elevation token
+was added.
+
 Layers: the controls sit at 30, under the app's popovers; the two menus and
 the drop line at 50. None of it is printed.
 

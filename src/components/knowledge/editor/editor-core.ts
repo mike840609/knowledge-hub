@@ -13,6 +13,7 @@ import { liftAtDocumentStart, liftListItemOverNested } from "./block-backspace";
 import { flipNearestDetails, handleDetailsDeleteKey } from "./details-toggle";
 import { handleCalloutBackspace } from "./reader-hints";
 import { configureCellBreakStringify, remarkCellBreaks } from "./table-cell-breaks";
+import { notionKeys } from "./notion-keys";
 import { configureWikiLinkStringify, wikiLinkPlugins } from "./wiki-link";
 
 /** The editor could not make a document of this Markdown; the caller should fall back to the source. */
@@ -304,6 +305,7 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
     // In every host of the editor, not an extra: a document with a wikilink must survive being opened in it.
     .use(wikiLinkPlugins)
     .use(readerHints)
+    .use(notionKeys)
     .use(history)
     .use(listener)
     .use(editWatcher)
