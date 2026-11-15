@@ -72,6 +72,7 @@ async function click(element: Element | null) {
   });
 }
 function clock() { return document.querySelector('button[aria-label="Recent documents"]'); }
+function star() { return document.querySelector('button[aria-label="Favorite documents"]'); }
 function menu() { return document.querySelector('[role="menu"]'); }
 function menuHrefs() { return [...(menu()?.querySelectorAll("a") ?? [])].map(link => link.getAttribute("href")); }
 const href = (id: number) => `/w/w/knowledge/a/d${id}`;
@@ -124,7 +125,24 @@ it("preserves favorite, current-document, and unavailable-document exclusions", 
   await mount();
   await click(clock());
   expect(menuHrefs()).toEqual([href(3), href(4), href(5), href(6)]);
-  expect(document.querySelector('section[aria-label="Favorites"]')?.textContent).toContain("Recent 1");
+  await click(clock());
+  await click(star());
+  expect(menuHrefs()).toEqual([href(1)]);
+});
+
+it("lists every favorite from the star next to the clock", async () => {
+  shortcuts.current.favorites = recent;
+  await mount();
+  expect(star()?.nextElementSibling).toBe(clock());
+  expect(document.querySelector('nav[aria-label="Document tree"]')?.textContent).not.toContain("Recent 1");
+  await click(star());
+  expect(menuHrefs()).toEqual([href(1), href(2), href(3), href(4), href(5), href(6)]);
+});
+
+it("keeps the star available when there are no favorites", async () => {
+  await mount();
+  await click(star());
+  expect(menu()?.textContent).toContain("No favorite documents");
 });
 
 it("keeps the clock available for genuinely empty history", async () => {

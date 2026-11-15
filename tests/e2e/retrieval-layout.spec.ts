@@ -16,7 +16,7 @@ async function createNote(page: Page, workspaceId: string, title: string) {
 
 /**
  * Retrieval-first layout: at 1024–1279 the explorer is a strip and a drawer,
- * not a 288px column; above 1280 it is inline again. Favorites stay visible on arrival; Recent is available from the toolbar menu.
+ * not a 288px column; above 1280 it is inline again. Favorites and Recent each open from the explorer toolbar.
  */
 test("the explorer becomes a drawer between the narrow and wide desktop layouts", async ({ page }) => {
   const workspaceId = await mySpace(page);
@@ -50,7 +50,7 @@ test("the explorer becomes a drawer between the narrow and wide desktop layouts"
   await expect(page.getByRole("button", { name: "Show documents", exact: true })).toHaveCount(0);
 });
 
-test("Favorites are visible on arrival and Recent opens from the toolbar", async ({ page }) => {
+test("Favorites and Recent open independently from adjacent toolbar buttons", async ({ page }) => {
   const workspaceId = await mySpace(page);
   const recentTitle = unique("Retrieval recent");
   const favoriteTitle = unique("Retrieval favorite");
@@ -60,17 +60,21 @@ test("Favorites are visible on arrival and Recent opens from the toolbar", async
   // Reading one document puts it in Recent; starring the other puts it in Favorites.
   await page.goto(recent.href);
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(recentTitle, ROUND_TRIP);
-  await page.goto(`/w/${workspaceId}/knowledge/${favorite.sourceId}`);
+  await expect.poll(() => page.evaluate(({ key, id }) =>
+    (JSON.parse(localStorage.getItem(key) ?? "{}").recent ?? []).some((value: string) => value.endsWith(`:${id}`)),
+  { key: `kh:document-shortcuts:${workspaceId}`, id: recent.documentId }), ROUND_TRIP).toBe(true);
+  await page.goto(favorite.href);
   await page.getByRole("button", { name: `Add to favorites: ${favoriteTitle}`, exact: true }).click();
 
-  const favorites = page.getByRole("region", { name: "Favorites" });
+  const favorites = page.getByRole("button", { name: "Favorite documents", exact: true });
   const clock = page.getByRole("button", { name: "Recent documents", exact: true });
-  await expect(page.getByRole("region", { name: "Recent documents", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Documents", exact: true })).toHaveCount(0);
+  await expect(favorites).toHaveAttribute("aria-expanded", "false");
   await expect(clock).toHaveAttribute("aria-expanded", "false");
-  await expect(favorites.getByRole("link", { name: favoriteTitle, exact: true })).toBeVisible(ROUND_TRIP);
-
-  // Favorites remain expanded; history is shown only on demand.
-  await expect(favorites.getByRole("button", { name: "Favorites", exact: true })).toHaveAttribute("aria-expanded", "true");
+  await favorites.click();
+  await expect(page.getByRole("menuitem").filter({ hasText: favoriteTitle })).toBeVisible(ROUND_TRIP);
+  await expect(page.getByRole("menuitem").filter({ hasText: recentTitle })).toHaveCount(0);
+  await page.keyboard.press("Escape");
   await clock.click();
   await expect(page.getByRole("menuitem").filter({ hasText: recentTitle })).toBeVisible(ROUND_TRIP);
 });

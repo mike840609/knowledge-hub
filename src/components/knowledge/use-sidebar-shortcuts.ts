@@ -13,7 +13,7 @@ export function useSidebarShortcuts(workspaceId: string, idsKey: string, include
     if (!ids.length) { startTransition(() => setResult({ key, documents: [], error: false })); return; }
     void (async () => {
       const documents: SidebarShortcut[] = [];
-      // Bounded requests preserve Show all for accounts with more than 100 favorites.
+      // Bounded requests let the Favorites menu list more than 100 documents.
       for (let i = 0; i < ids.length; i += 100) {
         const response = await fetch(`/api/workspaces/${workspaceId}/sidebar-shortcuts?ids=${ids.slice(i, i + 100).join(',')}&includeArchived=${includeArchived}`, { cache: 'no-store', signal: controller.signal });
         if (!response.ok) throw new Error();
