@@ -180,7 +180,7 @@ export function PageIconPicker({
                               aria-pressed={current === choice.char}
                               disabled={saving}
                               onClick={() => void save(choice.char)}
-                              className="flex h-8 w-8 items-center justify-center rounded-md text-heading outline-none hover:bg-kh-bg-hover focus-visible:bg-kh-bg-hover aria-pressed:bg-kh-bg-selected"
+                              className="kh-focus-ring flex h-8 w-8 items-center justify-center rounded-md text-heading hover:bg-kh-bg-hover focus-visible:ring-inset aria-pressed:bg-kh-bg-selected"
                             >
                               {choice.char}
                             </button>

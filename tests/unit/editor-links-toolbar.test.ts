@@ -4,7 +4,8 @@ import { TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
-import { selectionToolbar, storedLinkTarget } from "@/components/knowledge/editor/selection-toolbar";
+import { selectionToolbar, storedLinkTarget, withScheme } from "@/components/knowledge/editor/selection-toolbar";
+import type { RenderedLinks } from "@/components/knowledge/rendered-links";
 import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
 import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
 import { LINK_MARKDOWN_FIXTURES } from "../fixtures/link-markdown";
@@ -16,9 +17,9 @@ Range.prototype.getBoundingClientRect = () => rect;
 const opened: MarkdownEditor[] = [];
 afterEach(async () => { vi.restoreAllMocks(); for (const editor of opened.splice(0)) await editor.destroy(); document.body.innerHTML = ""; });
 
-async function open(markdown: string) {
+async function open(markdown: string, links?: RenderedLinks) {
   const root = document.body.appendChild(document.createElement("div"));
-  const toolbar = selectionToolbar();
+  const toolbar = selectionToolbar(undefined, () => links);
   const editor = await createMarkdownEditor({
     root, markdown, className: "kh-editor", ariaLabel: "Content", editable: true, onUserEdit: () => {}, onMarkdown: () => {}, allowImage: () => false,
     extraPlugins: toolbar.plugins, configure: toolbar.configure,
@@ -226,6 +227,38 @@ describe("the link card (11)", () => {
     keydown(input, { key: "Enter" });
     expect(editor.getMarkdown()).toBe("plain [site](https://example.org) end\n");
   });
+  describe("Edit on a relative .md link", () => {
+    const DOC = "see [other](../notes/other.md#Part) end\n";
+    const links: RenderedLinks = { [linkLookupKey("PATH", "../notes/other.md")]: { status: "RESOLVED", basePath: "/w/ws/knowledge/src/doc", title: "Other", ambiguousWith: 0 } };
+    const edges = (markdown: string) => extractDocumentLinks(markdown).map(({ kind, target }) => ({ kind, target }));
+
+    it("saves it unchanged, never as https://..., and keeps the document edge", async () => {
+      const { editor, view } = await open(DOC, links);
+      select(view, 7);
+      card()!.querySelector<HTMLButtonElement>("button[aria-label='Edit link']")!.click();
+      const input = toolbarEl().querySelector<HTMLInputElement>("input")!;
+      expect(input.value).toBe("../notes/other.md#Part");
+      keydown(input, { key: "Enter" });
+      expect(editor.getMarkdown()).toBe(DOC);
+      expect(edges(editor.getMarkdown())).toEqual([{ kind: "PATH", target: "../notes/other.md" }]);
+    });
+    it("opens the document from the field's Open, as the card does", async () => {
+      const open_ = vi.spyOn(window, "open").mockImplementation(() => null);
+      const { view } = await open(DOC, links);
+      select(view, 7);
+      card()!.querySelector<HTMLButtonElement>("button[aria-label='Edit link']")!.click();
+      const button = toolbarEl().querySelector<HTMLButtonElement>("button[aria-label='Open link']")!;
+      expect(button.disabled).toBe(false);
+      button.click();
+      expect(open_).toHaveBeenCalledWith("/w/ws/knowledge/src/doc#Part", "_blank", "noopener,noreferrer");
+    });
+    it("leaves Open off for a document the workspace does not have", async () => {
+      const { view } = await open(DOC);
+      select(view, 7);
+      card()!.querySelector<HTMLButtonElement>("button[aria-label='Edit link']")!.click();
+      expect(toolbarEl().querySelector<HTMLButtonElement>("button[aria-label='Open link']")!.disabled).toBe(true);
+    });
+  });
   it("follows the link while typing inside it, so Remove unlinks all of it", async () => {
     const { editor, view } = await open(MD);
     select(view, 2);
@@ -241,6 +274,13 @@ describe("the link card (11)", () => {
     select(view, 1);
     select(view, 2);
     expect(cardShown()).toBe(false);
+  });
+});
+
+describe("an address typed in the link field", () => {
+  it("is given https:// only when it is a web address", () => {
+    expect(withScheme("example.com/a")).toBe("https://example.com/a");
+    for (const kept of ["../notes/other.md", "other.md#Part", "notes/a%20b.md", "/w/ws", "#top", "mailto:a@b.c", "https://example.com"]) expect(withScheme(kept)).toBe(kept);
   });
 });
 
@@ -261,5 +301,6 @@ describe("where a link already in the document opens (11, Open and Mod-click)", 
     expect(storedLinkTarget("example.com")).toBeNull();
     expect(storedLinkTarget("javascript:alert(1)")).toBeNull();
     expect(storedLinkTarget("//evil.example")).toBeNull();
+    expect(storedLinkTarget("/\\evil.example")).toBeNull();
   });
 });

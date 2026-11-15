@@ -3,7 +3,7 @@ import { editorViewCtx } from "@milkdown/kit/core";
 import { undo } from "@milkdown/kit/prose/history";
 import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { slashCommands } from "@/components/knowledge/editor/slash-commands";
 import { wikiLinkSuggest } from "@/components/knowledge/editor/wikilink-suggest";
@@ -181,6 +181,82 @@ it("Mod-Shift-8 on a numbered item changes it to a bulleted list", async () => {
   caretAt(view, 3);
   mod(view, "*", { shiftKey: true });
   expect(view.state.doc.firstChild?.type.name).toBe("bullet_list");
+});
+
+/** The document as nested names, text in parentheses: `bullet_list[list_item[paragraph(a)]]`. */
+function shape(node: import("@milkdown/kit/prose/model").Node): string {
+  if (node.isText) return `(${node.text})`;
+  const inner = [] as string[];
+  node.forEach(child => inner.push(shape(child)));
+  return `${node.type.name}[${inner.join(" ")}]`;
+}
+const docShape = (view: EditorView) => { const found: string[] = []; view.state.doc.forEach(node => found.push(shape(node))); return found.join(" "); };
+function posIn(view: EditorView, text: string) {
+  let at = -1;
+  view.state.doc.descendants((node, pos) => { if (node.isText && node.text === text) at = pos; });
+  return at;
+}
+const edges = (markdown: string) => extractDocumentLinks(markdown).map(({ kind, target }) => `${kind}:${target}`).sort();
+
+describe("Mod-Shift-7/8/9 on an item with nested items or siblings", () => {
+  it("keeps the item's own sub-list under it, and leaves the siblings in their list", async () => {
+    const { view } = await open("- a\n  - b\n- c");
+    caretAt(view, posIn(view, "a") + 1);
+    mod(view, "&", { shiftKey: true });
+    expect(docShape(view)).toBe("ordered_list[list_item[paragraph[(a)] bullet_list[list_item[paragraph[(b)]]]]] bullet_list[list_item[paragraph[(c)]]]");
+  });
+  it("in a nested list changes that item only, so its next sibling does not become its child", async () => {
+    const { view } = await open("- a\n  - b\n  - c\n- d");
+    caretAt(view, posIn(view, "b") + 1);
+    mod(view, "&", { shiftKey: true });
+    expect(docShape(view)).toBe("bullet_list[list_item[paragraph[(a)] ordered_list[list_item[paragraph[(b)]]] bullet_list[list_item[paragraph[(c)]]]] list_item[paragraph[(d)]]]");
+  });
+  it("splits around a middle item and keeps the caret in it", async () => {
+    const { view } = await open("- a\n- b\n- c");
+    caretAt(view, posIn(view, "b") + 1);
+    mod(view, "&", { shiftKey: true });
+    type(view, "X");
+    expect(docShape(view)).toBe("bullet_list[list_item[paragraph[(a)]]] ordered_list[list_item[paragraph[(bX)]]] bullet_list[list_item[paragraph[(c)]]]");
+  });
+  it("goes on numbering a numbered list after the item that left it", async () => {
+    const { editor, view } = await open("1. a\n2. b\n3. c");
+    caretAt(view, posIn(view, "b") + 1);
+    mod(view, "*", { shiftKey: true });
+    expect(editor.getMarkdown()).toMatch(/1\. a\n\n- b\n\n3\. c/);
+  });
+  it("is one undo step", async () => {
+    const { view } = await open("- a\n  - b\n- c");
+    const before = docShape(view);
+    caretAt(view, posIn(view, "a") + 1);
+    mod(view, "&", { shiftKey: true });
+    undo(view.state, view.dispatch);
+    expect(docShape(view)).toBe(before);
+  });
+  it("reads its links back after the change", async () => {
+    const { editor, view } = await open("- see [[Target]] and [x](notes/other.md)\n  - [[Child]]\n- two\n");
+    const wanted = edges(editor.getMarkdown());
+    expect(wanted.length).toBeGreaterThan(2);
+    caretAt(view, 2);
+    mod(view, "&", { shiftKey: true });
+    expect(edges(editor.getMarkdown())).toEqual(wanted);
+  });
+});
+
+it("Mod-Shift-8 turns a heading into a bulleted list item, keeping the caret", async () => {
+  const { view } = await open("# Title");
+  caretAt(view, 4);
+  mod(view, "*", { shiftKey: true });
+  type(view, "X");
+  expect(docShape(view)).toBe("bullet_list[list_item[paragraph[(TitXle)]]]");
+});
+
+it("the [] rule reads its links back", async () => {
+  const { editor, view } = await open("see [[Target]] and [x](notes/other.md)\n");
+  const wanted = edges(editor.getMarkdown());
+  caretAt(view, 1);
+  type(view, "[] ");
+  expect(names(view)).toEqual(["bullet_list"]);
+  expect(edges(editor.getMarkdown())).toEqual(wanted);
 });
 
 it("Mod-Shift-9 on a bulleted item makes it a to-do in the same list", async () => {
