@@ -116,6 +116,12 @@ it.each([["->", "→"], ["<-", "←"], ["(c)", "©"], ["(r)", "®"], ["(tm)", "�
   expect(view.state.doc.textContent).toBe(`a ${typed}`);
 });
 
+it("leaves a [[target]] being typed as written", async () => {
+  const { view } = await open("");
+  type(view, "see [[A->B (c)");
+  expect(view.state.doc.textContent).toBe("see [[A->B (c)");
+});
+
 it("leaves -- alone so that --- still makes a divider, and does not replace in code", async () => {
   const { view } = await open("");
   type(view, "a -- b");
@@ -175,6 +181,33 @@ it("Mod-Shift-8 on a numbered item changes it to a bulleted list", async () => {
   caretAt(view, 3);
   mod(view, "*", { shiftKey: true });
   expect(view.state.doc.firstChild?.type.name).toBe("bullet_list");
+});
+
+it("Mod-Shift-9 on a bulleted item makes it a to-do in the same list", async () => {
+  const { editor, view } = await open("- one\n- two");
+  caretAt(view, 4);
+  mod(view, "(", { shiftKey: true });
+  expect(names(view)).toEqual(["bullet_list"]);
+  expect(editor.getMarkdown().trim()).toBe("- [ ] one\n- two");
+});
+
+it("Mod-Shift-8 keeps the caret where it was", async () => {
+  const { view } = await open("hello world");
+  caretAt(view, 6);
+  mod(view, "*", { shiftKey: true });
+  type(view, "X");
+  expect(view.state.doc.textContent).toBe("helloX world");
+});
+
+it("Mod-Shift-8 in the middle of a numbered list changes that item only, and keeps the caret", async () => {
+  const { view } = await open("1. one\n2. two\n3. three");
+  let at = 0;
+  view.state.doc.descendants((node, pos) => { if (node.isText && node.text === "two") at = pos; });
+  caretAt(view, at + 1);
+  mod(view, "*", { shiftKey: true });
+  type(view, "X");
+  expect(names(view)).toEqual(["ordered_list", "bullet_list", "ordered_list"]);
+  expect(view.state.doc.textBetween(0, view.state.doc.content.size, "|")).toBe("one|tXwo|three");
 });
 
 it("Mod-Shift-ArrowUp/Down move the current block and Mod-d duplicates it", async () => {

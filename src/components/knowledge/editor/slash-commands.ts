@@ -61,12 +61,22 @@ function loneSlash(state: EditorState, pos: number): [number, number] | null {
   return [pos + 1, pos + 2];
 }
 
-/** Rows for a query, case-insensitively: an alias it begins comes first, then label or `words` holding it, each in list order. */
+/**
+ * Rows for a query, case-insensitively, each group in list order: an alias it equals, a label it
+ * begins, an alias it begins, then label or `words` holding it. So `/h2` is Heading 2 and `/t` is Text,
+ * not To-do by way of `todo`.
+ */
 export function matchingCommands(query: string): readonly Command[] {
   const q = query.toLowerCase().trim();
-  const byAlias = commands.filter(command => command.aliases.some(alias => alias.startsWith(q)));
-  const byWords = commands.filter(command => !byAlias.includes(command) && `${command.label} ${command.words}`.toLowerCase().includes(q));
-  return [...byAlias, ...byWords];
+  const groups = [
+    (command: Command) => command.aliases.some(alias => alias === q),
+    (command: Command) => command.label.toLowerCase().startsWith(q),
+    (command: Command) => command.aliases.some(alias => alias.startsWith(q)),
+    (command: Command) => `${command.label} ${command.words}`.toLowerCase().includes(q),
+  ];
+  const found: Command[] = [];
+  for (const test of groups) for (const command of commands) if (!found.includes(command) && test(command)) found.push(command);
+  return found;
 }
 
 /** Each row's 16px Lucide glyph, drawn once from lucide-react as reader-hints.ts draws a callout's, then cloned. */

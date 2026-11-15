@@ -173,7 +173,8 @@ const calloutMenuFor = (view: EditorView) => menus.get(view);
 
 /** The one menu the callout labels share: Base-UI-style rows (`role=menu`), arrow keys, Escape back to the label. Drawn on the body like the block menu. */
 function createCalloutMenu(view: EditorView): { menu: CalloutMenu; destroy: () => void } {
-  // Built when first opened, so a document with no callout (or one never changed) leaves nothing on the body.
+  // Built with the editor, but put on the body only when first opened, so a document whose callouts are
+  // never changed leaves nothing there.
   const element = document.createElement("div");
   element.className = "kh-block-move-menu kh-callout-menu";
   element.hidden = true;

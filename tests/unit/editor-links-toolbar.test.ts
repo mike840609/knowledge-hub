@@ -4,7 +4,8 @@ import { TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
-import { selectionToolbar } from "@/components/knowledge/editor/selection-toolbar";
+import { selectionToolbar, storedLinkTarget } from "@/components/knowledge/editor/selection-toolbar";
+import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
 import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
 import { LINK_MARKDOWN_FIXTURES } from "../fixtures/link-markdown";
 
@@ -240,5 +241,25 @@ describe("the link card (11)", () => {
     select(view, 1);
     select(view, 2);
     expect(cardShown()).toBe(false);
+  });
+});
+
+describe("where a link already in the document opens (11, Open and Mod-click)", () => {
+  const links = { [linkLookupKey("PATH", "notes/other.md")]: { status: "RESOLVED" as const, basePath: "/w/ws/knowledge/src/doc", title: "Other", ambiguousWith: 0 } };
+
+  it("opens a relative .md link at its document, as the reader does, never at an invented host", () => {
+    const target = storedLinkTarget("notes/other.md#Some Heading", links);
+    expect(target?.startsWith("/w/ws/knowledge/src/doc#")).toBe(true);
+    expect(storedLinkTarget("missing.md", links)).toBeNull();
+    expect(storedLinkTarget("../other.md")).toBeNull();
+  });
+
+  it("opens other stored links only as written", () => {
+    expect(storedLinkTarget("https://example.com/a")).toBe("https://example.com/a");
+    expect(storedLinkTarget("mailto:a@b.c")).toBe("mailto:a@b.c");
+    expect(storedLinkTarget("/w/ws")).toBe("/w/ws");
+    expect(storedLinkTarget("example.com")).toBeNull();
+    expect(storedLinkTarget("javascript:alert(1)")).toBeNull();
+    expect(storedLinkTarget("//evil.example")).toBeNull();
   });
 });

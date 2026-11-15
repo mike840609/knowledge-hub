@@ -122,6 +122,14 @@ describe("code block keys (19)", () => {
     expect(editor.getMarkdown()).toContain("const b = 2;");
     expect(links(editor.getMarkdown())).toEqual(links(code));
   });
+  it("Shift-Tab at the very start, before a leading empty line, leaves the next line alone", async () => {
+    const { editor, view } = await open("```\n\n  two\n```\n");
+    let at = 0;
+    view.state.doc.descendants((node, pos) => { if (node.type.name === "code_block") at = pos + 1; });
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
+    press(view, "Tab", { shiftKey: true });
+    expect(editor.getMarkdown()).toContain("\n  two\n");
+  });
   it("indents every selected line and outdents up to two spaces of each", async () => {
     const { editor, view } = await open("```\none\n   two\nthree\n```\n");
     let from = 0;
