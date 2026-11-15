@@ -15,6 +15,7 @@ import { governanceFailure, governanceRequest, GovernanceError } from "@/compone
 import { DocumentAutosave, type DocumentContent, type SavedRevision } from "@/lib/document-autosave";
 import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } from "@/lib/document-draft";
 import { PersistentDraft } from "@/lib/persistent-draft";
+import { caretOnLastLine } from "@/lib/title-keys";
 import { carryTitle, resolveAuthoredTitle } from "@/lib/authored-title";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { downloadMarkdown } from "@/lib/download-markdown";
@@ -378,6 +379,14 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     refreshMetadata();
   }
   const displayTitle = dirty || recovery ? resolved.title || "Untitled" : savedTitle;
+  /** Enter, or ArrowDown on the last line, in the title: on to the start of the content (never a line break in the title). */
+  function leaveTitle() {
+    if (source || failed) {
+      const textarea = sourceTextarea.current;
+      textarea?.focus();
+      textarea?.setSelectionRange(0, 0);
+    } else editor.current?.focusStart();
+  }
   function focusTitle() {
     flushEditor();
     if (resolve(queue.current!.current).source !== "H1") {
@@ -470,7 +479,12 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     editorActions={<><AutosaveIndicator state={status} attention={attention} /><Button type="button" variant="ghost" aria-label="Rename document" title="Rename document" disabled={!editable || !!recovery || (!ready && !source && !failed)} onClick={focusTitle}><Pencil className="h-4 w-4" aria-hidden="true" /></Button>{markdownToggle}</>}
     titleControl={resolved.source !== "H1" ? <textarea ref={titleInput} aria-label="Title" value={content.title} disabled={!editable} maxLength={512} rows={1}
       onChange={event => change({ ...queue.current!.current, title: event.target.value })}
-      onKeyDown={event => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.blur(); } }}
+      onKeyDown={event => {
+        if (event.nativeEvent.isComposing || event.keyCode === 229 || event.metaKey || event.ctrlKey || event.altKey) return;
+        if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); leaveTitle(); }
+        else if (event.key === "ArrowDown" && !event.shiftKey && caretOnLastLine(event.currentTarget)) { event.preventDefault(); leaveTitle(); }
+        else if (event.key === "Enter") event.preventDefault();
+      }}
       className="mt-2 block w-full resize-none overflow-hidden break-words border-0 bg-transparent p-0 text-page-title font-semibold tracking-tight text-kh-text outline-none"
       onCompositionStart={() => { composing.current = true; writer?.pause(true); }}
       onCompositionEnd={() => { composing.current = false; writer?.pause(!editable || !!recovery || !resolve(queue.current!.current).title); }} /> : undefined}>
