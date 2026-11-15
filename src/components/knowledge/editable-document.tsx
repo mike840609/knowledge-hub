@@ -480,10 +480,12 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     titleControl={resolved.source !== "H1" ? <textarea ref={titleInput} aria-label="Title" value={content.title} disabled={!editable} maxLength={512} rows={1}
       onChange={event => change({ ...queue.current!.current, title: event.target.value })}
       onKeyDown={event => {
-        if (event.nativeEvent.isComposing || event.keyCode === 229 || event.metaKey || event.ctrlKey || event.altKey) return;
-        if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); leaveTitle(); }
-        else if (event.key === "ArrowDown" && !event.shiftKey && caretOnLastLine(event.currentTarget)) { event.preventDefault(); leaveTitle(); }
-        else if (event.key === "Enter") event.preventDefault();
+        if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+        if (event.key === "Enter") {
+          event.preventDefault();
+          if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) event.currentTarget.blur();
+          else leaveTitle();
+        } else if (event.key === "ArrowDown" && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && caretOnLastLine(event.currentTarget)) { event.preventDefault(); leaveTitle(); }
       }}
       className="mt-2 block w-full resize-none overflow-hidden break-words border-0 bg-transparent p-0 text-page-title font-semibold tracking-tight text-kh-text outline-none"
       onCompositionStart={() => { composing.current = true; writer?.pause(true); }}

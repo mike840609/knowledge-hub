@@ -642,6 +642,15 @@ describe("the React wrapper", () => {
       expect(open).toHaveBeenCalledWith("https://example.com", "_blank", "noopener,noreferrer");
     });
 
+    it("opens nothing on ⌘-click of a link with an unsafe scheme", async () => {
+      const open = vi.spyOn(window, "open").mockImplementation(() => null);
+      const built = ready();
+      const wrapper = mount(props({ markdown: "[a](javascript:alert(1)) [b](data:text/html,x)\n", editable, onReady: built.onReady }));
+      await built.promise;
+      for (const anchor of wrapper.container.querySelectorAll("a")) click(anchor as HTMLElement, { metaKey: true });
+      expect(open).not.toHaveBeenCalled();
+    });
+
     it("leaves a click that is not on a link alone", async () => {
       const open = vi.spyOn(window, "open").mockImplementation(() => null);
       const { paragraph } = await withLink();

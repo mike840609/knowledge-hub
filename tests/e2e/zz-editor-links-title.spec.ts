@@ -91,6 +91,28 @@ test.describe("title keys (10)", () => {
   });
 });
 
+test.describe("modified Enter in a title keeps its old meaning", () => {
+  test("Alt+Enter in a document's title adds no line break", async ({ page }) => {
+    const title = unique("Mod enter");
+    await openEditor(page, await createNote(page, await mySpace(page), title, "First"));
+    const field = main(page).getByRole("textbox", { name: "Title", exact: true });
+    await field.click();
+    await page.keyboard.press("Control+End");
+    await page.keyboard.press("Alt+Enter");
+    await expect(field).toHaveValue(title);
+  });
+  test("Shift+Enter in a new document's title does not submit the form", async ({ page }) => {
+    await page.goto(`/w/${await mySpace(page)}/knowledge/new`);
+    const field = main(page).getByLabel("Title", { exact: true });
+    await expect(surfaceOf(page)).toBeEditable(ROUND_TRIP);
+    await field.fill(unique("Shift enter"));
+    await field.press("Shift+Enter");
+    await expect(surfaceOf(page)).toBeFocused();
+    await page.waitForTimeout(500);
+    await expect(page).toHaveURL(/\/new$/);
+  });
+});
+
 test.describe("⌘K over a selection (9)", () => {
   test("opens the link field and not the palette; with no selection it is the palette", async ({ page }) => {
     const surface = await openEditor(page, await createNote(page, await mySpace(page), unique("Mod K"), "alpha beta gamma"));

@@ -54,7 +54,7 @@ const PRESSED = "aria-pressed:bg-kh-bg-selected aria-pressed:text-kh-text";
 const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 
 /** `example.com` is a web address; a path, an anchor or anything with a scheme (`mailto:`) is left as typed. */
-function withScheme(value: string): string {
+export function withScheme(value: string): string {
   if (!value || HAS_SCHEME.test(value) || value.startsWith("/") || value.startsWith("#")) return value;
   return `https://${value}`;
 }
@@ -117,7 +117,7 @@ function caretLink(view: EditorView): Extract<SelectedLink, { kind: "one" }> | n
   return run.kind === "one" ? run : null;
 }
 
-function canOpenLink(value: string): boolean {
+export function canOpenLink(value: string): boolean {
   return /^(?:https?:|mailto:|\/(?!\/)|#)/i.test(withScheme(value.trim()));
 }
 
@@ -455,6 +455,8 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
               return;
             }
             if (isCardLink(link)) { cardLink = link; placeCard(link); return; }
+            // Typing inside a shown link changes its range and address: follow it rather than keep the old one.
+            if (cardLink && card.dataset.show === "true" && !prevSelectionChanged) { showCard(link); return; }
             // Not yet showing for this link: it shows on entering it, or on a click, and not again
             // after Escape until the caret has been out of it (or a click lands in it).
             const dismissed = leftAt !== null && leftAt.from === link.from && leftAt.to === link.to && leftAt.mark.eq(link.mark);
@@ -486,7 +488,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             openLink();
           });
           cardButtons.get("Remove link")!.addEventListener("click", () => {
-            const target = cardLink;
+            const target = caretLink(editorView) ?? cardLink;
             if (!target || !editorView.editable) return;
             hideCard();
             editorView.dispatch(editorView.state.tr.removeMark(target.from, target.to, editorView.state.schema.marks.link));

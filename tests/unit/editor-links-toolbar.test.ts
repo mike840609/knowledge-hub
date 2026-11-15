@@ -171,6 +171,16 @@ describe("the link card (11)", () => {
     keydown(input, { key: "Enter" });
     expect(editor.getMarkdown()).toBe("plain [site](https://example.org) end\n");
   });
+  it("follows the link while typing inside it, so Remove unlinks all of it", async () => {
+    const { editor, view } = await open(MD);
+    select(view, 2);
+    select(view, IN_LINK);
+    expect(cardShown()).toBe(true);
+    view.dispatch(view.state.tr.insertText("xy", IN_LINK));
+    expect(cardShown()).toBe(true);
+    card()!.querySelector<HTMLButtonElement>("button[aria-label='Remove link']")!.click();
+    expect(editor.getMarkdown()).toBe("plain sixyte end\n");
+  });
   it("is not shown for a wikilink", async () => {
     const { view } = await open("a [[Other]] b\n");
     select(view, 1);
