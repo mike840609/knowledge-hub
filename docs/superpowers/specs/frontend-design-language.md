@@ -877,6 +877,20 @@ for `Mod-Shift-ArrowUp/Down` (move) and `Mod-d` (duplicate), which run the same
 commands as the menu's Move and Duplicate. No colour, radius or elevation token
 was added.
 
+**The selection toolbar and the link card** (editor Notion-parity spec,
+decisions 9-13; `editor/selection-toolbar.ts`). The toolbar holds Bold, Italic,
+Strikethrough, Inline code, Link, Heading 1-3, the two lists and Toggle, each a
+`ghost` `sm` button that reads `aria-pressed` when active. `Mod-k` over a text
+selection opens its link field and is handled by the editor, so the command
+palette (which yields to a handled event) stays closed; with no selection it is
+the palette. A caret that enters a link, by key or by a plain click, shows
+`.kh-link-card` under it: the address in `caption` muted text, then Open
+(`target=_blank`, `noopener noreferrer`), Edit (the toolbar's own link field,
+not a second editor) and Remove. It is the toolbar's surface (`lg` radius, a
+border, `popover` elevation, `kh-bg-raised`), one at a time, and goes when the
+caret leaves the link, on Escape (which it takes ahead of the block-selecting
+Escape), or when the link scrolls out of view. No token was added.
+
 Layers: the controls sit at 30, under the app's popovers; the two menus and
 the drop line at 50. None of it is printed.
 

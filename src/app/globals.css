@@ -425,6 +425,24 @@ input[type="search"]::-webkit-search-cancel-button:hover {
     transform: scale(0.98);
   }
 
+  /* The card under a link the caret is in (address, Open, Edit, Remove). Built like the toolbar above —
+     popover elevation, `lg` radius — and entered and left the same way: only `data-show` toggles. */
+  .kh-link-card {
+    @apply absolute z-20 flex items-center gap-0.5 rounded-lg border border-kh-border bg-kh-bg-raised p-1 shadow-popover;
+    @apply transition-[opacity,transform,display] duration-120 ease-out [transition-behavior:allow-discrete];
+  }
+  @starting-style {
+    .kh-link-card {
+      opacity: 0;
+      transform: scale(0.98);
+    }
+  }
+  .kh-link-card[data-show="false"] {
+    @apply hidden;
+    opacity: 0;
+    transform: scale(0.98);
+  }
+
   /* The `[[` list of documents. It is placed by the editor from the caret's coordinates (`left`/`top`),
      over the page rather than inside the scroller the editor sits in, so nothing clips it.
      It enters and leaves like the selection toolbar above: the popup only toggles `data-show`, so
