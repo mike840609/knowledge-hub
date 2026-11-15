@@ -76,6 +76,6 @@ describe("a page icon", () => {
   it("refuses a glyph the picker does not offer", async () => {
     const scope = await setupLinkScope(pool);
     const original = await hubDocument(pool, scope, "Icon page", "Body.");
-    await expect(hub().setDocumentIcon(owner, original.documentId, "🙂")).rejects.toThrow();
+    await expect(hub().setDocumentIcon(owner, original.documentId, "⌘")).rejects.toThrow();
   });
 });
