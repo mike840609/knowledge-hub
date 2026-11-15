@@ -240,7 +240,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           let linkMode = false;
           function setLinkMode(on: boolean) {
             linkMode = on;
-            buttons.className = on ? "hidden" : "flex items-center gap-0.5";
+            buttons.className = on ? "hidden" : "flex flex-wrap items-center gap-0.5";
             linkRow.className = on ? "flex flex-col gap-2" : "hidden";
           }
           setLinkMode(false);
