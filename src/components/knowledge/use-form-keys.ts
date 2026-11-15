@@ -34,6 +34,7 @@ export function useFormKeys({
         isComposing: event.nativeEvent.isComposing,
         keyCode: event.keyCode,
         code: event.code,
+        target: event.target,
       },
       { dirty, busy, canToggleMode: mode !== undefined },
     );

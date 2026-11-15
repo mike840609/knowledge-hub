@@ -489,3 +489,25 @@ it("[x] typed at the start of an item's later paragraph does not check the item"
   expect(editor.getMarkdown()).toBe("- first\n\n  \\[x] later\n");
   expect(view.state.doc.firstChild!.firstChild!.attrs.checked).toBeNull();
 });
+
+it.each([
+  ["- one\n- two\n", "two", "- one\n- [ ] two\n"],
+  ["1. one\n2. two\n", "two", "1. one\n2. [ ] two\n"],
+  ["- outer\n  - inner\n", "inner", "- outer\n  - [ ] inner\n"],
+])("[ ] typed on an item's first line makes that item a to-do: %j", async (markdown, at, expected) => {
+  const { editor, view } = await open(markdown);
+  caretAt(view, findText(view, at));
+  type(view, "[ ] ");
+  expect(editor.getMarkdown()).toBe(expected);
+});
+
+it("Mod-Shift-8 on an Escape-chosen list keeps its links", async () => {
+  const markdown = "- see [[Target]] and [[Other|alias]]\n- read [doc](notes/a.md#Part)\n";
+  const { editor, view } = await open(markdown);
+  caretAt(view, findText(view, "see") + 1);
+  press(view, "Escape");
+  mod(view, "8", { shiftKey: true });
+  const links = (text: string) => extractDocumentLinks(text).map(({ kind, target }) => ({ kind, target }));
+  expect(editor.getMarkdown()).not.toBe(markdown);
+  expect(links(editor.getMarkdown())).toEqual(links(markdown));
+});

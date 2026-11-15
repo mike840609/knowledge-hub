@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { editorViewCtx } from "@milkdown/kit/core";
-import { TextSelection } from "@milkdown/kit/prose/state";
+import { AllSelection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
@@ -311,7 +311,8 @@ describe("an address typed in the link field", () => {
     expect(withScheme("localhost:3000/x")).toBe("https://localhost:3000/x");
     expect(withScheme("example.com:8080")).toBe("https://example.com:8080");
     expect(storedLinkTarget(withScheme("localhost:3000/x"))).toBe("https://localhost:3000/x");
-    for (const kept of ["mailto:a@b.c", "tel:123", "https://user@example.com"]) expect(withScheme(kept)).toBe(kept);
+    for (const kept of ["mailto:a@b.c", "tel:123", "https://user@example.com", "#user@example.com", "./a@b.md"]) expect(withScheme(kept)).toBe(kept);
+    expect(withScheme("?a@b.c")).toBe("https://?a@b.c");
   });
   it("is given https:// only when it is a web address", () => {
     for (const web of ["example.com/a", "example.com/a.md", "github.com/org/repo/blob/main/README.md", "news.md"]) expect(withScheme(web)).toBe(`https://${web}`);
@@ -356,5 +357,28 @@ describe("where the link field is not offered", () => {
     expect(view.state.selection.constructor.name).toBe("NodeSelection");
     await new Promise(resolve => setTimeout(resolve, 300));
     expect(toolbarEl().dataset.show).not.toBe("true");
+  });
+});
+
+describe("the toolbar and its Link button, beyond a plain paragraph", () => {
+  it("is not shown over a code block chosen with Escape inside a list item", async () => {
+    const { view } = await open("- item\n\n  ```\n  code here\n  ```\n");
+    let at = -1;
+    view.state.doc.descendants((node, pos) => { if (at < 0 && node.type.name === "code_block") at = pos + 2; });
+    select(view, at, at + 3);
+    keydown(view.dom, { key: "Escape", keyCode: 27 } as KeyboardEventInit);
+    expect(view.state.selection.constructor.name).toBe("NodeSelection");
+    await new Promise(resolve => setTimeout(resolve, 300));
+    expect(toolbarEl().dataset.show).not.toBe("true");
+  });
+  it("keeps Link on for select-all and in a table cell", async () => {
+    const { view } = await open("one\n\ntwo\n");
+    view.dispatch(view.state.tr.setSelection(new AllSelection(view.state.doc)));
+    expect(toolbarEl().querySelector<HTMLButtonElement>("button[aria-label='Link']")!.disabled).toBe(false);
+    const table = await open("| a | b |\n| - | - |\n| cell | x |\n");
+    let at = -1;
+    table.view.state.doc.descendants((node, pos) => { if (at < 0 && node.isText && node.text === "cell") at = pos; });
+    select(table.view, at, at + 4);
+    expect(document.querySelectorAll<HTMLElement>(".kh-selection-toolbar")[1].querySelector<HTMLButtonElement>("button[aria-label='Link']")!.disabled).toBe(false);
   });
 });

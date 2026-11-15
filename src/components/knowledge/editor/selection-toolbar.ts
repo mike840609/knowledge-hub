@@ -55,7 +55,7 @@ function currentList(view: EditorView): ListName | null {
 // A pressed toggle reads as selected, as the composer's own Markdown toggle does.
 const PRESSED = "aria-pressed:bg-kh-bg-selected aria-pressed:text-kh-text";
 const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
-const EMAIL = /^[^\s@/:]+@[^\s@/:]+\.[^\s@/:]+$/;
+const EMAIL = /^[^\s@/:#?]+@[^\s@/:#?]+\.[^\s@/:#?]+$/;
 // `localhost:3000/x`, `example.com:8080`: a host and a port, not a scheme (`tel:123` has no dot).
 const HOST_PORT = /^(?:localhost|[^\s/:@]+\.[^\s/:@]+):\d+(?:[/?#]|$)/i;
 
@@ -67,9 +67,10 @@ const HOST_PORT = /^(?:localhost|[^\s/:@]+\.[^\s/:@]+):\d+(?:[/?#]|$)/i;
  * stays one (see `fieldHref`). `user@example.com` is mailed; `localhost:3000` is a host with a port.
  */
 export function withScheme(value: string): string {
+  if (!value || /^(?:\/|#|\.\.?\/)/.test(value)) return value;
   if (EMAIL.test(value)) return `mailto:${value}`;
   if (HOST_PORT.test(value)) return `https://${value}`;
-  if (!value || HAS_SCHEME.test(value) || /^(?:\/|#|\.\.?\/)/.test(value)) return value;
+  if (HAS_SCHEME.test(value)) return value;
   return `https://${value}`;
 }
 
@@ -78,14 +79,14 @@ type SelectedLink =
   | { kind: "multiple" }
   | { kind: "one"; from: number; to: number; mark: Mark };
 
-/** Every textblock the selection reaches may carry a link (a code block may not). */
+/** Some textblock the selection reaches may carry a link, as `toggleMark` asks (a code block may not). */
 function linkAllowed(view: EditorView): boolean {
   const type = view.state.schema.marks.link;
   if (!type) return false;
-  const { from, to, $from } = view.state.selection;
-  let allowed = $from.parent.type.allowsMarkType(type);
+  const { from, to } = view.state.selection;
+  let allowed = false;
   view.state.doc.nodesBetween(from, to, (node) => {
-    if (node.isTextblock && !node.type.allowsMarkType(type)) allowed = false;
+    if (node.isTextblock && node.type.allowsMarkType(type)) allowed = true;
   });
   return allowed;
 }
@@ -614,7 +615,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             // Milkdown's own rule, and none over a whole block chosen with Escape: Notion shows no toolbar there.
             shouldShow: (view) => {
               const { selection, doc } = view.state;
-              if (!view.editable || selection.empty || (selection instanceof NodeSelection && selection.$from.depth === 0)) return false;
+              if (!view.editable || selection.empty || (selection instanceof NodeSelection && selection.node.isBlock)) return false;
               if (selection instanceof TextSelection && !doc.textBetween(selection.from, selection.to).length) return false;
               return view.hasFocus() || element.contains(document.activeElement);
             },
