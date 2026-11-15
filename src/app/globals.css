@@ -943,6 +943,24 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-rail { display: none; }
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-inline { display: block; }
 .kh-document-pane .kh-review-document[data-review-inline][data-review-open] ~ * { max-width: calc(100% - 320px); }
+/* The editor's 56px block gutter hangs left of the text (`.kh-editor-blocks`), into the column's 24px padding
+   and its left margin. Where the pane shows the outline rail on the right (60rem) and has not yet reached the
+   left-hung outline (88rem), the rail's 224px slot leaves the column less than its reading width, so the margin
+   is 0 — at 1440px with both sidebars the pane is 976px, the column 752px, and the gutter had 24px. There the
+   column's own left padding makes up what its margin lacks, up to 56px: `3.5rem - margin`, never below the 24px
+   it has. It is the column, not the editor, so reading and editing keep one left edge; the text's right edge
+   does not move. Each margin is the one the rules above give, in the same `100%` (padding resolves against the
+   same containing block as margin), so opening the comments rail keeps the text where it was. */
+@container kh-document (min-width: 60rem) {
+  .kh-document-pane .kh-reading-column {
+    padding-inline-start: clamp(theme("spacing.6"), calc(theme("spacing.14") - (100% - theme("maxWidth.reading")) / 2), theme("spacing.14"));
+    /* With the margin, so where the two add up to 56px the text holds still while the rail slides in. */
+    transition: margin-inline-start 120ms ease-out, padding-inline-start 120ms ease-out;
+  }
+  .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column {
+    padding-inline-start: clamp(theme("spacing.6"), calc(theme("spacing.14") - min(calc((100% - theme("spacing.56") - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.reading") - 320px))), theme("spacing.14"));
+  }
+}
 /* A pane that holds outline, article and rail (224 + 860 + 320 = 1404px, 88rem) shows the outline on the
    column's left, as a shared page does, and keeps it there while the rail is open: outline, article,
    discussions. The column is centred in the whole pane; opening the rail moves it left only as far as the
@@ -1080,7 +1098,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-block-move-menu button[aria-current="true"] { @apply bg-kh-bg-selected font-medium text-kh-selected-text; }
 .kh-block-menu-separator { height: 1px; margin: 4px; background: var(--kh-border); }
 .kh-slash-menu { width: 18rem; max-width: calc(100vw - 1rem); max-height: min(24rem, 60vh); overflow-y: auto; }
-.kh-slash-option { @apply flex cursor-pointer flex-col rounded-md px-3 py-1.5 text-body-sm text-kh-text hover:bg-kh-bg-hover; }
+.kh-slash-option { @apply flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-body-sm text-kh-text hover:bg-kh-bg-hover; }
 .kh-slash-option[aria-selected="true"] { @apply bg-kh-bg-selected text-kh-selected-text; }
 .kh-tree-drop-line, .kh-block-drop-line { position: fixed; z-index: 50; height: 2px; background: var(--kh-primary); pointer-events: none; }
 .kh-block-is-dragging { cursor: grabbing; }
