@@ -11,7 +11,7 @@ import { tableActions } from "./table-actions";
 import { slashCommands } from "./slash-commands";
 import type { LinkTargetsView } from "@/modules/knowledge/application/knowledge-link-service";
 import { createMarkdownEditor, type MarkdownEditor } from "./editor-core";
-import { selectionToolbar } from "./selection-toolbar";
+import { canOpenLink, selectionToolbar, withScheme } from "./selection-toolbar";
 import { wikiLinkSuggest } from "./wikilink-suggest";
 
 import { editorViewCtx } from "@milkdown/kit/core";
@@ -253,7 +253,8 @@ export function RenderedEditor(props: RenderedEditorProps) {
     if (!link || link.closest("[data-kh-wiki-raw]")) return;
     event.preventDefault();
     const href = link.getAttribute("href");
-    if (href && (event.metaKey || event.ctrlKey)) window.open(href, "_blank", "noopener,noreferrer");
+    const target = withScheme((href ?? "").trim());
+    if (href && (event.metaKey || event.ctrlKey) && canOpenLink(target)) window.open(target, "_blank", "noopener,noreferrer");
   }
 
   return <><div ref={containerRef} onClick={followLinkOnModifierClick} />{wikiViews.map(({ dom, raw }, index) => {
