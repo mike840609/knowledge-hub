@@ -104,7 +104,7 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
     }
     const current = view.state.doc.nodeAt(trigger.pos)!;
     if (command.id === "toggle") {
-      insertDetailsSkeleton(view, trigger.pos, trigger.pos + current.nodeSize, "");
+      insertDetailsSkeleton(view, trigger.pos, trigger.pos + current.nodeSize, "", "summary");
       return;
     }
     let caret = trigger.pos + 1;

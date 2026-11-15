@@ -6,6 +6,7 @@ import { liftListItem } from "@milkdown/kit/prose/schema-list";
 import { AllSelection, NodeSelection, Plugin, PluginKey, Selection, TextSelection, type EditorState } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
+import { addRowAfter, goToNextCell, isInTable } from "@milkdown/kit/prose/tables";
 import { customInputRulesKey } from "@milkdown/kit/prose";
 import type { Mark } from "@milkdown/kit/prose/model";
 import { ReplaceStep } from "@milkdown/kit/prose/transform";
@@ -190,6 +191,58 @@ const selectAllInSteps = (state: EditorState, dispatch?: (tr: never) => void) =>
   return true;
 };
 
+// ---- Tab in a table and in code being edited (18, 19) ---------------------------------------------
+
+/** Tab in the last cell: a row below with the same columns, and the caret in its first cell. Any other cell is left to Milkdown's own Tab. */
+const tabInLastCell = (state: EditorState, dispatch?: (tr: never) => void, view?: EditorView) => {
+  if (!view?.editable || !isInTable(state) || goToNextCell(1)(state)) return false;
+  if (!dispatch) return addRowAfter(state);
+  if (!addRowAfter(state, dispatch as never)) return false;
+  goToNextCell(1)(view.state, dispatch as never);
+  return true;
+};
+
+/** The start of every line the selection touches, in code_block text. Positions are in the document. */
+function lineStarts(state: EditorState): number[] {
+  const { $from, $to } = state.selection;
+  const text = $from.parent.textContent;
+  const start = $from.start();
+  const first = text.lastIndexOf("\n", $from.parentOffset - 1) + 1;
+  const starts = [start + first];
+  for (let at = text.indexOf("\n", first); at !== -1 && start + at < $to.pos; at = text.indexOf("\n", at + 1)) starts.push(start + at + 1);
+  return starts;
+}
+
+/** Tab in a code block: two spaces at the caret, or at the start of every selected line. Nowhere else is Tab bound here. */
+const indentCode = (state: EditorState, dispatch?: (tr: never) => void, view?: EditorView) => {
+  const { selection } = state;
+  if (!view?.editable || !(selection instanceof TextSelection) || selection.$from.parent.type.name !== "code_block" || !selection.$from.sameParent(selection.$to)) return false;
+  if (dispatch) {
+    const tr = state.tr;
+    if (selection.empty) tr.insertText("  ");
+    else for (const at of lineStarts(state).reverse()) tr.insertText("  ", at);
+    dispatch(tr.scrollIntoView() as never);
+  }
+  return true;
+};
+
+/** Shift-Tab in a code block: up to two leading spaces off each line the caret or selection touches. */
+const outdentCode = (state: EditorState, dispatch?: (tr: never) => void, view?: EditorView) => {
+  const { selection } = state;
+  if (!view?.editable || !(selection instanceof TextSelection) || selection.$from.parent.type.name !== "code_block" || !selection.$from.sameParent(selection.$to)) return false;
+  if (dispatch) {
+    const tr = state.tr;
+    const text = selection.$from.parent.textContent;
+    const offset = selection.$from.start();
+    for (const at of lineStarts(state).reverse()) {
+      const spaces = /^ {1,2}/.exec(text.slice(at - offset))?.[0].length ?? 0;
+      if (spaces) tr.delete(at, at + spaces);
+    }
+    if (tr.docChanged) dispatch(tr.scrollIntoView() as never);
+  }
+  return true;
+};
+
 // Milkdown merges these into the editor's one keymap, ahead of ProseMirror's base keymap (priority 50).
 const notionKeymap = $useKeymap("khNotionKeys", {
   HeadingBackspace: { shortcuts: "Backspace", priority: 70, command: () => headingToParagraph as never },
@@ -200,6 +253,9 @@ const notionKeymap = $useKeymap("khNotionKeys", {
   MoveBlockUp: { shortcuts: "Mod-Shift-ArrowUp", command: () => moveCurrentBlock(-1) as never },
   MoveBlockDown: { shortcuts: "Mod-Shift-ArrowDown", command: () => moveCurrentBlock(1) as never },
   DuplicateBlock: { shortcuts: "Mod-d", command: () => duplicateCurrentBlock as never },
+  // One entry: two entries on one shortcut would leave Milkdown to pick between them.
+  Indent: { shortcuts: "Tab", priority: 70, command: () => ((state: EditorState, dispatch: never, view: EditorView) => tabInLastCell(state, dispatch, view) || indentCode(state, dispatch, view)) as never },
+  CodeShiftTab: { shortcuts: "Shift-Tab", priority: 70, command: () => outdentCode as never },
   SelectAllInSteps: { shortcuts: "Mod-a", priority: 70, command: () => selectAllInSteps as never },
 });
 

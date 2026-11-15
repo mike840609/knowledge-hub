@@ -9,7 +9,7 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { dispatchBlockAction } from "./block-actions";
 import { $prose } from "@milkdown/kit/utils";
-import { CALLOUT_ATTRIBUTE, calloutKind } from "@/shared/markdown/remark-callouts";
+import { CALLOUT_ATTRIBUTE, CALLOUT_KINDS, calloutKind } from "@/shared/markdown/remark-callouts";
 import { INLINE_HTML_TAG } from "@/shared/markdown/remark-known-html";
 
 /** A quote the reader will draw as a callout: its first line is the marker and nothing else. */
@@ -118,20 +118,125 @@ function hints(doc: ProseNode): DecorationSet {
         } else {
           found.push(Decoration.inline(pos + 2, pos + 2 + marker.nodeSize + (paragraph.maybeChild(1)?.type.name === "hardbreak" ? 1 : 0), { class: "kh-callout-marker" }));
         }
-        found.push(Decoration.widget(pos + 1, () => {
+        found.push(Decoration.widget(pos + 1, (view, getPos) => {
           const { title, Icon, glyph } = CALLOUTS[kind as CalloutKind];
           const label = document.createElement("div");
-          label.className = "kh-callout-title flex items-center gap-2 font-medium";
+          label.className = "kh-callout-title";
+          // The label is a button that opens the kind menu (decision 20). The widget is not editable text,
+          // and the editor must not take its clicks or keys for its own.
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "kh-callout-label kh-focus-ring flex items-center gap-2 rounded-md font-medium";
+          button.setAttribute("aria-haspopup", "menu");
+          button.setAttribute("aria-expanded", "false");
+          button.setAttribute("aria-label", `Callout type: ${title}`);
           // Only a bundled icon is parsed, never author-supplied HTML.
           const svg = new DOMParser().parseFromString(renderToStaticMarkup(createElement(Icon, { "aria-hidden": true, className: `h-4 w-4 shrink-0 ${glyph}` })), "image/svg+xml").documentElement;
-          label.append(document.importNode(svg, true), document.createTextNode(title));
+          button.append(document.importNode(svg, true), document.createTextNode(title));
+          // The menu lives with the view, not the widget: decorations are rebuilt on every change.
+          button.addEventListener("click", () => { const at = getPos(); if (at !== undefined) calloutMenuFor(view)?.open(button, at - 1); });
+          button.addEventListener("keydown", event => {
+            if ((event.key === "ArrowDown" || event.key === "ArrowUp") && !event.isComposing) {
+              event.preventDefault();
+              const at = getPos();
+              if (at !== undefined) calloutMenuFor(view)?.open(button, at - 1);
+            }
+          });
+          label.append(button);
           return label;
-        }, { key: `callout-${kind}`, side: -1 }));
+        }, { key: `callout-${kind}`, side: -1, stopEvent: () => true, ignoreSelection: true }));
       }
     }
     if (node.isTextblock) inlinePairs(node, pos + 1, found);
   });
   return DecorationSet.create(doc, found);
+}
+
+
+const TITLES: Record<CalloutKind, string> = Object.fromEntries(CALLOUT_KINDS.map(kind => [kind, CALLOUTS[kind].title])) as Record<CalloutKind, string>;
+
+/** Rewrites the marker of the callout at quotePos to `[!KIND]`, and nothing else: the body, its links and its wikilinks stay as they are. */
+export function setCalloutKind(view: EditorView, quotePos: number, kind: CalloutKind): boolean {
+  if (!view.editable) return false;
+  const quote = view.state.doc.nodeAt(quotePos);
+  if (quote?.type.name !== "blockquote" || !calloutOf(quote)) return false;
+  const marker = quote.firstChild!.firstChild!;
+  if (calloutKind(marker.text ?? "") === kind && marker.text === `[!${kind.toUpperCase()}]`) return true;
+  const from = quotePos + 2;
+  view.dispatch(view.state.tr.replaceWith(from, from + marker.nodeSize, view.state.schema.text(`[!${kind.toUpperCase()}]`)));
+  return true;
+}
+
+type CalloutMenu = { open: (anchor: HTMLElement, quotePos: number) => void };
+const menus = new WeakMap<EditorView, CalloutMenu>();
+const calloutMenuFor = (view: EditorView) => menus.get(view);
+
+/** The one menu the callout labels share: Base-UI-style rows (`role=menu`), arrow keys, Escape back to the label. Drawn on the body like the block menu. */
+function createCalloutMenu(view: EditorView): { menu: CalloutMenu; destroy: () => void } {
+  // Built when first opened, so a document with no callout (or one never changed) leaves nothing on the body.
+  const element = document.createElement("div");
+  element.className = "kh-block-move-menu kh-callout-menu";
+  element.hidden = true;
+  element.setAttribute("role", "menu");
+  element.setAttribute("aria-label", "Callout type");
+  let anchor: HTMLElement | null = null;
+  let quotePos = 0;
+  const items = () => [...element.querySelectorAll<HTMLButtonElement>("button")];
+  function close(refocus: boolean) {
+    if (element.hidden) return;
+    element.hidden = true;
+    anchor?.setAttribute("aria-expanded", "false");
+    if (refocus) anchor?.focus();
+    anchor = null;
+  }
+  const menu: CalloutMenu = {
+    open(button, at) {
+      if (!view.editable) return;
+      if (!element.hidden && anchor === button) { close(true); return; }
+      close(false);
+      if (!element.isConnected) document.body.appendChild(element);
+      anchor = button;
+      quotePos = at;
+      const current = calloutKind(view.state.doc.nodeAt(at)?.firstChild?.firstChild?.text ?? "");
+      element.replaceChildren(...CALLOUT_KINDS.map(kind => {
+        const row = document.createElement("button");
+        row.type = "button";
+        row.setAttribute("role", "menuitemradio");
+        row.setAttribute("aria-checked", String(kind === current));
+        row.textContent = TITLES[kind];
+        row.addEventListener("click", () => {
+          const target = quotePos;
+          close(false);
+          setCalloutKind(view, target, kind);
+          view.focus();
+        });
+        return row;
+      }));
+      button.setAttribute("aria-expanded", "true");
+      element.hidden = false;
+      const rect = button.getBoundingClientRect();
+      element.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - element.offsetWidth - 8))}px`;
+      element.style.top = `${Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - element.offsetHeight - 8))}px`;
+      (items().find(row => row.getAttribute("aria-checked") === "true") ?? items()[0])?.focus();
+    },
+  };
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.isComposing || event.keyCode === 229) return;
+    if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(true); return; }
+    if (event.key === "Tab") { event.preventDefault(); close(false); view.focus(); return; }
+    const rows = items();
+    const at = rows.indexOf(document.activeElement as HTMLButtonElement);
+    const to = event.key === "ArrowDown" ? (at + 1) % rows.length : event.key === "ArrowUp" ? (at - 1 + rows.length) % rows.length : event.key === "Home" ? 0 : event.key === "End" ? rows.length - 1 : -1;
+    if (to < 0) return;
+    event.preventDefault();
+    rows[to]?.focus();
+  };
+  const onPointerDown = (event: PointerEvent) => {
+    if (event.target instanceof Node && !element.contains(event.target) && !anchor?.contains(event.target)) close(false);
+  };
+  element.addEventListener("keydown", onKeyDown);
+  document.addEventListener("pointerdown", onPointerDown, true);
+  return { menu, destroy: () => { element.removeEventListener("keydown", onKeyDown); document.removeEventListener("pointerdown", onPointerDown, true); element.remove(); } };
 }
 
 const key = new PluginKey<DecorationSet>("khReaderHints");
@@ -157,6 +262,11 @@ export const readerHints = $prose(
         const marker = hiddenMarker(state);
         if (marker?.body == null) return null;
         return state.tr.setSelection(TextSelection.near(state.doc.resolve(marker.body)));
+      },
+      view(view) {
+        const { menu, destroy } = createCalloutMenu(view);
+        menus.set(view, menu);
+        return { destroy: () => { menus.delete(view); destroy(); } };
       },
       props: {
         decorations: (state) => key.getState(state),

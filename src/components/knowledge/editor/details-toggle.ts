@@ -35,14 +35,16 @@ export function convertBlockToDetails(view: EditorView): boolean {
   if (parent.type.name !== "paragraph" && parent.type.name !== "heading") return false;
   return insertDetailsSkeleton(view, $from.before(), $from.after(), parent.textContent);
 }
-/** Inserts an open disclosure so the body receiving the caret is visible. */
-export function insertDetailsSkeleton(view: EditorView, from: number, to: number, summaryValue: string): boolean {
+/** Inserts an open disclosure so the body receiving the caret is visible. `caret: "summary"` puts it in the
+ * (empty) title instead, for a toggle made from nothing: the title is what is typed first (editor Notion-parity
+ * spec, decision 17). Text that already exists as the title keeps the caret in the body. */
+export function insertDetailsSkeleton(view: EditorView, from: number, to: number, summaryValue: string, caret: "summary" | "body" = "body"): boolean {
   if (!view.editable) return false;
   const { details, details_summary, details_body, paragraph } = view.state.schema.nodes;
   const title = details_summary.create(null, summaryValue ? view.state.schema.text(summaryValue) : undefined);
   const node = details.create({ open: true }, [title, details_body.create(null, paragraph.create())]);
   const tr = view.state.tr.replaceWith(from, to, node);
-  dispatchBlockAction(view, tr, from + 1 + title.nodeSize + 2);
+  dispatchBlockAction(view, tr, caret === "summary" ? from + 2 : from + 1 + title.nodeSize + 2);
   return true;
 }
 /** Rewrites the nearest opener at pos, or false when the caret is not in a toggle. */

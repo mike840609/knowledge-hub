@@ -96,12 +96,17 @@ it('builds a 2x2 table with the caret in the first cell', async () => {
   expect(editor.getMarkdown()).toContain('| New block');
 });
 
-it('inserts an empty toggle with the caret in its body', async () => {
+it('inserts an empty toggle with the caret in its summary', async () => {
   const { editor, view } = await open();
   view.dispatch(view.state.tr.insertText('/toggle'));
   key(view.dom, 'Enter');
   expect(view.dom.querySelector('details')?.open).toBe(true);
   expect(view.dom.querySelector('summary')).not.toBeNull();
+  expect(view.state.selection.$from.parent.type.name).toBe('details_summary');
+  view.dispatch(view.state.tr.insertText('New title'));
+  expect(editor.getMarkdown()).toContain('<summary>New title</summary>');
+  key(view.dom, 'Enter');
+  expect(view.state.selection.$from.parent.type.name).toBe('paragraph');
   view.dispatch(view.state.tr.insertText('New block'));
   expect(editor.getMarkdown()).toContain('</summary>\n\nNew block\n\n</details>');
 });
