@@ -17,7 +17,7 @@ import { wikiLinkSuggest } from "./wikilink-suggest";
 import { editorViewCtx } from "@milkdown/kit/core";
 import { editorReviewPathsPlugin, preserveEditorSelection, updateEditorReviewPaths } from "./review-paths";
 import { createPortal } from "react-dom";
-import { Plugin, TextSelection } from "@milkdown/kit/prose/state";
+import { NodeSelection, Plugin, TextSelection } from "@milkdown/kit/prose/state";
 import { $prose } from "@milkdown/kit/utils";
 import { MarkdownAnchor } from "../markdown-base";
 import type { RenderedLinks } from "../rendered-links";
@@ -166,7 +166,13 @@ export function RenderedEditor(props: RenderedEditorProps) {
             const publish = () => queueMicrotask(() => { if (!cancelled) setCodeViews(previous => previous.some(item => item.dom === dom) ? previous.map(item => item.dom === dom ? current : item) : [...previous, current]); });
             const sync = () => {
               const pos = getPos();
-              if (pos === undefined || !view.hasFocus() || current.editing) return;
+              if (pos === undefined) return;
+              // Escape in the code selects the block: that ends the editing state, as "Done editing code" does.
+              if (current.editing) {
+                if (view.state.selection instanceof NodeSelection && view.state.selection.from === pos) setEditing(false);
+                return;
+              }
+              if (!view.hasFocus()) return;
               const actual = view.state.doc.nodeAt(pos);
               const { from, to } = view.state.selection;
               if (actual && from > pos && to < pos + actual.nodeSize) {
@@ -283,6 +289,4 @@ export function RenderedEditor(props: RenderedEditorProps) {
     {entry.editing && props.renderLanguage?.(entry.language, entry.setLanguage)}
     <button type="button" className={`text-caption text-kh-text-muted hover:text-kh-text ${entry.editing ? "" : "absolute bottom-1.5 right-1.5 rounded-md bg-kh-bg-subtle px-1.5 opacity-0 transition-opacity focus-visible:opacity-100 group-hover/code:opacity-100 [@media(hover:none)]:opacity-100"}`} onClick={() => entry.setEditing(!entry.editing)}>{entry.editing ? "Done editing code" : "Edit code"}</button>
   </>, entry.preview, String(codeViews.indexOf(entry))))}</>;
-
 }
-

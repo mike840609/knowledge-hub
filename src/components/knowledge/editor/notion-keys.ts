@@ -266,6 +266,8 @@ const notionKeymap = $useKeymap("khNotionKeys", {
  * A plain plugin `handleKeyDown`, at ordinary priority: the `[[` and `/` lists claim Escape through the
  * editor's direct prop before it gets here, and the block menu and the toolbar's link field hold focus
  * outside the editor, so none of them reach this. Anything a later plugin registers ahead of this one wins.
+ * With the caret in a code block being edited, Escape ends the editing state and selects that code block (a second
+ * Escape returns to its text): it is how a keyboard user steps out, since Tab and Shift-Tab indent there.
  * The event is not stopped: the composer's Esc still leaves a document nothing was typed into (`formKeyIntent`), and only that.
  */
 const escapeSelection = $prose(
@@ -279,10 +281,14 @@ const escapeSelection = $prose(
           if (event.target instanceof Element && event.target.closest("input, select, textarea, [contenteditable='false']")) return false;
           const { selection, doc } = view.state;
           if (selection instanceof AllSelection) return false;
-          // The caret in code being edited: that editor owns Escape (it is how a keyboard user steps out of it).
-          if (selection.$from.parent.type.name === "code_block") return false;
           let tr;
-          if (selection instanceof NodeSelection && selection.$from.depth === 0) {
+          if (selection instanceof TextSelection && selection.$from.parent.type.name === "code_block") {
+            // The caret in code being edited: Escape leaves the editing state (the block view closes it when its
+            // node is selected, as "Done editing code" does) and selects the code block, however deep it sits.
+            tr = view.state.tr.setSelection(NodeSelection.create(doc, selection.$from.before()));
+          } else if (selection instanceof NodeSelection && selection.node.type.name === "code_block") {
+            tr = view.state.tr.setSelection(Selection.near(doc.resolve(selection.from + 1), 1));
+          } else if (selection instanceof NodeSelection && selection.$from.depth === 0) {
             tr = view.state.tr.setSelection(Selection.near(doc.resolve(Math.min(selection.from + 1, doc.content.size)), 1));
           } else {
             const pos = topBlockPos(view.state);

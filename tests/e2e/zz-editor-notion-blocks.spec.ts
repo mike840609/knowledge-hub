@@ -129,6 +129,13 @@ test.describe("blocks in the rendered editor", () => {
     await page.keyboard.press("Tab");
     // Tab stayed in the code block: focus did not leave it.
     await expect(raw).toHaveText("  const a = 1;");
+    // A keyboard-only exit: Escape ends editing and selects the block.
+    await page.keyboard.press("Escape");
+    await expect(surface.locator(".ProseMirror-selectednode")).toHaveCount(1);
+    await expect(surface.getByRole("button", { name: "Edit code", exact: true })).toBeVisible();
+    await expect(language).toBeHidden();
+    await surface.getByRole("button", { name: "Edit code", exact: true }).click({ force: true });
+    await expect(language).toBeVisible();
     let markdown = await save(page);
     expect(markdown).toContain("```python\n  const a = 1;\n```");
     expect(markdown).toContain(`[[${target}]]`);

@@ -1863,7 +1863,7 @@ with the shared focus ring, and it is absent while the block is shown. In the
 code being edited, Tab inserts two spaces at the caret (or at the start of every
 selected line) and Shift-Tab removes up to two leading spaces from each line the
 caret or selection touches; Tab is bound nowhere else outside a table's last
-cell. Escape there stays the code editor's (decision 19). In a table, Tab in the
+cell. Escape there ends the editing state and selects the code block (a second Escape returns to its text), which is how a keyboard user steps out; an open language field or callout menu takes it first (decisions 7, 19). In a table, Tab in the
 last cell adds a row of the same width and moves to its first cell; Shift-Tab is
 unchanged (decision 18). No token was added.
 
