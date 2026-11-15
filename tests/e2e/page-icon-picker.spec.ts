@@ -42,9 +42,13 @@ test("the page icon picker searches in English and Chinese and is driven by keys
   await trigger.click();
   await expect(search).toBeFocused();
   await page.keyboard.press("ArrowDown");
-  await expect(page.getByRole("button", { name: "Use 📄", exact: true })).toBeFocused();
+  const first = page.getByRole("button", { name: "Use 📄", exact: true });
+  await expect(first).toBeFocused();
+  // Focus is drawn as the ring menu rows use, not only as the hover fill (contrast 1.2:1 against the page).
+  await expect(first).not.toHaveCSS("box-shadow", "none");
   await page.keyboard.press("ArrowRight");
   await expect(page.getByRole("button", { name: "Use 📝", exact: true })).toBeFocused();
+  await expect(first).toHaveCSS("box-shadow", "none");
   await page.keyboard.press("ArrowDown");
   await expect(page.getByRole("button", { name: "Use 🎯", exact: true }).or(page.getByRole("button", { name: "Use 🚀", exact: true }))).not.toHaveCount(0);
   await page.keyboard.press("ArrowUp");

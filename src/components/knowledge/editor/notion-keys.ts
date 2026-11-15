@@ -8,7 +8,7 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 import { toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
 import { addRowAfter, goToNextCell, isInTable } from "@milkdown/kit/prose/tables";
 import { customInputRulesKey } from "@milkdown/kit/prose";
-import type { Mark } from "@milkdown/kit/prose/model";
+import { Fragment, type Mark, type Node as ProseNode } from "@milkdown/kit/prose/model";
 import { ReplaceStep } from "@milkdown/kit/prose/transform";
 import { $inputRule, $prose, $useKeymap } from "@milkdown/kit/utils";
 import { duplicateBlock, moveBlock, topLevelBlocks, type BlockKind } from "./block-actions";
@@ -153,11 +153,19 @@ function listKindAt(state: EditorState): BlockKind | null {
   return null;
 }
 
+/** The depth of the list item the selection is in, or null. */
+function listItemDepth(state: EditorState): number | null {
+  const { $from } = state.selection;
+  for (let depth = $from.depth; depth >= 1; depth--) if ($from.node(depth).type.name === "list_item") return depth;
+  return null;
+}
+
 /**
  * A list of the given kind, or the item lifted back to a paragraph when it already is one. Only the
- * caret's item changes, and the caret stays where it was: an item in a list of another kind is lifted
- * out and wrapped again, so the list is split around it, as Notion's per-item blocks are. One
- * transaction, so one undo step.
+ * caret's item changes and the caret stays where it was, in one transaction (one undo step). An item
+ * in a list of the other kind is cut out of it: the items before and after stay in their list, and the
+ * item, with whatever is nested under it, becomes a list of its own. Bullet and to-do share a list, so
+ * switching between them is only the item's `checked`.
  */
 function toggleList(target: "ordered" | "bullet" | "task") {
   return (state: EditorState, dispatch?: (tr: Transaction) => void, view?: EditorView) => {
@@ -165,27 +173,64 @@ function toggleList(target: "ordered" | "bullet" | "task") {
     const { nodes } = state.schema;
     const kind = listKindAt(state);
     if (kind === target) return liftListItem(nodes.list_item)(state, dispatch);
-    // Bullet and to-do share a list: switching between them is only the item's `checked`.
-    const sameList = kind !== null && (kind === "ordered") === (target === "ordered");
-    let tr = state.tr;
-    if (!sameList) {
-      if (kind && !liftListItem(nodes.list_item)(state, (lifted) => { tr = lifted; })) return false;
-      const wrapped = wrapInList(target === "ordered" ? nodes.ordered_list : nodes.bullet_list)(state.apply(tr), (next) => {
-        for (const step of next.steps) tr.step(step);
-        tr.setSelection(next.selection.getBookmark().resolve(tr.doc));
-      });
-      if (!wrapped) return false;
+    const checked = target === "task" ? false : null;
+    const depth = listItemDepth(state);
+    if (depth === null) return wrapParagraph(state, target, dispatch);
+    const { $from, $to } = state.selection;
+    if ($to.pos > $from.end(depth)) return false; // several items selected: nothing here is meant for that
+    const item = $from.node(depth);
+    const itemPos = $from.before(depth);
+    if ((kind === "ordered") === (target === "ordered")) {
+      if (dispatch) dispatch(state.tr.setNodeMarkup(itemPos, undefined, { ...item.attrs, checked }).scrollIntoView());
+      return true;
     }
     if (!dispatch) return true;
-    const $from = tr.selection.$from;
-    for (let depth = $from.depth; depth >= 1; depth--) {
-      if ($from.node(depth).type !== nodes.list_item) continue;
-      tr.setNodeMarkup($from.before(depth), undefined, { ...$from.node(depth).attrs, checked: target === "task" ? false : null });
-      break;
+    const list = $from.node(depth - 1);
+    const listPos = $from.before(depth - 1);
+    const index = $from.index(depth - 1);
+    const items: ProseNode[] = [];
+    list.forEach((child) => items.push(child));
+    const ordered = target === "ordered";
+    const own = (ordered ? nodes.ordered_list : nodes.bullet_list).create(null, item.type.create({ ...item.attrs, checked, listType: ordered ? "ordered" : "bullet", label: ordered ? "1." : "•" }, item.content, item.marks));
+    const pieces: ProseNode[] = [];
+    if (index > 0) pieces.push(list.copy(Fragment.from(items.slice(0, index))));
+    pieces.push(own);
+    if (index < items.length - 1) {
+      // An ordered list that goes on after the item goes on from its number.
+      const after = list.type === nodes.ordered_list ? { ...list.attrs, order: (list.attrs.order ?? 1) + index + 1 } : list.attrs;
+      pieces.push(list.type.create(after, Fragment.from(items.slice(index + 1))));
     }
+    const tr = state.tr.replaceWith(listPos, listPos + list.nodeSize, pieces);
+    // The item now sits one list wrapper in, after the list of the items that came before it.
+    const shift = listPos + (index > 0 ? pieces[0].nodeSize : 0) + 1 - itemPos;
+    tr.setSelection(TextSelection.create(tr.doc, $from.pos + shift, $to.pos + shift));
     dispatch(tr.scrollIntoView());
     return true;
   };
+}
+
+/** A paragraph or heading that is not in a list becomes the first item of a new one, caret kept. */
+function wrapParagraph(state: EditorState, target: "ordered" | "bullet" | "task", dispatch?: (tr: Transaction) => void): boolean {
+  const { nodes } = state.schema;
+  const { $from, $to } = state.selection;
+  let tr = state.tr;
+  if ($from.parent.type === nodes.heading) tr = tr.setBlockType($from.pos, $to.pos, nodes.paragraph);
+  const wrapped = wrapInList(target === "ordered" ? nodes.ordered_list : nodes.bullet_list)(state.apply(tr), (next) => {
+    for (const step of next.steps) tr.step(step);
+    tr.setSelection(next.selection.getBookmark().resolve(tr.doc));
+  });
+  if (!wrapped) return false;
+  if (!dispatch) return true;
+  if (target === "task") {
+    const now = tr.selection.$from;
+    for (let depth = now.depth; depth >= 1; depth--) {
+      if (now.node(depth).type !== nodes.list_item) continue;
+      tr.setNodeMarkup(now.before(depth), undefined, { ...now.node(depth).attrs, checked: false });
+      break;
+    }
+  }
+  dispatch(tr.scrollIntoView());
+  return true;
 }
 
 function moveCurrentBlock(direction: -1 | 1) {

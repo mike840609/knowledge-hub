@@ -56,9 +56,12 @@ function currentList(view: EditorView): ListName | null {
 const PRESSED = "aria-pressed:bg-kh-bg-selected aria-pressed:text-kh-text";
 const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 
-/** `example.com` is a web address; a path, an anchor or anything with a scheme (`mailto:`) is left as typed. */
+/**
+ * `example.com` is a web address; a path, an anchor, anything with a scheme (`mailto:`) or a relative
+ * link to a Markdown file (`../notes/other.md`, a link to a document) is left as typed.
+ */
 export function withScheme(value: string): string {
-  if (!value || HAS_SCHEME.test(value) || value.startsWith("/") || value.startsWith("#")) return value;
+  if (!value || HAS_SCHEME.test(value) || value.startsWith("/") || value.startsWith("#") || parseDocumentHref(value)) return value;
   return `https://${value}`;
 }
 
@@ -120,12 +123,8 @@ function caretLink(view: EditorView): Extract<SelectedLink, { kind: "one" }> | n
   return run.kind === "one" ? run : null;
 }
 
-const OPENABLE = /^(?:https?:|mailto:|\/(?!\/)|#)/i;
-
-/** For what is typed in the link field, which `withScheme` completes. */
-export function canOpenLink(value: string): boolean {
-  return OPENABLE.test(withScheme(value.trim()));
-}
+// A leading `/` opens only as a path of this site: `//host` and `/\host` are both another origin.
+const OPENABLE = /^(?:https?:|mailto:|\/(?![/\\])|#)/i;
 
 /**
  * Where a link already in the document opens, or null. Unlike typed input it is never given a
@@ -341,8 +340,10 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           }
           linkRow.appendChild(linkActions);
           let editingLink: Extract<SelectedLink, { kind: "one" }> | null = null;
+          // What the field's address opens: a web address as typed, a document as the reader resolves it.
+          const fieldTarget = (value: string) => storedLinkTarget(withScheme(value.trim()), links?.());
           const updateLinkActions = () => {
-            openButton.disabled = !canOpenLink(input.value);
+            openButton.disabled = !fieldTarget(input.value);
             removeButton.disabled = !editingLink;
             saveButton.disabled = !input.value.trim();
           };
@@ -388,8 +389,8 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             editorView.focus();
           }
           openButton.addEventListener("click", () => {
-            const href = withScheme(input.value.trim());
-            if (canOpenLink(href)) window.open(href, "_blank", "noopener,noreferrer");
+            const target = fieldTarget(input.value);
+            if (target) window.open(target, "_blank", "noopener,noreferrer");
           });
           removeButton.addEventListener("click", () => {
             const target = editingLink;
