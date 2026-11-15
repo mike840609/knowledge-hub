@@ -163,13 +163,17 @@ test.describe("typing rules and keys in the rendered editor", () => {
     await expect(field).toBeHidden();
     await expect(selected).toHaveCount(0);
 
-    // (c) The code editor: Escape inside the code being edited does not select the block.
+    // (c) The code editor: Escape inside the code being edited ends editing and selects the block.
     await surface.getByRole("button", { name: "Edit code", exact: true }).click({ force: true });
     await expect(surface.getByRole("button", { name: "Done editing code" })).toBeVisible();
     await settle();
     await page.keyboard.press("Escape");
     await settle();
+    // Escape leaves the editing state and selects the code block; a second returns to the code.
+    await expect(selected).toHaveCount(1);
+    await expect(surface.getByRole("button", { name: "Edit code", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await settle();
     await expect(selected).toHaveCount(0);
-    await expect(surface.getByRole("button", { name: "Done editing code" })).toBeVisible();
   });
 });
