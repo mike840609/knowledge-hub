@@ -270,6 +270,22 @@ breakpoints derived from them do not change, nor does the rail on the right.
 The shared page measures its room by the window, so a classic, non-overlay
 scrollbar takes up to half its width from that 16px.
 
+**The column keeps 56px left of its text in a document pane of 60rem or more**
+(editor Notion-parity spec, decision 14). Between the pane width where the
+outline becomes a rail on the right (60rem) and the one where it hangs left
+(88rem), the rail's 224px slot leaves the column less than its 860px, so the
+column has no left margin and its text sat 24px from the pane — at a 1440px
+window with both sidebars open (a 976px pane, a 752px column) the editor's
+56px block gutter had 24px. There the column's left padding grows to
+`56px − its left margin`, never below its 24px: 56px at a 1440px window, 24px
+again once the pane passes about 1148px. This moves the text for readers too,
+by up to 32px at those widths, and that is the point: reading and editing keep
+one left edge. The right edge, the prose measure (the column still holds more
+than 40rem) and every other width are unchanged; tables and code lose the
+same up-to-32px from their width. With the comments rail open the padding
+follows the margin that rail gives, so opening it does not move the text
+further than it did. Below 60rem nothing changes.
+
 They are classes rather than remembered widths, and the `maxWidth` scale is
 replaced like the others, so `max-w-4xl` compiles to nothing and a sixth width
 cannot appear quietly. `panel` (36rem) is the one non-page width the scale
@@ -838,15 +854,21 @@ empty line (`editor/slash-commands.ts`).
 into the column's padding and the pane's margin, so the text being edited sits
 exactly where the reader puts it — same left edge, same measure — and nothing
 moves when a document goes from reading to editing or when the editor replaces
-the server's stand-in. Where the pane has less than 56px left of the text, the
-pane clips the part that does not fit and the controls are kept inside the pane,
-over the text's first characters while they show. The gutter is where the
+the server's stand-in. At the default layout — a 1440px window with the primary
+nav and the explorer open — and at every wider one, the gutter has its 56px and
+the controls never cover text (editor Notion-parity spec, decision 14): the
+column makes the room in its own left padding where its margin does not
+(§7, "Three page containers"), so the text the reader sees moved with it. Where
+the pane still has less than 56px left of the text — a pane under 60rem, as at a
+narrower window or beside the open Details panel — the pane clips the part that
+does not fit and the controls are kept inside the pane, over the text's first
+characters while they show. The gutter is where the
 pointer shows the controls; in the text it does nothing, so selecting prose is
 as it was.
 
 The controls are two `size-6` icon buttons in muted text with the shared focus
-ring: one adds a paragraph below, one is dragged to move the block and clicked
-for the block menu. The menu offers **Turn into** (Text, Heading 1–3, Bulleted
+ring: one adds a paragraph below and opens the `/` list on it, one is dragged to
+move the block and clicked for the block menu. The menu offers **Turn into** (Text, Heading 1–3, Bulleted
 list, Numbered list, To-do list, Quote, Code), **Duplicate**, **Delete**, then a
 rule and **Move up** / **Move down**. Turn into is a second page of the same
 menu, not a nested popover: a conversion that would drop content — a several-item
@@ -866,6 +888,23 @@ does: focus stays in the document, the editor is a `combobox` while it is
 open, and the keys are the editor's. An empty paragraph the caret is in reads
 `Type "/" for commands` in muted text; an empty document keeps its own
 sentence instead.
+
+Each row leads with a 16px Lucide glyph (`size-4`, `text-kh-text-muted`, also
+on the row in force, `aria-hidden`) beside its label and its `caption` hint:
+Type, Heading 1–3, List, List ordered, List todo, Quote, Code, Minus, Table,
+List collapse, and for Callout the reader's note glyph, Info. What follows `/`
+matches a row's label or words anywhere, or one of its aliases by prefix —
+`p`, `h1`–`h3`, `ul`/`bullet`, `ol`/`number`, `todo`/`checkbox`, `quote`,
+`code`, `hr`/`line`, `table`, `toggle`, `callout` — case-insensitively, and the
+rows an alias matches come first, so `/h2` or `/ol` with Enter is the block it
+names (decision 16).
+
+`+` opens the same list on the line it adds, as if `/` had been typed there,
+but nothing is typed: what is typed next filters it, and the empty line reads
+`Type to filter` while it is open (decision 15). Escape, leaving the editor,
+moving the caret off the line, or typing what no row matches dismisses it and
+takes nothing back: the line keeps what was written, or stays empty with the
+caret in it. Typing `/` there is the ordinary list.
 
 **A block can be chosen from the keyboard** (editor Notion-parity spec,
 decisions 6-8; `editor/notion-keys.ts`). Escape in the text, with no menu open,

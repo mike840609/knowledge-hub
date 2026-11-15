@@ -6,7 +6,7 @@ import type { Blockquote } from "mdast";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { afterEach, expect, it, vi } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
-import { slashCommands } from "@/components/knowledge/editor/slash-commands";
+import { matchingCommands, openBlockList, slashCommands } from "@/components/knowledge/editor/slash-commands";
 import { calloutMarker } from "@/shared/markdown/remark-callouts";
 
 const rect = { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 } as DOMRect;
@@ -137,4 +137,109 @@ it('does not intercept IME Enter or modifier-save keys', async () => {
   expect(view.state.doc.firstChild?.type.name).toBe('paragraph');
   key(view.dom, 'Enter', { ctrlKey: true });
   expect(view.state.doc.textContent).toBe('/code');
+});
+
+// Decision 16: aliases match by prefix, case-insensitively, beside the label and words.
+it.each([
+  ['h1', 'heading', { level: 1 }], ['H2', 'heading', { level: 2 }], ['h3', 'heading', { level: 3 }],
+  ['p', 'paragraph', {}], ['todo', 'bullet_list', {}], ['check', 'bullet_list', {}], ['ul', 'bullet_list', {}], ['bul', 'bullet_list', {}],
+  ['ol', 'ordered_list', {}], ['num', 'ordered_list', {}], ['hr', 'hr', {}], ['LINE', 'hr', {}], ['quo', 'blockquote', {}],
+  ['co', 'code_block', {}], ['tab', 'table', {}], ['tog', 'details', {}], ['call', 'blockquote', {}],
+])('/%s picks its block first, by alias', async (query, type, attrs) => {
+  const { view } = await open();
+  view.dispatch(view.state.tr.insertText('/' + query));
+  key(view.dom, 'Enter');
+  const first = view.state.doc.firstChild!;
+  expect(first.type.name).toBe(type);
+  expect(first.attrs).toMatchObject(attrs);
+  if (query === 'todo' || query === 'check') expect(first.firstChild?.attrs.checked).toBe(false);
+  if (query === 'call') expect(first.textContent).toBe('[!NOTE]');
+});
+
+it('matches aliases by prefix only, and label or words anywhere, aliases first', () => {
+  expect(matchingCommands('ol').map(command => command.id)).toEqual(['ordered', 'toggle']);
+  expect(matchingCommands('co').map(command => command.id)).toEqual(['code', 'toggle']);
+  expect(matchingCommands('CA').map(command => command.id)).toEqual(['callout']);
+  expect(matchingCommands('odo').map(command => command.id)).toEqual([]);
+  expect(matchingCommands('').length).toBe(13);
+});
+
+it('draws a 16px Lucide icon, hidden from assistive technology, at the left of every row', async () => {
+  const { view } = await open();
+  view.dispatch(view.state.tr.insertText('/'));
+  const rows = [...menu().querySelectorAll<HTMLElement>('[role="option"]')];
+  expect(rows).toHaveLength(13);
+  for (const row of rows) {
+    const icon = row.firstElementChild!;
+    expect(icon.tagName.toLowerCase()).toBe('svg');
+    expect(icon.getAttribute('aria-hidden')).toBe('true');
+    expect(icon.getAttribute('class')).toContain('lucide');
+    expect(icon.getAttribute('class')).toContain('size-4');
+    expect(icon.getAttribute('class')).toContain('text-kh-text-muted');
+  }
+  expect(rows[0].textContent).toBe('TextPlain paragraph');
+});
+
+// Decision 15: the list `+` opens is the list "/" opens, without a "/" in the document.
+it('opens on an empty line with nothing typed, filters by what is typed, and picks a block', async () => {
+  const { editor, view } = await open('Opening line.');
+  view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)));
+  view.dispatch(view.state.tr.insert(view.state.doc.content.size, view.state.schema.nodes.paragraph.create()));
+  view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)));
+  openBlockList(view);
+  expect(menu().hidden).toBe(false);
+  expect(view.dom.getAttribute('role')).toBe('combobox');
+  expect(view.dom.querySelectorAll('p')[1].getAttribute('data-placeholder')).toBe('Type to filter');
+  view.dispatch(view.state.tr.insertText('h2'));
+  expect([...menu().querySelectorAll('[role="option"]')].map(row => row.textContent)).toEqual(['Heading 2Section heading']);
+  key(view.dom, 'Enter');
+  expect(view.state.doc.child(1).type.name).toBe('heading');
+  expect(view.state.doc.child(1).textContent).toBe('');
+  view.dispatch(view.state.tr.insertText('Picked'));
+  expect(editor.getMarkdown()).toBe('Opening line.\n\n## Picked\n');
+});
+
+it('a list + opened is dismissed by Escape or by leaving, leaving only the empty line with the caret in it', async () => {
+  const { editor, view } = await open();
+  openBlockList(view);
+  expect(menu().hidden).toBe(false);
+  const bubbled = vi.fn(); document.body.addEventListener('keydown', bubbled);
+  key(view.dom, 'Escape');
+  document.body.removeEventListener('keydown', bubbled);
+  expect(bubbled).not.toHaveBeenCalled();
+  expect(menu().hidden).toBe(true);
+  expect(view.state.doc.childCount).toBe(1);
+  expect(view.state.doc.textContent).toBe('');
+  expect(view.state.selection.$from.parent.type.name).toBe('paragraph');
+  expect(view.dom.querySelector('p')?.getAttribute('data-placeholder')).toBe('Type "/" for commands');
+  // Typing after Escape is writing, not searching.
+  view.dispatch(view.state.tr.insertText('h'));
+  expect(menu().hidden).toBe(true);
+
+  const other = await open();
+  openBlockList(other.view);
+  expect(menu().hidden).toBe(false);
+  other.view.dom.blur(); other.view.dom.dispatchEvent(new FocusEvent('blur'));
+  expect(menu().hidden).toBe(true);
+  other.view.focus(); other.view.dom.dispatchEvent(new FocusEvent('focus'));
+  expect(menu().hidden).toBe(true);
+  expect(other.view.state.doc.textContent).toBe('');
+  expect(editor.getMarkdown()).toBe('h\n');
+});
+
+it('a list + opened closes once nothing matches, keeping what was written', async () => {
+  const { editor, view } = await open();
+  openBlockList(view);
+  view.dispatch(view.state.tr.insertText('Hel'));
+  expect(menu().hidden).toBe(true);
+  view.dispatch(view.state.tr.insertText('lo'));
+  expect(menu().hidden).toBe(true);
+  expect(editor.getMarkdown()).toBe('Hello\n');
+  // A "/" typed there is the ordinary list.
+  const other = await open();
+  openBlockList(other.view);
+  other.view.dispatch(other.view.state.tr.insertText('/quo'));
+  expect(menu().hidden).toBe(false);
+  key(other.view.dom, 'Enter');
+  expect(other.view.state.doc.firstChild?.type.name).toBe('blockquote');
 });

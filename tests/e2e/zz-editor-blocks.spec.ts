@@ -89,6 +89,46 @@ test.describe("blocks in the rendered editor", () => {
     }
   });
 
+  test("with both sidebars open, the block controls sit left of the text at 1440px and wider, where reading puts it", async ({ page }) => {
+    const stamp = unique("Gutter");
+    const workspaceId = await mySpace(page);
+    const prose = "A paragraph long enough to fill the measure of the reading column, so its width says where the column ends as well as where it begins.";
+    const url = await createNote(page, workspaceId, `Gutter ${stamp}`, `${prose}\n\n## A heading\n\n${prose}`);
+    const box = async (locator: ReturnType<Page["locator"]>) => {
+      const found = await locator.first().boundingBox();
+      return found && { x: Math.round(found.x), y: Math.round(found.y), width: Math.round(found.width) };
+    };
+    for (const width of [1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(url);
+      // The default layout: the primary nav and the explorer both open.
+      await expect(page.getByRole("navigation", { name: "Primary" })).toBeVisible();
+      await expect(page.getByRole("complementary", { name: "Knowledge explorer" })).toBeVisible();
+      const surface = composer(page).getByRole("textbox", { name: "Content" });
+      await expect(surface).toBeEditable(ROUND_TRIP);
+      const article = page.locator("main article");
+      await expect(article.locator("p").first()).toBeVisible();
+      const read = { text: await box(article.locator("p")), heading: await box(article.locator("h2")) };
+      await surface.locator("p").first().click();
+      const edit = { text: await box(surface.locator("p")), heading: await box(surface.locator("h2")) };
+      expect(edit, `at ${width}px`).toEqual(read);
+
+      const pane = (await page.getByRole("region", { name: "Document content" }).boundingBox())!;
+      const gutter = page.getByRole("group", { name: "Block actions" });
+      for (const block of [surface.locator("p").first(), surface.locator("h2")]) {
+        const text = (await block.boundingBox())!;
+        await page.mouse.move(text.x - 20, text.y + Math.min(10, text.height / 2));
+        await expect(gutter).toBeVisible();
+        const controls = (await gutter.boundingBox())!;
+        // Both controls stand in the gutter: inside the pane, and wholly left of the text.
+        expect(controls.x, `at ${width}px`).toBeGreaterThanOrEqual(pane.x);
+        expect(controls.x + controls.width, `at ${width}px`).toBeLessThanOrEqual(text.x);
+        await expect(page.getByRole("button", { name: "Add paragraph below" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Move block" })).toBeVisible();
+      }
+    }
+  });
+
   test("Details open while reading stays open while editing, and the text beside it stays put", async ({ page }) => {
     const stamp = unique("Details");
     const workspaceId = await mySpace(page);
@@ -149,13 +189,17 @@ test.describe("blocks in the rendered editor", () => {
     const workspaceId = await mySpace(page);
     const url = await createNote(page, workspaceId, unique("Slash"), "Opening line.");
 
-    const surface = await openEditor(page, url);
+    await openEditor(page, url);
+    // By its label, not its role: it is a combobox, not a textbox, while the list is open.
+    const surface = composer(page).locator('.ProseMirror[aria-label="Content"]');
     // A new empty line from the block controls, below the paragraph the caret is in.
     await page.keyboard.press("Alt+F10");
     await page.getByRole("button", { name: "Add paragraph below" }).click();
     await expect(surface).toBeFocused();
-    // The empty line says which key to press; the document's own empty-state sentence is not it.
-    await expect(surface.locator("p[data-placeholder]")).toHaveCount(1);
+    // + has opened the list already; Escape leaves the empty line, which says which key to press
+    // (the document's own empty-state sentence is not it).
+    await page.keyboard.press("Escape");
+    await expect(surface.locator("p[data-placeholder]")).toHaveAttribute("data-placeholder", 'Type "/" for commands');
     await page.keyboard.type("/quo");
     const list = page.getByRole("listbox");
     await expect(list.getByRole("option")).toHaveCount(1);
@@ -173,6 +217,58 @@ test.describe("blocks in the rendered editor", () => {
   });
 });
 
+
+test("+ opens the \"/\" list on the new line; Escape leaves the line empty, and a pick saves with its links", async ({ page }) => {
+  const stamp = unique("Plus");
+  const target = `Target ${stamp}`;
+  const workspaceId = await mySpace(page);
+  const targetUrl = await createNote(page, workspaceId, target, "The target document.");
+  const url = await createNote(page, workspaceId, `Plus ${stamp}`, `Linked: see [[${target}]].`);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openEditor(page, url);
+  // By its label, not its role: it is a combobox, not a textbox, while the list is open.
+  const surface = composer(page).locator('.ProseMirror[aria-label="Content"]');
+  const list = page.getByRole("listbox", { name: "Block commands" });
+  const paragraph = surface.locator("p").first();
+  const text = (await paragraph.boundingBox())!;
+
+  // The pointer's way: hover the gutter, then +.
+  await page.mouse.move(text.x - 20, text.y + 10);
+  await page.getByRole("button", { name: "Add paragraph below" }).click();
+  await expect(list).toBeVisible();
+  await expect(surface).toBeFocused();
+  await expect(surface).toHaveAttribute("aria-controls", (await list.getAttribute("id"))!);
+  await expect(surface.locator("p")).toHaveCount(2);
+  await expect(surface.locator("p").nth(1)).toHaveText("");
+  await page.keyboard.press("Escape");
+  await expect(list).toBeHidden();
+  // Nothing was typed to take back: the line is empty and the caret is in it.
+  await expect(surface.locator("p")).toHaveCount(2);
+  await expect(surface.locator("p").nth(1)).toHaveText("");
+  await page.keyboard.type("Written after Escape.");
+  await expect(surface.locator("p").nth(1)).toHaveText("Written after Escape.");
+  await expect(list).toBeHidden();
+
+  // The keyboard's way: Alt+F10, then + — and what is typed filters, with no "/" in front.
+  await page.keyboard.press("Alt+F10");
+  await page.keyboard.press("Enter");
+  await expect(list).toBeVisible();
+  await page.keyboard.type("h2");
+  await expect(list.getByRole("option")).toHaveCount(1);
+  await expect(list.getByRole("option", { name: /Heading 2/ })).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Enter");
+  await expect(list).toBeHidden();
+  await page.keyboard.type("Picked heading");
+  await expect(surface.locator("h2")).toHaveText("Picked heading");
+
+  const markdown = await save(page);
+  expect(markdown).toContain(`Linked: see [[${target}]].`);
+  expect(markdown).toContain("Written after Escape.");
+  expect(markdown).toContain("## Picked heading");
+  expect(markdown).not.toMatch(/^\/|h2Picked|\\\[/m);
+  await page.goto(targetUrl);
+  await expect(page.locator("[data-backlinks]").getByRole("heading", { name: "Linked from 1 document" })).toBeVisible(ROUND_TRIP);
+});
 
 test("slash blocks render while editing and survive save and reopen", async ({ page }, testInfo) => {
   const workspaceId = await mySpace(page);
