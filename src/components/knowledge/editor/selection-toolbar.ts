@@ -55,7 +55,7 @@ function currentList(view: EditorView): ListName | null {
 // A pressed toggle reads as selected, as the composer's own Markdown toggle does.
 const PRESSED = "aria-pressed:bg-kh-bg-selected aria-pressed:text-kh-text";
 const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
-const EMAIL = /^[^\s@/:#?]+@[^\s@/:#?]+\.[^\s@/:#?]+$/;
+const EMAIL = /^[^\s@/:#?]+@[^\s@/:]+\.[^\s@/:]+$/;
 // `localhost:3000/x`, `example.com:8080`: a host and a port, not a scheme (`tel:123` has no dot).
 const HOST_PORT = /^(?:localhost|[^\s/:@]+\.[^\s/:@]+):\d+(?:[/?#]|$)/i;
 
@@ -67,7 +67,7 @@ const HOST_PORT = /^(?:localhost|[^\s/:@]+\.[^\s/:@]+):\d+(?:[/?#]|$)/i;
  * stays one (see `fieldHref`). `user@example.com` is mailed; `localhost:3000` is a host with a port.
  */
 export function withScheme(value: string): string {
-  if (!value || /^(?:\/|#|\.\.?\/)/.test(value)) return value;
+  if (!value || /^(?:\/|#|\?|\.\.?\/)/.test(value)) return value;
   if (EMAIL.test(value)) return `mailto:${value}`;
   if (HOST_PORT.test(value)) return `https://${value}`;
   if (HAS_SCHEME.test(value)) return value;
@@ -243,11 +243,8 @@ const pasteUrlOverSelection = $prose(
           const type = schema.marks.link;
           if (!view.editable || !type || !PASTED_URL.test(text) || !(selection instanceof TextSelection) || selection.empty) return false;
           try { new URL(text); } catch { return false; }
-          let allowed = true;
-          view.state.doc.nodesBetween(selection.from, selection.to, (node) => {
-            if (node.isTextblock && !node.type.allowsMarkType(type)) allowed = false;
-          });
-          if (!allowed) return false;
+          // As the Link button asks; `addMark` leaves a code block in the selection as it was.
+          if (!linkAllowed(view)) return false;
           event.preventDefault();
           view.dispatch(view.state.tr.addMark(selection.from, selection.to, type.create({ href: text })).scrollIntoView());
           return true;

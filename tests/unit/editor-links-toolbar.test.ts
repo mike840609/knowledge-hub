@@ -94,6 +94,13 @@ describe("a URL pasted over a selection (12)", () => {
     paste(view, text);
     expect(editor.getMarkdown()).not.toContain("[some](");
   });
+  it("over text and a code block links the text and leaves the code as it was", async () => {
+    const markdown = "some text\n\n```\ncode\n```\n";
+    const { editor, view } = await open(markdown);
+    select(view, 1, view.state.doc.content.size - 2);
+    expect(paste(view, "https://example.com").defaultPrevented).toBe(true);
+    expect(editor.getMarkdown()).toBe("[some text](https://example.com)\n\n```\ncode\n```\n");
+  });
   it("is unchanged with no selection", async () => {
     const { editor, view } = await open("some text\n");
     select(view, 3);
@@ -312,7 +319,8 @@ describe("an address typed in the link field", () => {
     expect(withScheme("example.com:8080")).toBe("https://example.com:8080");
     expect(storedLinkTarget(withScheme("localhost:3000/x"))).toBe("https://localhost:3000/x");
     for (const kept of ["mailto:a@b.c", "tel:123", "https://user@example.com", "#user@example.com", "./a@b.md"]) expect(withScheme(kept)).toBe(kept);
-    expect(withScheme("?a@b.c")).toBe("https://?a@b.c");
+    for (const kept of ["?a@b.c", "?q=1"]) expect(withScheme(kept)).toBe(kept);
+    expect(withScheme("a@b.c?subject=hi")).toBe("mailto:a@b.c?subject=hi");
   });
   it("is given https:// only when it is a web address", () => {
     for (const web of ["example.com/a", "example.com/a.md", "github.com/org/repo/blob/main/README.md", "news.md"]) expect(withScheme(web)).toBe(`https://${web}`);
