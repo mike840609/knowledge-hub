@@ -21,11 +21,12 @@ import { useWorkspaceAuthorization } from "./use-workspace-authorization";
 type NavigationItem = ReturnType<typeof useWorkspaceAuthorization>["navigation"]["items"][number];
 
 // The workspace's mark, in both rail states: its first letter in a small square.
+// The letter is decoration drawn by CSS, not text: the switcher's accessible name is the
+// workspace, and visible text that is not in that name is what axe reports as a mismatch.
 function WorkspaceInitial({ name }: { name: string }) {
   return (
-    <span aria-hidden="true" className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-kh-bg-selected text-caption font-semibold text-kh-selected-text">
-      {name.charAt(0).toUpperCase()}
-    </span>
+    <span aria-hidden="true" data-initial={name.charAt(0).toUpperCase()}
+      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-kh-bg-selected text-caption font-semibold text-kh-selected-text before:content-[attr(data-initial)]" />
   );
 }
 

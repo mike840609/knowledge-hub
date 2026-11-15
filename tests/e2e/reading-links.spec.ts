@@ -313,7 +313,7 @@ test.describe("wikilinks and backlinks in My Space", () => {
     const linker = await createMySpaceDocument(page, `Pressed Linker ${stamp}`, `Go to [[Pressed Target ${stamp}|the target]].`);
     const { link, pressAcrossTakeover } = await openWithEditorHeld(page, linker.url, "the target");
     // Focus elsewhere, so the press also moves focus (a blur mid-press must not count as its end).
-    await page.getByRole("button", { name: "Quick search" }).focus();
+    await page.getByRole("button", { name: "Search ⌘K" }).focus();
     await pressAcrossTakeover(link);
     await expect(page).toHaveURL(target.url, ROUND_TRIP);
   });

@@ -44,7 +44,7 @@ export function AttentionList({ workspaceId, reminders }: { workspaceId: string;
   return <section aria-label="Needs attention" className="rounded-md border border-kh-border py-1">
     <div className="flex items-baseline justify-between px-3 pb-1 pt-2">
       <h2 className="text-caption font-medium text-kh-text-muted">Needs attention</h2>
-      <Link className="kh-focus-ring rounded-md text-caption text-kh-link" href={`/w/${workspaceId}/updates`}>View all updates</Link>
+      <Link className="kh-focus-ring inline-flex min-h-6 items-center rounded-md text-caption text-kh-link" href={`/w/${workspaceId}/updates`}>View all updates</Link>
     </div>
     <SourceReminder workspaceId={workspaceId} reminders={reminders} />
   </section>;

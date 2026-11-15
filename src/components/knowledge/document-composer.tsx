@@ -646,6 +646,7 @@ export function DocumentComposer({
           {resolved.source === "TYPED" ? (
             <input
               ref={titleRef}
+              name="title"
               aria-label="Title"
               placeholder="Title"
               value={title}
@@ -668,6 +669,9 @@ export function DocumentComposer({
             {resolved.source === "METADATA" ? <span>Title comes from the uploaded file’s frontmatter</span> : null}
             {renamesOnSave ? <span>Saving will rename this document to “{resolved.title}”</span> : null}
             {durableDraft && <span role="status">
+              {/* The meta line is a row of separate facts: without a separator the sentence
+                  before this ("… to save") runs straight into the draft status. */}
+              <span aria-hidden="true" className="mr-2 text-kh-text-subtle">·</span>
               {({ loading: "Loading draft…", saved: "Draft saved to your account", saving: "Saving draft…", local: "Draft kept on this device · syncing…", error: "Draft sync failed. Keep this page open and retry.", conflict: "Draft changed on another device. Your text is preserved here; copy it before loading another draft.", "too-large": "Draft is too large to save to your account. Download or copy it before leaving.", "too-large-unstored": "Draft is too large to save, and this browser could not keep a local copy. Download it before leaving." })[draftStatus]}
               {draftStatus === "error" && <Button type="button" variant="link" onClick={() => void persistent.current?.retry()}>Retry draft save</Button>}
             </span>}
