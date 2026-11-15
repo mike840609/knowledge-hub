@@ -14,6 +14,7 @@ import { flipNearestDetails, handleDetailsDeleteKey } from "./details-toggle";
 import { handleCalloutBackspace } from "./reader-hints";
 import { configureCellBreakStringify, remarkCellBreaks } from "./table-cell-breaks";
 import { notionKeys } from "./notion-keys";
+import { pasteHtml } from "./paste-html";
 import { configureWikiLinkStringify, wikiLinkPlugins } from "./wiki-link";
 
 /** The editor could not make a document of this Markdown; the caller should fall back to the source. */
@@ -306,6 +307,7 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
     .use(wikiLinkPlugins)
     .use(readerHints)
     .use(notionKeys)
+    .use(pasteHtml)
     .use(history)
     .use(listener)
     .use(editWatcher)
