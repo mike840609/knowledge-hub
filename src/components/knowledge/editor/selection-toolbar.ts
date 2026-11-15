@@ -22,6 +22,9 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 import { buttonClasses } from "@/components/ui/button";
 import { fieldClasses } from "@/components/ui/field";
 import { convertBlockToDetails, inDetails } from "./details-toggle";
+import { parseDocumentHref } from "@/modules/knowledge/domain/document-links";
+import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
+import type { RenderedLinks } from "../rendered-links";
 
 const tooltip = tooltipFactory("khSelectionToolbar");
 
@@ -117,8 +120,27 @@ function caretLink(view: EditorView): Extract<SelectedLink, { kind: "one" }> | n
   return run.kind === "one" ? run : null;
 }
 
+const OPENABLE = /^(?:https?:|mailto:|\/(?!\/)|#)/i;
+
+/** For what is typed in the link field, which `withScheme` completes. */
 export function canOpenLink(value: string): boolean {
-  return /^(?:https?:|mailto:|\/(?!\/)|#)/i.test(withScheme(value.trim()));
+  return OPENABLE.test(withScheme(value.trim()));
+}
+
+/**
+ * Where a link already in the document opens, or null. Unlike typed input it is never given a
+ * scheme: a relative `.md` link is a document, resolved as the reader resolves it (`markdown-base`),
+ * and anything else opens only as written.
+ */
+export function storedLinkTarget(href: string, links?: RenderedLinks): string | null {
+  const value = href.trim();
+  const document = parseDocumentHref(value);
+  if (document) {
+    const resolved = links?.[linkLookupKey("PATH", document.target)];
+    if (resolved?.status !== "RESOLVED") return null;
+    return `${resolved.basePath}${document.fragment ? `#${encodeURIComponent(document.fragment)}` : ""}`;
+  }
+  return OPENABLE.test(value) ? value : null;
 }
 
 type Item = {
@@ -222,7 +244,7 @@ const pasteUrlOverSelection = $prose(
  * `<form>`, where the default type submits — that is, saves. `mousedown` is
  * cancelled on them so pressing one does not take the selection with it.
  */
-export function selectionToolbar(comment?: { available: () => boolean; run: (view: EditorView) => void }): { plugins: MilkdownPlugin[]; configure: (ctx: Ctx) => void } {
+export function selectionToolbar(comment?: { available: () => boolean; run: (view: EditorView) => void }, links?: () => RenderedLinks | undefined): { plugins: MilkdownPlugin[]; configure: (ctx: Ctx) => void } {
   return {
     plugins: [tooltip, pasteUrlOverSelection].flat() as MilkdownPlugin[],
     configure: (ctx) => {
@@ -439,7 +461,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             cardLink = link;
             cardAddress.textContent = href;
             cardAddress.title = href;
-            cardButtons.get("Open link")!.disabled = !canOpenLink(href);
+            cardButtons.get("Open link")!.disabled = !storedLinkTarget(href, links?.());
             if (!card.isConnected) (editorView.dom.parentElement ?? document.body).appendChild(card);
             card.dataset.show = "true";
             placeCard(link);
@@ -476,8 +498,8 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             pointerTimer = setTimeout(() => { pointerDown = false; }, 600);
           });
           cardButtons.get("Open link")!.addEventListener("click", () => {
-            const href = withScheme(String(cardLink?.mark.attrs.href ?? "").trim());
-            if (canOpenLink(href)) window.open(href, "_blank", "noopener,noreferrer");
+            const target = storedLinkTarget(String(cardLink?.mark.attrs.href ?? ""), links?.());
+            if (target) window.open(target, "_blank", "noopener,noreferrer");
           });
           cardButtons.get("Edit link")!.addEventListener("click", () => {
             const target = cardLink;

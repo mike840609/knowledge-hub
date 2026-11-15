@@ -11,7 +11,7 @@ import { tableActions } from "./table-actions";
 import { slashCommands } from "./slash-commands";
 import type { LinkTargetsView } from "@/modules/knowledge/application/knowledge-link-service";
 import { createMarkdownEditor, type MarkdownEditor } from "./editor-core";
-import { canOpenLink, selectionToolbar, withScheme } from "./selection-toolbar";
+import { selectionToolbar, storedLinkTarget } from "./selection-toolbar";
 import { wikiLinkSuggest } from "./wikilink-suggest";
 
 import { editorViewCtx } from "@milkdown/kit/core";
@@ -106,7 +106,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
           return readReviewRange(view.dom, markdown, range).anchor ?? null;
         });
       },
-    });
+    }, () => latest.current.links);
     const suggest = wikiLinkSuggest({
       // Read through the ref at the moment of use, like every other prop here.
       loadTargets: () => governanceRequest<LinkTargetsView>(`/api/workspaces/${latest.current.workspaceId}/link-targets`),
@@ -273,8 +273,8 @@ export function RenderedEditor(props: RenderedEditorProps) {
     if (!link || link.closest("[data-kh-wiki-raw]")) return;
     event.preventDefault();
     const href = link.getAttribute("href");
-    const target = withScheme((href ?? "").trim());
-    if (href && (event.metaKey || event.ctrlKey) && canOpenLink(target)) window.open(target, "_blank", "noopener,noreferrer");
+    const target = href ? storedLinkTarget(href, props.links) : null;
+    if (target && (event.metaKey || event.ctrlKey)) window.open(target, "_blank", "noopener,noreferrer");
   }
 
   return <><div ref={containerRef} onClick={followLinkOnModifierClick} />{wikiViews.map(({ dom, raw }, index) => {

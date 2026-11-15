@@ -2,8 +2,8 @@ import { commandsCtx } from "@milkdown/kit/core";
 import type { MilkdownPlugin } from "@milkdown/kit/ctx";
 import { setBlockType } from "@milkdown/kit/prose/commands";
 import { InputRule, undoInputRule } from "@milkdown/kit/prose/inputrules";
-import { liftListItem } from "@milkdown/kit/prose/schema-list";
-import { AllSelection, NodeSelection, Plugin, PluginKey, Selection, TextSelection, type EditorState } from "@milkdown/kit/prose/state";
+import { liftListItem, wrapInList } from "@milkdown/kit/prose/schema-list";
+import { AllSelection, NodeSelection, Plugin, PluginKey, Selection, TextSelection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
 import { addRowAfter, goToNextCell, isInTable } from "@milkdown/kit/prose/tables";
@@ -11,7 +11,7 @@ import { customInputRulesKey } from "@milkdown/kit/prose";
 import type { Mark } from "@milkdown/kit/prose/model";
 import { ReplaceStep } from "@milkdown/kit/prose/transform";
 import { $inputRule, $prose, $useKeymap } from "@milkdown/kit/utils";
-import { duplicateBlock, moveBlock, topLevelBlocks, turnBlockInto, type BlockKind } from "./block-actions";
+import { duplicateBlock, moveBlock, topLevelBlocks, type BlockKind } from "./block-actions";
 
 /**
  * The typing rules and keys a Notion writer reaches for
@@ -54,11 +54,18 @@ const todoInputRule = $inputRule(
     }),
 );
 
+/** Inside a `[[target` still being typed: the target is a title or path, and must stay as written. */
+function inWikiTarget(state: EditorState, pos: number): boolean {
+  const $pos = state.doc.resolve(pos);
+  const before = $pos.parent.textBetween(0, $pos.parentOffset, undefined, "\ufffc");
+  return before.lastIndexOf("[[") > before.lastIndexOf("]]");
+}
+
 function replacement(regexp: RegExp, symbol: string) {
   return $inputRule(
     () =>
       new InputRule(regexp, (state, _match, start, end) => {
-        if (hasCodeAt(state, start)) return null;
+        if (hasCodeAt(state, start) || inWikiTarget(state, start)) return null;
         return state.tr.insertText(symbol, start, end);
       }),
   );
@@ -146,14 +153,38 @@ function listKindAt(state: EditorState): BlockKind | null {
   return null;
 }
 
-/** A list of the given kind, or the item lifted back to a paragraph when it already is one. */
+/**
+ * A list of the given kind, or the item lifted back to a paragraph when it already is one. Only the
+ * caret's item changes, and the caret stays where it was: an item in a list of another kind is lifted
+ * out and wrapped again, so the list is split around it, as Notion's per-item blocks are. One
+ * transaction, so one undo step.
+ */
 function toggleList(target: "ordered" | "bullet" | "task") {
-  return (state: EditorState, dispatch?: (tr: never) => void, view?: EditorView) => {
+  return (state: EditorState, dispatch?: (tr: Transaction) => void, view?: EditorView) => {
     if (!view?.editable || !(state.selection instanceof TextSelection || state.selection instanceof NodeSelection)) return false;
-    if (listKindAt(state) === target) return liftListItem(state.schema.nodes.list_item)(state, dispatch as never);
-    const pos = topBlockPos(state);
-    if (pos === null) return false;
-    return dispatch ? turnBlockInto(view, pos, target) : true;
+    const { nodes } = state.schema;
+    const kind = listKindAt(state);
+    if (kind === target) return liftListItem(nodes.list_item)(state, dispatch);
+    // Bullet and to-do share a list: switching between them is only the item's `checked`.
+    const sameList = kind !== null && (kind === "ordered") === (target === "ordered");
+    let tr = state.tr;
+    if (!sameList) {
+      if (kind && !liftListItem(nodes.list_item)(state, (lifted) => { tr = lifted; })) return false;
+      const wrapped = wrapInList(target === "ordered" ? nodes.ordered_list : nodes.bullet_list)(state.apply(tr), (next) => {
+        for (const step of next.steps) tr.step(step);
+        tr.setSelection(next.selection.getBookmark().resolve(tr.doc));
+      });
+      if (!wrapped) return false;
+    }
+    if (!dispatch) return true;
+    const $from = tr.selection.$from;
+    for (let depth = $from.depth; depth >= 1; depth--) {
+      if ($from.node(depth).type !== nodes.list_item) continue;
+      tr.setNodeMarkup($from.before(depth), undefined, { ...$from.node(depth).attrs, checked: target === "task" ? false : null });
+      break;
+    }
+    dispatch(tr.scrollIntoView());
+    return true;
   };
 }
 
@@ -207,7 +238,8 @@ function lineStarts(state: EditorState): number[] {
   const { $from, $to } = state.selection;
   const text = $from.parent.textContent;
   const start = $from.start();
-  const first = text.lastIndexOf("\n", $from.parentOffset - 1) + 1;
+  // At offset 0 there is no line before: lastIndexOf with -1 would search from 0 and find a leading "\n".
+  const first = $from.parentOffset === 0 ? 0 : text.lastIndexOf("\n", $from.parentOffset - 1) + 1;
   const starts = [start + first];
   for (let at = text.indexOf("\n", first); at !== -1 && start + at < $to.pos; at = text.indexOf("\n", at + 1)) starts.push(start + at + 1);
   return starts;

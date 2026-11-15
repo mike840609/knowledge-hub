@@ -169,6 +169,13 @@ it('matches aliases by prefix only, and label or words anywhere, aliases first',
   expect(matchingCommands('').length).toBe(13);
 });
 
+it('puts an exact alias, then a label prefix, before an alias prefix', () => {
+  expect(matchingCommands('t')[0].id).toBe('text');
+  expect(matchingCommands('c')[0].id).toBe('code');
+  expect(matchingCommands('h2')[0].id).toBe('h2');
+  expect(matchingCommands('todo')[0].id).toBe('task');
+});
+
 it('draws a 16px Lucide icon, hidden from assistive technology, at the left of every row', async () => {
   const { view } = await open();
   view.dispatch(view.state.tr.insertText('/'));
