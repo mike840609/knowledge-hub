@@ -167,7 +167,7 @@ it('keeps the controls inside the pane when the gutter hangs past its left edge'
   expect(document.querySelector<HTMLElement>('.kh-block-gutter')!.style.left).toBe('104px');
 });
 
-it('+ opens the "/" list on the new line, and Escape leaves that line empty with the caret in it', async () => {
+async function openWithList() {
   const root = document.body.appendChild(document.createElement('div'));
   const slash = slashCommands();
   const editor = await createMarkdownEditor({ root, markdown: 'First\n\nSecond', className: 'kh-editor', ariaLabel: 'Content', editable: true, onUserEdit: () => {}, onMarkdown: () => {}, allowImage: () => false, extraPlugins: [...slash.plugins, blockGutter()], configure: slash.configure });
@@ -179,13 +179,43 @@ it('+ opens the "/" list on the new line, and Escape leaves that line empty with
   view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', altKey: true, bubbles: true, cancelable: true }));
   button('Add paragraph below').click();
   const list = document.querySelector<HTMLElement>('.kh-slash-menu')!;
+  const press = (name: string) => view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }));
+  return { editor, view, list, press };
+}
+
+// Decision 15 (deviation): + writes a visible "/" on the new line; the list it opens is a typed "/"'s.
+it('+ opens the "/" list on a new line holding a "/", and Escape takes back the lone "/" leaving the caret there', async () => {
+  const { editor, view, list, press } = await openWithList();
   expect(list.hidden).toBe(false);
-  expect(view.state.doc.child(1).textContent).toBe('');
-  view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  expect(view.state.doc.child(1).textContent).toBe('/');
+  press('Escape');
   expect(list.hidden).toBe(true);
   expect(view.state.doc.childCount).toBe(3);
   expect(view.state.selection.$from.index(0)).toBe(1);
-  // Nothing typed is left behind: the empty line is the editor's own empty paragraph.
   expect(view.state.doc.child(1).textContent).toBe('');
   expect(editor.getMarkdown()).not.toMatch(/^\/|\n\/\n/);
+});
+
+it('+ then "Title" keeps "Title" in sight as the "/Title" query, and Escape keeps it as text', async () => {
+  const { editor, view, list, press } = await openWithList();
+  view.dispatch(view.state.tr.insertText('Title'));
+  // The query is on the page, as a typed "/Title" is: what Enter would pick is in the list beside it.
+  expect(view.dom.children[1].textContent).toBe('/Title');
+  expect(list.hidden).toBe(false);
+  expect([...list.querySelectorAll('[role="option"]')].map(row => row.textContent)).toEqual(['Heading 1Large heading', 'Heading 2Section heading', 'Heading 3Small heading']);
+  press('Escape');
+  expect(list.hidden).toBe(true);
+  expect(view.state.doc.child(1).textContent).toBe('/Title');
+  expect(editor.getMarkdown()).toBe('First\n\n/Title\n\nSecond\n');
+});
+
+it('+ then "h2" and Enter makes a Heading 2', async () => {
+  const { editor, view, list, press } = await openWithList();
+  view.dispatch(view.state.tr.insertText('h2'));
+  press('Enter');
+  expect(list.hidden).toBe(true);
+  expect(view.state.doc.child(1).type.name).toBe('heading');
+  expect(view.state.doc.child(1).attrs.level).toBe(2);
+  view.dispatch(view.state.tr.insertText('Picked'));
+  expect(editor.getMarkdown()).toBe('First\n\n## Picked\n\nSecond\n');
 });

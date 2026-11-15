@@ -216,7 +216,7 @@ export function blockGutter() {
         hide();
       };
       add.addEventListener("mousedown", event => { if (event.button === 0) event.preventDefault(); });
-      // As Notion's +: the new line opens the "/" list, with nothing typed that a dismissal would have to take back.
+      // As Notion's +: the new line holds a visible "/" with its list open; dismissing it with only the "/" takes it back.
       add.addEventListener("click", () => { if (active !== null && insertBlockBelow(view, active)) openBlockList(view); });
       function moveBy(direction: number) {
         if (active === null) return;

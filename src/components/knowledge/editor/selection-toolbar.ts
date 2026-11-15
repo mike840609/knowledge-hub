@@ -405,7 +405,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           card.setAttribute("role", "group");
           card.setAttribute("aria-label", "Link");
           const cardAddress = document.createElement("span");
-          cardAddress.className = "max-w-60 truncate px-2 text-caption text-kh-text-muted";
+          cardAddress.className = "kh-link-card-address truncate px-2 text-caption text-kh-text-muted";
           card.appendChild(cardAddress);
           const cardButtons = new Map<string, HTMLButtonElement>();
           for (const [label, text] of [["Open link", "Open"], ["Edit link", "Edit"], ["Remove link", "Remove"]] as const) {

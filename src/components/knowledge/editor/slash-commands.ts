@@ -28,9 +28,13 @@ const commands = [
 ] as const;
 type Command = typeof commands[number];
 type Trigger = { pos: number; query: string };
-/** `armed`: the empty paragraph `+` made, whose list is open as if "/" had been typed there (spec decision 15). */
-type State = { trigger: Trigger | null; dismissed: number | null; index: number; armed: number | null };
+/**
+ * `added`: the paragraph whose "/" `+` wrote (spec decision 15, deviation), held while its list is open there.
+ * Dismissing that list with the "/" alone on the line takes the "/" back; anything typed after it stays.
+ */
+type State = { trigger: Trigger | null; dismissed: number | null; index: number; added: number | null };
 const OPEN = "khOpenBlockList";
+const key = new PluginKey<State>("khSlashCommands");
 let sequence = 0;
 
 function detect(state: EditorState): Trigger | null {
@@ -40,19 +44,21 @@ function detect(state: EditorState): Trigger | null {
   const match = /^\/([^/\n]{0,40})$/.exec($from.parent.textContent);
   return match ? { pos: $from.before(1), query: match[1].toLowerCase().trim() } : null;
 }
-/** The armed paragraph's query: its own text, with no "/" in front, while the caret is at its end. */
-function armedTrigger(state: EditorState, pos: number): Trigger | null {
-  const { $from, empty } = state.selection;
-  if (!empty || $from.depth !== 1 || $from.before(1) !== pos || $from.parent.type.name !== "paragraph" || $from.parentOffset !== $from.parent.content.size) return null;
-  const first = $from.parent.firstChild;
-  if ($from.parent.childCount > 1 || (first && (!first.isText || first.marks.length))) return null;
-  const match = /^([^/\n]{0,40})$/.exec($from.parent.textContent);
-  return match ? { pos, query: match[1].toLowerCase().trim() } : null;
+/**
+ * What `+` does after inserting an empty paragraph, as Notion's does: writes a visible "/" there, so the list opens
+ * through the same path a typed "/" takes and what is typed next is that "/"'s query. Only where the list is installed.
+ */
+export function openBlockList(view: EditorView): boolean {
+  const { $from, empty } = view.state.selection;
+  if (!view.editable || !key.get(view.state) || !empty || $from.depth !== 1 || $from.parent.type.name !== "paragraph" || $from.parent.content.size) return false;
+  view.dispatch(view.state.tr.insertText("/").setMeta(OPEN, true));
+  return true;
 }
-
-/** Opens the list on the empty paragraph the caret is in, with nothing typed: what `+` does after inserting one. */
-export function openBlockList(view: EditorView) {
-  view.dispatch(view.state.tr.setMeta(OPEN, true));
+/** The lone "/" `+` wrote, still alone on its line: [from, to) to take back, or null. */
+function loneSlash(state: EditorState, pos: number): [number, number] | null {
+  const node = pos < state.doc.content.size ? state.doc.nodeAt(pos) : null;
+  if (node?.type.name !== "paragraph" || node.childCount !== 1 || !node.firstChild!.isText || node.firstChild!.marks.length || node.textContent !== "/") return null;
+  return [pos + 1, pos + 2];
 }
 
 /** Rows for a query, case-insensitively: an alias it begins comes first, then label or `words` holding it, each in list order. */
@@ -76,7 +82,6 @@ function glyph(Icon: LucideIcon): SVGElement {
 }
 
 export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: Ctx) => void } {
-  const key = new PluginKey<State>("khSlashCommands");
   let visible = false;
   let shown: readonly Command[] = [];
 
@@ -122,29 +127,30 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
   const plugin = $prose(() => new Plugin<State>({
     key,
     state: {
-      init: () => ({ trigger: null, dismissed: null, index: 0, armed: null }),
+      init: () => ({ trigger: null, dismissed: null, index: 0, added: null }),
       apply(transaction, previous, _old, state) {
-        const meta = transaction.getMeta(key) as { dismiss?: boolean; disarm?: boolean; index?: number } | undefined;
-        let armed = previous.armed === null ? null : transaction.mapping.map(previous.armed);
-        if (transaction.getMeta(OPEN)) {
-          const { $from, empty } = state.selection;
-          armed = empty && $from.depth === 1 && $from.parent.type.name === "paragraph" && $from.parent.content.size === 0 ? $from.before(1) : null;
-        }
-        if (meta?.dismiss || meta?.disarm) armed = null;
-        const typed = detect(state);
-        const armedHere = armed === null ? null : armedTrigger(state, armed);
-        // Armed, the list goes once nothing matches (the paragraph is being written, not searched) or the caret leaves.
-        if (armed !== null && (armedHere ? !matchingCommands(armedHere.query).length : typed?.pos !== armed)) armed = null;
-        const trigger = typed ?? (armed === null ? null : armedHere);
+        const meta = transaction.getMeta(key) as { dismiss?: boolean; release?: boolean; index?: number } | undefined;
+        const trigger = detect(state);
+        let added = previous.added === null ? null : transaction.mapping.map(previous.added);
+        if (transaction.getMeta(OPEN)) added = trigger?.pos ?? null;
+        // Held only while that line's list is open: a dismissal, leaving the editor, or the caret leaving lets it go.
+        if (meta?.dismiss || meta?.release || trigger?.pos !== added) added = null;
         const dismissed = meta?.dismiss && trigger ? trigger.pos : !trigger ? null : previous.dismissed === null ? null : transaction.mapping.map(previous.dismissed);
-        return { trigger, dismissed, armed, index: meta?.index ?? (trigger?.query === previous.trigger?.query ? previous.index : 0) };
+        return { trigger, dismissed, added, index: meta?.index ?? (trigger?.query === previous.trigger?.query ? previous.index : 0) };
       },
+    },
+    // When the list `+` opened is let go with its "/" still alone on the line, the "/" goes too: nothing was written.
+    appendTransaction(transactions, old, state) {
+      const before = key.getState(old)?.added;
+      if (before == null || key.getState(state)?.added != null) return null;
+      const range = loneSlash(state, transactions.reduce((pos, transaction) => transaction.mapping.map(pos), before));
+      return range ? state.tr.delete(...range).setMeta("addToHistory", false) : null;
     },
     props: {
       decorations(state) {
         const { $from, empty } = state.selection;
         if (!empty || $from.depth !== 1 || $from.parent.type.name !== "paragraph" || $from.parent.content.size) return null;
-        return DecorationSet.create(state.doc, [Decoration.node($from.before(1), $from.after(1), { "data-placeholder": key.getState(state)?.armed === $from.before(1) ? "Type to filter" : 'Type "/" for commands' })]);
+        return DecorationSet.create(state.doc, [Decoration.node($from.before(1), $from.after(1), { "data-placeholder": 'Type "/" for commands' })]);
       },
     },
     view(view) {
@@ -213,8 +219,8 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
       }
       const keepCaret = (event: MouseEvent) => { if (event.button === 0) event.preventDefault(); };
       popup.addEventListener("mousedown", keepCaret);
-      // Leaving the editor dismisses a list `+` opened, as Escape does: coming back to the empty line does not reopen it.
-      const blur = () => { close(); if (key.getState(view.state)?.armed != null) view.dispatch(view.state.tr.setMeta(key, { disarm: true })); };
+      // Leaving the editor lets go of a list `+` opened: a lone "/" is taken back, a "/query" stays as if typed.
+      const blur = () => { close(); if (key.getState(view.state)?.added != null) view.dispatch(view.state.tr.setMeta(key, { release: true })); };
       dom.addEventListener("focus", sync); dom.addEventListener("blur", blur);
       dom.addEventListener("compositionstart", close); dom.addEventListener("compositionend", sync);
       window.addEventListener("scroll", position, true); window.addEventListener("resize", position);

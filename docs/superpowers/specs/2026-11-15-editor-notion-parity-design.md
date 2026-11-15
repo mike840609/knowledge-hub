@@ -85,6 +85,17 @@ read it").
     wider one, the gutter controls never cover text. The text's left edge stays
     the same in reading and editing. Below that, the existing fallback stays.
 15. `+` inserts an empty paragraph below and opens the `/` list on it.
+
+    **Deviation (2026-11-15, final review).** The first build opened the list
+    on an empty line with nothing typed, so a word typed next was a hidden
+    query: `Title`, `Note` or `A` with Enter or Tab converted the block and
+    dropped the word. `+` now writes a visible `/` on the new line, as Notion's
+    does, and the list opens through the same path a typed `/` takes: what is
+    typed next is that `/`'s query, in sight, and behaves exactly as a typed
+    `/query` does. Dismissing the list (Escape, leaving the editor, moving the
+    caret off the line) while the `/` is still alone on the line takes the `/`
+    back, leaving the empty line with the caret in it; anything typed after the
+    `/` stays. A `/` typed by hand is never taken back.
 16. The `/` list matches aliases as well as labels: `h1`, `h2`, `h3`, `p`,
     `todo`, `checkbox`, `ul`, `bullet`, `ol`, `number`, `hr`, `line`, `quote`,
     `code`, `table`, `toggle`, `callout`. Each row has a 16px lucide icon at its

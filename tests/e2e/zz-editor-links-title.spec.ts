@@ -169,6 +169,28 @@ test.describe("the link card (11)", () => {
     await expect(card(page)).toHaveCount(0);
   });
 
+  test("a long address truncates at about 15rem, and the card stays inside a narrow window", async ({ page }) => {
+    const href = `https://example.com/${"long-segment-".repeat(30)}end`;
+    const surface = await openEditor(page, await createNote(page, await mySpace(page), unique("Long"), `Before the [site](${href}) after.`));
+    for (const width of [1440, 360]) {
+      await page.setViewportSize({ width, height: 800 });
+      // Out of the link first: the card shows on an entry into it.
+      await surface.locator("p").first().click({ position: { x: 4, y: 8 } });
+      await settle(page);
+      await surface.locator("a").click();
+      await expect(card(page)).toBeVisible();
+      const address = card(page).locator(".kh-link-card-address");
+      await expect(address).toHaveAttribute("title", href);
+      const box = (await address.boundingBox())!;
+      expect(box.width, `address at ${width}px`).toBeLessThanOrEqual(241);
+      expect(await address.evaluate(element => element.scrollWidth > element.clientWidth), `truncated at ${width}px`).toBe(true);
+      const outer = (await card(page).boundingBox())!;
+      expect(outer.width, `card at ${width}px`).toBeLessThanOrEqual(width - 16);
+      await page.keyboard.press("Escape");
+      await expect(card(page)).toHaveCount(0);
+    }
+  });
+
   test("Open uses a new tab; Mod-click does the same", async ({ page, context }) => {
     const surface = await openEditor(page, await createNote(page, await mySpace(page), unique("Open"), "Before the [site](/open-target) after."));
     await surface.locator("a").click();
