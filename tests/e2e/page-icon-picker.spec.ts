@@ -49,12 +49,27 @@ test("the page icon picker searches in English and Chinese and is driven by keys
   await expect(page.getByRole("button", { name: "Use 🎯", exact: true }).or(page.getByRole("button", { name: "Use 🚀", exact: true }))).not.toHaveCount(0);
   await page.keyboard.press("ArrowUp");
   await expect(page.getByRole("button", { name: "Use 📝", exact: true })).toBeFocused();
-  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("End");
+  await expect(page.locator("button[data-emoji]").last()).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(page.getByRole("button", { name: "Use 📄", exact: true })).toBeFocused();
+  await page.keyboard.press("ArrowRight");
   const saved = page.waitForResponse((response) => response.url().endsWith("/icon") && response.request().method() === "PUT");
   await page.keyboard.press("Enter");
   expect((await saved).ok()).toBe(true);
   await expect(main.getByRole("button", { name: "Change page icon", exact: true })).toBeVisible(ROUND_TRIP);
-  await expect(main.locator("[data-page-icon]").first()).toHaveText("📄");
+  await expect(main.locator("[data-page-icon]").first()).toHaveText("📝");
+
+  // Roving tabindex: one tab stop in the grid, so one Tab from a cell reaches "Remove icon".
+  await main.getByRole("button", { name: "Change page icon", exact: true }).click();
+  await expect(page.locator('button[data-emoji][tabindex="0"]')).toHaveCount(1);
+  await expect(page.locator('button[data-emoji][tabindex="-1"]')).toHaveCount(350);
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("button", { name: "Use 📄", exact: true })).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Remove icon", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
 
   // A catalog emoji beyond the suggested sixteen is accepted by the server.
   await main.getByRole("button", { name: "Change page icon", exact: true }).click();
