@@ -76,6 +76,8 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   const [source, setSource] = useState(false);
   const [failed, setFailed] = useState(false);
   const [CodePreview, setCodePreview] = useState<ComponentType<{ code: string; language: string }>>();
+  const [CodeLanguage, setCodeLanguage] = useState<ComponentType<{ language: string; onChange: (language: string) => void }>>();
+  const renderLanguage = useCallback((language: string, onChange: (language: string) => void) => CodeLanguage ? <CodeLanguage language={language} onChange={onChange} /> : null, [CodeLanguage]);
   const renderCode = useCallback((code: string, language: string) => CodePreview ? <CodePreview code={code} language={language} /> : <pre><code>{code}</code></pre>, [CodePreview]);
   const sourceTextarea = useRef<HTMLTextAreaElement>(null);
   const titleInput = useRef<HTMLTextAreaElement>(null);
@@ -311,7 +313,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   useEffect(() => {
     if (!/```|~~~/u.test(content.markdown) || CodePreview) return;
     let live = true;
-    void import("./editor/inline-code-preview").then(module => { if (live) setCodePreview(() => module.InlineCodePreview); }).catch(() => { /* Raw code stays available if its preview cannot load. */ });
+    void import("./editor/inline-code-preview").then(module => { if (live) { setCodePreview(() => module.InlineCodePreview); setCodeLanguage(() => module.CodeLanguageField); } }).catch(() => { /* Raw code stays available if its preview cannot load. */ });
     return () => { live = false; };
   }, [content.markdown, CodePreview]);
   useEffect(() => {
@@ -450,7 +452,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     }}>
       {!ready && !source && !failed && !recovery ? standIn : null}
       <Article tabIndex={-1} data-review-document={ready && !source && !failed ? "" : undefined} hidden={source || failed || !ready}>
-        {loaded && Editor && !failed && <Editor reviewMarkdown={ready && !source && !recovery ? content.markdown : undefined} renderCode={renderCode} links={links} workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId}
+        {loaded && Editor && !failed && <Editor reviewMarkdown={ready && !source && !recovery ? content.markdown : undefined} renderCode={renderCode} renderLanguage={renderLanguage} links={links} workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId}
           markdown={content.markdown} editable={editable && !source} onReady={(instance, openedWith) => {
             editor.current = instance;
             if (openedWith !== queue.current!.current.markdown) instance.replaceMarkdown(queue.current!.current.markdown);

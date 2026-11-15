@@ -413,6 +413,18 @@ warning     TriangleAlert           warning           warning
 caution     OctagonAlert            danger            danger
 ```
 
+In the rendered editor the title row is a button (`.kh-callout-label`: the same
+glyph and word, a `bg-hover` fill under the pointer, the shared focus ring) that
+opens a menu of the five kinds, the one in force checked
+(`role="menuitemradio"`). It is the block menu's surface (`.kh-block-move-menu`:
+`lg` radius, a border, `popover` elevation, `kh-bg-raised`), drawn on the body,
+opened by click, Enter, Space or ArrowDown/ArrowUp on the label, moved with the
+arrow keys, Home and End, and closed by Escape (focus returns to the label, and
+the block is not selected: the menu takes the key before the block-selecting
+Escape), Tab or a click outside. Choosing a kind rewrites only the marker to
+`[!KIND]` in one undo step; the body, its links and its wikilinks are untouched
+(editor Notion-parity spec, decision 20). The reader's title stays text.
+
 No token was added. There is no information blue and no emphasis purple in the
 palette, and five hues inside the reading column would be decorative colour,
 which §8 rules out; a note and an important are neutral and told apart by
@@ -1821,16 +1833,39 @@ No token was added.
 ### Rendered slash blocks (2026-10-15, PR #200 follow-up)
 
 The rendered editor shows a Toggle as a native disclosure with an editable,
-plain-text summary and a block body. New toggles open with the caret in the body;
-clicking the summary's chevron or pressing Alt+Enter changes the saved open state.
-Typing in the summary edits its title; Enter moves into the body. Existing bare
+plain-text summary and a block body. A toggle made from `/` or `+` opens with the
+caret in its (empty) summary, which keeps its `Details` placeholder; one made from
+a paragraph by the toolbar keeps the caret in the empty body. The chevron and the
+summary text share one line: in the editor the chevron is hung in the summary's
+20px left padding, as tall as the first line (`1lh`) and centred in it, so the
+trailing break ProseMirror keeps in an empty title cannot push it, or the
+placeholder, onto a second line; the reader's own chevron is unchanged, and so is
+the Markdown of every toggle already written (editor Notion-parity spec, decision
+17). Clicking the summary's chevron or pressing Alt+Enter changes the saved open
+state. Typing in the summary edits its title; Enter at its end moves to the first
+line of the body, opening a collapsed toggle first. Existing bare
 `details`/`summary` Markdown uses the reader's exact recognizer; unsupported HTML
 stays inert text. This supersedes the earlier raw-tag editing limitation.
 
 Callouts show the reader's glyph and kind title. Their source marker remains in
-the document for Markdown round trips but is hidden in rendered editing; change
-the kind in Markdown mode. This supersedes the marker-visible portion of the
-editor reader-hints contract. Their bodies remain editable.
+the document for Markdown round trips but is hidden in rendered editing; the kind
+is changed from the title, a button that opens a menu of the five kinds (§8,
+"Callouts"). This supersedes the marker-visible portion of the editor
+reader-hints contract. Their bodies remain editable.
+
+A code block being edited (its raw code open under `Edit code`) shows a
+`Language` `<select>` beside `Done editing code`: Plain text first, then the
+languages the reader's highlighter registers (`code-highlight.ts`), plus the
+fence's own language when it is none of them so opening the field never loses
+it. Choosing one rewrites the fence's language in the Markdown; Plain text writes
+a fence with none. The field is `caption` text, `md` radius, the border token,
+with the shared focus ring, and it is absent while the block is shown. In the
+code being edited, Tab inserts two spaces at the caret (or at the start of every
+selected line) and Shift-Tab removes up to two leading spaces from each line the
+caret or selection touches; Tab is bound nowhere else outside a table's last
+cell. Escape there stays the code editor's (decision 19). In a table, Tab in the
+last cell adds a row of the same width and moves to its first cell; Shift-Tab is
+unchanged (decision 18). No token was added.
 
 Editor tables use the reader's bordered scroll container, 70vh height limit,
 sticky header and 8rem minimum cell width. Cell paragraphs have no article-level

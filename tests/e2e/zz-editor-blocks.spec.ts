@@ -285,10 +285,11 @@ test("slash blocks render while editing and survive save and reopen", async ({ p
   }
   await insert("toggle");
   await expect(surface.locator("details")).toHaveAttribute("open", "");
+  // The caret starts in the summary; Enter at its end goes to the body.
+  await page.keyboard.type("Project notes");
+  await page.keyboard.press("Enter");
   await page.keyboard.type(`See [[${target}]].`);
   const summary = surface.locator("summary");
-  await summary.click({ position: { x: 22, y: 8 } });
-  await page.keyboard.type("Project notes");
   await summary.click({ position: { x: 5, y: 8 } });
   await expect(surface.locator("details")).not.toHaveAttribute("open");
   await summary.click({ position: { x: 5, y: 8 } });
