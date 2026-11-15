@@ -21,9 +21,9 @@ const localServer = {
   command: `${process.execPath} node_modules/next/dist/bin/next start --hostname 127.0.0.1`,
   url: `http://127.0.0.1:${port}/`, timeout: 60_000, reuseExistingServer: false,
   // One local user runs every spec, and unapplied previews stay READY for 30 minutes: an unsharded run
-  // (`make test-e2e`) passes the default of 10 and later imports fail. The BUILDING quota keeps its
-  // default because source-import.spec.ts asserts it.
-  env: { KM_IMPORT_MAX_READY_PER_USER: "1000", ...process.env, NODE_ENV: "production", KM_IDENTITY_PROVIDER: "local", PORT: String(port) } as Record<string, string>,
+  // (`make test-e2e`) passes the default of 10 and later imports fail. Set after process.env, which
+  // carries .env's 10. The BUILDING quota keeps its default because source-import.spec.ts asserts it.
+  env: { ...process.env, NODE_ENV: "production", KM_IDENTITY_PROVIDER: "local", PORT: String(port), KM_IMPORT_MAX_READY_PER_USER: "1000" } as Record<string, string>,
 };
 // The same build and database, with Team workspaces closed: what the switcher says while they are.
 const teamsClosedServer = {
