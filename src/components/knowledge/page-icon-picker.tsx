@@ -38,13 +38,18 @@ export function PageIconPicker({
   const gridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => setCurrent(icon), [icon]);
-  useEffect(() => { if (!open) setQuery(""); }, [open]);
+  useEffect(() => { if (!open) { setQuery(""); setActive(null); } }, [open]);
 
   // No query: every group, Suggested first, nothing twice. A query: one list in catalog order.
   const sections = useMemo(() => {
     const needle = query.trim();
     return needle ? [{ id: "results", label: "Results", emoji: searchEmoji(needle) }] : EMOJI_GROUPS;
   }, [query]);
+  // Roving tabindex: one cell is the grid's tab stop (the last focused, else the first), so Tab
+  // goes from the field through the grid to "Remove icon" in two presses, not 351.
+  const [active, setActive] = useState<string | null>(null);
+  const firstChar = sections.find((section) => section.emoji.length > 0)?.emoji[0]?.char ?? null;
+  const tabChar = active !== null && sections.some((section) => section.emoji.some((entry) => entry.char === active)) ? active : firstChar;
   const none = sections.every((section) => section.emoji.length === 0);
 
   const cells = () => Array.from(gridRef.current?.querySelectorAll<HTMLButtonElement>("button[data-emoji]") ?? []);
@@ -76,6 +81,8 @@ export function PageIconPicker({
     else if (event.key === "ArrowLeft") next = index === 0 ? searchRef.current : all[index - 1];
     else if (event.key === "ArrowDown") next = vertical(from, 1);
     else if (event.key === "ArrowUp") next = vertical(from, -1) ?? searchRef.current;
+    else if (event.key === "Home") next = all[0];
+    else if (event.key === "End") next = all[all.length - 1];
     else return;
     event.preventDefault();
     next?.focus();
@@ -166,6 +173,8 @@ export function PageIconPicker({
                               key={choice.char}
                               type="button"
                               data-emoji={choice.char}
+                              tabIndex={choice.char === tabChar ? 0 : -1}
+                              onFocus={() => setActive(choice.char)}
                               aria-label={`Use ${choice.char}`}
                               title={choice.name}
                               aria-pressed={current === choice.char}
