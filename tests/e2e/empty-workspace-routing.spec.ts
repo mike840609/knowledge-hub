@@ -20,7 +20,9 @@ test("an empty workspace offers its first import regardless of other test data",
     const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
     await expect(explorer.getByText("No documents yet", { exact: true })).toBeVisible();
     await expect(explorer.getByRole("region", { name: "Get started" })).toHaveCount(0);
-    await expect(explorer.getByRole("link", { name: "Import folder", exact: true })).toHaveAttribute("href", `/w/${workspace.id}/sources/import`);
+    await explorer.getByRole("button", { name: "Document options", exact: true }).click();
+    await expect(page.getByRole("menuitem", { name: "Import folder", exact: true })).toHaveAttribute("href", `/w/${workspace.id}/sources/import`);
+    await page.keyboard.press("Escape");
     await page.getByRole("link", { name: "Create document", exact: true }).click();
     await expect(page).toHaveURL(`/w/${workspace.id}/knowledge/new`);
   } finally { await context.close(); }

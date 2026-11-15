@@ -67,7 +67,7 @@ test.describe("narrow knowledge layout", () => {
 test("reading navigation separates collections from authoring and source management", async ({ page }) => {
   await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`, { waitUntil: "networkidle" });
   const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
-  await expect(explorer.getByRole("heading", { name: "Documents" })).toBeVisible();
+  await expect(explorer.getByRole("navigation", { name: "Document tree" })).toBeVisible();
   await expect(explorer.getByRole("combobox")).toHaveCount(0);
   await expect(explorer.getByRole("button", { name: "New document" })).toHaveCount(0);
   await expect(explorer.locator('input[type="file"]')).toHaveCount(0);
@@ -135,16 +135,16 @@ test("a favorite from a synced source carries the read-only cue; one from a Hub 
   await explorer.getByRole("button", { name: "Add to favorites: Compliance Policy", exact: true }).click();
   await explorer.getByRole("button", { name: "Add to favorites: Runbooks", exact: true }).click();
   try {
-    const favorites = explorer.getByRole("region", { name: "Favorites" });
-    const toggle = favorites.getByRole("button", { name: "Favorites", exact: true });
-    if (await toggle.getAttribute("aria-expanded") === "false") await toggle.click();
-    const synced = favorites.getByRole("link", { name: "Compliance Policy", exact: true });
-    const hub = favorites.getByRole("link", { name: "Runbooks", exact: true });
+    await explorer.getByRole("button", { name: "Favorite documents", exact: true }).click();
+    const favorites = page.getByRole("menu");
+    const synced = favorites.getByRole("menuitem", { name: /Compliance Policy/ });
+    const hub = favorites.getByRole("menuitem", { name: /Runbooks/ });
     await expect(synced.locator("[data-read-only-cue]")).toBeVisible();
-    await expect(synced).toHaveAccessibleDescription("Vendor Compliance Vault Synced from a folder, read-only in the Hub");
+    await expect(synced).toHaveAccessibleDescription("Synced from a folder, read-only in the Hub");
     await expect(hub.locator("[data-read-only-cue]")).toHaveCount(0);
     await expect(hub).not.toHaveAccessibleDescription(/read-only/);
   } finally {
+    await page.keyboard.press("Escape");
     for (const title of ["Compliance Policy", "Runbooks"]) {
       const remove = explorer.getByRole("button", { name: `Remove from favorites: ${title}`, exact: true }).first();
       if (await remove.count()) await remove.click();

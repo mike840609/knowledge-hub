@@ -81,7 +81,9 @@ test("F is unbound; the menu favorites the row", async ({ page }) => {
   await page.keyboard.press("f");
   await row(page, a).click({ button: "right" });
   await page.getByRole("menuitem", { name: "Add to favorites", exact: true }).click();
-  await expect(page.getByRole("region", { name: "Favorites" }).getByRole("link", { name: new RegExp(a) })).toBeVisible(ROUND_TRIP);
+  await page.getByRole("button", { name: "Favorite documents", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: new RegExp(a) })).toBeVisible(ROUND_TRIP);
+  await page.keyboard.press("Escape");
   await row(page, a).click({ button: "right" });
   await expect(page.getByRole("menuitem", { name: "Remove from favorites" })).toBeVisible();
 });
@@ -250,10 +252,10 @@ test("closing a row menu does not enable F", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toHaveCount(0);
   await page.keyboard.press("f");
-  const favorites = page.getByRole("region", { name: "Favorites" });
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(favorites.getByRole("link", { name: new RegExp(b) })).toHaveCount(0);
-  await expect(favorites.getByRole("link", { name: new RegExp(a) })).toHaveCount(0);
+  await page.getByRole("button", { name: "Favorite documents", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: new RegExp(b) })).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: new RegExp(a) })).toHaveCount(0);
 });
 
 /** What a row key would have done to the page: left it, opened another dialog, or favourited the row. */
@@ -261,7 +263,8 @@ async function expectUntouched(page: Page, title: string, before: string, dialog
   await page.waitForTimeout(300); // bounded settle: a leaked key navigates or opens something within a tick
   expect(page.url()).toBe(before);
   await expect(page.getByRole("dialog")).toHaveCount(dialogs);
-  await expect(page.getByRole("region", { name: "Favorites" }).getByRole("link", { name: new RegExp(title) })).toHaveCount(0);
+  const document = page.getByRole("treeitem", { name: title, exact: true, includeHidden: true });
+  await expect(document.getByRole("button", { name: `Add to favorites: ${title}`, exact: true, includeHidden: true })).toBeAttached();
 }
 
 test("row keys pressed while the row menu is open do not act", async ({ page }) => {

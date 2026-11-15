@@ -70,7 +70,7 @@ async function createDocumentIn(page: Page, folder: string, title: string) {
 }
 
 async function showArchived(page: Page, on: boolean) {
-  await page.getByRole("button", { name: "Document display options" }).click();
+  await page.getByRole("button", { name: "Document options" }).click();
   const item = page.getByRole("menuitemcheckbox", { name: "Show archived" });
   if ((await item.getAttribute("aria-checked")) !== String(on)) await item.click();
   else await page.keyboard.press("Escape");
