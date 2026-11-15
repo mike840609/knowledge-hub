@@ -42,6 +42,10 @@ for (const scenario of [
     };
     const destination = await create(withOutlineTitle, `## First section\n\n[[${plainTitle}]]\n\n${paragraphs}\n\n## Last section\n\nEnd.`);
     const start = await create(plainTitle, `[[${withOutlineTitle}]]\n\n${paragraphs}`);
+    let destinationPrefetched = false;
+    page.on("response", (response) => {
+      if (new URL(response.url()).pathname === destination && response.request().headers()["next-router-prefetch"]) destinationPrefetched = true;
+    });
     await page.goto(start);
     const content = page.getByRole("region", { name: "Document content", exact: true });
     // The first column that holds content; the outline's zero-height box (`kh-outline-rail-left`) shares the class only to share its edge.
@@ -77,6 +81,10 @@ for (const scenario of [
       // The explorer closes on navigation; a link under its backdrop would not navigate.
       await expect(page.locator("[role=dialog]")).toHaveCount(0, ROUND_TRIP);
     } else {
+      // Article links do not prefetch; the boundary comes from the explorer's link, which prefetches
+      // only once on screen. A My Space filled by earlier specs can push it below the fold.
+      await page.getByRole("treeitem", { name: withOutlineTitle, exact: true }).scrollIntoViewIfNeeded();
+      await expect.poll(() => destinationPrefetched, ROUND_TRIP).toBe(true);
       await content.getByRole("link", { name: withOutlineTitle, exact: true }).click();
     }
     await expect(content.getByRole("status")).toHaveText("Loading document");
