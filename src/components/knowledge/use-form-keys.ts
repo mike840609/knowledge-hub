@@ -33,6 +33,7 @@ export function useFormKeys({
         altKey: event.altKey,
         isComposing: event.nativeEvent.isComposing,
         keyCode: event.keyCode,
+        code: event.code,
       },
       { dirty, busy, canToggleMode: mode !== undefined },
     );

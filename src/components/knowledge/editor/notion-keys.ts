@@ -11,7 +11,7 @@ import { customInputRulesKey } from "@milkdown/kit/prose";
 import { Fragment, type Mark, type Node as ProseNode } from "@milkdown/kit/prose/model";
 import { ReplaceStep } from "@milkdown/kit/prose/transform";
 import { $inputRule, $prose, $useKeymap } from "@milkdown/kit/utils";
-import { duplicateBlock, moveBlock, topLevelBlocks, turnBlockInto, type BlockKind } from "./block-actions";
+import { blockKind, canTurnInto, duplicateBlock, moveBlock, topLevelBlocks, turnBlockInto, type BlockKind } from "./block-actions";
 import { findWikiLinkTrigger } from "./link-suggestions";
 
 /**
@@ -43,6 +43,8 @@ const todoInputRule = $inputRule(
       if (itemDepth >= 1 && $start.node(itemDepth).type.name === "list_item") {
         const item = $start.node(itemDepth);
         if (item.attrs.checked != null) return null;
+        // Only the item's first line makes it a to-do; in a later paragraph it is just text.
+        if ($start.index(itemDepth) !== 0) return null;
         return tr.setNodeMarkup($start.before(itemDepth), undefined, { ...item.attrs, checked });
       }
       if ($start.depth !== 1) return null;
@@ -175,9 +177,12 @@ function toggleList(target: "ordered" | "bullet" | "task") {
   return (state: EditorState, dispatch?: (tr: Transaction) => void, view?: EditorView) => {
     if (!view?.editable || !(state.selection instanceof TextSelection || state.selection instanceof NodeSelection)) return false;
     // A whole block chosen with Escape (a heading, a list, a quote) is turned into the list as the
-    // block menu turns it: there is no caret to keep.
+    // block menu turns it: there is no caret to keep. A list of that kind already toggles off, into
+    // its paragraphs.
     if (state.selection instanceof NodeSelection && state.selection.$from.depth === 0) {
-      return dispatch ? turnBlockInto(view, state.selection.from, target) : true;
+      const into = blockKind(state.selection.node) === target ? "paragraph" : target;
+      if (!canTurnInto(state.selection.node, into)) return false;
+      return dispatch ? turnBlockInto(view, state.selection.from, into) : true;
     }
     const { nodes } = state.schema;
     const kind = listKindAt(state);

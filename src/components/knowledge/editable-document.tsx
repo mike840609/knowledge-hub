@@ -16,6 +16,7 @@ import { DocumentAutosave, type DocumentContent, type SavedRevision } from "@/li
 import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } from "@/lib/document-draft";
 import { PersistentDraft } from "@/lib/persistent-draft";
 import { caretOnLastLine } from "@/lib/title-keys";
+import { isListKey } from "@/lib/form-keys";
 import { carryTitle, resolveAuthoredTitle } from "@/lib/authored-title";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { downloadMarkdown } from "@/lib/download-markdown";
@@ -440,7 +441,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       flushEditor();
       writer?.pause(!editable || !!recovery || !resolve(queue.current!.current).title);
     }} onBlur={() => flushEditor()} onKeyDownCapture={event => {
-      if ((event.metaKey || event.ctrlKey) && event.key === "/" && !event.nativeEvent.isComposing && !failed) {
+      if ((event.metaKey || event.ctrlKey) && event.key === "/" && !isListKey(event) && !event.nativeEvent.isComposing && !failed) {
         event.preventDefault(); flushEditor();
         if (!source) sourceRef.current = true;
         setSource(value => !value);

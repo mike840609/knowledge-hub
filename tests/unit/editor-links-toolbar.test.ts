@@ -250,6 +250,26 @@ describe("the link card (11)", () => {
       keydown(toolbarEl().querySelector<HTMLInputElement>("input")!, { key: "Enter" });
       expect(editor.getMarkdown()).toBe(bare);
     });
+    it("stays a document link when its address is edited (other.md → other.md#sec)", async () => {
+      const bare = "see [other](other.md) end\n";
+      const { editor, view } = await open(bare);
+      select(view, 7);
+      card()!.querySelector<HTMLButtonElement>("button[aria-label='Edit link']")!.click();
+      const input = toolbarEl().querySelector<HTMLInputElement>("input")!;
+      input.value = "other.md#sec";
+      keydown(input, { key: "Enter" });
+      expect(editor.getMarkdown()).toBe("see [other](other.md#sec) end\n");
+      expect(edges(editor.getMarkdown())).toEqual([{ kind: "PATH", target: "other.md" }]);
+    });
+    it("becomes a web address when it is edited to one", async () => {
+      const { editor, view } = await open("see [other](other.md) end\n");
+      select(view, 7);
+      card()!.querySelector<HTMLButtonElement>("button[aria-label='Edit link']")!.click();
+      const input = toolbarEl().querySelector<HTMLInputElement>("input")!;
+      input.value = "example.com";
+      keydown(input, { key: "Enter" });
+      expect(editor.getMarkdown()).toBe("see [other](https://example.com) end\n");
+    });
     it("opens the document from the field's Open, as the card does", async () => {
       const open_ = vi.spyOn(window, "open").mockImplementation(() => null);
       const { view } = await open(DOC, links);
@@ -286,6 +306,13 @@ describe("the link card (11)", () => {
 });
 
 describe("an address typed in the link field", () => {
+  it("makes an email address mail it, and gives a host with a port https://", () => {
+    expect(withScheme("user@example.com")).toBe("mailto:user@example.com");
+    expect(withScheme("localhost:3000/x")).toBe("https://localhost:3000/x");
+    expect(withScheme("example.com:8080")).toBe("https://example.com:8080");
+    expect(storedLinkTarget(withScheme("localhost:3000/x"))).toBe("https://localhost:3000/x");
+    for (const kept of ["mailto:a@b.c", "tel:123", "https://user@example.com"]) expect(withScheme(kept)).toBe(kept);
+  });
   it("is given https:// only when it is a web address", () => {
     for (const web of ["example.com/a", "example.com/a.md", "github.com/org/repo/blob/main/README.md", "news.md"]) expect(withScheme(web)).toBe(`https://${web}`);
     for (const kept of ["../notes/other.md", "./other.md#Part", "/w/ws", "#top", "mailto:a@b.c", "https://example.com"]) expect(withScheme(kept)).toBe(kept);
@@ -310,5 +337,24 @@ describe("where a link already in the document opens (11, Open and Mod-click)", 
     expect(storedLinkTarget("javascript:alert(1)")).toBeNull();
     expect(storedLinkTarget("//evil.example")).toBeNull();
     expect(storedLinkTarget("/\\evil.example")).toBeNull();
+  });
+});
+
+describe("where the link field is not offered", () => {
+  it("⌘K in a code block is left to the palette, and the toolbar's Link button is off", async () => {
+    const { view } = await open("```\nlet code = 1\n```\n");
+    select(view, 2, 6);
+    expect(keydown(view.dom, { key: "k", ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(toolbarEl().querySelector<HTMLButtonElement>("button[aria-label='Link']")!.disabled).toBe(true);
+  });
+  it("the toolbar is not shown over a block chosen with Escape", async () => {
+    const { view } = await open("some text here\n\nsecond\n");
+    select(view, 1, 5);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    expect(toolbarEl().dataset.show).toBe("true");
+    keydown(view.dom, { key: "Escape", keyCode: 27 } as KeyboardEventInit);
+    expect(view.state.selection.constructor.name).toBe("NodeSelection");
+    await new Promise(resolve => setTimeout(resolve, 300));
+    expect(toolbarEl().dataset.show).not.toBe("true");
   });
 });

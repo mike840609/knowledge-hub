@@ -49,6 +49,11 @@ function press(view: EditorView, key: string, init: KeyboardEventInit = {}) {
 }
 const mod = (view: EditorView, key: string, extra: KeyboardEventInit = {}) => press(view, key, { ctrlKey: true, ...extra });
 const caretAt = (view: EditorView, pos: number) => view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, pos)));
+function findText(view: EditorView, text: string) {
+  let at = -1;
+  view.state.doc.descendants((node, pos) => { if (at < 0 && node.isText && node.text!.includes(text)) at = pos + node.text!.indexOf(text); });
+  return at;
+}
 const names = (view: EditorView) => { const found: string[] = []; view.state.doc.forEach(node => found.push(node.type.name)); return found; };
 
 it.each(["**bold** x", "*it* x", "_it_ x", "`co` x", "~~st~~ x", "~st~ x"])("ends a mark made by an input rule at its closing delimiter: %s", async (typed) => {
@@ -452,3 +457,35 @@ it("undo still works after these keys", async () => {
 });
 
 vi.fn();
+
+describe("Mod-Shift-7/8/9 on a list chosen with Escape (5: the keys toggle off)", () => {
+  it.each([
+    ["- one\n- two\n", "8", { shiftKey: true }],
+    ["1. one\n2. two\n", "7", { shiftKey: true }],
+    ["- [ ] one\n- [ ] two\n", "9", { shiftKey: true }],
+  ] as const)("turns %j back into paragraphs, and handles the key", async (markdown, key, extra) => {
+    const { editor, view } = await open(markdown);
+    caretAt(view, findText(view, "one") + 1);
+    press(view, "Escape");
+    expect(view.state.selection).toBeInstanceOf(NodeSelection);
+    const event = mod(view, key, extra);
+    expect(event.defaultPrevented).toBe(true);
+    expect(editor.getMarkdown()).toBe("one\n\ntwo\n");
+  });
+  it("leaves the key alone for a block that cannot become a list", async () => {
+    const { view } = await open("| a |\n| - |\n| b |\n");
+    caretAt(view, findText(view, "b") + 1);
+    press(view, "Escape");
+    expect(view.state.selection).toBeInstanceOf(NodeSelection);
+    expect(mod(view, "8", { shiftKey: true }).defaultPrevented).toBe(false);
+  });
+});
+
+it("[x] typed at the start of an item's later paragraph does not check the item", async () => {
+  const { editor, view } = await open("- first\n\n  later\n");
+  caretAt(view, findText(view, "later"));
+  type(view, "[x] ");
+  // Written as text (the serializer escapes it), and the item is not a to-do.
+  expect(editor.getMarkdown()).toBe("- first\n\n  \\[x] later\n");
+  expect(view.state.doc.firstChild!.firstChild!.attrs.checked).toBeNull();
+});
