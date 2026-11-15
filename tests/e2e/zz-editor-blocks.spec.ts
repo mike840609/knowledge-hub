@@ -196,8 +196,8 @@ test.describe("blocks in the rendered editor", () => {
     await page.keyboard.press("Alt+F10");
     await page.getByRole("button", { name: "Add paragraph below" }).click();
     await expect(surface).toBeFocused();
-    // + has opened the list already; Escape leaves the empty line, which says which key to press
-    // (the document's own empty-state sentence is not it).
+    // + has opened the list already on a "/" of its own; Escape takes the lone "/" back and leaves the
+    // empty line, which says which key to press (the document's own empty-state sentence is not it).
     await page.keyboard.press("Escape");
     await expect(surface.locator("p[data-placeholder]")).toHaveAttribute("data-placeholder", 'Type "/" for commands');
     await page.keyboard.type("/quo");
@@ -218,7 +218,7 @@ test.describe("blocks in the rendered editor", () => {
 });
 
 
-test("+ opens the \"/\" list on the new line; Escape leaves the line empty, and a pick saves with its links", async ({ page }) => {
+test("+ opens the \"/\" list on a \"/\" on the new line; Escape takes it back, and a pick saves with its links", async ({ page }) => {
   const stamp = unique("Plus");
   const target = `Target ${stamp}`;
   const workspaceId = await mySpace(page);
@@ -239,17 +239,28 @@ test("+ opens the \"/\" list on the new line; Escape leaves the line empty, and 
   await expect(surface).toBeFocused();
   await expect(surface).toHaveAttribute("aria-controls", (await list.getAttribute("id"))!);
   await expect(surface.locator("p")).toHaveCount(2);
-  await expect(surface.locator("p").nth(1)).toHaveText("");
+  // As Notion's +: the "/" is in sight, and the list is the one a typed "/" opens (decision 15, deviation).
+  await expect(surface.locator("p").nth(1)).toHaveText("/");
   await page.keyboard.press("Escape");
   await expect(list).toBeHidden();
-  // Nothing was typed to take back: the line is empty and the caret is in it.
+  // Only the lone "/" was taken back: the line is empty and the caret is in it.
   await expect(surface.locator("p")).toHaveCount(2);
   await expect(surface.locator("p").nth(1)).toHaveText("");
   await page.keyboard.type("Written after Escape.");
   await expect(surface.locator("p").nth(1)).toHaveText("Written after Escape.");
   await expect(list).toBeHidden();
 
-  // The keyboard's way: Alt+F10, then + — and what is typed filters, with no "/" in front.
+  // A word typed after + is the "/" query, in sight, never silently dropped.
+  await page.keyboard.press("Alt+F10");
+  await page.keyboard.press("Enter");
+  await expect(list).toBeVisible();
+  await page.keyboard.type("Title");
+  await expect(surface.locator("p").nth(2)).toHaveText("/Title");
+  await page.keyboard.press("Escape");
+  await expect(list).toBeHidden();
+  await expect(surface.locator("p").nth(2)).toHaveText("/Title");
+
+  // The keyboard's way: Alt+F10, then + — and what is typed after its "/" filters.
   await page.keyboard.press("Alt+F10");
   await page.keyboard.press("Enter");
   await expect(list).toBeVisible();
@@ -265,7 +276,8 @@ test("+ opens the \"/\" list on the new line; Escape leaves the line empty, and 
   expect(markdown).toContain(`Linked: see [[${target}]].`);
   expect(markdown).toContain("Written after Escape.");
   expect(markdown).toContain("## Picked heading");
-  expect(markdown).not.toMatch(/^\/|h2Picked|\\\[/m);
+  expect(markdown).toMatch(/^\/Title$/m);
+  expect(markdown).not.toMatch(/^\/$|^\/?h2|h2Picked|\\\[/m);
   await page.goto(targetUrl);
   await expect(page.locator("[data-backlinks]").getByRole("heading", { name: "Linked from 1 document" })).toBeVisible(ROUND_TRIP);
 });
@@ -280,7 +292,8 @@ test("slash blocks render while editing and survive save and reopen", async ({ p
   async function insert(query: string) {
     await page.keyboard.press("Alt+F10");
     await page.getByRole("button", { name: "Add paragraph below" }).click();
-    await page.keyboard.type(`/${query}`);
+    // + has written the "/" already.
+    await page.keyboard.type(query);
     await page.getByRole("listbox").getByRole("option", { name: new RegExp(query, "i") }).click();
   }
   await insert("toggle");

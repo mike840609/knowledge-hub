@@ -110,6 +110,60 @@ describe("a URL pasted over a selection (12)", () => {
   });
 });
 
+describe("a link laid over a selection that holds a wikilink", () => {
+  // The whole paragraph "a [[X]] b": the wikilink must be written back as it was read, its edge kept.
+  const MD = "a [[X]] b\n";
+  const all = (view: EditorView) => select(view, 1, view.state.doc.firstChild!.nodeSize - 1);
+  const kinds = (markdown: string) => extractDocumentLinks(markdown).map(({ kind, target }) => ({ kind, target }));
+  function linkedWikiLinks(view: EditorView) {
+    let count = 0;
+    view.state.doc.descendants((node) => { if (node.type.name === "wiki_link" && node.marks.some((mark) => mark.type.name === "link")) count += 1; });
+    return count;
+  }
+  function expectKept(editor: MarkdownEditor, view: EditorView, href: string) {
+    const markdown = editor.getMarkdown();
+    expect(linkedWikiLinks(view)).toBe(0);
+    expect(markdown).toContain("[[X]]");
+    expect(markdown).not.toMatch(/\[[^\]]*\[\[X\]\][^\]]*\]\(/);
+    expect(kinds(markdown)).toEqual(expect.arrayContaining([{ kind: "WIKI", target: "X" }]));
+    expect(markdown).toContain(`](${href})`);
+    // Read back, as a saved document is: the edge is in the extractor's links, and the editor holds it as a node.
+    return markdown;
+  }
+
+  it("by a pasted URL", async () => {
+    const { editor, view } = await open(MD);
+    all(view);
+    expect(paste(view, "https://example.com/p").defaultPrevented).toBe(true);
+    const markdown = expectKept(editor, view, "https://example.com/p");
+    const reopened = await open(markdown);
+    expect(kinds(reopened.editor.getMarkdown())).toEqual(kinds(markdown));
+  });
+
+  it.each([
+    ["the toolbar's Link button", () => toolbarEl().querySelector<HTMLButtonElement>('button[aria-label="Link"]')!.click()],
+    ["⌘K", (view: EditorView) => { keydown(view.dom, { key: "k", metaKey: true }); }],
+  ])("by %s and the link field", async (_name, start) => {
+    const { editor, view } = await open(MD);
+    all(view);
+    start(view);
+    const input = toolbarEl().querySelector<HTMLInputElement>("input")!;
+    expect(document.activeElement).toBe(input);
+    input.value = "https://example.org/q";
+    keydown(input, { key: "Enter" });
+    expectKept(editor, view, "https://example.org/q");
+  });
+
+  it("is undone with the link in one step", async () => {
+    const { editor, view } = await open(MD);
+    all(view);
+    paste(view, "https://example.com/p");
+    const { undo } = await import("@milkdown/kit/prose/history");
+    undo(view.state, view.dispatch);
+    expect(editor.getMarkdown()).toBe(MD);
+  });
+});
+
 describe("the link card (11)", () => {
   const MD = "plain [site](https://example.com) end\n";
   // doc positions: paragraph starts at 1; "plain " is 6 chars, link text is 4

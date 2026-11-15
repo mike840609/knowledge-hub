@@ -911,12 +911,13 @@ matches a row's label or words anywhere, or one of its aliases by prefix —
 rows an alias matches come first, so `/h2` or `/ol` with Enter is the block it
 names (decision 16).
 
-`+` opens the same list on the line it adds, as if `/` had been typed there,
-but nothing is typed: what is typed next filters it, and the empty line reads
-`Type to filter` while it is open (decision 15). Escape, leaving the editor,
-moving the caret off the line, or typing what no row matches dismisses it and
-takes nothing back: the line keeps what was written, or stays empty with the
-caret in it. Typing `/` there is the ordinary list.
+`+` writes a visible `/` on the line it adds and opens the same list there,
+through the path a typed `/` takes: what is typed next is that `/`'s query, in
+sight, and behaves exactly as a typed `/query` does (decision 15, deviation).
+Escape, leaving the editor, or moving the caret off the line while the `/` is
+still alone takes the `/` back, leaving the empty line with the caret in it;
+whatever was typed after the `/` stays. A `/` typed by hand is never taken
+back.
 
 **A block can be chosen from the keyboard** (editor Notion-parity spec,
 decisions 6-8; `editor/notion-keys.ts`). Escape in the text, with no menu open,

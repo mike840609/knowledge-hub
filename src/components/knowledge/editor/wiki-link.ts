@@ -2,7 +2,8 @@ import { remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 import type { Ctx } from "@milkdown/kit/ctx";
 import { InputRule } from "@milkdown/kit/prose/inputrules";
 import { Fragment, Slice, type Mark, type Node as ProseNode, type NodeType } from "@milkdown/kit/prose/model";
-import { Plugin } from "@milkdown/kit/prose/state";
+import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
+import { AddMarkStep } from "@milkdown/kit/prose/transform";
 import { $inputRule, $node, $prose, $remark } from "@milkdown/kit/utils";
 import type { State } from "mdast-util-to-markdown";
 import { findWikiLinks, parseWikiLinkParts } from "@/modules/knowledge/domain/document-links";
@@ -123,8 +124,45 @@ const wikiLinkPaste = $prose(
     }),
 );
 
+/**
+ * A link mark is never laid on a wikilink. Linking a selection that holds one (a pasted URL, the toolbar's
+ * link field, ⌘K) would otherwise mark the node too, and it would be written `[see [[X]] now](url)`: link
+ * text, which the extractor does not count, so the wikilink's edge would be lost on save. Whatever path
+ * adds the mark, it is taken off the node again in the same step, so the link covers only the text around
+ * it and the wikilink is written back as it was read. A document that already holds such a link is left
+ * as written: only marks added now are looked at.
+ */
+const wikiLinkRefusesLinkMark = $prose(
+  (ctx) =>
+    new Plugin({
+      key: new PluginKey("khWikiLinkRefusesLinkMark"),
+      appendTransaction(transactions, _old, state) {
+        const link = state.schema.marks.link;
+        if (!link) return null;
+        const ranges: [number, number][] = [];
+        transactions.forEach((transaction, t) => transaction.steps.forEach((step, index) => {
+          if (!(step instanceof AddMarkStep) || step.mark.type !== link) return;
+          // Where the step's range is now, after what followed it in this transaction and the later ones.
+          const maps = [...transaction.mapping.slice(index + 1).maps, ...transactions.slice(t + 1).flatMap((next) => next.mapping.maps)];
+          const from = maps.reduce((pos, map) => map.map(pos, 1), step.from);
+          const to = maps.reduce((pos, map) => map.map(pos, -1), step.to);
+          if (from < to) ranges.push([from, to]);
+        }));
+        if (!ranges.length) return null;
+        const type = wikiLinkNode.type(ctx);
+        const tr = state.tr;
+        for (const [from, to] of ranges) {
+          state.doc.nodesBetween(from, to, (node, pos) => {
+            if (node.type === type && link.isInSet(node.marks)) tr.removeMark(pos, pos + node.nodeSize, link);
+          });
+        }
+        return tr.docChanged ? tr : null;
+      },
+    }),
+);
+
 /** Everything the editor needs to hold a wikilink as a node. `configureWikiLinkStringify` is the other half. */
-export const wikiLinkPlugins = [...wikiLinkRemark, wikiLinkNode, wikiLinkInputRule, wikiLinkPaste];
+export const wikiLinkPlugins = [...wikiLinkRemark, wikiLinkNode, wikiLinkInputRule, wikiLinkPaste, wikiLinkRefusesLinkMark];
 
 /**
  * What the serialiser needs besides the node: a `wikiLink` written out as it was held, and Milkdown's

@@ -450,9 +450,15 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 
   /* The card under a link the caret is in (address, Open, Edit, Remove). Built like the toolbar above —
      popover elevation, `lg` radius — and entered and left the same way: only `data-show` toggles. */
+  /* Its width is bounded here, not by a `max-w-*` on the address: the config replaces the maxWidth scale,
+     so a default spelling such as `max-w-60` compiles to nothing. A long address truncates at 15rem and
+     the card never grows past the viewport less its 8px margins. */
   .kh-link-card {
-    @apply absolute z-20 flex items-center gap-0.5 rounded-lg border border-kh-border bg-kh-bg-raised p-1 shadow-popover;
+    @apply absolute z-20 flex max-w-[calc(100vw-16px)] items-center gap-0.5 rounded-lg border border-kh-border bg-kh-bg-raised p-1 shadow-popover;
     @apply transition-[opacity,transform,display] duration-120 ease-out [transition-behavior:allow-discrete];
+  }
+  .kh-link-card-address {
+    @apply min-w-0 max-w-[15rem] shrink;
   }
   @starting-style {
     .kh-link-card {

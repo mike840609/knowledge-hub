@@ -185,66 +185,99 @@ it('draws a 16px Lucide icon, hidden from assistive technology, at the left of e
   expect(rows[0].textContent).toBe('TextPlain paragraph');
 });
 
-// Decision 15: the list `+` opens is the list "/" opens, without a "/" in the document.
-it('opens on an empty line with nothing typed, filters by what is typed, and picks a block', async () => {
-  const { editor, view } = await open('Opening line.');
-  view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)));
+// Decision 15 (deviation): `+` writes a visible "/" on its new line and opens the list a typed "/" opens.
+async function plusLine(markdown = 'Opening line.') {
+  const opened = await open(markdown);
+  const { view } = opened;
   view.dispatch(view.state.tr.insert(view.state.doc.content.size, view.state.schema.nodes.paragraph.create()));
   view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)));
-  openBlockList(view);
+  expect(openBlockList(view)).toBe(true);
+  return opened;
+}
+const optionLabels = () => [...menu().querySelectorAll('[role="option"]')].map(row => row.textContent);
+
+it('opens with a visible "/" on the new line, filters by what is typed, and picks a block', async () => {
+  const { editor, view } = await plusLine();
   expect(menu().hidden).toBe(false);
   expect(view.dom.getAttribute('role')).toBe('combobox');
-  expect(view.dom.querySelectorAll('p')[1].getAttribute('data-placeholder')).toBe('Type to filter');
+  expect(view.state.doc.child(1).textContent).toBe('/');
   view.dispatch(view.state.tr.insertText('h2'));
-  expect([...menu().querySelectorAll('[role="option"]')].map(row => row.textContent)).toEqual(['Heading 2Section heading']);
+  expect(optionLabels()).toEqual(['Heading 2Section heading']);
   key(view.dom, 'Enter');
   expect(view.state.doc.child(1).type.name).toBe('heading');
+  expect(view.state.doc.child(1).attrs.level).toBe(2);
   expect(view.state.doc.child(1).textContent).toBe('');
   view.dispatch(view.state.tr.insertText('Picked'));
   expect(editor.getMarkdown()).toBe('Opening line.\n\n## Picked\n');
 });
 
-it('a list + opened is dismissed by Escape or by leaving, leaving only the empty line with the caret in it', async () => {
-  const { editor, view } = await open();
-  openBlockList(view);
+it('never drops a word typed after +: it is in sight as the "/" query and stays when the list is dismissed', async () => {
+  const { editor, view } = await plusLine();
+  view.dispatch(view.state.tr.insertText('Title'));
+  expect(view.dom.querySelectorAll('p')[1].textContent).toBe('/Title');
+  expect(menu().hidden).toBe(false);
+  key(view.dom, 'Escape');
+  expect(menu().hidden).toBe(true);
+  key(view.dom, 'Enter');
+  expect(view.state.doc.textContent).toContain('/Title');
+  expect(editor.getMarkdown()).toContain('/Title');
+});
+
+it('a word after + is the same query a typed "/word" is', async () => {
+  const plus = await plusLine();
+  plus.view.dispatch(plus.view.state.tr.insertText('Title'));
+  const fromPlus = { hidden: menu().hidden, rows: optionLabels() };
+  const typed = await open('Opening line.');
+  typed.view.dispatch(typed.view.state.tr.insert(typed.view.state.doc.content.size, typed.view.state.schema.nodes.paragraph.create()));
+  typed.view.dispatch(typed.view.state.tr.setSelection(TextSelection.atEnd(typed.view.state.doc)));
+  typed.view.dispatch(typed.view.state.tr.insertText('/Title'));
+  expect({ hidden: menu().hidden, rows: optionLabels() }).toEqual(fromPlus);
+  expect(plus.editor.getMarkdown()).toBe(typed.editor.getMarkdown());
+});
+
+it('a list + opened, dismissed by Escape or by leaving with the "/" alone, takes the "/" back', async () => {
+  const { view } = await plusLine('');
   expect(menu().hidden).toBe(false);
   const bubbled = vi.fn(); document.body.addEventListener('keydown', bubbled);
   key(view.dom, 'Escape');
   document.body.removeEventListener('keydown', bubbled);
   expect(bubbled).not.toHaveBeenCalled();
   expect(menu().hidden).toBe(true);
-  expect(view.state.doc.childCount).toBe(1);
-  expect(view.state.doc.textContent).toBe('');
-  expect(view.state.selection.$from.parent.type.name).toBe('paragraph');
-  expect(view.dom.querySelector('p')?.getAttribute('data-placeholder')).toBe('Type "/" for commands');
+  expect(view.state.doc.child(1).textContent).toBe('');
+  expect(view.state.selection.$from.parent).toBe(view.state.doc.child(1));
+  expect(view.dom.querySelectorAll('p')[1].getAttribute('data-placeholder')).toBe('Type "/" for commands');
   // Typing after Escape is writing, not searching.
   view.dispatch(view.state.tr.insertText('h'));
   expect(menu().hidden).toBe(true);
+  expect(view.state.doc.child(1).textContent).toBe('h');
 
-  const other = await open();
-  openBlockList(other.view);
+  const other = await plusLine();
   expect(menu().hidden).toBe(false);
   other.view.dom.blur(); other.view.dom.dispatchEvent(new FocusEvent('blur'));
   expect(menu().hidden).toBe(true);
+  expect(other.view.state.doc.child(1).textContent).toBe('');
   other.view.focus(); other.view.dom.dispatchEvent(new FocusEvent('focus'));
   expect(menu().hidden).toBe(true);
-  expect(other.view.state.doc.textContent).toBe('');
-  expect(editor.getMarkdown()).toBe('h\n');
+  expect(other.editor.getMarkdown()).toBe('Opening line.\n');
+
+  // The caret leaving the line lets it go as well.
+  const third = await plusLine();
+  third.view.dispatch(third.view.state.tr.setSelection(TextSelection.atStart(third.view.state.doc)));
+  expect(menu().hidden).toBe(true);
+  expect(third.view.state.doc.child(1).textContent).toBe('');
 });
 
-it('a list + opened closes once nothing matches, keeping what was written', async () => {
-  const { editor, view } = await open();
-  openBlockList(view);
-  view.dispatch(view.state.tr.insertText('Hel'));
+it('a list + opened keeps what follows its "/" when dismissed, and a typed "/" is never taken back', async () => {
+  const { view } = await plusLine();
+  view.dispatch(view.state.tr.insertText('quo'));
+  key(view.dom, 'Escape');
   expect(menu().hidden).toBe(true);
-  view.dispatch(view.state.tr.insertText('lo'));
-  expect(menu().hidden).toBe(true);
-  expect(editor.getMarkdown()).toBe('Hello\n');
-  // A "/" typed there is the ordinary list.
-  const other = await open();
-  openBlockList(other.view);
-  other.view.dispatch(other.view.state.tr.insertText('/quo'));
-  expect(menu().hidden).toBe(false);
-  key(other.view.dom, 'Enter');
-  expect(other.view.state.doc.firstChild?.type.name).toBe('blockquote');
+  expect(view.state.doc.child(1).textContent).toBe('/quo');
+  // Typed by hand, a lone "/" stays when its list is dismissed.
+  const typed = await open();
+  typed.view.dispatch(typed.view.state.tr.insertText('/'));
+  key(typed.view.dom, 'Escape');
+  expect(typed.view.state.doc.textContent).toBe('/');
+  // Without the "/" list installed, + writes nothing.
+  expect(openBlockList(typed.view)).toBe(false);
 });

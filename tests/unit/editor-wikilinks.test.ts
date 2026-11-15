@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-import { editorViewCtx } from "@milkdown/kit/core";
+import { commandsCtx, editorViewCtx } from "@milkdown/kit/core";
+import { toggleLinkCommand } from "@milkdown/kit/preset/commonmark";
+import { TextSelection } from "@milkdown/kit/prose/state";
 import { afterEach, describe, expect, it } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
@@ -113,4 +115,21 @@ describe("what a wikilink is written back as", () => {
     const editor = await open("\\[\\[lit\\]\\] and [[Real]]\n");
     expect(editor.getMarkdown()).toBe("\\[\\[lit]] and [[Real]]\n");
   });
+});
+
+describe("a link laid over text that holds a wikilink", () => {
+  // Whatever path adds the link mark (here Milkdown's own command, which the toolbar and ⌘K call), the
+  // wikilink is not put inside link text, where the extractor would not count it.
+  it.each(LINK_MARKDOWN_FIXTURES.filter((fixture) => fixture.links.some((link) => link.kind === "WIKI")).map((fixture) => [fixture.name, fixture.markdown, fixture.links] as const))(
+    "%s",
+    async (_name, markdown, expected) => {
+      const editor = await open(markdown);
+      const v = view(editor);
+      v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, 1, v.state.doc.content.size - 1)));
+      editor.action((ctx) => ctx.get(commandsCtx).call(toggleLinkCommand.key, { href: "https://example.com/l" }));
+      const written = editor.getMarkdown();
+      const wiki = (list: { kind: string }[]) => list.filter((link) => link.kind === "WIKI");
+      expect(wiki(links(written))).toEqual(wiki(expected));
+    },
+  );
 });
