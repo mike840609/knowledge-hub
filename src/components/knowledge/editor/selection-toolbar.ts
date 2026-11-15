@@ -57,11 +57,13 @@ const PRESSED = "aria-pressed:bg-kh-bg-selected aria-pressed:text-kh-text";
 const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 
 /**
- * `example.com` is a web address; a path, an anchor, anything with a scheme (`mailto:`) or a relative
- * link to a Markdown file (`../notes/other.md`, a link to a document) is left as typed.
+ * `example.com` (and `example.com/a.md`) is a web address; a path, an anchor, anything with a scheme
+ * (`mailto:`) or an explicitly relative link (`./other.md`, `../notes/other.md`) is left as typed. A
+ * bare `notes/other.md` cannot be told from a host, so it is a web address when typed; an existing
+ * link saved unedited keeps its address (see `saveLink`).
  */
 export function withScheme(value: string): string {
-  if (!value || HAS_SCHEME.test(value) || value.startsWith("/") || value.startsWith("#") || parseDocumentHref(value)) return value;
+  if (!value || HAS_SCHEME.test(value) || /^(?:\/|#|\.\.?\/)/.test(value)) return value;
   return `https://${value}`;
 }
 
@@ -341,7 +343,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           linkRow.appendChild(linkActions);
           let editingLink: Extract<SelectedLink, { kind: "one" }> | null = null;
           // What the field's address opens: a web address as typed, a document as the reader resolves it.
-          const fieldTarget = (value: string) => storedLinkTarget(withScheme(value.trim()), links?.());
+          const fieldTarget = (value: string) => storedLinkTarget(fieldHref(value), links?.());
           const updateLinkActions = () => {
             openButton.disabled = !fieldTarget(input.value);
             removeButton.disabled = !editingLink;
@@ -367,8 +369,13 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             setLinkMode(true);
             input.focus();
           }
+          /** The field's address as it would be saved: an existing link's own address, left unedited, stays as written. */
+          function fieldHref(value: string): string {
+            const typed = value.trim();
+            return editingLink && typed === String(editingLink.mark.attrs.href ?? "").trim() ? typed : withScheme(typed);
+          }
           function saveLink() {
-            const href = withScheme(input.value.trim());
+            const href = fieldHref(input.value);
             if (!href) {
               if (!editingLink) {
                 showButtons();

@@ -174,6 +174,7 @@ it('puts an exact alias, then a label prefix, before an alias prefix', () => {
   expect(matchingCommands('c')[0].id).toBe('code');
   expect(matchingCommands('h2')[0].id).toBe('h2');
   expect(matchingCommands('todo')[0].id).toBe('task');
+  expect(matchingCommands('li').slice(0, 2).map(command => command.id)).toEqual(['bullet', 'ordered']);
 });
 
 it('draws a 16px Lucide icon, hidden from assistive technology, at the left of every row', async () => {

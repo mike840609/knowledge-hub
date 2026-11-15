@@ -242,6 +242,14 @@ describe("the link card (11)", () => {
       expect(editor.getMarkdown()).toBe(DOC);
       expect(edges(editor.getMarkdown())).toEqual([{ kind: "PATH", target: "../notes/other.md" }]);
     });
+    it("keeps a bare relative link (notes/other.md) saved unedited", async () => {
+      const bare = "see [other](notes/other.md) end\n";
+      const { editor, view } = await open(bare);
+      select(view, 7);
+      card()!.querySelector<HTMLButtonElement>("button[aria-label='Edit link']")!.click();
+      keydown(toolbarEl().querySelector<HTMLInputElement>("input")!, { key: "Enter" });
+      expect(editor.getMarkdown()).toBe(bare);
+    });
     it("opens the document from the field's Open, as the card does", async () => {
       const open_ = vi.spyOn(window, "open").mockImplementation(() => null);
       const { view } = await open(DOC, links);
@@ -279,8 +287,8 @@ describe("the link card (11)", () => {
 
 describe("an address typed in the link field", () => {
   it("is given https:// only when it is a web address", () => {
-    expect(withScheme("example.com/a")).toBe("https://example.com/a");
-    for (const kept of ["../notes/other.md", "other.md#Part", "notes/a%20b.md", "/w/ws", "#top", "mailto:a@b.c", "https://example.com"]) expect(withScheme(kept)).toBe(kept);
+    for (const web of ["example.com/a", "example.com/a.md", "github.com/org/repo/blob/main/README.md", "news.md"]) expect(withScheme(web)).toBe(`https://${web}`);
+    for (const kept of ["../notes/other.md", "./other.md#Part", "/w/ws", "#top", "mailto:a@b.c", "https://example.com"]) expect(withScheme(kept)).toBe(kept);
   });
 });
 

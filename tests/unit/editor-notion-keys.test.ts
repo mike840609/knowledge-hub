@@ -122,6 +122,21 @@ it("leaves a [[target]] being typed as written", async () => {
   expect(view.state.doc.textContent).toBe("see [[A->B (c)");
 });
 
+it("still replaces after a stray [[ further back than the [[ list looks (MAX_QUERY_LENGTH)", async () => {
+  const { view } = await open("");
+  const prose = `type [[ to link, ${"and so on ".repeat(11)}then a `;
+  type(view, `${prose}-> b`);
+  expect(view.state.doc.textContent).toBe(`${prose}→ b`);
+});
+
+it.each([["# Head", "bullet_list", "- Head"], ["- a\n- b", "ordered_list", "1. a\n2. b"]])("Mod-Shift-%s chosen with Escape is turned into a list", async (markdown, type_, expected) => {
+  const { editor, view } = await open(markdown);
+  view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, 0)));
+  mod(view, type_ === "ordered_list" ? "&" : "*", { shiftKey: true });
+  expect(view.state.doc.firstChild?.type.name).toBe(type_);
+  expect(editor.getMarkdown().trim()).toBe(expected);
+});
+
 it("leaves -- alone so that --- still makes a divider, and does not replace in code", async () => {
   const { view } = await open("");
   type(view, "a -- b");

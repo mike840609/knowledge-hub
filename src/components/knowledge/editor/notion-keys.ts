@@ -11,7 +11,8 @@ import { customInputRulesKey } from "@milkdown/kit/prose";
 import { Fragment, type Mark, type Node as ProseNode } from "@milkdown/kit/prose/model";
 import { ReplaceStep } from "@milkdown/kit/prose/transform";
 import { $inputRule, $prose, $useKeymap } from "@milkdown/kit/utils";
-import { duplicateBlock, moveBlock, topLevelBlocks, type BlockKind } from "./block-actions";
+import { duplicateBlock, moveBlock, topLevelBlocks, turnBlockInto, type BlockKind } from "./block-actions";
+import { findWikiLinkTrigger } from "./link-suggestions";
 
 /**
  * The typing rules and keys a Notion writer reaches for
@@ -54,11 +55,14 @@ const todoInputRule = $inputRule(
     }),
 );
 
-/** Inside a `[[target` still being typed: the target is a title or path, and must stay as written. */
+/**
+ * Inside a `[[target` still being typed, by the rule the `[[` list itself uses (`findWikiLinkTrigger`):
+ * the target is a title or path and must stay as written. A stray `[[` far back in a paragraph is
+ * not one, so it does not turn replacements off for the rest of it.
+ */
 function inWikiTarget(state: EditorState, pos: number): boolean {
   const $pos = state.doc.resolve(pos);
-  const before = $pos.parent.textBetween(0, $pos.parentOffset, undefined, "\ufffc");
-  return before.lastIndexOf("[[") > before.lastIndexOf("]]");
+  return findWikiLinkTrigger($pos.parent.textBetween(0, $pos.parentOffset, undefined, "\n")) !== null;
 }
 
 function replacement(regexp: RegExp, symbol: string) {
@@ -170,6 +174,11 @@ function listItemDepth(state: EditorState): number | null {
 function toggleList(target: "ordered" | "bullet" | "task") {
   return (state: EditorState, dispatch?: (tr: Transaction) => void, view?: EditorView) => {
     if (!view?.editable || !(state.selection instanceof TextSelection || state.selection instanceof NodeSelection)) return false;
+    // A whole block chosen with Escape (a heading, a list, a quote) is turned into the list as the
+    // block menu turns it: there is no caret to keep.
+    if (state.selection instanceof NodeSelection && state.selection.$from.depth === 0) {
+      return dispatch ? turnBlockInto(view, state.selection.from, target) : true;
+    }
     const { nodes } = state.schema;
     const kind = listKindAt(state);
     if (kind === target) return liftListItem(nodes.list_item)(state, dispatch);
@@ -203,13 +212,19 @@ function toggleList(target: "ordered" | "bullet" | "task") {
     const tr = state.tr.replaceWith(listPos, listPos + list.nodeSize, pieces);
     // The item now sits one list wrapper in, after the list of the items that came before it.
     const shift = listPos + (index > 0 ? pieces[0].nodeSize : 0) + 1 - itemPos;
-    tr.setSelection(TextSelection.create(tr.doc, $from.pos + shift, $to.pos + shift));
+    tr.setSelection(state.selection instanceof NodeSelection
+      ? NodeSelection.create(tr.doc, $from.pos + shift)
+      : TextSelection.create(tr.doc, $from.pos + shift, $to.pos + shift));
     dispatch(tr.scrollIntoView());
     return true;
   };
 }
 
-/** A paragraph or heading that is not in a list becomes the first item of a new one, caret kept. */
+/**
+ * A paragraph or heading that is not in a list becomes the first item of a new one, caret kept. A list
+ * item starts with a paragraph, so every heading the selection reaches becomes one (`# H` and `## I`
+ * selected together make `- H` / `- I`), as Notion's list keys do.
+ */
 function wrapParagraph(state: EditorState, target: "ordered" | "bullet" | "task", dispatch?: (tr: Transaction) => void): boolean {
   const { nodes } = state.schema;
   const { $from, $to } = state.selection;
