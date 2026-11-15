@@ -332,6 +332,10 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-editor .kh-wikilink.ProseMirror-selectednode {
     @apply rounded-sm bg-kh-bg-selected;
   }
+  /* A block chosen with Escape (editor Notion-parity spec, decision 7): one top-level node, drawn like any selection. */
+  .kh-editor > .ProseMirror-selectednode {
+    @apply rounded-sm bg-kh-bg-selected outline-none;
+  }
   .kh-editor img:not([data-diagram]) {
     @apply my-4 h-auto max-w-full rounded-md border border-kh-border;
   }
@@ -347,6 +351,11 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-editor .kh-callout-marker {
     display: none;
   }
+  /* The label is a button that opens the kind menu (editor Notion-parity spec, decision 20). It keeps the
+     reader's title row — glyph, word, medium weight — and gains only a hover fill and the focus ring. */
+  .kh-editor .kh-callout-label {
+    @apply -ml-1 cursor-pointer px-1 text-left text-kh-text hover:bg-kh-bg-hover;
+  }
   .kh-editor .kh-callout-title + p,
   .kh-editor .kh-callout-marker + p {
     @apply mt-1;
@@ -360,9 +369,25 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-editor-details > summary {
     @apply cursor-text rounded-md font-medium;
   }
+  /* The chevron and the title are one line (editor Notion-parity spec, decision 17). The chevron is taken
+     out of the flow and hung in the summary's left padding, as tall as the first line and centred in it, so
+     it can never be pushed onto a line of its own by the trailing <br> ProseMirror keeps in an empty title,
+     and cannot be split from a title ProseMirror has cut into several nodes. The click that flips the
+     toggle is the first 20px (details-node.ts); the padding is the same 20px. */
+  .kh-editor-details > summary {
+    @apply relative pl-5;
+  }
+  .kh-editor-details > summary::before {
+    @apply absolute left-0 top-0 mr-0 block w-3.5;
+    height: 1.5em;
+    height: 1lh;
+    -webkit-mask: url("/icons/chevron-right.svg") center / theme("spacing.3.5") no-repeat;
+    mask: url("/icons/chevron-right.svg") center / theme("spacing.3.5") no-repeat;
+    vertical-align: baseline;
+  }
   .kh-editor-details > summary:has(> br:only-child)::after {
     content: attr(data-placeholder);
-    @apply pointer-events-none text-kh-text-muted;
+    @apply pointer-events-none absolute left-5 top-0 text-kh-text-muted;
   }
   .kh-editor-details > [data-details-body] {
     @apply ml-1 border-l-2 border-kh-border pl-4;
@@ -402,6 +427,8 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 
   /* The toolbar over a selection. Milkdown's tooltip sets `left`/`top` and `data-show`. */
   .kh-selection-toolbar {
+    /* Wraps rather than overflow a phone: the row below it is `flex-wrap`, as `.kh-table-actions` is. */
+    max-width: calc(100vw - 16px);
     @apply absolute z-20 flex items-center rounded-lg border border-kh-border bg-kh-bg-raised p-1 shadow-popover;
     /* Overlays enter and leave (design language §9). The tooltip only toggles `data-show` —
        there is no exit state to hook like Base UI's `data-[ending-style]` — so both directions
@@ -416,6 +443,30 @@ input[type="search"]::-webkit-search-cancel-button:hover {
     }
   }
   .kh-selection-toolbar[data-show="false"] {
+    @apply hidden;
+    opacity: 0;
+    transform: scale(0.98);
+  }
+
+  /* The card under a link the caret is in (address, Open, Edit, Remove). Built like the toolbar above —
+     popover elevation, `lg` radius — and entered and left the same way: only `data-show` toggles. */
+  /* Its width is bounded here, not by a `max-w-*` on the address: the config replaces the maxWidth scale,
+     so a default spelling such as `max-w-60` compiles to nothing. A long address truncates at 15rem and
+     the card never grows past the viewport less its 8px margins. */
+  .kh-link-card {
+    @apply absolute z-20 flex max-w-[calc(100vw-16px)] items-center gap-0.5 rounded-lg border border-kh-border bg-kh-bg-raised p-1 shadow-popover;
+    @apply transition-[opacity,transform,display] duration-120 ease-out [transition-behavior:allow-discrete];
+  }
+  .kh-link-card-address {
+    @apply min-w-0 max-w-[15rem] shrink;
+  }
+  @starting-style {
+    .kh-link-card {
+      opacity: 0;
+      transform: scale(0.98);
+    }
+  }
+  .kh-link-card[data-show="false"] {
     @apply hidden;
     opacity: 0;
     transform: scale(0.98);
@@ -921,6 +972,24 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-rail { display: none; }
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-inline { display: block; }
 .kh-document-pane .kh-review-document[data-review-inline][data-review-open] ~ * { max-width: calc(100% - 320px); }
+/* The editor's 56px block gutter hangs left of the text (`.kh-editor-blocks`), into the column's 24px padding
+   and its left margin. Where the pane shows the outline rail on the right (60rem) and has not yet reached the
+   left-hung outline (88rem), the rail's 224px slot leaves the column less than its reading width, so the margin
+   is 0 — at 1440px with both sidebars the pane is 976px, the column 752px, and the gutter had 24px. There the
+   column's own left padding makes up what its margin lacks, up to 56px: `3.5rem - margin`, never below the 24px
+   it has. It is the column, not the editor, so reading and editing keep one left edge; the text's right edge
+   does not move. Each margin is the one the rules above give, in the same `100%` (padding resolves against the
+   same containing block as margin), so opening the comments rail keeps the text where it was. */
+@container kh-document (min-width: 60rem) {
+  .kh-document-pane .kh-reading-column {
+    padding-inline-start: clamp(theme("spacing.6"), calc(theme("spacing.14") - (100% - theme("maxWidth.reading")) / 2), theme("spacing.14"));
+    /* With the margin, so where the two add up to 56px the text holds still while the rail slides in. */
+    transition: margin-inline-start 120ms ease-out, padding-inline-start 120ms ease-out;
+  }
+  .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column {
+    padding-inline-start: clamp(theme("spacing.6"), calc(theme("spacing.14") - min(calc((100% - theme("spacing.56") - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.reading") - 320px))), theme("spacing.14"));
+  }
+}
 /* A pane that holds outline, article and rail (224 + 860 + 320 = 1404px, 88rem) shows the outline on the
    column's left, as a shared page does, and keeps it there while the rail is open: outline, article,
    discussions. The column is centred in the whole pane; opening the rail moves it left only as far as the
@@ -1055,10 +1124,10 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-block-move-menu button {
   @apply block w-full rounded-md px-3 py-2 text-left text-body-sm text-kh-text hover:bg-kh-bg-hover disabled:opacity-50 kh-focus-ring;
 }
-.kh-block-move-menu button[aria-current="true"] { @apply bg-kh-bg-selected font-medium text-kh-selected-text; }
+.kh-block-move-menu button[aria-current="true"], .kh-block-move-menu button[aria-checked="true"] { @apply bg-kh-bg-selected font-medium text-kh-selected-text; }
 .kh-block-menu-separator { height: 1px; margin: 4px; background: var(--kh-border); }
 .kh-slash-menu { width: 18rem; max-width: calc(100vw - 1rem); max-height: min(24rem, 60vh); overflow-y: auto; }
-.kh-slash-option { @apply flex cursor-pointer flex-col rounded-md px-3 py-1.5 text-body-sm text-kh-text hover:bg-kh-bg-hover; }
+.kh-slash-option { @apply flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-body-sm text-kh-text hover:bg-kh-bg-hover; }
 .kh-slash-option[aria-selected="true"] { @apply bg-kh-bg-selected text-kh-selected-text; }
 .kh-tree-drop-line, .kh-block-drop-line { position: fixed; z-index: 50; height: 2px; background: var(--kh-primary); pointer-events: none; }
 .kh-block-is-dragging { cursor: grabbing; }

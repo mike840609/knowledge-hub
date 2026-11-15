@@ -3,6 +3,7 @@ import { editorViewCtx } from "@milkdown/kit/core";
 import { afterEach, expect, it } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { blockGutter } from "@/components/knowledge/editor/block-gutter";
+import { slashCommands } from "@/components/knowledge/editor/slash-commands";
 
 const rect = (top: number, bottom: number) => ({ x: 20, y: top, left: 20, right: 600, top, bottom, width: 580, height: bottom - top, toJSON: () => ({}) }) as DOMRect;
 // jsdom has no layout or native scrolling; an unowned drop has no hit target.
@@ -164,4 +165,57 @@ it('keeps the controls inside the pane when the gutter hangs past its left edge'
   view.focus();
   view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', altKey: true, bubbles: true, cancelable: true }));
   expect(document.querySelector<HTMLElement>('.kh-block-gutter')!.style.left).toBe('104px');
+});
+
+async function openWithList() {
+  const root = document.body.appendChild(document.createElement('div'));
+  const slash = slashCommands();
+  const editor = await createMarkdownEditor({ root, markdown: 'First\n\nSecond', className: 'kh-editor', ariaLabel: 'Content', editable: true, onUserEdit: () => {}, onMarkdown: () => {}, allowImage: () => false, extraPlugins: [...slash.plugins, blockGutter()], configure: slash.configure });
+  opened.push(editor);
+  const view = editor.action(ctx => ctx.get(editorViewCtx));
+  view.dom.getBoundingClientRect = () => rect(40, 300);
+  [...view.dom.children].forEach((child, index) => { child.getBoundingClientRect = () => rect(40 + index * 60, 80 + index * 60); });
+  view.focus();
+  view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', altKey: true, bubbles: true, cancelable: true }));
+  button('Add paragraph below').click();
+  const list = document.querySelector<HTMLElement>('.kh-slash-menu')!;
+  const press = (name: string) => view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }));
+  return { editor, view, list, press };
+}
+
+// Decision 15 (deviation): + writes a visible "/" on the new line; the list it opens is a typed "/"'s.
+it('+ opens the "/" list on a new line holding a "/", and Escape takes back the lone "/" leaving the caret there', async () => {
+  const { editor, view, list, press } = await openWithList();
+  expect(list.hidden).toBe(false);
+  expect(view.state.doc.child(1).textContent).toBe('/');
+  press('Escape');
+  expect(list.hidden).toBe(true);
+  expect(view.state.doc.childCount).toBe(3);
+  expect(view.state.selection.$from.index(0)).toBe(1);
+  expect(view.state.doc.child(1).textContent).toBe('');
+  expect(editor.getMarkdown()).not.toMatch(/^\/|\n\/\n/);
+});
+
+it('+ then "Title" keeps "Title" in sight as the "/Title" query, and Escape keeps it as text', async () => {
+  const { editor, view, list, press } = await openWithList();
+  view.dispatch(view.state.tr.insertText('Title'));
+  // The query is on the page, as a typed "/Title" is: what Enter would pick is in the list beside it.
+  expect(view.dom.children[1].textContent).toBe('/Title');
+  expect(list.hidden).toBe(false);
+  expect([...list.querySelectorAll('[role="option"]')].map(row => row.textContent)).toEqual(['Heading 1Large heading', 'Heading 2Section heading', 'Heading 3Small heading']);
+  press('Escape');
+  expect(list.hidden).toBe(true);
+  expect(view.state.doc.child(1).textContent).toBe('/Title');
+  expect(editor.getMarkdown()).toBe('First\n\n/Title\n\nSecond\n');
+});
+
+it('+ then "h2" and Enter makes a Heading 2', async () => {
+  const { editor, view, list, press } = await openWithList();
+  view.dispatch(view.state.tr.insertText('h2'));
+  press('Enter');
+  expect(list.hidden).toBe(true);
+  expect(view.state.doc.child(1).type.name).toBe('heading');
+  expect(view.state.doc.child(1).attrs.level).toBe(2);
+  view.dispatch(view.state.tr.insertText('Picked'));
+  expect(editor.getMarkdown()).toBe('First\n\n## Picked\n\nSecond\n');
 });

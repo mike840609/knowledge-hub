@@ -3,27 +3,38 @@ import type { Ctx, MilkdownPlugin } from "@milkdown/kit/ctx";
 import { Plugin, PluginKey, type EditorState } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
+import { Code, Heading1, Heading2, Heading3, Info, List, ListCollapse, ListOrdered, ListTodo, Minus, Quote, Table, Type, type LucideIcon } from "lucide-react";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { dispatchBlockAction } from "./block-actions";
 import { insertDetailsSkeleton } from "./details-toggle";
 
+// `aliases` match by prefix (what a Notion hand types: /h2, /todo, /ul); label and `words` match anywhere.
 const commands = [
-  { id: "text", label: "Text", hint: "Plain paragraph", words: "paragraph 文字 段落" },
-  { id: "h1", label: "Heading 1", hint: "Large heading", words: "title 標題" },
-  { id: "h2", label: "Heading 2", hint: "Section heading", words: "title 標題" },
-  { id: "h3", label: "Heading 3", hint: "Small heading", words: "title 標題" },
-  { id: "bullet", label: "Bulleted list", hint: "Unordered items", words: "list 清單" },
-  { id: "ordered", label: "Numbered list", hint: "Ordered steps", words: "list 清單" },
-  { id: "task", label: "To-do list", hint: "Tasks with checkboxes", words: "task checklist 待辦" },
-  { id: "quote", label: "Quote", hint: "A block quotation", words: "blockquote 引用" },
-  { id: "code", label: "Code", hint: "A fenced code block", words: "程式碼" },
-  { id: "divider", label: "Divider", hint: "A horizontal rule", words: "hr line 分隔線" },
-  { id: "table", label: "Table", hint: "A simple 2×2 table", words: "table 表格" },
-  { id: "toggle", label: "Toggle", hint: "A collapsible section", words: "toggle fold collapsible 折疊" },
-  { id: "callout", label: "Callout", hint: "A highlighted note", words: "callout note 提示 標註" },
+  { id: "text", label: "Text", hint: "Plain paragraph", words: "paragraph 文字 段落", aliases: ["p"], Icon: Type },
+  { id: "h1", label: "Heading 1", hint: "Large heading", words: "title 標題", aliases: ["h1"], Icon: Heading1 },
+  { id: "h2", label: "Heading 2", hint: "Section heading", words: "title 標題", aliases: ["h2"], Icon: Heading2 },
+  { id: "h3", label: "Heading 3", hint: "Small heading", words: "title 標題", aliases: ["h3"], Icon: Heading3 },
+  { id: "bullet", label: "Bulleted list", hint: "Unordered items", words: "list 清單", aliases: ["ul", "bullet"], Icon: List },
+  { id: "ordered", label: "Numbered list", hint: "Ordered steps", words: "list 清單", aliases: ["ol", "number"], Icon: ListOrdered },
+  { id: "task", label: "To-do list", hint: "Tasks with checkboxes", words: "task checklist 待辦", aliases: ["todo", "checkbox"], Icon: ListTodo },
+  { id: "quote", label: "Quote", hint: "A block quotation", words: "blockquote 引用", aliases: ["quote"], Icon: Quote },
+  { id: "code", label: "Code", hint: "A fenced code block", words: "程式碼", aliases: ["code"], Icon: Code },
+  { id: "divider", label: "Divider", hint: "A horizontal rule", words: "hr line 分隔線", aliases: ["hr", "line"], Icon: Minus },
+  { id: "table", label: "Table", hint: "A simple 2×2 table", words: "table 表格", aliases: ["table"], Icon: Table },
+  { id: "toggle", label: "Toggle", hint: "A collapsible section", words: "toggle fold collapsible 折疊", aliases: ["toggle"], Icon: ListCollapse },
+  // The reader's callout glyph for a note (markdown-callout.tsx).
+  { id: "callout", label: "Callout", hint: "A highlighted note", words: "callout note 提示 標註", aliases: ["callout"], Icon: Info },
 ] as const;
 type Command = typeof commands[number];
 type Trigger = { pos: number; query: string };
-type State = { trigger: Trigger | null; dismissed: number | null; index: number };
+/**
+ * `added`: the paragraph whose "/" `+` wrote (spec decision 15, deviation), held while its list is open there.
+ * Dismissing that list with the "/" alone on the line takes the "/" back; anything typed after it stays.
+ */
+type State = { trigger: Trigger | null; dismissed: number | null; index: number; added: number | null };
+const OPEN = "khOpenBlockList";
+const key = new PluginKey<State>("khSlashCommands");
 let sequence = 0;
 
 function detect(state: EditorState): Trigger | null {
@@ -33,10 +44,56 @@ function detect(state: EditorState): Trigger | null {
   const match = /^\/([^/\n]{0,40})$/.exec($from.parent.textContent);
   return match ? { pos: $from.before(1), query: match[1].toLowerCase().trim() } : null;
 }
-const matches = (query: string) => commands.filter(command => `${command.label} ${command.words}`.toLowerCase().includes(query));
+/**
+ * What `+` does after inserting an empty paragraph, as Notion's does: writes a visible "/" there, so the list opens
+ * through the same path a typed "/" takes and what is typed next is that "/"'s query. Only where the list is installed.
+ */
+export function openBlockList(view: EditorView): boolean {
+  const { $from, empty } = view.state.selection;
+  if (!view.editable || !key.get(view.state) || !empty || $from.depth !== 1 || $from.parent.type.name !== "paragraph" || $from.parent.content.size) return false;
+  view.dispatch(view.state.tr.insertText("/").setMeta(OPEN, true));
+  return true;
+}
+/** The lone "/" `+` wrote, still alone on its line: [from, to) to take back, or null. */
+function loneSlash(state: EditorState, pos: number): [number, number] | null {
+  const node = pos < state.doc.content.size ? state.doc.nodeAt(pos) : null;
+  if (node?.type.name !== "paragraph" || node.childCount !== 1 || !node.firstChild!.isText || node.firstChild!.marks.length || node.textContent !== "/") return null;
+  return [pos + 1, pos + 2];
+}
+
+/**
+ * Rows for a query, case-insensitively, each group in list order: an alias it equals, a label it
+ * begins, a word of the label or `words` it begins, an alias it begins, then label or `words` holding
+ * it. So `/h2` is Heading 2, `/t` is Text rather than To-do by way of `todo`, and `/li` is a list
+ * rather than Divider by way of `line`.
+ */
+export function matchingCommands(query: string): readonly Command[] {
+  const q = query.toLowerCase().trim();
+  const groups = [
+    (command: Command) => command.aliases.some(alias => alias === q),
+    (command: Command) => command.label.toLowerCase().startsWith(q),
+    (command: Command) => `${command.label} ${command.words}`.toLowerCase().split(/\s+/).some(word => word.startsWith(q)),
+    (command: Command) => command.aliases.some(alias => alias.startsWith(q)),
+    (command: Command) => `${command.label} ${command.words}`.toLowerCase().includes(q),
+  ];
+  const found: Command[] = [];
+  for (const test of groups) for (const command of commands) if (!found.includes(command) && test(command)) found.push(command);
+  return found;
+}
+
+/** Each row's 16px Lucide glyph, drawn once from lucide-react as reader-hints.ts draws a callout's, then cloned. */
+const glyphs = new Map<LucideIcon, SVGElement>();
+function glyph(Icon: LucideIcon): SVGElement {
+  let svg = glyphs.get(Icon);
+  if (!svg) {
+    const markup = renderToStaticMarkup(createElement(Icon, { "aria-hidden": true, className: "size-4 shrink-0 text-kh-text-muted" }));
+    svg = new DOMParser().parseFromString(markup, "image/svg+xml").documentElement as unknown as SVGElement;
+    glyphs.set(Icon, svg);
+  }
+  return document.importNode(svg, true);
+}
 
 export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: Ctx) => void } {
-  const key = new PluginKey<State>("khSlashCommands");
   let visible = false;
   let shown: readonly Command[] = [];
 
@@ -64,7 +121,7 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
     }
     const current = view.state.doc.nodeAt(trigger.pos)!;
     if (command.id === "toggle") {
-      insertDetailsSkeleton(view, trigger.pos, trigger.pos + current.nodeSize, "");
+      insertDetailsSkeleton(view, trigger.pos, trigger.pos + current.nodeSize, "", "summary");
       return;
     }
     let caret = trigger.pos + 1;
@@ -82,13 +139,24 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
   const plugin = $prose(() => new Plugin<State>({
     key,
     state: {
-      init: () => ({ trigger: null, dismissed: null, index: 0 }),
+      init: () => ({ trigger: null, dismissed: null, index: 0, added: null }),
       apply(transaction, previous, _old, state) {
+        const meta = transaction.getMeta(key) as { dismiss?: boolean; release?: boolean; index?: number } | undefined;
         const trigger = detect(state);
-        const meta = transaction.getMeta(key) as { dismiss?: boolean; index?: number } | undefined;
+        let added = previous.added === null ? null : transaction.mapping.map(previous.added);
+        if (transaction.getMeta(OPEN)) added = trigger?.pos ?? null;
+        // Held only while that line's list is open: a dismissal, leaving the editor, or the caret leaving lets it go.
+        if (meta?.dismiss || meta?.release || trigger?.pos !== added) added = null;
         const dismissed = meta?.dismiss && trigger ? trigger.pos : !trigger ? null : previous.dismissed === null ? null : transaction.mapping.map(previous.dismissed);
-        return { trigger, dismissed, index: meta?.index ?? (trigger?.query === previous.trigger?.query ? previous.index : 0) };
+        return { trigger, dismissed, added, index: meta?.index ?? (trigger?.query === previous.trigger?.query ? previous.index : 0) };
       },
+    },
+    // When the list `+` opened is let go with its "/" still alone on the line, the "/" goes too: nothing was written.
+    appendTransaction(transactions, old, state) {
+      const before = key.getState(old)?.added;
+      if (before == null || key.getState(state)?.added != null) return null;
+      const range = loneSlash(state, transactions.reduce((pos, transaction) => transaction.mapping.map(pos), before));
+      return range ? state.tr.delete(...range).setMeta("addToHistory", false) : null;
     },
     props: {
       decorations(state) {
@@ -133,7 +201,7 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
       function sync() {
         const state = key.getState(view.state);
         if (!view.editable || !view.hasFocus() || !state?.trigger || state.dismissed === state.trigger.pos || view.composing) { close(); return; }
-        shown = matches(state.trigger.query);
+        shown = matchingCommands(state.trigger.query);
         const active = Math.min(state.index, shown.length - 1);
         popup.replaceChildren();
         shown.forEach((command, index) => {
@@ -142,9 +210,11 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
           row.setAttribute("role", "option");
           row.setAttribute("aria-selected", String(index === active));
           row.className = "kh-slash-option";
+          const text = document.createElement("span"); text.className = "flex min-w-0 flex-col";
           const label = document.createElement("span"); label.textContent = command.label;
           const hint = document.createElement("span"); hint.className = "text-caption text-kh-text-muted"; hint.textContent = command.hint;
-          row.append(label, hint);
+          text.append(label, hint);
+          row.append(glyph(command.Icon), text);
           row.addEventListener("mousedown", event => { if (event.button === 0) { event.preventDefault(); choose(view, command); } });
           popup.appendChild(row);
         });
@@ -161,12 +231,14 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
       }
       const keepCaret = (event: MouseEvent) => { if (event.button === 0) event.preventDefault(); };
       popup.addEventListener("mousedown", keepCaret);
-      dom.addEventListener("focus", sync); dom.addEventListener("blur", close);
+      // Leaving the editor lets go of a list `+` opened: a lone "/" is taken back, a "/query" stays as if typed.
+      const blur = () => { close(); if (key.getState(view.state)?.added != null) view.dispatch(view.state.tr.setMeta(key, { release: true })); };
+      dom.addEventListener("focus", sync); dom.addEventListener("blur", blur);
       dom.addEventListener("compositionstart", close); dom.addEventListener("compositionend", sync);
       window.addEventListener("scroll", position, true); window.addEventListener("resize", position);
       return { update: sync, destroy() {
         close(); popup.remove();
-        dom.removeEventListener("focus", sync); dom.removeEventListener("blur", close);
+        dom.removeEventListener("focus", sync); dom.removeEventListener("blur", blur);
         dom.removeEventListener("compositionstart", close); dom.removeEventListener("compositionend", sync);
         window.removeEventListener("scroll", position, true); window.removeEventListener("resize", position);
       } };

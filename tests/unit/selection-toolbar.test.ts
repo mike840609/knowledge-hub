@@ -146,9 +146,12 @@ describe("the selection toolbar's DOM contract", () => {
     expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
       "Bold",
       "Italic",
+      "Strikethrough",
+      "Inline code",
       "Link",
       "Heading 1",
       "Heading 2",
+      "Heading 3",
       "Bulleted list",
       "Numbered list",
       "Toggle section",
@@ -163,9 +166,12 @@ describe("the selection toolbar's DOM contract", () => {
     expect([...buttonRow().querySelectorAll("button")].map((b) => b.getAttribute("aria-label"))).toEqual([
       "Bold",
       "Italic",
+      "Strikethrough",
+      "Inline code",
       "Link",
       "Heading 1",
       "Heading 2",
+      "Heading 3",
       "Bulleted list",
       "Numbered list",
       "Toggle section",
@@ -634,6 +640,15 @@ describe("the React wrapper", () => {
       expect(click(anchor, { ctrlKey: true }).defaultPrevented).toBe(true);
       expect(open).toHaveBeenCalledTimes(2);
       expect(open).toHaveBeenCalledWith("https://example.com", "_blank", "noopener,noreferrer");
+    });
+
+    it("opens nothing on ⌘-click of a link with an unsafe scheme", async () => {
+      const open = vi.spyOn(window, "open").mockImplementation(() => null);
+      const built = ready();
+      const wrapper = mount(props({ markdown: "[a](javascript:alert(1)) [b](data:text/html,x)\n", editable, onReady: built.onReady }));
+      await built.promise;
+      for (const anchor of wrapper.container.querySelectorAll("a")) click(anchor as HTMLElement, { metaKey: true });
+      expect(open).not.toHaveBeenCalled();
     });
 
     it("leaves a click that is not on a link alone", async () => {

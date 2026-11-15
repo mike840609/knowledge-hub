@@ -15,6 +15,8 @@ import { governanceFailure, governanceRequest, GovernanceError } from "@/compone
 import { DocumentAutosave, type DocumentContent, type SavedRevision } from "@/lib/document-autosave";
 import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } from "@/lib/document-draft";
 import { PersistentDraft } from "@/lib/persistent-draft";
+import { caretOnLastLine } from "@/lib/title-keys";
+import { isListKey } from "@/lib/form-keys";
 import { carryTitle, resolveAuthoredTitle } from "@/lib/authored-title";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { downloadMarkdown } from "@/lib/download-markdown";
@@ -75,6 +77,8 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   const [source, setSource] = useState(false);
   const [failed, setFailed] = useState(false);
   const [CodePreview, setCodePreview] = useState<ComponentType<{ code: string; language: string }>>();
+  const [CodeLanguage, setCodeLanguage] = useState<ComponentType<{ language: string; onChange: (language: string) => void }>>();
+  const renderLanguage = useCallback((language: string, onChange: (language: string) => void) => CodeLanguage ? <CodeLanguage language={language} onChange={onChange} /> : null, [CodeLanguage]);
   const renderCode = useCallback((code: string, language: string) => CodePreview ? <CodePreview code={code} language={language} /> : <pre><code>{code}</code></pre>, [CodePreview]);
   const sourceTextarea = useRef<HTMLTextAreaElement>(null);
   const titleInput = useRef<HTMLTextAreaElement>(null);
@@ -310,7 +314,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   useEffect(() => {
     if (!/```|~~~/u.test(content.markdown) || CodePreview) return;
     let live = true;
-    void import("./editor/inline-code-preview").then(module => { if (live) setCodePreview(() => module.InlineCodePreview); }).catch(() => { /* Raw code stays available if its preview cannot load. */ });
+    void import("./editor/inline-code-preview").then(module => { if (live) { setCodePreview(() => module.InlineCodePreview); setCodeLanguage(() => module.CodeLanguageField); } }).catch(() => { /* Raw code stays available if its preview cannot load. */ });
     return () => { live = false; };
   }, [content.markdown, CodePreview]);
   useEffect(() => {
@@ -378,6 +382,14 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     refreshMetadata();
   }
   const displayTitle = dirty || recovery ? resolved.title || "Untitled" : savedTitle;
+  /** Enter, or ArrowDown on the last line, in the title: on to the start of the content (never a line break in the title). */
+  function leaveTitle() {
+    if (source || failed) {
+      const textarea = sourceTextarea.current;
+      textarea?.focus();
+      textarea?.setSelectionRange(0, 0);
+    } else editor.current?.focusStart();
+  }
   function focusTitle() {
     flushEditor();
     if (resolve(queue.current!.current).source !== "H1") {
@@ -429,7 +441,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       flushEditor();
       writer?.pause(!editable || !!recovery || !resolve(queue.current!.current).title);
     }} onBlur={() => flushEditor()} onKeyDownCapture={event => {
-      if ((event.metaKey || event.ctrlKey) && event.key === "/" && !event.nativeEvent.isComposing && !failed) {
+      if ((event.metaKey || event.ctrlKey) && event.key === "/" && !isListKey(event) && !event.nativeEvent.isComposing && !failed) {
         event.preventDefault(); flushEditor();
         if (!source) sourceRef.current = true;
         setSource(value => !value);
@@ -441,7 +453,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     }}>
       {!ready && !source && !failed && !recovery ? standIn : null}
       <Article tabIndex={-1} data-review-document={ready && !source && !failed ? "" : undefined} hidden={source || failed || !ready}>
-        {loaded && Editor && !failed && <Editor reviewMarkdown={ready && !source && !recovery ? content.markdown : undefined} renderCode={renderCode} links={links} workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId}
+        {loaded && Editor && !failed && <Editor reviewMarkdown={ready && !source && !recovery ? content.markdown : undefined} renderCode={renderCode} renderLanguage={renderLanguage} links={links} workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId}
           markdown={content.markdown} editable={editable && !source} onReady={(instance, openedWith) => {
             editor.current = instance;
             if (openedWith !== queue.current!.current.markdown) instance.replaceMarkdown(queue.current!.current.markdown);
@@ -470,7 +482,14 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     editorActions={<><AutosaveIndicator state={status} attention={attention} /><Button type="button" variant="ghost" aria-label="Rename document" title="Rename document" disabled={!editable || !!recovery || (!ready && !source && !failed)} onClick={focusTitle}><Pencil className="h-4 w-4" aria-hidden="true" /></Button>{markdownToggle}</>}
     titleControl={resolved.source !== "H1" ? <textarea ref={titleInput} aria-label="Title" value={content.title} disabled={!editable} maxLength={512} rows={1}
       onChange={event => change({ ...queue.current!.current, title: event.target.value })}
-      onKeyDown={event => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.blur(); } }}
+      onKeyDown={event => {
+        if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+        if (event.key === "Enter") {
+          event.preventDefault();
+          if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) event.currentTarget.blur();
+          else leaveTitle();
+        } else if (event.key === "ArrowDown" && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && caretOnLastLine(event.currentTarget)) { event.preventDefault(); leaveTitle(); }
+      }}
       className="mt-2 block w-full resize-none overflow-hidden break-words border-0 bg-transparent p-0 text-page-title font-semibold tracking-tight text-kh-text outline-none"
       onCompositionStart={() => { composing.current = true; writer?.pause(true); }}
       onCompositionEnd={() => { composing.current = false; writer?.pause(!editable || !!recovery || !resolve(queue.current!.current).title); }} /> : undefined}>

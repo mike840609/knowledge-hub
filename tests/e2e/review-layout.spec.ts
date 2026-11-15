@@ -378,8 +378,11 @@ test("a comment starts from a button beside the selection and opens in the rail 
   expect(await page.evaluate(() => window.scrollY)).toBeCloseTo(scrollY, 0);
   const card = page.locator("[data-review-rail] [data-review-thread]").filter({ visible: true });
   await expect(card).toHaveCount(1);
-  const [draftBox, cardBox] = [(await draft.boundingBox())!, (await card.boundingBox())!];
-  expect(cardBox.y >= draftBox.y + draftBox.height || cardBox.y + cardBox.height <= draftBox.y).toBe(true);
+  // The card glides aside (the rail animates `top`), so wait for where it lands rather than one frame of the move.
+  await expect.poll(async () => {
+    const [draftBox, cardBox] = [(await draft.boundingBox())!, (await card.boundingBox())!];
+    return cardBox.y >= draftBox.y + draftBox.height || cardBox.y + cardBox.height <= draftBox.y;
+  }).toBe(true);
   await draft.getByRole("textbox", { name: "Add comment" }).fill("Written beside the passage");
   await draft.getByRole("button", { name: "Add comment", exact: true }).click();
   await expect(draft).toHaveCount(0);

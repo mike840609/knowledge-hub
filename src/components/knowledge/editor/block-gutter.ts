@@ -1,6 +1,7 @@
 import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
+import { openBlockList } from "./slash-commands";
 import { blockKind, canTurnInto, deleteBlock, duplicateBlock, insertBlockBelow, moveBlock, topLevelBlocks, turnBlockInto, type BlockKind } from "./block-actions";
 
 function icon(kind: "plus" | "grip"): SVGSVGElement {
@@ -215,7 +216,8 @@ export function blockGutter() {
         hide();
       };
       add.addEventListener("mousedown", event => { if (event.button === 0) event.preventDefault(); });
-      add.addEventListener("click", () => { if (active !== null) insertBlockBelow(view, active); });
+      // As Notion's +: the new line holds a visible "/" with its list open; dismissing it with only the "/" takes it back.
+      add.addEventListener("click", () => { if (active !== null && insertBlockBelow(view, active)) openBlockList(view); });
       function moveBy(direction: number) {
         if (active === null) return;
         const blocks = topLevelBlocks(view.state.doc);

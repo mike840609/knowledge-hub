@@ -11,13 +11,13 @@ import { tableActions } from "./table-actions";
 import { slashCommands } from "./slash-commands";
 import type { LinkTargetsView } from "@/modules/knowledge/application/knowledge-link-service";
 import { createMarkdownEditor, type MarkdownEditor } from "./editor-core";
-import { selectionToolbar } from "./selection-toolbar";
+import { selectionToolbar, storedLinkTarget } from "./selection-toolbar";
 import { wikiLinkSuggest } from "./wikilink-suggest";
 
 import { editorViewCtx } from "@milkdown/kit/core";
 import { editorReviewPathsPlugin, preserveEditorSelection, updateEditorReviewPaths } from "./review-paths";
 import { createPortal } from "react-dom";
-import { Plugin, TextSelection } from "@milkdown/kit/prose/state";
+import { NodeSelection, Plugin, TextSelection } from "@milkdown/kit/prose/state";
 import { $prose } from "@milkdown/kit/utils";
 import { MarkdownAnchor } from "../markdown-base";
 import type { RenderedLinks } from "../rendered-links";
@@ -31,6 +31,12 @@ export type RenderedEditorProps = {
   links?: RenderedLinks;
   reviewMarkdown?: string;
   renderCode?: (code: string, language: string) => ReactNode;
+  /**
+   * The language field shown while a block's code is being edited: its current language and what to call with the
+   * new one ("" for plain text). Supplied with `renderCode`, from the same lazily loaded module, because the list of
+   * languages is the reader's highlighter's and the composer's first load must not reach it.
+   */
+  renderLanguage?: (language: string, onChange: (language: string) => void) => ReactNode;
   /** The document being edited, when there is one: `[[` does not offer it to itself. */
   documentId?: string;
   /** What to open with. Later changes go in through the handle `onReady` gave. */
@@ -62,7 +68,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<MarkdownEditor | null>(null);
   const [wikiViews, setWikiViews] = useState<{ dom: HTMLElement; raw: string }[]>([]);
-  const [codeViews, setCodeViews] = useState<{ dom: HTMLElement; preview: HTMLElement; pre: HTMLElement; code: string; language: string; editing: boolean; setEditing: (value: boolean) => void }[]>([]);
+  const [codeViews, setCodeViews] = useState<{ dom: HTMLElement; preview: HTMLElement; pre: HTMLElement; code: string; language: string; editing: boolean; setEditing: (value: boolean) => void; setLanguage: (language: string) => void }[]>([]);
   const latest = useRef(props);
   latest.current = props;
 
@@ -100,7 +106,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
           return readReviewRange(view.dom, markdown, range).anchor ?? null;
         });
       },
-    });
+    }, () => latest.current.links);
     const suggest = wikiLinkSuggest({
       // Read through the ref at the moment of use, like every other prop here.
       loadTargets: () => governanceRequest<LinkTargetsView>(`/api/workspaces/${latest.current.workspaceId}/link-targets`),
@@ -148,11 +154,25 @@ export function RenderedEditor(props: RenderedEditorProps) {
                 view.focus();
               }
             };
-            let current = { dom, preview, pre, code: node.textContent, language: String(node.attrs.language ?? ""), editing: false, setEditing };
+            // Rewrites the fence's language: the attribute is what Markdown writes after the backticks, and "" writes none.
+            const setLanguage = (language: string) => {
+              const pos = getPos();
+              const actual = pos === undefined ? null : view.state.doc.nodeAt(pos);
+              if (pos === undefined || actual?.type.name !== "code_block" || !view.editable) return;
+              view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...actual.attrs, language }));
+              view.focus();
+            };
+            let current = { dom, preview, pre, code: node.textContent, language: String(node.attrs.language ?? ""), editing: false, setEditing, setLanguage };
             const publish = () => queueMicrotask(() => { if (!cancelled) setCodeViews(previous => previous.some(item => item.dom === dom) ? previous.map(item => item.dom === dom ? current : item) : [...previous, current]); });
             const sync = () => {
               const pos = getPos();
-              if (pos === undefined || !view.hasFocus() || current.editing) return;
+              if (pos === undefined) return;
+              // Escape in the code selects the block: that ends the editing state, as "Done editing code" does.
+              if (current.editing) {
+                if (view.state.selection instanceof NodeSelection && view.state.selection.from === pos) setEditing(false);
+                return;
+              }
+              if (!view.hasFocus()) return;
               const actual = view.state.doc.nodeAt(pos);
               const { from, to } = view.state.selection;
               if (actual && from > pos && to < pos + actual.nodeSize) {
@@ -253,7 +273,8 @@ export function RenderedEditor(props: RenderedEditorProps) {
     if (!link || link.closest("[data-kh-wiki-raw]")) return;
     event.preventDefault();
     const href = link.getAttribute("href");
-    if (href && (event.metaKey || event.ctrlKey)) window.open(href, "_blank", "noopener,noreferrer");
+    const target = href ? storedLinkTarget(href, props.links) : null;
+    if (target && (event.metaKey || event.ctrlKey)) window.open(target, "_blank", "noopener,noreferrer");
   }
 
   return <><div ref={containerRef} onClick={followLinkOnModifierClick} />{wikiViews.map(({ dom, raw }, index) => {
@@ -265,7 +286,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
     {/* Under every block it was a line of chrome read past on each scroll, and room the saved page does not
         have. Over the block's lower corner instead, taking none, shown on pointing, on keyboard focus and
         always where nothing can point; below the raw code while it is edited (reader-measure spec §5). */}
+    {entry.editing && props.renderLanguage?.(entry.language, entry.setLanguage)}
     <button type="button" className={`text-caption text-kh-text-muted hover:text-kh-text ${entry.editing ? "" : "absolute bottom-1.5 right-1.5 rounded-md bg-kh-bg-subtle px-1.5 opacity-0 transition-opacity focus-visible:opacity-100 group-hover/code:opacity-100 [@media(hover:none)]:opacity-100"}`} onClick={() => entry.setEditing(!entry.editing)}>{entry.editing ? "Done editing code" : "Edit code"}</button>
   </>, entry.preview, String(codeViews.indexOf(entry))))}</>;
-
 }

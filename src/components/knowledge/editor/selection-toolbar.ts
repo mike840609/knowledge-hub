@@ -1,9 +1,10 @@
-import { flip, getOverflowAncestors, offset, shift } from "@floating-ui/dom";
+import { computePosition, flip, getOverflowAncestors, offset, shift } from "@floating-ui/dom";
 import { commandsCtx } from "@milkdown/kit/core";
 import type { Ctx, MilkdownPlugin } from "@milkdown/kit/ctx";
 import { TooltipProvider, tooltipFactory } from "@milkdown/kit/plugin/tooltip";
 import {
   liftListItemCommand,
+  toggleInlineCodeCommand,
   toggleEmphasisCommand,
   toggleLinkCommand,
   toggleStrongCommand,
@@ -12,12 +13,18 @@ import {
   wrapInHeadingCommand,
   wrapInOrderedListCommand,
 } from "@milkdown/kit/preset/commonmark";
-import { TextSelection } from "@milkdown/kit/prose/state";
+import { toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
+import { posToDOMRect } from "@milkdown/kit/prose";
+import { NodeSelection, Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
+import { $prose } from "@milkdown/kit/utils";
 import type { Mark } from "@milkdown/kit/prose/model";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { buttonClasses } from "@/components/ui/button";
 import { fieldClasses } from "@/components/ui/field";
 import { convertBlockToDetails, inDetails } from "./details-toggle";
+import { parseDocumentHref } from "@/modules/knowledge/domain/document-links";
+import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
+import type { RenderedLinks } from "../rendered-links";
 
 const tooltip = tooltipFactory("khSelectionToolbar");
 
@@ -48,10 +55,22 @@ function currentList(view: EditorView): ListName | null {
 // A pressed toggle reads as selected, as the composer's own Markdown toggle does.
 const PRESSED = "aria-pressed:bg-kh-bg-selected aria-pressed:text-kh-text";
 const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+const EMAIL = /^[^\s@/:#?]+@[^\s@/:]+\.[^\s@/:]+$/;
+// `localhost:3000/x`, `example.com:8080`: a host and a port, not a scheme (`tel:123` has no dot).
+const HOST_PORT = /^(?:localhost|[^\s/:@]+\.[^\s/:@]+):\d+(?:[/?#]|$)/i;
 
-/** `example.com` is a web address; a path, an anchor or anything with a scheme (`mailto:`) is left as typed. */
-function withScheme(value: string): string {
-  if (!value || HAS_SCHEME.test(value) || value.startsWith("/") || value.startsWith("#")) return value;
+/**
+ * `example.com` (and `example.com/a.md`) is a web address; a path, an anchor, anything with a scheme
+ * (`mailto:`) or an explicitly relative link (`./other.md`, `../notes/other.md`) is left as typed. A
+ * bare `notes/other.md` cannot be told from a host, so it is a web address when typed; an existing
+ * link saved unedited keeps its address, and a document link edited to another document address
+ * stays one (see `fieldHref`). `user@example.com` is mailed; `localhost:3000` is a host with a port.
+ */
+export function withScheme(value: string): string {
+  if (!value || /^(?:\/|#|\?|\.\.?\/)/.test(value)) return value;
+  if (EMAIL.test(value)) return `mailto:${value}`;
+  if (HOST_PORT.test(value)) return `https://${value}`;
+  if (HAS_SCHEME.test(value)) return value;
   return `https://${value}`;
 }
 
@@ -59,6 +78,18 @@ type SelectedLink =
   | { kind: "none" }
   | { kind: "multiple" }
   | { kind: "one"; from: number; to: number; mark: Mark };
+
+/** Some textblock the selection reaches may carry a link, as `toggleMark` asks (a code block may not). */
+function linkAllowed(view: EditorView): boolean {
+  const type = view.state.schema.marks.link;
+  if (!type) return false;
+  const { from, to } = view.state.selection;
+  let allowed = false;
+  view.state.doc.nodesBetween(from, to, (node) => {
+    if (node.isTextblock && node.type.allowsMarkType(type)) allowed = true;
+  });
+  return allowed;
+}
 
 /** Find one complete link even when the selection covers only part of it. */
 function selectedLink(view: EditorView): SelectedLink {
@@ -78,6 +109,13 @@ function selectedLink(view: EditorView): SelectedLink {
   if (runs.length > 1) return { kind: "multiple" };
 
   const run = runs[0];
+  return expandRun(view, run.from, run.mark);
+}
+
+/** The whole run of text carrying `mark` that the text at `pos` belongs to (a link split by formatting is still one link). */
+function expandRun(view: EditorView, pos: number, mark: Mark): SelectedLink {
+  const type = view.state.schema.marks.link;
+  const run = { from: pos, mark };
   const $start = view.state.doc.resolve(run.from);
   const parentStart = $start.start();
   const siblings: { from: number; to: number; matches: boolean }[] = [];
@@ -93,8 +131,36 @@ function selectedLink(view: EditorView): SelectedLink {
   return { kind: "one", from: siblings[first].from, to: siblings[last].to, mark: run.mark };
 }
 
-function canOpenLink(value: string): boolean {
-  return /^(?:https?:|mailto:|\/(?!\/)|#)/i.test(withScheme(value.trim()));
+/** The link the caret is in (no selection range), or null. Wikilinks are nodes, not link marks, so never count. */
+function caretLink(view: EditorView): Extract<SelectedLink, { kind: "one" }> | null {
+  const type = view.state.schema.marks.link;
+  const { selection } = view.state;
+  if (!type || !(selection instanceof TextSelection) || !selection.empty) return null;
+  const mark = type.isInSet(selection.$from.marks());
+  if (!mark) return null;
+  const { $from } = selection;
+  const pos = $from.nodeBefore && type.isInSet($from.nodeBefore.marks) ? $from.pos - 1 : $from.pos;
+  const run = expandRun(view, pos, mark);
+  return run.kind === "one" ? run : null;
+}
+
+// A leading `/` opens only as a path of this site: `//host` and `/\host` are both another origin.
+const OPENABLE = /^(?:https?:|mailto:|\/(?![/\\])|#)/i;
+
+/**
+ * Where a link already in the document opens, or null. Unlike typed input it is never given a
+ * scheme: a relative `.md` link is a document, resolved as the reader resolves it (`markdown-base`),
+ * and anything else opens only as written.
+ */
+export function storedLinkTarget(href: string, links?: RenderedLinks): string | null {
+  const value = href.trim();
+  const document = parseDocumentHref(value);
+  if (document) {
+    const resolved = links?.[linkLookupKey("PATH", document.target)];
+    if (resolved?.status !== "RESOLVED") return null;
+    return `${resolved.basePath}${document.fragment ? `#${encodeURIComponent(document.fragment)}` : ""}`;
+  }
+  return OPENABLE.test(value) ? value : null;
 }
 
 type Item = {
@@ -109,14 +175,16 @@ type Item = {
 const items: Item[] = [
   { label: "Bold", text: "B", className: "font-bold", active: (view) => markActive(view, "strong"), run: (ctx) => ctx.get(commandsCtx).call(toggleStrongCommand.key) },
   { label: "Italic", text: "I", className: "italic", active: (view) => markActive(view, "emphasis"), run: (ctx) => ctx.get(commandsCtx).call(toggleEmphasisCommand.key) },
+  { label: "Strikethrough", text: "S", className: "line-through", active: (view) => markActive(view, "strike_through"), run: (ctx) => ctx.get(commandsCtx).call(toggleStrikethroughCommand.key) },
+  { label: "Inline code", text: "</>", className: "font-mono", active: (view) => markActive(view, "inlineCode"), run: (ctx) => ctx.get(commandsCtx).call(toggleInlineCodeCommand.key) },
   {
     label: "Link",
     text: "Link",
     active: (view) => markActive(view, "link"),
-    disabled: (view) => selectedLink(view).kind === "multiple",
+    disabled: (view) => selectedLink(view).kind === "multiple" || !linkAllowed(view),
     run: (_ctx, _view, openLink) => openLink(),
   },
-  ...[1, 2].map<Item>((level) => ({
+  ...[1, 2, 3].map<Item>((level) => ({
     label: `Heading ${level}`,
     text: `H${level}`,
     active: (view) => headingLevel(view) === level,
@@ -157,6 +225,34 @@ const items: Item[] = [
   },
 ];
 
+const PASTED_URL = /^https?:\/\/\S+$/i;
+
+/**
+ * Pasting one web address over selected text links the text instead of replacing it (design
+ * decision 12). Only a plain-text paste of a single http(s) URL, whitespace nowhere inside it, and
+ * only over a non-empty text selection in text that may carry a link; everything else pastes as before.
+ */
+const pasteUrlOverSelection = $prose(
+  () =>
+    new Plugin({
+      key: new PluginKey("khPasteUrlOverSelection"),
+      props: {
+        handlePaste(view, event) {
+          const text = event.clipboardData?.getData("text/plain").trim() ?? "";
+          const { selection, schema } = view.state;
+          const type = schema.marks.link;
+          if (!view.editable || !type || !PASTED_URL.test(text) || !(selection instanceof TextSelection) || selection.empty) return false;
+          try { new URL(text); } catch { return false; }
+          // As the Link button asks; `addMark` leaves a code block in the selection as it was.
+          if (!linkAllowed(view)) return false;
+          event.preventDefault();
+          view.dispatch(view.state.tr.addMark(selection.from, selection.to, type.create({ href: text })).scrollIntoView());
+          return true;
+        },
+      },
+    }),
+);
+
 /**
  * The toolbar that floats over a text selection (composer spec §11.4). Built
  * from the DOM because it lives inside a ProseMirror plugin, not React.
@@ -165,9 +261,9 @@ const items: Item[] = [
  * `<form>`, where the default type submits — that is, saves. `mousedown` is
  * cancelled on them so pressing one does not take the selection with it.
  */
-export function selectionToolbar(comment?: { available: () => boolean; run: (view: EditorView) => void }): { plugins: MilkdownPlugin[]; configure: (ctx: Ctx) => void } {
+export function selectionToolbar(comment?: { available: () => boolean; run: (view: EditorView) => void }, links?: () => RenderedLinks | undefined): { plugins: MilkdownPlugin[]; configure: (ctx: Ctx) => void } {
   return {
-    plugins: [tooltip].flat() as MilkdownPlugin[],
+    plugins: [tooltip, pasteUrlOverSelection].flat() as MilkdownPlugin[],
     configure: (ctx) => {
       ctx.set(tooltip.key, {
         view: (editorView) => {
@@ -183,7 +279,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           let linkMode = false;
           function setLinkMode(on: boolean) {
             linkMode = on;
-            buttons.className = on ? "hidden" : "flex items-center gap-0.5";
+            buttons.className = on ? "hidden" : "flex flex-wrap items-center gap-0.5";
             linkRow.className = on ? "flex flex-col gap-2" : "hidden";
           }
           setLinkMode(false);
@@ -262,8 +358,10 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           }
           linkRow.appendChild(linkActions);
           let editingLink: Extract<SelectedLink, { kind: "one" }> | null = null;
+          // What the field's address opens: a web address as typed, a document as the reader resolves it.
+          const fieldTarget = (value: string) => storedLinkTarget(fieldHref(value), links?.());
           const updateLinkActions = () => {
-            openButton.disabled = !canOpenLink(input.value);
+            openButton.disabled = !fieldTarget(input.value);
             removeButton.disabled = !editingLink;
             saveButton.disabled = !input.value.trim();
           };
@@ -287,8 +385,19 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             setLinkMode(true);
             input.focus();
           }
+          /**
+           * The field's address as it would be saved: an existing link's own address, left unedited, stays as
+           * written, and a document link edited to another document address (`other.md#sec`) stays a document link.
+           */
+          function fieldHref(value: string): string {
+            const typed = value.trim();
+            if (!editingLink) return withScheme(typed);
+            const original = String(editingLink.mark.attrs.href ?? "").trim();
+            if (typed === original || (parseDocumentHref(original) && parseDocumentHref(typed))) return typed;
+            return withScheme(typed);
+          }
           function saveLink() {
-            const href = withScheme(input.value.trim());
+            const href = fieldHref(input.value);
             if (!href) {
               if (!editingLink) {
                 showButtons();
@@ -309,8 +418,8 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             editorView.focus();
           }
           openButton.addEventListener("click", () => {
-            const href = withScheme(input.value.trim());
-            if (canOpenLink(href)) window.open(href, "_blank", "noopener,noreferrer");
+            const target = fieldTarget(input.value);
+            if (target) window.open(target, "_blank", "noopener,noreferrer");
           });
           removeButton.addEventListener("click", () => {
             const target = editingLink;
@@ -337,6 +446,162 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             }
           });
 
+          // ---- The link card (decision 11) --------------------------------------------------------
+          // A small card under the link the caret is in: its address, with Open, Edit and Remove. It
+          // shows when the caret enters a link (by key or by a plain click), and hides when the caret
+          // leaves, on Escape, or when the link scrolls out of view. One at a time; Edit is the
+          // toolbar's own link field above, not a second editor.
+          const card = document.createElement("div");
+          card.className = "kh-link-card";
+          card.dataset.show = "false";
+          card.setAttribute("role", "group");
+          card.setAttribute("aria-label", "Link");
+          const cardAddress = document.createElement("span");
+          cardAddress.className = "kh-link-card-address truncate px-2 text-caption text-kh-text-muted";
+          card.appendChild(cardAddress);
+          const cardButtons = new Map<string, HTMLButtonElement>();
+          for (const [label, text] of [["Open link", "Open"], ["Edit link", "Edit"], ["Remove link", "Remove"]] as const) {
+            const cardButton = document.createElement("button");
+            cardButton.type = "button";
+            cardButton.textContent = text;
+            cardButton.setAttribute("aria-label", label);
+            cardButton.className = buttonClasses({ variant: "ghost", size: "sm" });
+            card.appendChild(cardButton);
+            cardButtons.set(label, cardButton);
+          }
+          // Pressing the card must not take the caret (and the link with it) out of the editor.
+          card.addEventListener("mousedown", (event) => event.preventDefault());
+          let cardLink: Extract<SelectedLink, { kind: "one" }> | null = null;
+          let leftAt: Extract<SelectedLink, { kind: "one" }> | null = null;
+          let pointerDown = false;
+          let pointerTimer: ReturnType<typeof setTimeout> | undefined;
+          const linkRect = (link: { from: number; to: number }) => posToDOMRect(editorView, link.from, link.to);
+          const cardVirtual = (link: { from: number; to: number }) => ({ getBoundingClientRect: () => linkRect(link), contextElement: editorView.dom });
+          function placeCard(link: { from: number; to: number }) {
+            void computePosition(cardVirtual(link), card, { placement: "bottom-start", middleware: [flip(() => ({ boundary: boundary() })), offset(6), shift()] }).then(({ x, y }) => {
+              Object.assign(card.style, { left: `${x}px`, top: `${y}px` });
+            });
+          }
+          function hideCard() {
+            cardLink = null;
+            if (card.dataset.show !== "false") card.dataset.show = "false";
+          }
+          function showCard(link: Extract<SelectedLink, { kind: "one" }>) {
+            const href = String(link.mark.attrs.href ?? "");
+            cardLink = link;
+            cardAddress.textContent = href;
+            cardAddress.title = href;
+            cardButtons.get("Open link")!.disabled = !storedLinkTarget(href, links?.());
+            if (!card.isConnected) (editorView.dom.parentElement ?? document.body).appendChild(card);
+            card.dataset.show = "true";
+            placeCard(link);
+          }
+          function isCardLink(link: Extract<SelectedLink, { kind: "one" }>) {
+            return cardLink !== null && cardLink.from === link.from && cardLink.to === link.to && cardLink.mark.eq(link.mark);
+          }
+          function syncCard(view: EditorView, prevSelectionChanged: boolean) {
+            const link = view.editable && (view.hasFocus() || card.contains(document.activeElement)) && !linkMode ? caretLink(view) : null;
+            if (!link) {
+              if (cardLink || leftAt) leftAt = null;
+              hideCard();
+              return;
+            }
+            if (isCardLink(link)) { cardLink = link; placeCard(link); return; }
+            // Typing inside a shown link changes its range and address: follow it rather than keep the old one.
+            if (cardLink && card.dataset.show === "true" && !prevSelectionChanged) { showCard(link); return; }
+            // Not yet showing for this link: it shows on entering it, or on a click, and not again
+            // after Escape until the caret has been out of it (or a click lands in it).
+            const dismissed = leftAt !== null && leftAt.from === link.from && leftAt.to === link.to && leftAt.mark.eq(link.mark);
+            if (!prevSelectionChanged) return;
+            if (dismissed && !pointerDown) return;
+            leftAt = null;
+            showCard(link);
+          }
+          function dismissCard() {
+            if (cardLink) leftAt = cardLink;
+            hideCard();
+          }
+          editorView.dom.addEventListener("mousedown", (event) => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            pointerDown = true;
+            clearTimeout(pointerTimer);
+            pointerTimer = setTimeout(() => { pointerDown = false; }, 600);
+          });
+          cardButtons.get("Open link")!.addEventListener("click", () => {
+            const target = storedLinkTarget(String(cardLink?.mark.attrs.href ?? ""), links?.());
+            if (target) window.open(target, "_blank", "noopener,noreferrer");
+          });
+          cardButtons.get("Edit link")!.addEventListener("click", () => {
+            const target = cardLink;
+            if (!target) return;
+            hideCard();
+            editorView.dispatch(editorView.state.tr.setSelection(TextSelection.create(editorView.state.doc, target.from, target.to)));
+            provider.show(cardVirtual(target), editorView);
+            openLink();
+          });
+          cardButtons.get("Remove link")!.addEventListener("click", () => {
+            const target = caretLink(editorView) ?? cardLink;
+            if (!target || !editorView.editable) return;
+            hideCard();
+            editorView.dispatch(editorView.state.tr.removeMark(target.from, target.to, editorView.state.schema.marks.link));
+            editorView.focus();
+          });
+          // Escape closes the card before anything else gets it: in capture, on the editor, ahead of the
+          // keymap that would select the block (and the composer's Esc that would leave the page).
+          function closeCardOnEscape(event: KeyboardEvent) {
+            if (event.key !== "Escape" || card.dataset.show !== "true" || event.isComposing || event.keyCode === 229) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            dismissCard();
+            editorView.focus();
+          }
+          editorView.dom.addEventListener("keydown", closeCardOnEscape, true);
+          card.addEventListener("keydown", (event) => {
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            event.stopPropagation();
+            dismissCard();
+            editorView.focus();
+          });
+          card.addEventListener("focusout", (event) => {
+            const next = event.relatedTarget;
+            if (next === null && !document.hasFocus()) return;
+            if (next instanceof Node && (card.contains(next) || editorView.dom.contains(next))) return;
+            hideCard();
+          });
+          const hideCardOnBlur = (event: FocusEvent) => {
+            if (event.relatedTarget instanceof Node && card.contains(event.relatedTarget)) return;
+            if (event.relatedTarget === null && !document.hasFocus()) return;
+            hideCard();
+          };
+          editorView.dom.addEventListener("blur", hideCardOnBlur);
+          // Scrolling moves the link under the card: follow it, and let go when it has left the editor's view.
+          const onScroll = () => {
+            const link = cardLink;
+            if (!link) return;
+            const rect = linkRect(link);
+            const bounds = [editorView.dom, ...getOverflowAncestors(editorView.dom).filter((node): node is Element => node instanceof Element)].map((node) => node.getBoundingClientRect());
+            const outside = rect.bottom < 0 || rect.top > window.innerHeight || bounds.some((box) => box.height > 0 && (rect.bottom < box.top || rect.top > box.bottom));
+            if (outside) dismissCard();
+            else placeCard(link);
+          };
+          window.addEventListener("scroll", onScroll, true);
+
+          // ⌘/Ctrl-K over a text selection is the link field, not the palette: the editor handles the event
+          // (`preventDefault`), and the palette's listener yields to a handled event. With no selection it
+          // is left alone, and reaches the palette.
+          function openLinkOnModK(event: KeyboardEvent) {
+            if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== "k") return;
+            if (event.isComposing || event.keyCode === 229) return;
+            const { selection } = editorView.state;
+            if (!editorView.editable || !(selection instanceof TextSelection) || selection.empty || selectedLink(editorView).kind === "multiple" || !linkAllowed(editorView)) return;
+            event.preventDefault();
+            hideCard();
+            if (element.dataset.show !== "true") provider.show({ getBoundingClientRect: () => posToDOMRect(editorView, selection.from, selection.to), contextElement: editorView.dom }, editorView);
+            openLink();
+          }
+          editorView.dom.addEventListener("keydown", openLinkOnModK);
+
           // Above the first line is the document's header ("Updated …"), not free space: flip below a
           // selection with no room above it inside the editor, as well as inside the panes that clip it
           // (Milkdown's default). Derived per placement, since the editor is mounted only after this runs.
@@ -344,6 +609,13 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           const boundary = () => [editorView.dom, ...getOverflowAncestors(editorView.dom).filter((node): node is Element => node instanceof Element)];
           const provider = new TooltipProvider({
             content: element,
+            // Milkdown's own rule, and none over a whole block chosen with Escape: Notion shows no toolbar there.
+            shouldShow: (view) => {
+              const { selection, doc } = view.state;
+              if (!view.editable || selection.empty || (selection instanceof NodeSelection && selection.node.isBlock)) return false;
+              if (selection instanceof TextSelection && !doc.textBetween(selection.from, selection.to).length) return false;
+              return view.hasFocus() || element.contains(document.activeElement);
+            },
             floatingUIOptions: { middleware: [flip(() => ({ boundary: boundary() })), offset(8), shift()] },
           });
           provider.onHide = showButtons;
@@ -384,7 +656,8 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           linkRow.addEventListener("focusout", hideOnLinkBoxBlur);
 
           return {
-            update: view => {
+            update: (view, prevState) => {
+              syncCard(view, !prevState || (prevState.doc.eq(view.state.doc) && !prevState.selection.eq(view.state.selection)));
               commentGroup.hidden = !comment?.available();
               for (const { item, button } of pressers) {
                 button.setAttribute("aria-pressed", String(item.active(view)));
@@ -399,6 +672,12 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
               editorView.dom.removeEventListener("keydown", captureSelectionOnTab, true);
               editorView.dom.removeEventListener("blur", hideOnBlur);
               editorView.dom.removeEventListener("focus", showOnFocus);
+              editorView.dom.removeEventListener("keydown", closeCardOnEscape, true);
+              editorView.dom.removeEventListener("keydown", openLinkOnModK);
+              editorView.dom.removeEventListener("blur", hideCardOnBlur);
+              window.removeEventListener("scroll", onScroll, true);
+              clearTimeout(pointerTimer);
+              card.remove();
               provider.destroy();
               element.remove();
             },

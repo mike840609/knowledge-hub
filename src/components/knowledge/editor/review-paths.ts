@@ -174,7 +174,11 @@ export function preserveEditorSelection(view: EditorView, transaction: Transacti
       const anchor = view.posAtDOM(selection.anchorNode!, selection.anchorOffset);
       const head = view.posAtDOM(selection.focusNode!, selection.focusOffset);
       if (view.state.doc.resolve(anchor).parent.inlineContent && view.state.doc.resolve(head).parent.inlineContent) {
-        transaction.setSelection(TextSelection.create(view.state.doc, anchor, head));
+        // Only when it differs: setting an equal selection still drops the stored marks and the
+        // undoable input rule, so the caret after `**bold**` would carry the mark and Backspace
+        // after `(c)` would delete it instead of restoring what was typed.
+        const next = TextSelection.create(view.state.doc, anchor, head);
+        if (!next.eq(view.state.selection)) transaction.setSelection(next);
       }
     } catch {
       // A concurrently replaced endpoint has no valid position in this document.

@@ -3,7 +3,7 @@ import type { Ctx, MilkdownPlugin } from "@milkdown/kit/ctx";
 import { history } from "@milkdown/kit/plugin/history";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
 import { commonmark, hardbreakFilterNodes, imageSchema } from "@milkdown/kit/preset/commonmark";
-import { gfm, tableSchema } from "@milkdown/kit/preset/gfm";
+import { gfm, tableSchema, wrapInTaskListInputRule } from "@milkdown/kit/preset/gfm";
 import { Plugin, Selection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $ctx, $prose, getMarkdown, replaceAll } from "@milkdown/kit/utils";
@@ -13,6 +13,8 @@ import { liftAtDocumentStart, liftListItemOverNested } from "./block-backspace";
 import { flipNearestDetails, handleDetailsDeleteKey } from "./details-toggle";
 import { handleCalloutBackspace } from "./reader-hints";
 import { configureCellBreakStringify, remarkCellBreaks } from "./table-cell-breaks";
+import { notionKeys } from "./notion-keys";
+import { pasteHtml } from "./paste-html";
 import { configureWikiLinkStringify, wikiLinkPlugins } from "./wiki-link";
 
 /** The editor could not make a document of this Markdown; the caller should fall back to the source. */
@@ -73,7 +75,8 @@ const scrollableTable = tableSchema.extendSchema(previous => ctx => ({
   ...previous(ctx),
   toDOM: () => ["div", { class: "kh-markdown-table kh-editor-table", role: "region", "aria-label": "Table", tabindex: "0" }, ["table", ["tbody", 0]]],
 }));
-const gfmWithScrollableTables = gfm.filter(plugin => plugin !== tableSchema[0] && plugin !== tableSchema[1]);
+// Without Milkdown's `[ ] ` rule: notion-keys' own covers list items too, and asks which line it is on.
+const gfmWithScrollableTables = gfm.filter(plugin => plugin !== tableSchema[0] && plugin !== tableSchema[1] && plugin !== wrapInTaskListInputRule);
 
 type MarkdownNode = { type: string; title?: string | null; children?: MarkdownNode[] };
 type DefinitionNode = MarkdownNode & { identifier?: string; url?: string };
@@ -304,6 +307,8 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
     // In every host of the editor, not an extra: a document with a wikilink must survive being opened in it.
     .use(wikiLinkPlugins)
     .use(readerHints)
+    .use(notionKeys)
+    .use(pasteHtml)
     .use(history)
     .use(listener)
     .use(editWatcher)

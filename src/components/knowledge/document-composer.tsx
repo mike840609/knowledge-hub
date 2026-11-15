@@ -566,7 +566,8 @@ export function DocumentComposer({
   // Plain Enter in a single-line title field would otherwise submit the form
   // natively; ⌘/Ctrl Enter still reaches useFormKeys's save handling above.
   function onTitleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key !== "Enter" || event.metaKey || event.ctrlKey) return;
+    if (event.key !== "Enter" && event.key !== "ArrowDown") return;
+    if (event.key === "Enter" ? event.metaKey || event.ctrlKey : event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     event.preventDefault();
     if (showing === "rendered") editorRef.current?.focusStart();

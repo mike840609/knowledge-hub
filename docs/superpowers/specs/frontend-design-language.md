@@ -270,6 +270,22 @@ breakpoints derived from them do not change, nor does the rail on the right.
 The shared page measures its room by the window, so a classic, non-overlay
 scrollbar takes up to half its width from that 16px.
 
+**The column keeps 56px left of its text in a document pane of 60rem or more**
+(editor Notion-parity spec, decision 14). Between the pane width where the
+outline becomes a rail on the right (60rem) and the one where it hangs left
+(88rem), the rail's 224px slot leaves the column less than its 860px, so the
+column has no left margin and its text sat 24px from the pane — at a 1440px
+window with both sidebars open (a 976px pane, a 752px column) the editor's
+56px block gutter had 24px. There the column's left padding grows to
+`56px − its left margin`, never below its 24px: 56px at a 1440px window, 24px
+again once the pane passes about 1148px. This moves the text for readers too,
+by up to 32px at those widths, and that is the point: reading and editing keep
+one left edge. The right edge, the prose measure (the column still holds more
+than 40rem) and every other width are unchanged; tables and code lose the
+same up-to-32px from their width. With the comments rail open the padding
+follows the margin that rail gives, so opening it does not move the text
+further than it did. Below 60rem nothing changes.
+
 They are classes rather than remembered widths, and the `maxWidth` scale is
 replaced like the others, so `max-w-4xl` compiles to nothing and a sixth width
 cannot appear quietly. `panel` (36rem) is the one non-page width the scale
@@ -396,6 +412,18 @@ important   MessageSquareWarning    text-secondary    text
 warning     TriangleAlert           warning           warning
 caution     OctagonAlert            danger            danger
 ```
+
+In the rendered editor the title row is a button (`.kh-callout-label`: the same
+glyph and word, a `bg-hover` fill under the pointer, the shared focus ring) that
+opens a menu of the five kinds, the one in force checked
+(`role="menuitemradio"`). It is the block menu's surface (`.kh-block-move-menu`:
+`lg` radius, a border, `popover` elevation, `kh-bg-raised`), drawn on the body,
+opened by click, Enter, Space or ArrowDown/ArrowUp on the label, moved with the
+arrow keys, Home and End, and closed by Escape (focus returns to the label, and
+the block is not selected: the menu takes the key before the block-selecting
+Escape), Tab or a click outside. Choosing a kind rewrites only the marker to
+`[!KIND]` in one undo step; the body, its links and its wikilinks are untouched
+(editor Notion-parity spec, decision 20). The reader's title stays text.
 
 No token was added. There is no information blue and no emphasis purple in the
 palette, and five hues inside the reading column would be decorative colour,
@@ -838,15 +866,21 @@ empty line (`editor/slash-commands.ts`).
 into the column's padding and the pane's margin, so the text being edited sits
 exactly where the reader puts it — same left edge, same measure — and nothing
 moves when a document goes from reading to editing or when the editor replaces
-the server's stand-in. Where the pane has less than 56px left of the text, the
-pane clips the part that does not fit and the controls are kept inside the pane,
-over the text's first characters while they show. The gutter is where the
+the server's stand-in. At the default layout — a 1440px window with the primary
+nav and the explorer open — and at every wider one, the gutter has its 56px and
+the controls never cover text (editor Notion-parity spec, decision 14): the
+column makes the room in its own left padding where its margin does not
+(§7, "Three page containers"), so the text the reader sees moved with it. Where
+the pane still has less than 56px left of the text — a pane under 60rem, as at a
+narrower window or beside the open Details panel — the pane clips the part that
+does not fit and the controls are kept inside the pane, over the text's first
+characters while they show. The gutter is where the
 pointer shows the controls; in the text it does nothing, so selecting prose is
 as it was.
 
 The controls are two `size-6` icon buttons in muted text with the shared focus
-ring: one adds a paragraph below, one is dragged to move the block and clicked
-for the block menu. The menu offers **Turn into** (Text, Heading 1–3, Bulleted
+ring: one adds a paragraph below and opens the `/` list on it, one is dragged to
+move the block and clicked for the block menu. The menu offers **Turn into** (Text, Heading 1–3, Bulleted
 list, Numbered list, To-do list, Quote, Code), **Duplicate**, **Delete**, then a
 rule and **Move up** / **Move down**. Turn into is a second page of the same
 menu, not a nested popover: a conversion that would drop content — a several-item
@@ -866,6 +900,48 @@ does: focus stays in the document, the editor is a `combobox` while it is
 open, and the keys are the editor's. An empty paragraph the caret is in reads
 `Type "/" for commands` in muted text; an empty document keeps its own
 sentence instead.
+
+Each row leads with a 16px Lucide glyph (`size-4`, `text-kh-text-muted`, also
+on the row in force, `aria-hidden`) beside its label and its `caption` hint:
+Type, Heading 1–3, List, List ordered, List todo, Quote, Code, Minus, Table,
+List collapse, and for Callout the reader's note glyph, Info. What follows `/`
+matches a row's label or words anywhere, or one of its aliases by prefix —
+`p`, `h1`–`h3`, `ul`/`bullet`, `ol`/`number`, `todo`/`checkbox`, `quote`,
+`code`, `hr`/`line`, `table`, `toggle`, `callout` — case-insensitively, and the
+rows an alias matches come first, so `/h2` or `/ol` with Enter is the block it
+names (decision 16).
+
+`+` writes a visible `/` on the line it adds and opens the same list there,
+through the path a typed `/` takes: what is typed next is that `/`'s query, in
+sight, and behaves exactly as a typed `/query` does (decision 15, deviation).
+Escape, leaving the editor, or moving the caret off the line while the `/` is
+still alone takes the `/` back, leaving the empty line with the caret in it;
+whatever was typed after the `/` stays. A `/` typed by hand is never taken
+back.
+
+**A block can be chosen from the keyboard** (editor Notion-parity spec,
+decisions 6-8; `editor/notion-keys.ts`). Escape in the text, with no menu open,
+selects the current top-level block as a node selection, drawn `kh-bg-selected`
+at the `sm` radius with no outline (`.kh-editor > .ProseMirror-selectednode`);
+Escape again returns to the text. The block menu, the `[[` and `/` lists and the
+toolbar's link field take Escape first. A selected block is the current block
+for `Mod-Shift-ArrowUp/Down` (move) and `Mod-d` (duplicate), which run the same
+commands as the menu's Move and Duplicate. No colour, radius or elevation token
+was added.
+
+**The selection toolbar and the link card** (editor Notion-parity spec,
+decisions 9-13; `editor/selection-toolbar.ts`). The toolbar holds Bold, Italic,
+Strikethrough, Inline code, Link, Heading 1-3, the two lists and Toggle, each a
+`ghost` `sm` button that reads `aria-pressed` when active. `Mod-k` over a text
+selection opens its link field and is handled by the editor, so the command
+palette (which yields to a handled event) stays closed; with no selection it is
+the palette. A caret that enters a link, by key or by a plain click, shows
+`.kh-link-card` under it: the address in `caption` muted text, then Open
+(`target=_blank`, `noopener noreferrer`), Edit (the toolbar's own link field,
+not a second editor) and Remove. It is the toolbar's surface (`lg` radius, a
+border, `popover` elevation, `kh-bg-raised`), one at a time, and goes when the
+caret leaves the link, on Escape (which it takes ahead of the block-selecting
+Escape), or when the link scrolls out of view. No token was added.
 
 Layers: the controls sit at 30, under the app's popovers; the two menus and
 the drop line at 50. None of it is printed.
@@ -1707,7 +1783,7 @@ distinction that cannot be made with what exists, not to match a count.
 
 ## October 2026 remediation
 
-Desktop navigation keeps a 176px primary rail, collapsible to 48px, beside an independent 288px contextual explorer, collapsible to a 40px strip. Wide screens have no topbar: rail, explorer and content all start at the top of the window, and the explorer retains its full height when the primary rail collapses. Between 1024 and 1279px the inline explorer is replaced by a 40px strip that opens the same explorer in a left drawer over the content; the drawer closes on Escape, its X, or any page change, and Escape or the X returns focus to the strip. The 288px column returns at 1280px. This is the retrieval-first compromise: the 176px rail is unchanged, while a 1024px window no longer spends 288px on a second column. Favorites and Recent are open on arrival; an explicit collapse still persists. Under 1024px the app shell's Menu drawer remains the one explorer. The explorer has no multi-select: each row's own menu acts on its one document, and a document row shows its glyph, not a checkbox (multi-select was removed on 2026-10-28 because the hover checkbox read as noise over the list). The primary rail opens with the wordmark and its collapse control, then the workspace switcher, then a Search row drawn like navigation. A personal workspace puts **Inbox** first among the navigation rows, with the unread count beside it; it is the only Inbox control at every width — the rail's header row is the wordmark and the collapse control, and the narrow topbar has none (`2026-10-31-single-inbox-entry-design.md`). Where its own box is at least 75rem wide the Inbox is a 22rem discussion index beside the selected discussion: one row per discussion, newest activity first, over four relationship tabs (`All` / `My documents` / `Following` / `Mentions`) and status and unread filters that are server-side and live in the URL; the selection is the thread (`?item=`), nothing is selected on arrival because selecting marks it read, ↑/↓ move it, and a modified click still opens the document. The page has no unread count of its own — the rail badge is the only number — and documents and folders shared with the reader by name sit in a separate unread **Shared with you** section (`2026-11-04-inbox-discussion-index-design.md`). Narrower, it is the same index as a plain list whose rows open the document. The reader pins its breadcrumb line (location › title, with Markdown/Share/Comments/Details, then the favorite star and the document overflow) to the top of the reading column while the rest of its header scrolls away. The overflow carries the same registry actions as a tree row's menu — Copy link, Duplicate, Move, Download Markdown and Archive/Restore; Share keeps its own button — so a page can be arranged without going back to the tree. The document's own title is `page-title` 32/40, with its page icon above it; when the title is the H1 the document opens with, that leading H1 wears the same scale. The icon is a document-level choice and never a revision. The same icon follows the document to every retrieval surface — tree rows, Home's Recent and Favorites, the ⌘K palette, full search and the shared page — so scanning for a glyph works wherever a reader looks. A pinned bar's lower edge is not a rule: while it is pinned, the content scrolling under it fades into it through a 16px gradient from `--kh-bg` to transparent (`.kh-fade-below`, in `globals.css`), drawn below the bar, click-through, and never taller than would swallow a line of text. The composer's pinned command line uses the same edge. The rule is for a page's pinned *top line* over reading or writing; a sticky table header and a pinned bottom action bar keep their rule, which separates a header from its rows and an action bar from the form it acts on. On a document page the rail's first row (wordmark), the explorer's first row (Documents) and the document's breadcrumb line are each 48px and centred on one line, so the three columns share one top edge. Narrow screens keep a topbar (Menu, search icon, and the document's title, star and actions once its header scrolls away) and one Menu drawer headed by the switcher (`2026-10-08-workspace-switcher-in-rail-design.md`). Reader/composer share DocumentPane geometry and lay a document out line for line alike — the 48px path line, the page icon and `page-title` title with one muted caption line under it, the outline (rail or disclosure), then the text — so nothing moves between reading and editing (`tests/e2e/zz-editor-blocks.spec.ts` measures both). The composer pins Save/Cancel/Markdown in its path line; its draft status and title hints take the reader's "Updated" line, which stays one line tall when empty and may wrap to a second only while a status needs it (a rename notice beside a draft status on a phone) — a jump the writer caused, not one between reading and editing. Details is the reader's panel with the reader's open state: the document is edited inline, so a panel open while reading is open while editing and after Cancel or Save, beside text that has not moved. The composer has a Details button in the reader's place, last in its path line, but no ⌘I, which the editor gives to italic. See `2026-10-02-linear-remediation-design.md` for the coordinated contract. Kbd and graph action hints use `text-muted` to meet small-text contrast. Desktop controls retain 24/32/40px heights; coarse pointers get at least 40px physical targets through the shared control classes.
+Desktop navigation keeps a 176px primary rail, collapsible to 48px, beside an independent 288px contextual explorer, collapsible to a 40px strip. Wide screens have no topbar: rail, explorer and content all start at the top of the window, and the explorer retains its full height when the primary rail collapses. Between 1024 and 1279px the inline explorer is replaced by a 40px strip that opens the same explorer in a left drawer over the content; the drawer closes on Escape, its X, or any page change, and Escape or the X returns focus to the strip. The 288px column returns at 1280px. This is the retrieval-first compromise: the 176px rail is unchanged, while a 1024px window no longer spends 288px on a second column. Favorites and Recent are open on arrival; an explicit collapse still persists. Under 1024px the app shell's Menu drawer remains the one explorer. The explorer has no multi-select: each row's own menu acts on its one document, and a document row shows its glyph, not a checkbox (multi-select was removed on 2026-10-28 because the hover checkbox read as noise over the list). The primary rail opens with the wordmark and its collapse control, then the workspace switcher, then a Search row drawn like navigation. A personal workspace puts **Inbox** first among the navigation rows, with the unread count beside it; it is the only Inbox control at every width — the rail's header row is the wordmark and the collapse control, and the narrow topbar has none (`2026-10-31-single-inbox-entry-design.md`). Where its own box is at least 75rem wide the Inbox is a 22rem discussion index beside the selected discussion: one row per discussion, newest activity first, over four relationship tabs (`All` / `My documents` / `Following` / `Mentions`) and status and unread filters that are server-side and live in the URL; the selection is the thread (`?item=`), nothing is selected on arrival because selecting marks it read, ↑/↓ move it, and a modified click still opens the document. The page has no unread count of its own — the rail badge is the only number — and documents and folders shared with the reader by name sit in a separate unread **Shared with you** section (`2026-11-04-inbox-discussion-index-design.md`). Narrower, it is the same index as a plain list whose rows open the document. The reader pins its breadcrumb line (location › title, with Markdown/Share/Comments/Details, then the favorite star and the document overflow) to the top of the reading column while the rest of its header scrolls away. The overflow carries the same registry actions as a tree row's menu — Copy link, Duplicate, Move, Download Markdown and Archive/Restore; Share keeps its own button — so a page can be arranged without going back to the tree. The document's own title is `page-title` 32/40, with its page icon above it; when the title is the H1 the document opens with, that leading H1 wears the same scale. The icon is a document-level choice and never a revision. The picker is a popover over a bundled catalog of about 350 emoji (`src/lib/emoji-catalog.ts`, no dependency, no fetch), grouped Suggested (the original 16, first and not repeated), Smileys, People, Nature, Food, Activities, Travel, Objects and Symbols, each with English and Traditional Chinese keywords. Its search field takes focus on open; a query matches name and keywords as a case-insensitive substring and lists results in catalog order, or says "No emoji match." in muted body-sm text. Arrow keys move through the grid (a cell shows focus with the focus ring, drawn inset so the scrolling list does not clip it, as menu rows do — the hover fill alone is not a focus indicator; ArrowUp from the first row returns to the field), Enter in the field or on a cell chooses, Escape closes and returns focus to the trigger, and IME composition is never read as a key. "Remove icon" stays. The server accepts exactly the catalog's characters (`isPageIcon`); `tests/e2e/page-icon-picker.spec.ts` drives it. The same icon follows the document to every retrieval surface — tree rows, Home's Recent and Favorites, the ⌘K palette, full search and the shared page — so scanning for a glyph works wherever a reader looks. A pinned bar's lower edge is not a rule: while it is pinned, the content scrolling under it fades into it through a 16px gradient from `--kh-bg` to transparent (`.kh-fade-below`, in `globals.css`), drawn below the bar, click-through, and never taller than would swallow a line of text. The composer's pinned command line uses the same edge. The rule is for a page's pinned *top line* over reading or writing; a sticky table header and a pinned bottom action bar keep their rule, which separates a header from its rows and an action bar from the form it acts on. On a document page the rail's first row (wordmark), the explorer's first row (Documents) and the document's breadcrumb line are each 48px and centred on one line, so the three columns share one top edge. Narrow screens keep a topbar (Menu, search icon, and the document's title, star and actions once its header scrolls away) and one Menu drawer headed by the switcher (`2026-10-08-workspace-switcher-in-rail-design.md`). Reader/composer share DocumentPane geometry and lay a document out line for line alike — the 48px path line, the page icon and `page-title` title with one muted caption line under it, the outline (rail or disclosure), then the text — so nothing moves between reading and editing (`tests/e2e/zz-editor-blocks.spec.ts` measures both). The composer pins Save/Cancel/Markdown in its path line; its draft status and title hints take the reader's "Updated" line, which stays one line tall when empty and may wrap to a second only while a status needs it (a rename notice beside a draft status on a phone) — a jump the writer caused, not one between reading and editing. Details is the reader's panel with the reader's open state: the document is edited inline, so a panel open while reading is open while editing and after Cancel or Save, beside text that has not moved. The composer has a Details button in the reader's place, last in its path line, but no ⌘I, which the editor gives to italic. See `2026-10-02-linear-remediation-design.md` for the coordinated contract. Kbd and graph action hints use `text-muted` to meet small-text contrast. Desktop controls retain 24/32/40px heights; coarse pointers get at least 40px physical targets through the shared control classes.
 
 
 ### Shared article discussion layout (2026-10-12, PR #168)
@@ -1758,17 +1834,44 @@ No token was added.
 ### Rendered slash blocks (2026-10-15, PR #200 follow-up)
 
 The rendered editor shows a Toggle as a native disclosure with an editable,
-plain-text summary and a block body. New toggles open with the caret in the body;
-clicking the summary's chevron or pressing Alt+Enter changes the saved open state.
-Typing in the summary edits its title; Enter moves into the body. Existing bare
+plain-text summary and a block body. A toggle made from `/` or `+` opens with the
+caret in its (empty) summary, which keeps its `Details` placeholder; one made from
+a paragraph by the toolbar keeps the caret in the empty body. The chevron and the
+summary text share one line: in the editor the chevron is hung in the summary's
+20px left padding, as tall as the first line (`1lh`) and centred in it, so the
+trailing break ProseMirror keeps in an empty title cannot push it, or the
+placeholder, onto a second line; the reader's own chevron is unchanged, and so is
+the Markdown of every toggle already written (editor Notion-parity spec, decision
+17). Clicking the summary's chevron or pressing Alt+Enter changes the saved open
+state. Typing in the summary edits its title; Enter at its end moves to the first
+line of the body, opening a collapsed toggle first. Existing bare
 `details`/`summary` Markdown uses the reader's exact recognizer; unsupported HTML
 stays inert text. This supersedes the earlier raw-tag editing limitation.
 
 Callouts show the reader's glyph and kind title. Their source marker remains in
-the document for Markdown round trips but is hidden in rendered editing; change
-the kind in Markdown mode. This supersedes the marker-visible portion of the
-editor reader-hints contract. Their bodies remain editable.
+the document for Markdown round trips but is hidden in rendered editing; the kind
+is changed from the title, a button that opens a menu of the five kinds (§8,
+"Callouts"). This supersedes the marker-visible portion of the editor
+reader-hints contract. Their bodies remain editable.
+
+A code block being edited (its raw code open under `Edit code`) shows a
+`Language` `<select>` beside `Done editing code`: Plain text first, then the
+languages the reader's highlighter registers (`code-highlight.ts`), plus the
+fence's own language when it is none of them so opening the field never loses
+it. Choosing one rewrites the fence's language in the Markdown; Plain text writes
+a fence with none. The field is `caption` text, `md` radius, the border token,
+with the shared focus ring, and it is absent while the block is shown. In the
+code being edited, Tab inserts two spaces at the caret (or at the start of every
+selected line) and Shift-Tab removes up to two leading spaces from each line the
+caret or selection touches; Tab is bound nowhere else outside a table's last
+cell. Escape there ends the editing state and selects the code block (a second Escape returns to its text), which is how a keyboard user steps out; an open language field or callout menu takes it first (decisions 7, 19). In a table, Tab in the
+last cell adds a row of the same width and moves to its first cell; Shift-Tab is
+unchanged (decision 18). No token was added.
 
 Editor tables use the reader's bordered scroll container, 70vh height limit,
 sticky header and 8rem minimum cell width. Cell paragraphs have no article-level
 vertical margin, so a one-line cell has the reader's height. No token is added.
+
+### Pasted HTML
+
+The rendered editor reads clipboard HTML through `editor/paste-html.ts` (a `transformPastedHTML` step; the Markdown reader is untouched and nothing is passed through as markup). `<s>` and `<strike>` paste as strikethrough; a `<li>` led by a checkbox `<input>` (bare, or inside a `<p>` or `<label>`) pastes as a to-do carrying its checked state; a `<table>` with no `<thead>` and no `<th>` uses its first row as the header row. `tests/unit/editor-paste-html.test.ts` pastes each and re-opens the saved Markdown.

@@ -26,7 +26,8 @@ for (const width of [1680, 900, 390]) {
     await page.screenshot({ path: testInfo.outputPath(`selection-toolbar-${width}.png`) });
     const comment = toolbar.getByRole("button", { name: "Comment on selection" });
     if (width === 900) {
-      for (let index = 0; index < 9; index++) await page.keyboard.press("Tab");
+      // Reached by keyboard, however many formatting buttons come first: the count is not a contract.
+      for (let index = 0; index < 20 && !(await comment.evaluate(node => node === document.activeElement)); index++) await page.keyboard.press("Tab");
       await expect(comment).toBeFocused();
       await page.keyboard.press("Enter");
     } else await comment.click();
