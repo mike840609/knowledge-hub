@@ -130,4 +130,46 @@ test.describe("typing rules and keys in the rendered editor", () => {
     await expect(surface.locator(":scope > p")).toHaveText(["Head"]);
     await expect(surface.locator("ul > li")).toHaveCount(1);
   });
+
+  test("Escape belongs to the block menu, the link field and the code editor before it selects a block", async ({ page }) => {
+    const workspaceId = await mySpace(page);
+    const surface = await openEditor(page, await createNote(page, workspaceId, unique("Precedence"), "First words here\n\n```js\nconst x = 1;\n```\n\nLast"));
+    const selected = surface.locator(".ProseMirror-selectednode");
+    const settle = () => page.waitForTimeout(150);
+
+    // (a) The block menu: Escape closes it and does not select the block.
+    await surface.locator("p").first().click();
+    await page.keyboard.press("Home");
+    await settle();
+    await page.keyboard.press("Alt+F10");
+    await expect(page.getByRole("button", { name: "Add paragraph below" })).toBeFocused();
+    await page.getByRole("button", { name: "Move block" }).click();
+    const menu = page.getByRole("menu", { name: "Block actions" });
+    await expect(menu).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+    await expect(selected).toHaveCount(0);
+
+    // (b) The toolbar's link field: Escape closes the field and does not select the block.
+    await surface.locator("p").first().click();
+    await page.keyboard.press("Home");
+    await page.keyboard.press("Shift+Control+ArrowRight");
+    await settle();
+    const toolbar = page.getByRole("toolbar", { name: "Formatting" }).or(page.locator('[aria-label="Formatting"]'));
+    await toolbar.getByRole("button", { name: "Link", exact: true }).click();
+    const field = page.getByLabel("Link address");
+    await expect(field).toBeVisible();
+    await field.press("Escape");
+    await expect(field).toBeHidden();
+    await expect(selected).toHaveCount(0);
+
+    // (c) The code editor: Escape inside the code being edited does not select the block.
+    await surface.getByRole("button", { name: "Edit code", exact: true }).click({ force: true });
+    await expect(surface.getByRole("button", { name: "Done editing code" })).toBeVisible();
+    await settle();
+    await page.keyboard.press("Escape");
+    await settle();
+    await expect(selected).toHaveCount(0);
+    await expect(surface.getByRole("button", { name: "Done editing code" })).toBeVisible();
+  });
 });

@@ -270,6 +270,13 @@ it("Escape closes the [[ list first", async () => {
   expect(view.state.selection).toBeInstanceOf(TextSelection);
 });
 
+it("Escape in code being edited is the code editor's, and selects no block", async () => {
+  const { view } = await open("```js\nconst x = 1;\n```\n\nTail");
+  caretAt(view, 3);
+  press(view, "Escape");
+  expect(view.state.selection).toBeInstanceOf(TextSelection);
+});
+
 it("Escape is left alone while composing and when the target is a form field", async () => {
   const { view } = await open("One");
   caretAt(view, 2);

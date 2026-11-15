@@ -223,6 +223,8 @@ const escapeSelection = $prose(
           if (event.target instanceof Element && event.target.closest("input, select, textarea, [contenteditable='false']")) return false;
           const { selection, doc } = view.state;
           if (selection instanceof AllSelection) return false;
+          // The caret in code being edited: that editor owns Escape (it is how a keyboard user steps out of it).
+          if (selection.$from.parent.type.name === "code_block") return false;
           let tr;
           if (selection instanceof NodeSelection && selection.$from.depth === 0) {
             tr = view.state.tr.setSelection(Selection.near(doc.resolve(Math.min(selection.from + 1, doc.content.size)), 1));
