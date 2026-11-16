@@ -51,7 +51,7 @@ export function blockGutter() {
     view(view: EditorView) {
       const dom = view.dom;
       const toolbar = document.createElement("div"); toolbar.className = "kh-block-gutter"; toolbar.hidden = true; toolbar.setAttribute("role", "group"); toolbar.setAttribute("aria-label", "Block actions");
-      const add = document.createElement("button"); add.type = "button"; add.setAttribute("aria-label", "Add paragraph below"); add.title = "Add paragraph below (Alt+F10 for block actions)"; add.appendChild(icon("plus"));
+      const add = document.createElement("button"); add.type = "button"; add.setAttribute("aria-label", "Add block below"); add.title = "Add block below (Alt+F10 for block actions)"; add.appendChild(icon("plus"));
       const grip = document.createElement("button"); grip.type = "button"; grip.draggable = true; grip.setAttribute("aria-label", "Move block"); grip.title = "Drag to move. Click for block actions."; grip.setAttribute("aria-haspopup", "menu"); grip.setAttribute("aria-expanded", "false"); grip.appendChild(icon("grip"));
       toolbar.append(add, grip);
       const menu = document.createElement("div"); menu.className = "kh-block-move-menu"; menu.hidden = true; menu.setAttribute("role", "menu"); menu.setAttribute("aria-label", "Block actions");

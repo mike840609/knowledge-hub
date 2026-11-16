@@ -24,7 +24,8 @@ editor must write a wikilink back as it read it").
    item of the same kind. Turning one item into a leaf (paragraph, heading,
    quote, code) splits its list around the result; turning it into another
    list kind moves that item out into a list of its own, with an ordered list
-   that goes on after it keeping its numbers. Escape still selects the
+   that goes on after it keeping its numbers. Delete removes the item and keeps
+   the list; deleting the only item removes the list. Escape still selects the
    top-level block, as 2026-11-15 decision 7 says, and the list keys still act
    on that selection.
 3. **A table column can be aligned.** The table actions add a **Column
@@ -37,15 +38,18 @@ editor must write a wikilink back as it read it").
    keyboard users and becomes **Done editing code**.
 5. **Turn into reaches Toggle and Callout.** A paragraph or heading becomes a
    toggle with its words as the summary, or a Note callout with its words as
-   the body. Turning a callout into text drops the `[!NOTE]` marker rather than
-   leaving it as prose.
+   the body. The summary is plain text by design (`details_summary` accepts
+   text only): a wikilink keeps its written form, marks become text. Turning a
+   callout into text drops the marker line only; a marker-looking line that is
+   not alone is a plain quote and stays as written.
 6. **The `/` list is grouped and links to pages.** Rows sit under Basic blocks,
-   Lists, Blocks and Links. **Page link** replaces the `/query` paragraph with
+   Lists, Blocks and Links; each heading appears once per query, and a group
+   takes the best rank of its rows. **Page link** replaces the `/query` paragraph with
    `[[` and puts the caret after it, so the existing `[[` list owns the rest;
    there is still one way to write a wikilink.
-7. **There is one editing surface.** The peek panel's Edit and a conflict's
-   recovery link open the document page, which is already the editor for a
-   writer. `/edit` remains only as a direct address, not an entry point.
+7. **There is one editing surface.** The peek panel's Edit opens the document
+   page, which is already the editor for a writer. `/edit` already redirects
+   there; the unreferenced composer wrapper (`document-editor.tsx`) is removed.
 
 ## Out of scope, recorded
 

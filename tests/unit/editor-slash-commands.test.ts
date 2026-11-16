@@ -306,3 +306,11 @@ it("offers a page link that hands off to the [[ list", async () => {
   expect(view.state.doc.firstChild?.textContent).toBe("[[");
   expect(view.state.selection.from).toBe(3);
 });
+
+it("keeps each group together for a filtered query", async () => {
+  const { view } = await open();
+  view.dispatch(view.state.tr.insertText("/t"));
+  const groups = [...menu().querySelectorAll("[data-slash-group]")].map((group) => group.textContent);
+  expect(groups).toEqual([...new Set(groups)]);
+  expect(groups).toEqual(["Basic blocks", "Lists", "Blocks", "Links"]);
+});

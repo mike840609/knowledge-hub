@@ -1,3 +1,4 @@
+import { closeHistory } from "@milkdown/kit/prose/history";
 import { Plugin, type Command } from "@milkdown/kit/prose/state";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { addColumnAfter, addRowAfter, deleteColumn, deleteRow, deleteTable, isInTable } from "@milkdown/kit/prose/tables";
@@ -43,7 +44,7 @@ function setColumnAlignment(view: EditorView, alignment: string | null): void {
       cellPos += cell.nodeSize;
     }
   });
-  if (transaction.docChanged) view.dispatch(transaction);
+  if (transaction.docChanged) view.dispatch(closeHistory(transaction));
 }
 
 /** Controls follow the selected cell; they live outside ProseMirror's editable table. */

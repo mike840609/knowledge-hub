@@ -1895,21 +1895,27 @@ seven gaps left after the 22-decision pass of 2026-11-15:
 - The pointer's gutter, the block menu, drag, `+`, `Mod-d` and
   `Mod-Shift-ArrowUp/Down` act on the nearest list item, not the whole list.
   A conversion of one item splits its list around it; three menu items cannot
-  drop content (`canTurnInto`). Escape still selects the top-level block, as
-  the 2026-11-15 decision 7 says, and the list keys still act on that selection.
-- The table actions carry a **Column alignment** select (default, left, centre,
+  drop content (`canTurnInto`). Delete removes the item and keeps the list, and
+  removes the list itself when it was the only item. Escape still selects the
+  top-level block, as the 2026-11-15 decision 7 says, and the list keys still
+  act on that selection.
+- The table actions carry a **Column alignment** select (default, left, center,
   right). It writes GFM's delimiter row; the reader already renders it. A
   header-row toggle is not offered: GFM requires a header row, so there is no
   Markdown state for "no header".
 - Pressing a rendered code block opens its raw code, as Notion's does; the
   corner button stays for keyboard users and says "Done editing code".
-- Turn into adds **Toggle** and **Callout**. A callout's marker is dropped when
-  it is turned into text, rather than left as prose.
+- Turn into adds **Toggle** and **Callout**. A toggle's summary is plain text by
+  design (`details_summary` accepts text only): a wikilink keeps its written
+  form, marks become text. A callout's marker line is dropped when it is turned
+  into text; a marker-looking line that is not alone on its line is a plain
+  quote and stays as written.
 - The `/` list is grouped (Basic blocks, Lists, Blocks, Links) and adds
   **Page link**, which hands off to the `[[` list rather than inventing a second
   way to write a wikilink.
-- The peek panel's **Edit** and a conflict's recovery link open the document
-  page, the one editing surface; `/edit` remains only as a direct address.
+- The peek panel's **Edit** opens the document page, the one editing surface.
+  `/edit` already redirects there; the unreferenced composer wrapper that
+  still held a conflict link is removed.
 
 Out of scope, recorded: comments inside a team document's editor (the review
 API is document-scoped but its editor wiring is personal-workspace-only; making

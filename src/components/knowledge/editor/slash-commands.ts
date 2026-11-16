@@ -70,6 +70,8 @@ function loneSlash(state: EditorState, pos: number): [number, number] | null {
  */
 export function matchingCommands(query: string): readonly Command[] {
   const q = query.toLowerCase().trim();
+  // Rows are shown under one heading each, in this order; the rank inside a group is preserved.
+  const order = ["Basic blocks", "Lists", "Blocks", "Links"] as const;
   const groups = [
     (command: Command) => command.aliases.some(alias => alias === q),
     (command: Command) => command.label.toLowerCase().startsWith(q),
@@ -79,7 +81,17 @@ export function matchingCommands(query: string): readonly Command[] {
   ];
   const found: Command[] = [];
   for (const test of groups) for (const command of commands) if (!found.includes(command) && test(command)) found.push(command);
-  return found;
+  // Each heading appears once, and a group keeps the best rank of its rows: a label prefix in one
+  // group still outranks a word match in another, while the rows of one heading stay together.
+  const rankOf = (command: Command) => groups.findIndex(test => test(command));
+  const orderIndex = (command: Command) => order.indexOf(command.group as typeof order[number]);
+  const groupRank = new Map<string, number>();
+  for (const command of found) groupRank.set(command.group, Math.min(groupRank.get(command.group) ?? Infinity, rankOf(command)));
+  return [...found].sort((a, b) =>
+    (groupRank.get(a.group)! - groupRank.get(b.group)!) ||
+    (orderIndex(a) - orderIndex(b)) ||
+    (rankOf(a) - rankOf(b)) ||
+    (found.indexOf(a) - found.indexOf(b)));
 }
 
 /** Each row's 16px Lucide glyph, drawn once from lucide-react as reader-hints.ts draws a callout's, then cloned. */

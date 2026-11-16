@@ -123,7 +123,7 @@ test.describe("blocks in the rendered editor", () => {
         // Both controls stand in the gutter: inside the pane, and wholly left of the text.
         expect(controls.x, `at ${width}px`).toBeGreaterThanOrEqual(pane.x);
         expect(controls.x + controls.width, `at ${width}px`).toBeLessThanOrEqual(text.x);
-        await expect(page.getByRole("button", { name: "Add paragraph below" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Add block below" })).toBeVisible();
         await expect(page.getByRole("button", { name: "Move block" })).toBeVisible();
       }
     }
@@ -169,7 +169,7 @@ test.describe("blocks in the rendered editor", () => {
     const surface = await openEditor(page, sourceUrl);
     await expect(surface.locator("[data-kh-wiki-raw]")).toHaveCount(1);
     await page.keyboard.press("Alt+F10");
-    await expect(page.getByRole("button", { name: "Add paragraph below" })).toBeFocused();
+    await expect(page.getByRole("button", { name: "Add block below" })).toBeFocused();
     await page.getByRole("button", { name: "Move block" }).click();
     await page.getByRole("menuitem", { name: "Move down" }).click();
     await expect(surface.locator("p").first()).toHaveText("Second paragraph.");
@@ -194,7 +194,7 @@ test.describe("blocks in the rendered editor", () => {
     const surface = composer(page).locator('.ProseMirror[aria-label="Content"]');
     // A new empty line from the block controls, below the paragraph the caret is in.
     await page.keyboard.press("Alt+F10");
-    await page.getByRole("button", { name: "Add paragraph below" }).click();
+    await page.getByRole("button", { name: "Add block below" }).click();
     await expect(surface).toBeFocused();
     // + has opened the list already on a "/" of its own; Escape takes the lone "/" back and leaves the
     // empty line, which says which key to press (the document's own empty-state sentence is not it).
@@ -234,7 +234,7 @@ test("+ opens the \"/\" list on a \"/\" on the new line; Escape takes it back, a
 
   // The pointer's way: hover the gutter, then +.
   await page.mouse.move(text.x - 20, text.y + 10);
-  await page.getByRole("button", { name: "Add paragraph below" }).click();
+  await page.getByRole("button", { name: "Add block below" }).click();
   await expect(list).toBeVisible();
   await expect(surface).toBeFocused();
   await expect(surface).toHaveAttribute("aria-controls", (await list.getAttribute("id"))!);
@@ -291,7 +291,7 @@ test("slash blocks render while editing and survive save and reopen", async ({ p
   let surface = await openEditor(page, url);
   async function insert(query: string) {
     await page.keyboard.press("Alt+F10");
-    await page.getByRole("button", { name: "Add paragraph below" }).click();
+    await page.getByRole("button", { name: "Add block below" }).click();
     // + has written the "/" already.
     await page.keyboard.type(query);
     await page.getByRole("listbox").getByRole("option", { name: new RegExp(query, "i") }).click();

@@ -13,9 +13,9 @@ afterEach(async () => {
   document.body.innerHTML = "";
 });
 
-async function open(markdown: string) {
+async function open(markdown: string, editable = true) {
   const root = document.body.appendChild(document.createElement("div"));
-  const editor = await createMarkdownEditor({ root, markdown, className: "kh-editor", ariaLabel: "Content", editable: true, onUserEdit() {}, onMarkdown() {}, allowImage: () => false, extraPlugins: [taskCheckbox()] });
+  const editor = await createMarkdownEditor({ root, markdown, className: "kh-editor", ariaLabel: "Content", editable, onUserEdit() {}, onMarkdown() {}, allowImage: () => false, extraPlugins: [taskCheckbox()] });
   opened.push(editor);
   return { root, editor, view: editor.action((ctx) => ctx.get(editorViewCtx)) };
 }
@@ -54,4 +54,35 @@ it("is one undo step, and only on a real to-do", async () => {
   expect(editor.getMarkdown()).toContain("- [ ] First");
   // A plain bullet has no checkbox.
   expect(boxes(root)).toHaveLength(1);
+});
+
+// Review finding (2026-11-17): decorations render in a read-only editor too, so a revision
+// snapshot showed a focusable checkbox that could not be pressed.
+it("offers no control at all when the document opens read-only", async () => {
+  const { root, editor } = await open("- [ ] First\n", false);
+  expect(boxes(root)).toHaveLength(0);
+  expect(root.querySelector(".kh-task-toggle")).not.toBeNull();
+  editor.setEditable(true);
+  expect(boxes(root)).toHaveLength(1);
+});
+
+it("turns its control inert when the editor becomes read-only, and live again", async () => {
+  const { root, editor } = await open("- [ ] First\n");
+  expect(boxes(root)).toHaveLength(1);
+  editor.setEditable(false);
+  expect(boxes(root)).toHaveLength(0);
+  const before = editor.getMarkdown();
+  root.querySelector<HTMLElement>(".kh-task-toggle")!.click();
+  expect(editor.getMarkdown()).toBe(before);
+  editor.setEditable(true);
+  expect(boxes(root)).toHaveLength(1);
+});
+
+it("keeps focus on the control after a keyboard tick", async () => {
+  const { root } = await open("- [ ] First\n");
+  const box = boxes(root)[0];
+  box.focus();
+  box.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true }));
+  expect(document.activeElement?.getAttribute("role")).toBe("checkbox");
+  expect(document.activeElement?.getAttribute("aria-checked")).toBe("true");
 });

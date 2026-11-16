@@ -3,6 +3,7 @@ import { Fragment } from "@milkdown/kit/prose/model";
 import { closeHistory } from "@milkdown/kit/prose/history";
 import { Selection, type Transaction } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
+import { calloutKind } from "@/shared/markdown/remark-callouts";
 
 export type EditorBlock = { pos: number; node: ProseNode };
 export function topLevelBlocks(doc: ProseNode): EditorBlock[] {
@@ -54,7 +55,15 @@ export type BlockKind =
   | "other";
 
 const LIST_KINDS: ReadonlySet<BlockKind> = new Set(["bullet", "ordered", "task"]);
-const CALLOUT_MARKER = /^\[![A-Z]+\]/;
+/** A quote the reader draws as a callout: its marker is alone on the first line (reader-hints.ts's rule). */
+function calloutOf(quote: ProseNode): string | null {
+  const paragraph = quote.firstChild;
+  const line = paragraph?.type.name === "paragraph" ? paragraph.firstChild : null;
+  if (!paragraph || !line?.isText) return null;
+  const next = paragraph.maybeChild(1);
+  if (next && next.type.name !== "hardbreak") return null;
+  return calloutKind(line.text ?? "");
+}
 
 /** What the block is now, for the menu's labels and for which conversions keep every byte. */
 export function blockKind(node: ProseNode): BlockKind {
@@ -74,7 +83,7 @@ export function blockKind(node: ProseNode): BlockKind {
     case "ordered_list":
       return "ordered";
     case "blockquote":
-      return CALLOUT_MARKER.test(node.firstChild?.firstChild?.textContent ?? "") ? "callout" : "quote";
+      return calloutOf(node) ? "callout" : "quote";
     case "code_block":
       return "code";
     case "details":
@@ -177,7 +186,7 @@ function leafFrom(node: ProseNode, target: LeafKind, schema: EditorView["state"]
     case "code": {
       // `textContent` drops a hard break entirely; a code block must keep the
       // line the writer sees. `leafText` supplies the newline for hard breaks.
-      const text = node.type.name === "code_block" ? node.textContent : node.textBetween(0, node.content.size, "\n", "\n");
+      const text = node.type.name === "code_block" ? node.textContent : node.textBetween(0, node.content.size, "\n", (leaf) => leaf.type.name === "wiki_link" ? String(leaf.attrs.raw ?? "") : leaf.type.name === "hardbreak" ? "\n" : String(leaf.attrs.alt ?? ""));
       return schema.nodes.code_block.create(null, text ? schema.text(text) : undefined);
     }
   }
@@ -187,7 +196,7 @@ function leafFrom(node: ProseNode, target: LeafKind, schema: EditorView["state"]
  * The summary is plain text by design (details_summary `content: "text*"`): a wikilink keeps its
  * written form rather than vanishing, and other marks become text. */
 function toggleFrom(node: ProseNode, schema: EditorView["state"]["schema"]): ProseNode {
-  const words = node.textBetween(0, node.content.size, "", (leaf) => leaf.type.name === "wiki_link" ? String(leaf.attrs.raw ?? "") : String(leaf.attrs.alt ?? ""));
+  const words = node.textBetween(0, node.content.size, "", (leaf) => leaf.type.name === "wiki_link" ? String(leaf.attrs.raw ?? "") : leaf.type.name === "hardbreak" ? "\n" : String(leaf.attrs.alt ?? ""));
   const title = schema.nodes.details_summary.create(null, words ? schema.text(words) : undefined);
   return schema.nodes.details.create({ open: true }, [title, schema.nodes.details_body.create(null, schema.nodes.paragraph.create())]);
 }
@@ -267,12 +276,22 @@ export function turnBlockInto(view: EditorView, pos: number, target: BlockKind):
     return true;
   }
   if (target === "paragraph" && block.node.type.name === "blockquote") {
-    const callout = blockKind(block.node) === "callout";
+    const callout = calloutOf(block.node) !== null;
     const paragraphs: ProseNode[] = [];
-    block.node.forEach((child) => {
-      // The marker is the callout's kind, not its prose; turning it into text drops it.
-      if (callout && CALLOUT_MARKER.test(child.textContent)) return;
-      paragraphs.push(schema.nodes.paragraph.create(null, child.content));
+    block.node.forEach((child, _offset, index) => {
+      if (!callout || index !== 0 || child.type.name !== "paragraph") {
+        paragraphs.push(schema.nodes.paragraph.create(null, child.content));
+        return;
+      }
+      // Drop the marker line only: its text, and the break that ends it. Everything after the
+      // break is prose and stays; a marker-looking line that is not alone is a plain quote above.
+      const nodes: ProseNode[] = [];
+      child.forEach((node) => nodes.push(node));
+      const marker = nodes.findIndex((node) => node.isText && calloutKind(node.text ?? "") !== null);
+      const rest = marker >= 0 ? nodes.slice(marker + 1) : nodes;
+      if (rest[0]?.type.name === "hardbreak") rest.shift();
+      const content = Fragment.fromArray(rest);
+      if (content.size) paragraphs.push(schema.nodes.paragraph.create(null, content));
     });
     const transaction = view.state.tr.replaceWith(pos, pos + block.node.nodeSize, paragraphs);
     dispatchBlockAction(view, transaction, pos + 1);

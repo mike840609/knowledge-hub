@@ -80,3 +80,27 @@ it("aligns the column the caret is in and writes it to the Markdown", async () =
   align.dispatchEvent(new Event("change", { bubbles: true }));
   expect(editor.getMarkdown()).not.toMatch(/\|\s*:-+:/);
 });
+
+it("aligns only the caret's column, and undoes as one step", async () => {
+  const { editor, view } = await open();
+  const align = document.querySelector<HTMLSelectElement>('select[aria-label="Column alignment"]')!;
+  // open() puts the caret in "one", the first column.
+  align.value = "center";
+  align.dispatchEvent(new Event("change", { bubbles: true }));
+  const headerAlignment = () => {
+    const values: Array<string | null> = [];
+    view.state.doc.descendants((node) => { if (node.type.name === "table_header") values.push(node.attrs.alignment ?? null); });
+    return values;
+  };
+  expect(headerAlignment()).toEqual(["center", null]);
+  // The second column, then undo: only the second alignment goes.
+  let two = 0;
+  view.state.doc.descendants((node, pos) => { if (node.isText && node.text === "two") two = pos; });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, two)));
+  align.value = "right";
+  align.dispatchEvent(new Event("change", { bubbles: true }));
+  expect(headerAlignment()).toEqual(["center", "right"]);
+  undo(view.state, view.dispatch);
+  expect(headerAlignment()).toEqual(["center", null]);
+  expect(editor.getMarkdown()).toMatch(/\|\s*:-+:?\s*\|\s*-+\s*\|/);
+});

@@ -46,7 +46,7 @@ function drag(type: string, target: Element, y = 220, x = 150) {
 it('offers + for the focused block, inserts below, and does not put controls into Markdown', async () => {
   const { editor, view } = await open();
   expect(document.querySelector<HTMLElement>('.kh-block-gutter')!.hidden).toBe(false);
-  button('Add paragraph below').click();
+  button('Add block below').click();
   expect(view.state.doc.child(1).textContent).toBe('');
   expect(view.state.selection.$from.index(0)).toBe(1);
   expect(editor.getMarkdown()).not.toMatch(/Add paragraph|Move block/);
@@ -118,7 +118,7 @@ it('hides controls when made read-only and removes all overlays on destruction',
   editor.setEditable(false);
   expect(document.querySelector<HTMLElement>('.kh-block-gutter')!.hidden).toBe(true);
   const original = editor.getMarkdown();
-  button('Add paragraph below').click();
+  button('Add block below').click();
   expect(editor.getMarkdown()).toBe(original);
   await editor.destroy(); opened.splice(opened.indexOf(editor), 1);
   expect(document.querySelector('.kh-block-gutter')).toBeNull();
@@ -129,7 +129,7 @@ it('hides controls when made read-only and removes all overlays on destruction',
 it('reaches block actions directly by keyboard and returns to the editor with Escape', async () => {
   const { view } = await open();
   view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', altKey: true, bubbles: true, cancelable: true }));
-  expect(document.activeElement).toBe(button('Add paragraph below'));
+  expect(document.activeElement).toBe(button('Add block below'));
   button('Move block').focus();
   button('Move block').click();
   const turn = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) => item.textContent === 'Turn into')!;
@@ -189,7 +189,7 @@ async function openWithList() {
   [...view.dom.children].forEach((child, index) => { child.getBoundingClientRect = () => rect(40 + index * 60, 80 + index * 60); });
   view.focus();
   view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', altKey: true, bubbles: true, cancelable: true }));
-  button('Add paragraph below').click();
+  button('Add block below').click();
   const list = document.querySelector<HTMLElement>('.kh-slash-menu')!;
   const press = (name: string) => view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }));
   return { editor, view, list, press };
@@ -284,7 +284,7 @@ it("inserts a new sibling item below a list item", async () => {
   const { editor, view } = await openWith("- First\n- Second\n", false);
   caretAfter(view, "First");
   reveal(view);
-  button("Add paragraph below").click();
+  button("Add block below").click();
   const list = view.state.doc.firstChild!;
   expect(list.childCount).toBe(3);
   expect(list.child(1).textContent).toBe("");
@@ -348,4 +348,40 @@ it("keeps a paragraph's words when it becomes a toggle, and its marks in a callo
   menuItem("Callout").click();
   expect(second.editor.getMarkdown()).toContain("[[Target]]");
   expect(second.editor.getMarkdown()).toContain("**bold**");
+});
+
+it("acts on a nested list item, not on its parent item", async () => {
+  const { editor, view } = await openWith("- a\n  - b\n  - c\n", false);
+  caretAfter(view, "c");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Delete").click();
+  const markdown = editor.getMarkdown();
+  expect(markdown).toMatch(/^\s+- b/m);
+  expect(markdown).not.toMatch(/^\s+- c/m);
+  expect(markdown).toMatch(/^- a/m);
+});
+
+it("splits an ordered list around the item and keeps the numbers after it", async () => {
+  const { editor, view } = await openWith("1. a\n2. b\n3. c\n", false);
+  caretAfter(view, "b");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  menuItem("Heading 2").click();
+  const markdown = editor.getMarkdown();
+  expect(markdown).toMatch(/1\. a/);
+  expect(markdown).toMatch(/## b/);
+  expect(markdown).toMatch(/3\. c/);
+});
+
+it("keeps a wikilink's written form when a paragraph becomes code", async () => {
+  const markdown = "See [[Target]] now";
+  const { editor, view } = await openWith(markdown, false);
+  caretAfter(view, "now");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  menuItem("Code").click();
+  expect(editor.getMarkdown()).toContain("[[Target]]");
 });
