@@ -328,3 +328,24 @@ it("keeps an item's nested list when the item becomes another list kind", async 
   expect(markdown).toMatch(/^\s+- b/m);
   expect(markdown).toMatch(/^- c/m);
 });
+
+// The toggle summary is plain text by design (details_summary accepts text only), so the words
+// survive and the marks become text; the callout body keeps its inline marks.
+it("keeps a paragraph's words when it becomes a toggle, and its marks in a callout", async () => {
+  const markdown = "See [[Target]] and **bold**";
+  const first = await openWith(markdown, false);
+  caretAfter(first.view, "bold");
+  reveal(first.view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  menuItem("Toggle").click();
+  expect(first.editor.getMarkdown()).toContain("<summary>See [[Target]] and bold</summary>");
+  const second = await openWith(markdown, false);
+  caretAfter(second.view, "bold");
+  reveal(second.view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  menuItem("Callout").click();
+  expect(second.editor.getMarkdown()).toContain("[[Target]]");
+  expect(second.editor.getMarkdown()).toContain("**bold**");
+});

@@ -183,9 +183,12 @@ function leafFrom(node: ProseNode, target: LeafKind, schema: EditorView["state"]
   }
 }
 
-/** A paragraph or heading becomes a toggle with its words as the summary, as Notion's Turn into does. */
+/** A paragraph or heading becomes a toggle with its words as the summary, as Notion's Turn into does.
+ * The summary is plain text by design (details_summary `content: "text*"`): a wikilink keeps its
+ * written form rather than vanishing, and other marks become text. */
 function toggleFrom(node: ProseNode, schema: EditorView["state"]["schema"]): ProseNode {
-  const title = schema.nodes.details_summary.create(null, node.textContent ? schema.text(node.textContent) : undefined);
+  const words = node.textBetween(0, node.content.size, "", (leaf) => leaf.type.name === "wiki_link" ? String(leaf.attrs.raw ?? "") : String(leaf.attrs.alt ?? ""));
+  const title = schema.nodes.details_summary.create(null, words ? schema.text(words) : undefined);
   return schema.nodes.details.create({ open: true }, [title, schema.nodes.details_body.create(null, schema.nodes.paragraph.create())]);
 }
 

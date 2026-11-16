@@ -220,6 +220,8 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
             const heading = document.createElement("div");
             heading.className = "px-2 pb-1 pt-2 text-caption text-kh-text-muted";
             heading.setAttribute("data-slash-group", group);
+            heading.setAttribute("role", "presentation");
+            heading.setAttribute("aria-hidden", "true");
             heading.textContent = group;
             popup.appendChild(heading);
           }
