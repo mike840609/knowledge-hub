@@ -179,9 +179,18 @@ export function DocumentHeader({
       <header ref={headerRef}>
         <div className="kh-reading-column pb-3">
           {beforeTitle}
-          {titleControl ?? (contentOwnsTitle ? null : (
+          {titleControl ? (
+            <>
+              {/* The field is the visible title; a heading is what assistive tech navigates by,
+                  and a document whose markdown has no `#` line has no other one. When the markdown
+                  does open with `#`, that heading is the only h1: a field can still be drawn over
+                  it (a frontmatter title wins the resolver), so this must not add a second. */}
+              {title && !contentOwnsTitle ? <h1 className="sr-only">{title}</h1> : null}
+              {titleControl}
+            </>
+          ) : contentOwnsTitle ? null : (
             <h1 className="mt-2 break-words text-page-title font-semibold tracking-tight text-kh-text" title={title}>{title}</h1>
-          ))}
+          )}
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">
             {readOnlyReason}
             {readOnly ? <span className="inline-flex items-center gap-1"><LockKeyhole className="h-3 w-3" aria-hidden="true" />Read only</span> : null}
@@ -194,7 +203,14 @@ export function DocumentHeader({
             ) : null}
             {status === "ARCHIVED" ? <Badge variant="warning">Archived</Badge> : null}
             <time dateTime={new Date(updatedAt).toISOString()} title={formatDateTime(updatedAt, zone)}>Updated {relative}</time>
-            {editHint ? <span>{editHint}</span> : null}
+            {editHint ? <>
+              {/* The meta line is a row of separate facts; without a separator "10 days ago"
+                  and the hint after it read as one sentence. `gap` is not text, so copy/paste
+                  and speech both need a real one: a dot for the eye, a comma for AT. */}
+              <span aria-hidden="true" className="text-kh-text-faint">·</span>
+              <span className="sr-only">, </span>
+              <span>{editHint}</span>
+            </> : null}
             {linkSummary ? (
               // The padding makes a 24px target (WCAG 2.5.8) and the negative
               // margins give it back, so a document with links is not a row taller

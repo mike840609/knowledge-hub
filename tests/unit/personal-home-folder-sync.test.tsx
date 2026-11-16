@@ -34,8 +34,8 @@ it("leads with Recent and Favorites, searches through ⌘K and leaves the change
   // The search bar is a button that opens the ⌘K palette, never a second search field.
   expect(html).not.toContain('role="search"');
   expect(html).not.toContain("<input");
-  expect(html).toContain('aria-label="Search articles and notes"');
-  expect(html.indexOf('aria-label="Search articles and notes"')).toBeLessThan(html.indexOf('aria-label="Recent"'));
+  expect(html).toContain('aria-label="Search articles and notes ⌘K"');
+  expect(html.indexOf('aria-label="Search articles and notes ⌘K"')).toBeLessThan(html.indexOf('aria-label="Recent"'));
   // The ⌘K hint takes 13px in the 40px search bar, not the 11px default.
   expect(html).toMatch(/<kbd class="[^"]*text-body-sm[^"]*">⌘K<\/kbd>/);
   expect(html).not.toContain("/sources/import");
@@ -223,6 +223,27 @@ describe("C on Home opens a new note", () => {
     const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} />);
     expect(html).toMatch(/<a [^>]*href="\/w\/ws\/knowledge\/new"[^>]*aria-keyshortcuts="C"|<a [^>]*aria-keyshortcuts="C"[^>]*href="\/w\/ws\/knowledge\/new"/);
     expect(html).toMatch(/<button [^>]*data-home-search/);
+  });
+
+  // Launcher audit (WCAG 2.5.8, target size): the caption link was 16px tall.
+  it("gives the Open Inbox link a 24px target", () => {
+    const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} />);
+    expect(html).toMatch(/<a[^>]*class="[^"]*min-h-6[^"]*"[^>]*>Open Inbox</);
+  });
+
+  // Launcher audit (axe `label-content-name-mismatch`): the field is announced as "Search
+  // articles and notes", so an ellipsis and a ⌘K badge drawn beside that text are visible
+  // characters the name does not contain. The shortcut is exposed as a key shortcut too, and the
+  // ellipsis says nothing a button label needs to say.
+  it("names the whole visible label of the search field, ⌘K included", () => {
+    const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} />);
+    const field = html.slice(html.indexOf("data-home-search"), html.indexOf("New note"));
+    // A label whose name skips the badge reads as a different label to a speech user.
+    expect(field).toContain('aria-label="Search articles and notes ⌘K"');
+    expect(field).toContain('aria-keyshortcuts="Meta+K Control+K"');
+    expect(field).not.toContain("…");
+    // The rule joins visible text nodes with no separator, so the space before the badge is real.
+    expect(field).toMatch(/notes<\/span> <kbd/);
   });
 });
 

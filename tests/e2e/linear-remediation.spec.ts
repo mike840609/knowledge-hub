@@ -43,7 +43,7 @@ test('reader and composer keep their column and expose commands during long scro
   expect(expandedExplorer.y).toBe(0);
   // The rail opens with the wordmark, then the workspace switcher, then Search, then the navigation.
   const workspace = page.getByRole('button', { name: /^Workspace:/ });
-  const search = page.getByRole('button', { name: 'Quick search', exact: true });
+  const search = page.getByRole('button', { name: 'Search ⌘K', exact: true });
   const primary = page.getByRole('navigation', { name: 'Primary' });
   const inRail = async (rail: number) => {
     for (const control of [workspace, search]) { const box = (await control.boundingBox())!; expect(box.x).toBe(8); expect(box.x + box.width).toBeLessThanOrEqual(rail - 8); }

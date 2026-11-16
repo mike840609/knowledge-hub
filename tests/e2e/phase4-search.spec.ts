@@ -8,7 +8,7 @@ const RESTRICTED_BODY_NEEDLE = "restricted-secret-body-9f31";
 
 test("finds a mixed Chinese/English document and opens it", async ({ page }) => {
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge`);
-  await page.getByRole("button", { name: "Quick search" }).click();
+  await page.getByRole("button", { name: "Search ⌘K" }).click();
   await page.getByRole("combobox", { name: "Search documents" }).fill("請假");
 
   const hit = page.getByRole("button", { name: new RegExp(SEARCH_TITLE) });

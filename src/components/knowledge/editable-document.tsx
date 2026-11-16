@@ -555,7 +555,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     contentOwnsTitle={markdownOpensWithHeading(content.markdown)}
     editHint={showEditHint ? "Click anywhere in the text to edit." : undefined}
     editorActions={<><AutosaveIndicator state={status} attention={attention} /><Button type="button" variant="ghost" aria-label="Rename document" title="Rename document" disabled={!editable || !!recovery || (!ready && !source && !failed)} onClick={focusTitle}><Pencil className="h-4 w-4" aria-hidden="true" /></Button>{markdownToggle}</>}
-    titleControl={resolved.source !== "H1" ? <textarea ref={titleInput} aria-label="Title" value={content.title} disabled={!editable} maxLength={512} rows={1}
+    titleControl={resolved.source !== "H1" ? <textarea ref={titleInput} name="title" aria-label="Title" value={content.title} disabled={!editable} maxLength={512} rows={1}
       onChange={event => change({ ...queue.current!.current, title: event.target.value })}
       onKeyDown={event => {
         if (event.nativeEvent.isComposing || event.keyCode === 229) return;

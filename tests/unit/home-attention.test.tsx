@@ -53,3 +53,11 @@ describe("UnreadDiscussions", () => {
     expect(renderToStaticMarkup(<UnreadDiscussions notices={many} />).match(/data-list-row/g)).toHaveLength(5);
   });
 });
+
+// Launcher audit (WCAG 2.5.8, target size): the caption link was 16px tall — smaller than a
+// pointer can reliably hit. It is not inside a sentence, so the inline exception does not apply.
+describe("the all-updates link's target", () => {
+  it("is at least 24px tall", () => {
+    expect(render([reminder("old")])).toMatch(/<a[^>]*class="[^"]*min-h-6[^"]*"[^>]*>View all updates</);
+  });
+});

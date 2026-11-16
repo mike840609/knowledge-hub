@@ -238,10 +238,14 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
         </>}
       />
       {/* Opens the same ⌘K palette as the rail, so there is still one place to search. */}
+      {/* WCAG 2.5.3: the badge is visible text in the field, so the name carries it too. The space
+          before the badge is real: axe joins visible text nodes without one, and the name has to
+          appear inside that run. A whitespace-only text node is not a flex item, so the field's
+          layout is unchanged. */}
       <div className="flex items-center gap-3">
-        <button type="button" data-home-search onClick={requestQuickSearch} aria-label="Search articles and notes" className="kh-focus-ring flex min-h-8 min-w-0 flex-1 items-center gap-3 rounded-md border border-kh-border px-3 py-1 text-body text-kh-text-muted hover:bg-kh-bg-subtle">
+        <button type="button" data-home-search onClick={requestQuickSearch} aria-label="Search articles and notes ⌘K" aria-keyshortcuts="Meta+K Control+K" className="kh-focus-ring flex min-h-8 min-w-0 flex-1 items-center gap-3 rounded-md border border-kh-border px-3 py-1 text-body text-kh-text-muted hover:bg-kh-bg-subtle">
           <Search size={16} aria-hidden="true" />
-          <span className="flex-1 truncate text-left">Search articles and notes…</span>
+          <span className="flex-1 truncate text-left">Search articles and notes</span>{" "}
           <Kbd size="md" className="hidden shrink-0 sm:inline-flex">⌘K</Kbd>
         </button>
         <Tooltip label="New note" shortcut="C">
@@ -265,7 +269,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
           </Section>
         </div>
         <div className="min-w-0 space-y-6">
-          <Section title="Discussions" count={notices.length} action={<Link className="kh-focus-ring rounded-md text-caption text-kh-link" href={`/w/${workspaceId}/inbox`}>Open Inbox</Link>}>
+          <Section title="Discussions" count={notices.length} action={<Link className="kh-focus-ring inline-flex min-h-6 items-center rounded-md text-caption text-kh-link" href={`/w/${workspaceId}/inbox`}>Open Inbox</Link>}>
             {notices.length ? <UnreadDiscussions notices={notices} /> : <EmptyLine>No new comments or replies.</EmptyLine>}
           </Section>
           <Section title="Favorites">
