@@ -40,7 +40,7 @@ async function createNote(page: Page, workspaceId: string, title: string, markdo
 
 /** The new-document page, with the editor ready and the caret in it. */
 async function startWriting(page: Page, workspaceId: string, title: string) {
-  await page.goto(`/w/${workspaceId}/knowledge/new`);
+  await page.goto(`/w/${workspaceId}/knowledge/new?compose`);
   await composer(page).getByLabel("Title", { exact: true }).fill(title);
   const surface = surfaceOf(page);
   await expect(surface).toBeEditable(ROUND_TRIP);
@@ -103,7 +103,7 @@ test.describe("the `[[` list", () => {
     expect(markdown).toContain(`See [[${stamp} Kubernetes upgrade]] for the plan.`);
     expect(markdown).not.toContain("\\[");
 
-    await expect(page).not.toHaveURL(/\/new$/, ROUND_TRIP);
+    await expect(page).not.toHaveURL(/\/new(?:\?.*)?$/, ROUND_TRIP);
     await expect(page.locator("article").first().getByRole("link", { name: `${stamp} Kubernetes upgrade`, exact: true })).toBeVisible(ROUND_TRIP);
     await expectBacklinkFrom(page, targetUrl);
   });
@@ -258,7 +258,7 @@ test.describe("the `[[` list", () => {
     const created = nextWrite(page, "POST");
     await composer(page).getByRole("button", { name: "Create document" }).click();
     expect(sentMarkdown(await created)).toContain(`[[${stamp} Note]]`);
-    await expect(page).not.toHaveURL(/\/new$/, ROUND_TRIP);
+    await expect(page).not.toHaveURL(/\/new(?:\?.*)?$/, ROUND_TRIP);
     await expectBacklinkFrom(page, targetUrl);
   });
 

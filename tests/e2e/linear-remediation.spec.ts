@@ -56,7 +56,7 @@ test('reader and composer keep their column and expose commands during long scro
   const centre = async (locator: ReturnType<Page['locator']>) => { const box = (await locator.boundingBox())!; return box.y + box.height / 2; };
   const line = await centre(breadcrumb);
   expect(Math.abs(await centre(page.getByText('Knowledge Hub', { exact: true }).filter({ visible: true })) - line)).toBeLessThanOrEqual(1);
-  expect(Math.abs(await centre(explorer.getByRole('heading', { name: 'Documents', exact: true })) - line)).toBeLessThanOrEqual(1);
+  expect(Math.abs(await centre(explorer.getByRole('button', { name: 'Favorite documents', exact: true })) - line)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: info.outputPath('reader-navigation-expanded.png') });
   // Scrolling pins the breadcrumb line — location › title, and its actions — to the top of the reading column.
   const regionBox = (await region.boundingBox())!;
@@ -238,8 +238,10 @@ test('mobile explorer menus retain focus inside the navigation drawer', async ({
   await page.goto(doc.href);
   await page.getByRole('button', { name: 'Open menu', exact: true }).click();
   const drawer = page.getByRole('dialog', { name: 'Menu', exact: true });
-  const display = drawer.getByRole('button', { name: 'Document display options', exact: true });
-  await display.click();
+  const display = drawer.getByRole('button', { name: 'Document options', exact: true });
+  await display.press('ArrowDown');
+  const importFolder = page.getByRole('menuitem', { name: 'Import folder', exact: true });
+  await expect(importFolder).toBeFocused();
   const archived = page.getByRole('menuitemcheckbox', { name: 'Show archived', exact: true });
   await expect(archived).toBeVisible();
   await page.keyboard.press('ArrowDown');
@@ -247,6 +249,10 @@ test('mobile explorer menus retain focus inside the navigation drawer', async ({
   await page.keyboard.press('Escape');
   await expect(drawer).toBeVisible();
   await expect(display).toBeFocused();
+  await display.click();
+  await importFolder.click();
+  await expect(page).toHaveURL(`/w/${doc.workspaceId}/sources/import`);
+  await expect(drawer).toBeHidden();
 });
 
 test('mobile explorer row actions and folder dialog remain operable', async ({ page }) => {
@@ -303,7 +309,11 @@ test('long explorer reveals the selected document after portal layout settles', 
     await expect(row).toHaveAttribute('aria-current', 'page');
     await expect(row).toBeInViewport();
   } finally { releaseFavorites(); }
-  await expect(page.getByRole('region', { name: 'Favorites' }).getByRole('link')).toHaveCount(4);
+  const favoriteDocuments = page.getByRole('button', { name: 'Favorite documents', exact: true });
+  await favoriteDocuments.click();
+  const favoriteItems = page.getByRole('menu', { name: 'Favorite documents', exact: true }).getByRole('menuitem');
+  await expect(favoriteItems).toHaveCount(4);
+  await page.keyboard.press('Escape');
   await expect(row).toBeInViewport();
   expect(await page.getByRole('region', { name: 'Document content', exact: true }).evaluate(el => el.scrollTop)).toBe(0);
   // Opening or closing Favorites or Recent is the reader's own layout change: the explorer stays where they
@@ -311,12 +321,11 @@ test('long explorer reveals the selected document after portal layout settles', 
   const scroller = page.getByRole('navigation', { name: 'Document tree', exact: true });
   await scroller.evaluate(el => { el.scrollTop = 0; });
   await expect(row).not.toBeInViewport();
-  for (const name of ['Favorites', 'Recent']) {
+  for (const name of ['Favorite documents', 'Recent documents']) {
     const toggle = page.getByRole('button', { name, exact: true });
-    if (await toggle.count() === 0) continue;
     for (let i = 0; i < 2; i++) {
       await toggle.click();
-      await page.waitForTimeout(150);
+      await expect(toggle).toHaveAttribute('aria-expanded', i === 0 ? 'true' : 'false');
       expect(await scroller.evaluate(el => el.scrollTop)).toBe(0);
     }
   }

@@ -110,7 +110,11 @@ read it").
 19. Code block while editing: a language field (a native `<select>` of the
     languages the highlighter knows, plus "Plain text") sits in the block's
     header; Tab inserts two spaces and Shift-Tab removes up to two at the line's
-    start.
+    start. The field is inline editing's only. The new-note composer keeps its
+    raw code block (Tab and Shift-Tab still work there), and a language is
+    typed after its fence: the field's list is the highlighter's, and the
+    composer must not reach the highlighter, not even on demand
+    (`tests/unit/composer-bundle.test.ts`).
 20. Callout: its label is a button that opens a menu of the five GitHub alert
     types (Note, Tip, Important, Warning, Caution); choosing one rewrites
     `[!TYPE]`.

@@ -120,7 +120,7 @@ test("Comfortable is offered before Compact in the density row", async ({ page }
 
 test("the sidebar display options toggle archived mode", async ({ page }) => {
   await page.goto(KNOWLEDGE);
-  await page.getByLabel("Document display options", { exact: true }).click();
+  await page.getByLabel("Document options", { exact: true }).click();
   const item = page.getByRole("menuitemcheckbox", { name: "Show archived" });
   await expect(item).toHaveAttribute("aria-checked", "false");
   await item.click();

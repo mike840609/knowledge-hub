@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { formKeyIntent, type FormKeyEvent } from "@/lib/form-keys";
 
@@ -24,6 +25,16 @@ describe("formKeyIntent", () => {
     expect(formKeyIntent(key({ key: "/", ctrlKey: true }), editing)).toBe("toggle-mode");
     // Some layouts type "/" with Shift.
     expect(formKeyIntent(key({ key: "/", metaKey: true, shiftKey: true }), editing)).toBe("toggle-mode");
+    expect(formKeyIntent(key({ key: "/", metaKey: true, shiftKey: true, code: "Period" }), editing)).toBe("toggle-mode");
+  });
+
+  it("leaves Mod-Shift-7 to the numbered list on layouts where Shift-7 types /", () => {
+    const editor = document.createElement("div");
+    editor.className = "ProseMirror";
+    const inEditor = editor.appendChild(document.createElement("p"));
+    expect(formKeyIntent(key({ key: "/", ctrlKey: true, shiftKey: true, code: "Digit7", target: inEditor }), editing)).toBeNull();
+    // Outside the rendered editor (the source textarea, the title) there is no list key: ⌘/ still toggles back.
+    expect(formKeyIntent(key({ key: "/", ctrlKey: true, shiftKey: true, code: "Digit7", target: document.createElement("textarea") }), editing)).toBe("toggle-mode");
   });
 
   it("leaves a bare slash, ⌥⌘/ and a form without modes alone", () => {

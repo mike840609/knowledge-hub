@@ -10,7 +10,7 @@ async function createMySpaceDocument(page: Page, title: string, body: string): P
   await page.goto("/");
   await page.waitForURL(/\/w\/[^/]+\/knowledge/);
   const workspaceId = new URL(page.url()).pathname.split("/")[2];
-  await page.goto(`/w/${workspaceId}/knowledge/new`);
+  await page.goto(`/w/${workspaceId}/knowledge/new?compose`);
   const form = page.locator("main");
   await form.getByLabel("Title", { exact: true }).fill(title);
   await (await showMarkdown(form)).fill(body);

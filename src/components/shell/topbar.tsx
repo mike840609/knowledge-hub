@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Menu } from "lucide-react";
 import type { WorkspaceShellModel } from "@/server/knowledge-read";
 import { QuickSearch } from "@/components/search/quick-search";
@@ -16,7 +17,10 @@ export function Topbar({ model, onMenuClick }: { model: WorkspaceShellModel; onM
     <header className="flex h-12 shrink-0 items-center border-b border-kh-border bg-kh-bg-raised lg:hidden">
       <div className="flex shrink-0 items-center gap-2 px-3">
         {onMenuClick ? <button type="button" aria-label="Open menu" onClick={onMenuClick} className={buttonClasses({ variant: "ghost", icon: true })}><Menu className="h-4 w-4" aria-hidden="true" /></button> : null}
-        <span className="hidden whitespace-nowrap text-caption font-semibold text-kh-text sm:block">Knowledge Hub</span>
+        <div className="hidden items-center gap-1 sm:flex">
+          <Image src="/icon.svg" width={20} height={20} alt="" className="shrink-0" />
+          <span className="whitespace-nowrap text-caption font-semibold text-kh-text">Knowledge Hub</span>
+        </div>
       </div>
       <QuickSearch workspaceId={model.workspace.id} />
       <DocumentContextBar workspaceId={model.workspace.id} className="flex-1 px-3" />

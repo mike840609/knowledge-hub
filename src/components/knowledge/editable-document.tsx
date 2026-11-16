@@ -11,11 +11,14 @@ import { FileCode2, Pencil } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { readStored, writeStored } from "@/components/shell/use-persisted-state";
-import { governanceFailure, governanceRequest, GovernanceError } from "@/components/workspaces/governance-error";
+import { governanceFailure, governanceRequest, GovernanceError, transientSaveFailure } from "@/components/workspaces/governance-error";
 import { DocumentAutosave, type DocumentContent, type SavedRevision } from "@/lib/document-autosave";
+import { mergeText } from "@/lib/merge-text";
+import { takeNewNote } from "./new-note-starter";
 import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } from "@/lib/document-draft";
 import { PersistentDraft } from "@/lib/persistent-draft";
 import { caretOnLastLine } from "@/lib/title-keys";
+import { isListKey } from "@/lib/form-keys";
 import { carryTitle, resolveAuthoredTitle } from "@/lib/authored-title";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { downloadMarkdown } from "@/lib/download-markdown";
@@ -82,7 +85,9 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   const sourceTextarea = useRef<HTMLTextAreaElement>(null);
   const titleInput = useRef<HTMLTextAreaElement>(null);
   const [Editor, setEditor] = useState<ComponentType<RenderedEditorProps>>();
-  const [recovery, setRecovery] = useState<"current" | "stale" | null>(null);
+  // Only a draft written over an older version waits for a decision: one over the current version
+  // goes on saving as it opens (inline-editing spec, "Leaving and failures").
+  const [recovery, setRecovery] = useState<"stale" | null>(null);
   const [recoveryMetadata, setRecoveryMetadata] = useState<"ready" | "loading" | "unavailable">("ready");
   const [discarding, setDiscarding] = useState(false);
   const [, render] = useState(0);
@@ -94,6 +99,8 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   const staleDraftBase = useRef<{ revisionId: string | null } | null>(null);
   const pending = useRef(false);
   const composing = useRef(false);
+  /** A conflict met during composition is merged once it ends: replacing the document under an IME loses the candidate. */
+  const settleRef = useRef<() => void>(undefined);
   const alive = useRef(false);
   const discardingRef = useRef(false);
   const sourceRef = useRef(false);
@@ -145,6 +152,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       return revision;
     } };
   }
+  const savesRef = useRef<BroadcastChannel | null>(null);
   const flushRef = useRef(flushEditor);
   flushRef.current = flushEditor;
 
@@ -153,19 +161,23 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     let live = true;
     let previousStatus: string | undefined;
     const writer = new DocumentAutosave({ title: initialTitle, markdown }, revisionId, {
-      write: async (snapshot, expectedRevisionId) => {
+      write: async (snapshot, expectedRevisionId, options) => {
         if (!authorization.current) throw new Error("Editing is unavailable.");
-        const title = resolve(snapshot).title;
-        if (!title) throw new Error("Add a title before saving.");
+        // An untitled page saves as "Untitled", as Notion's does; typing a title later replaces it.
+        const title = resolve(snapshot).title || "Untitled";
         return governanceRequest<SavedRevision>(`/api/documents/${detail.inspectorData.documentId}`, "PATCH", {
           title, markdown: snapshot.markdown, expectedCurrentRevisionId: expectedRevisionId, autosave: true,
           ...(hasMetadataTitle() ? { updateMetadataTitle: true } : {}),
-        }, { notifyMutation: false });
+        }, { notifyMutation: false, keepalive: options?.keepalive });
       },
+      retryable: transientSaveFailure,
       change: () => {
         if (live) render(value => value + 1);
         // A failed document write gets an account recovery copy; normal saves only use local storage.
-        if (writer.status === "error" && previousStatus !== "error") void persistent.current?.flush();
+        if (writer.status === "error" && previousStatus !== "error") {
+          void persistent.current?.flush();
+          if (governanceFailure(writer.error).code === "REVISION_CONFLICT") void settleConflict();
+        }
         previousStatus = writer.status;
       },
       saved: (snapshot, revision) => {
@@ -175,7 +187,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
         if (!live) return;
         acknowledgedRevisionNo.current = revision.revisionNo;
         setSavedRevision(revision.revisionId);
-        setSavedTitle(resolve(snapshot).title);
+        setSavedTitle(resolve(snapshot).title || "Untitled");
         const createdAt = new Date();
         setSavedAt(createdAt);
         setLocalRevisions(previous => {
@@ -184,6 +196,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
           if (preserved) retained.push({ ...preserved, createdAt: new Date(preserved.createdAt), history: preserved.history ? { ...preserved.history, windowStartedAt: preserved.history.windowStartedAt ? new Date(preserved.history.windowStartedAt) : null } : undefined });
           return [...retained, { id: revision.revisionId, revisionNo: revision.revisionNo, createdAt, history: revision.history ? { ...revision.history, windowStartedAt: revision.history.windowStartedAt ? new Date(revision.history.windowStartedAt) : null } : undefined }];
         });
+        savesRef.current?.postMessage({ documentId: detail.inspectorData.documentId, revisionId: revision.revisionId });
         metadataDirty.current = true;
         const targets = JSON.stringify(extractDocumentLinks(snapshot.markdown).map(({ kind, target, fragment }) => [kind, target, fragment]));
         if (targets !== savedLinkTargets.current) {
@@ -194,6 +207,32 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
         }
       },
     });
+    // A conflict whose two sides changed different lines is merged and goes on saving, as Notion's
+    // does; changes to the same lines still stop for the writer to decide (inline editing spec).
+    const settleConflict = async () => {
+      if (composing.current || !writer.error || governanceFailure(writer.error).code !== "REVISION_CONFLICT") return;
+      const expected = writer.revisionId;
+      let theirs: { title: string; markdown: string; revisionId: string };
+      try {
+        theirs = await governanceRequest(`/api/documents/${detail.inspectorData.documentId}/peek?brief`);
+      } catch { return; }
+      if (!live || composing.current || !writer.error || writer.revisionId !== expected || theirs.revisionId === expected) return;
+      flushRef.current();
+      const base = writer.saved, mine = writer.current;
+      const markdown = mergeText(base.markdown, mine.markdown, theirs.markdown);
+      // The title field holds what was typed; a revision title equal to the base's resolved one (an empty one saved as "Untitled") is no change.
+      const theirsTitle = resolve(mine).source === "H1" || theirs.title === (resolve(base).title || "Untitled") ? base.title : theirs.title;
+      const title = mine.title === base.title ? theirsTitle : theirsTitle === base.title || theirsTitle === mine.title ? mine.title : null;
+      if (markdown === null || title === null) return;
+      if (!writer.rebase({ title: theirsTitle, markdown: theirs.markdown }, theirs.revisionId, { title, markdown })) return;
+      // ponytail: the whole document is replaced, so the caret moves; map the selection if merges become common.
+      if (editor.current && !sourceRef.current && editor.current.getMarkdown() !== markdown) {
+        try { editor.current.replaceMarkdown(markdown); } catch { setFailed(true); }
+      }
+      setContent(writer.current);
+      keepRecovery();
+    };
+    settleRef.current = () => void settleConflict();
     writer.pause(true);
     queue.current = writer;
     const remote = personal ? new PersistentDraft(`/api/workspaces/${detail.inspectorData.workspaceId}/personal`, `draft:${detail.inspectorData.documentId}`, () => {}, { autoSync: false, delay: 15_000 }) : null;
@@ -204,12 +243,14 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       if (!live) return;
       const draft = local ?? account;
       if (draft && (draft.title !== initialTitle || draft.markdown !== markdown)) {
-        // Never publish a recovered draft merely because the user opened a page.
+        // Written over the current version, it is this writer's own unsaved text: it goes on saving,
+        // as Notion's does. Over an older one, saving it would overwrite what was saved since.
         if (draft.baseRevisionId !== revisionId) staleDraftBase.current = { revisionId: draft.baseRevisionId };
         writer.change({ title: draft.title, markdown: draft.markdown });
         setContent(writer.current);
-        setRecovery(draft.baseRevisionId === revisionId ? "current" : "stale");
-        if (draft.baseRevisionId !== revisionId) {
+        if (draft.baseRevisionId === revisionId) writer.pause(!authorization.current);
+        else {
+          setRecovery("stale");
           const { revisions } = detail.inspectorData;
           const base = revisions.find(item => item.id === draft.baseRevisionId);
           if (!base) setRecoveryMetadata("unavailable");
@@ -244,13 +285,37 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       // A mouse release dispatches pointerup, mouseup and click in one task; the next task is after them.
       setTimeout(() => { if (live) setReady(true); }, 0);
     };
-    const visibility = () => { if (document.visibilityState === "hidden") persist(); };
+    // The page may be going (a closed tab, a reload, a phone putting it away): what is unsaved is sent
+    // now, with a request that outlives the page. The recovery copy stays until the save is acknowledged.
+    const sendNow = () => {
+      persist();
+      void writer.flush({ keepalive: true });
+    };
+    // A tab left open while the document was saved elsewhere (another tab, another device) shows the
+    // newer revision when it comes back, so the next keystroke does not start from an old one. Only
+    // while nothing here is unsaved: the refresh is adopted by the effect below, never over input.
+    const catchUp = () => {
+      if (live && !writer.dirty && !writer.error) router.refresh();
+    };
+    const saves = typeof BroadcastChannel === "function" ? new BroadcastChannel("kh:document-saved") : null;
+    savesRef.current = saves;
+    if (saves) saves.onmessage = ({ data }: MessageEvent<{ documentId?: string; revisionId?: string }>) => {
+      if (data?.documentId === detail.inspectorData.documentId && data.revisionId !== writer.revisionId) catchUp();
+    };
+    const visibility = () => {
+      if (document.visibilityState === "hidden") sendNow();
+      else { writer.retryNow(); catchUp(); }
+    };
+    const online = () => writer.retryNow();
     const unload = (event: BeforeUnloadEvent) => {
       persist();
-      if (writer.dirty && !discardingRef.current) event.preventDefault();
+      // Asked only when what is unsaved cannot go with the page: too large for that request, a failed
+      // or paused save (composing, recovering), or a save still in flight.
+      if (writer.dirty && !discardingRef.current && !writer.canSendOnLeave()) event.preventDefault();
     };
-    window.addEventListener("pagehide", persist);
+    window.addEventListener("pagehide", sendNow);
     window.addEventListener("beforeunload", unload);
+    window.addEventListener("online", online);
     document.addEventListener("visibilitychange", visibility);
     for (const type of ["pointerup", "pointercancel"]) window.addEventListener(type, pressEnded, true);
     // Not captured: a captured blur is any element's, and a press moves focus.
@@ -261,10 +326,13 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       alive.current = false;
       clearTimeout(timer);
       clearTimeout(refreshTimer.current);
-      writer.dispose();
+      // Navigation inside the app: what is unsaved goes with it, as the page would on a reload.
+      writer.leave();
       remote?.dispose();
-      window.removeEventListener("pagehide", persist);
+      saves?.close();
+      window.removeEventListener("pagehide", sendNow);
       window.removeEventListener("beforeunload", unload);
+      window.removeEventListener("online", online);
       document.removeEventListener("visibilitychange", visibility);
       for (const type of ["pointerup", "pointercancel"]) window.removeEventListener(type, pressEnded, true);
       window.removeEventListener("blur", pressEnded);
@@ -273,8 +341,8 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   }, []);
 
   useEffect(() => {
-    queue.current?.pause(!loaded || !authorization.current || !!recovery || composing.current || !resolved.title);
-  }, [loaded, confirmed, access.actions.canWrite, access.workspace.lifecycleState, recovery, resolved.title]);
+    queue.current?.pause(!loaded || !authorization.current || !!recovery || composing.current);
+  }, [loaded, confirmed, access.actions.canWrite, access.workspace.lifecycleState, recovery]);
   useEffect(() => {
     const timer = setTimeout(() => {
       void import("@/shared/markdown/outline").then(({ extractOutline }) => {
@@ -340,8 +408,8 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   const conflict = error?.code === "REVISION_CONFLICT";
   const dirty = !!writer?.dirty || pending.current;
   const editable = loaded && authorization.current;
-  const status = !loaded ? "loading" : recovery ? "recovery" : !resolved.title ? "invalid" : error ? "error" : writer?.status === "saving" ? "saving" : dirty ? "pending" : "saved";
-  const attention = recovery ? "Recovered changes" : !resolved.title ? "Add a title" : error ? "Not saved" : undefined;
+  const status = !loaded ? "loading" : recovery ? "recovery" : error ? "error" : writer?.status === "saving" ? "saving" : dirty ? "pending" : "saved";
+  const attention = recovery ? "Recovered changes" : error ? "Not saved" : undefined;
   // The page is the editor: a first visit says so once, then the hint stays out of the way.
   const [showEditHint, setShowEditHint] = useState(false);
   useEffect(() => {
@@ -389,6 +457,13 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       textarea?.setSelectionRange(0, 0);
     } else editor.current?.focusStart();
   }
+  // Arriving from a new note (`/knowledge/new` created it): the title is where to start typing, with
+  // "Untitled" selected so the first keystroke replaces it.
+  useEffect(() => {
+    if (!editable || !takeNewNote(detail.inspectorData.documentId)) return;
+    titleInput.current?.focus();
+    if (titleInput.current?.value === "Untitled") titleInput.current.select();
+  }, [editable]);
   function focusTitle() {
     flushEditor();
     if (resolve(queue.current!.current).source !== "H1") {
@@ -416,14 +491,14 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   </Button>;
   const article = <>
     {recovery && <p role="status" className="mb-3 text-body-sm">
-      {recovery === "stale" ? "This document changed while you were away. Your recovered text is kept here; download it before loading the latest version." : "Your unsaved changes were recovered."}
-      {recovery === "current" && <Button variant="link" onClick={() => setRecovery(null)}>Resume saving</Button>}
+      This document changed while you were away. Your recovered text is kept here; download it before loading the latest version.
       <Button variant="link" onClick={() => setDiscarding(true)}>Discard recovered changes</Button>
     </p>}
     {recovery === "stale" && recoveryMetadata === "loading" ? <p role="status" className="mb-3 text-body-sm">Loading the draft's original metadata…</p> : null}
     {recovery === "stale" && recoveryMetadata === "unavailable" ? <p role="status" className="mb-3 text-body-sm">The draft's original metadata is unavailable; the download uses metadata from the latest saved version.</p> : null}
     {error && <div className="mb-3"><GovernanceError error={error} />
       {conflict ? <p className="text-body-sm">Someone updated this document. Your text is still here. Download your changes before loading the latest version.</p> : null}
+      {writer?.retrying ? <p className="text-body-sm">Your text is kept here. Trying again automatically.</p> : null}
       {!conflict && <Button variant="link" disabled={!editable} onClick={() => void writer?.retry()}>Retry save</Button>}
       <Button variant="link" onClick={() => setDiscarding(true)}>Load latest version</Button>
     </div>}
@@ -438,9 +513,10 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     <div ref={pressArea} onPointerDownCapture={() => { dismissEditHint(); if (!ready) standInPressed.current = true; }} onFocusCapture={dismissEditHint} onCompositionStart={() => { composing.current = true; writer?.pause(true); }} onCompositionEnd={() => {
       composing.current = false;
       flushEditor();
-      writer?.pause(!editable || !!recovery || !resolve(queue.current!.current).title);
+      writer?.pause(!editable || !!recovery);
+      settleRef.current?.();
     }} onBlur={() => flushEditor()} onKeyDownCapture={event => {
-      if ((event.metaKey || event.ctrlKey) && event.key === "/" && !event.nativeEvent.isComposing && !failed) {
+      if ((event.metaKey || event.ctrlKey) && event.key === "/" && !isListKey(event) && !event.nativeEvent.isComposing && !failed) {
         event.preventDefault(); flushEditor();
         if (!source) sourceRef.current = true;
         setSource(value => !value);
@@ -491,7 +567,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       }}
       className="mt-2 block w-full resize-none overflow-hidden break-words border-0 bg-transparent p-0 text-page-title font-semibold tracking-tight text-kh-text outline-none"
       onCompositionStart={() => { composing.current = true; writer?.pause(true); }}
-      onCompositionEnd={() => { composing.current = false; writer?.pause(!editable || !!recovery || !resolve(queue.current!.current).title); }} /> : undefined}>
+      onCompositionEnd={() => { composing.current = false; writer?.pause(!editable || !!recovery); settleRef.current?.(); }} /> : undefined}>
     <div className="kh-reading-column py-6">
       {personal && <ReadRevisionMarker workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId} revisionId={savedRevision} />}
       {personal ? <OwnerReviewPanel documentId={detail.inspectorData.documentId} revisionId={savedRevision} markdown={content.markdown} prepareComment={prepareComment} commentAvailable={editable && ready && !recovery && !source && !failed} contentPending={dirty || !!recovery || source || failed || !ready}>{article}</OwnerReviewPanel> : article}

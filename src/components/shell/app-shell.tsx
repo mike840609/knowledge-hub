@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import Image from "next/image";
 import { NavigationContext } from "./navigation-context";
 import type { WorkspaceShellModel } from "@/server/knowledge-read";
 import { DocumentTopbarContext, type DocumentTopbarState } from "./document-topbar-context";
@@ -99,12 +100,21 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
       {authorization.access.workspace.lifecycleState === "ARCHIVED" && <ArchivedWorkspaceBanner workspaceId={model.workspace.id} canRestore={authorization.confirmed && authorization.access.actions.canRestore} />}
       <div className="flex min-h-0 flex-1">
         <aside className={`hidden shrink-0 border-r border-kh-border bg-kh-bg-sunken lg:flex lg:flex-col ${navCollapsed ? "w-12" : "w-44"}`}>
-          {/* The wordmark and the collapse control share the compact 176px header. */}
           <div className={`flex h-12 shrink-0 items-center gap-1 ${navCollapsed ? "justify-center px-2" : "px-2"}`}>
-            {navCollapsed ? null : <span className="min-w-0 flex-1 whitespace-nowrap text-caption font-semibold text-kh-text">Knowledge Hub</span>}
+            {navCollapsed ? null : (
+              <>
+                <Image src="/icon.svg" width={20} height={20} alt="" className="shrink-0" />
+                <span className="min-w-0 flex-1 truncate text-caption font-semibold text-kh-text">Knowledge Hub</span>
+              </>
+            )}
             <Tooltip label={navCollapsed ? "Expand navigation" : "Collapse navigation"} shortcut={NAV_TOGGLE_SHORTCUT} side={navCollapsed ? "right" : "bottom"}>
-              <button type="button" onClick={toggleNav} aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"} aria-keyshortcuts={NAV_TOGGLE_SHORTCUT} className={buttonClasses({ variant: "ghost", icon: true, size: navCollapsed ? "md" : "sm" })}>
-                {navCollapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
+              <button type="button" onClick={toggleNav} aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"} aria-keyshortcuts={NAV_TOGGLE_SHORTCUT} className={buttonClasses({ variant: "ghost", icon: true, size: navCollapsed ? "md" : "sm", className: "group" })}>
+                {navCollapsed ? (
+                  <>
+                    <Image src="/icon.svg" width={20} height={20} alt="" className="group-focus-visible:hidden [@media(hover:hover)_and_(pointer:fine)]:group-hover:hidden" />
+                    <PanelLeftOpen className="hidden h-4 w-4 group-focus-visible:block [@media(hover:hover)_and_(pointer:fine)]:group-hover:block" aria-hidden="true" />
+                  </>
+                ) : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
               </button>
             </Tooltip>
           </div>

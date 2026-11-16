@@ -213,7 +213,7 @@ test("inline: content and title autosave without navigating or losing focus", as
     if (request.method() === "PUT" && request.url().includes("/personal") || request.headers()["rsc"] === "1" && new URL(request.url()).pathname === url && !request.headers()["next-router-prefetch"]) traffic.push(request.url());
   });
   await editor.fill("Changed inline.");
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(500);
   await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "pending");
   await expect(page.locator("[data-autosave-status]")).toHaveText("");
   await saved(page);
@@ -277,20 +277,23 @@ test("inline: historical revisions remain read-only", async ({ page }) => {
   await expect(page.locator("main article")).toContainText("Original paragraph.");
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toHaveCount(0);
 });
-test("inline: failed saves recover after reload without silently publishing", async ({ page }) => {
+test("inline: failed saves retry automatically and resume after reload", async ({ page }) => {
   const { url, id } = await note(page);
   const editor = await surface(page, url);
   await page.route(`**/api/documents/${id}`, route => route.request().method() === "PATCH" ? route.abort() : route.continue());
   await editor.fill("Recover me.");
   await expect(editor).toContainText("Recover me.");
-  // The write only starts after the 3s autosave debounce; the default 5s left ~1.6s for a parallel run.
-  await expect(page.getByRole("button", { name: "Retry save" })).toBeVisible({ timeout: 15000 });
+  // The write only starts after the autosave delay; the default 5s is tight for a parallel run.
+  await expect(page.getByText("Trying again automatically.")).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("button", { name: "Retry save" })).toBeVisible();
   page.on("dialog", dialog => dialog.accept());
   await page.reload();
-  await expect(page.getByRole("button", { name: "Resume saving" })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Recover me.");
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Recover me.", { timeout: 15000 });
+  await expect(page.getByRole("button", { name: "Resume saving" })).toHaveCount(0);
+  await expect(page.getByText("Trying again automatically.")).toBeVisible({ timeout: 15000 });
   await page.unroute(`**/api/documents/${id}`);
-  await page.getByRole("button", { name: "Resume saving" }).click();
+  // Coming back online retries at once instead of waiting out the backoff.
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await saved(page);
   await page.reload();
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Recover me.");
@@ -353,15 +356,16 @@ test("inline: continuous typing submits by the maximum wait without account draf
     if (request.method() === "PATCH" && request.url().endsWith(`/api/documents/${id}`)) patches++;
     if (request.method() === "PUT" && request.url().includes("/personal")) drafts++;
   });
-  for (let i = 0; i < 15; i++) {
+  // Changes 300 ms apart never reach the one-second delay; only the five-second maximum wait saves.
+  for (let i = 0; i < 20; i++) {
     await editor.fill(`Continuous typing ${i}`);
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(300);
   }
   await expect.poll(() => patches).toBeGreaterThanOrEqual(1);
   await saved(page);
   expect(drafts).toBe(0);
   await page.reload();
-  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Continuous typing 14");
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Continuous typing 19");
 });
 
 test("inline: a failed document save backs up recovery to the account", async ({ page, browser }) => {
@@ -375,11 +379,87 @@ test("inline: a failed document save backs up recovery to the account", async ({
   try {
     const second = await other.newPage();
     await second.goto(new URL(url, page.url()).href);
-    await expect(second.getByRole("button", { name: "Resume saving" })).toBeVisible({ timeout: 15000 });
-    await expect(second.getByRole("textbox", { name: "Content", exact: true })).toContainText("Account recovery text.");
+    await expect(second.getByRole("textbox", { name: "Content", exact: true })).toContainText("Account recovery text.", { timeout: 15000 });
+    // Written over the current revision, the recovered text goes on saving from the other device.
+    await saved(second);
   } finally { await other.close(); }
 });
 
+
+test("inline: an idle tab shows what another tab or device saved, then saves on top of it", async ({ page, browser }) => {
+  const { url, id } = await note(page);
+  const editor = await surface(page, url);
+  // Another tab of this browser: its save is announced to this one.
+  const other = await page.context().newPage();
+  const otherEditor = await surface(other, url);
+  const otherSave = other.waitForResponse(response => response.request().method() === "PATCH" && response.url().endsWith(`/api/documents/${id}`) && response.ok());
+  await otherEditor.fill("Saved in the other tab.");
+  const { revisionId } = await (await otherSave).json();
+  const title = await other.getByRole("textbox", { name: "Title", exact: true }).inputValue();
+  await saved(other);
+  await other.close();
+  await expect(editor).toContainText("Saved in the other tab.", { timeout: 15000 });
+  // Another device: nothing is announced; coming back to the tab looks.
+  const device = await browser.newContext({ storageState: await page.context().storageState() });
+  try {
+    const response = await device.request.patch(new URL(`/api/documents/${id}`, page.url()).href, { data: { title, markdown: "Saved on the phone.", expectedCurrentRevisionId: revisionId } });
+    expect(response.ok()).toBe(true);
+  } finally { await device.close(); }
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(editor).toContainText("Saved on the phone.", { timeout: 15000 });
+  await editor.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" And more here.");
+  await saved(page);
+  await expect(page.getByText("Someone updated this document.", { exact: false })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Saved on the phone. And more here.");
+});
+
+test("inline: a page without a title saves as Untitled", async ({ page }) => {
+  const { url } = await note(page);
+  const editor = await surface(page, url);
+  await page.getByRole("textbox", { name: "Title", exact: true }).fill("");
+  // Ending an IME composition on an untitled page does not pause saving.
+  await editor.dispatchEvent("compositionstart");
+  await editor.fill("Body without a title.");
+  await editor.dispatchEvent("compositionend");
+  await saved(page);
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" }).last()).toContainText("Untitled");
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Body without a title.", { timeout: 15000 });
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Untitled");
+});
+
+test("inline: a conflict on different paragraphs merges and saves; on the same paragraph it stops", async ({ page }) => {
+  const workspace = await personalWorkspaceId(page);
+  const created = await (await page.request.post(`/api/workspaces/${workspace}/documents`, { data: { title: "Merge", markdown: "First.\n\nSecond.\n\nThird." } })).json();
+  const editor = await surface(page, `/w/${workspace}/knowledge/${created.sourceId}/${created.documentId}`);
+  // Saved elsewhere without telling this tab (no shared browser, no return to the page).
+  const elsewhere = await page.request.patch(`/api/documents/${created.documentId}`, { data: { title: "Merge", markdown: "First.\n\nSecond.\n\nThird, from elsewhere.", expectedCurrentRevisionId: created.revisionId } });
+  expect(elsewhere.ok()).toBe(true);
+  await editor.getByText("First.").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Mine.");
+  await saved(page);
+  await expect(editor).toContainText("Third, from elsewhere.");
+  await expect(page.getByText("Someone updated this document.", { exact: false })).toHaveCount(0);
+  await page.reload();
+  const reloaded = page.getByRole("textbox", { name: "Content", exact: true });
+  await expect(reloaded).toContainText("First. Mine.", { timeout: 15000 });
+  await expect(reloaded).toContainText("Third, from elsewhere.");
+
+  const current = await page.request.patch(`/api/documents/${created.documentId}`, { data: { title: "Merge", markdown: "First. Mine.\n\nSecond, theirs.\n\nThird, from elsewhere.", expectedCurrentRevisionId: (await (await page.request.get(`/api/documents/${created.documentId}/peek?brief`)).json()).revisionId } });
+  expect(current.ok()).toBe(true);
+  await reloaded.getByText("Second.").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Mine too.");
+  await expect(page.getByText("Someone updated this document.", { exact: false })).toBeVisible({ timeout: 15000 });
+  await expect(reloaded).toContainText("Second. Mine too.");
+});
 
 test("inline: action letters type normally in title and body", async ({ page }) => {
   const { url } = await note(page);

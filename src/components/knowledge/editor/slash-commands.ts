@@ -63,14 +63,16 @@ function loneSlash(state: EditorState, pos: number): [number, number] | null {
 
 /**
  * Rows for a query, case-insensitively, each group in list order: an alias it equals, a label it
- * begins, an alias it begins, then label or `words` holding it. So `/h2` is Heading 2 and `/t` is Text,
- * not To-do by way of `todo`.
+ * begins, a word of the label or `words` it begins, an alias it begins, then label or `words` holding
+ * it. So `/h2` is Heading 2, `/t` is Text rather than To-do by way of `todo`, and `/li` is a list
+ * rather than Divider by way of `line`.
  */
 export function matchingCommands(query: string): readonly Command[] {
   const q = query.toLowerCase().trim();
   const groups = [
     (command: Command) => command.aliases.some(alias => alias === q),
     (command: Command) => command.label.toLowerCase().startsWith(q),
+    (command: Command) => `${command.label} ${command.words}`.toLowerCase().split(/\s+/).some(word => word.startsWith(q)),
     (command: Command) => command.aliases.some(alias => alias.startsWith(q)),
     (command: Command) => `${command.label} ${command.words}`.toLowerCase().includes(q),
   ];

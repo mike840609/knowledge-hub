@@ -24,7 +24,7 @@ test("workspace page breadcrumbs share a desktop origin and document rows share 
     expect(bounds!.y, route).toBeCloseTo(origin.y, 0);
     expect(bounds!.height, route).toBeCloseTo(origin.height, 0);
   }
-  await page.goto(`/w/${ws}/knowledge/new`);
+  await page.goto(`/w/${ws}/knowledge/new?compose`);
   const row = page.getByRole("navigation", { name: "Breadcrumb", exact: true });
   await expect(row).toBeVisible();
   const bounds = await row.boundingBox();

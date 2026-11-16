@@ -49,6 +49,11 @@ function press(view: EditorView, key: string, init: KeyboardEventInit = {}) {
 }
 const mod = (view: EditorView, key: string, extra: KeyboardEventInit = {}) => press(view, key, { ctrlKey: true, ...extra });
 const caretAt = (view: EditorView, pos: number) => view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, pos)));
+function findText(view: EditorView, text: string) {
+  let at = -1;
+  view.state.doc.descendants((node, pos) => { if (at < 0 && node.isText && node.text!.includes(text)) at = pos + node.text!.indexOf(text); });
+  return at;
+}
 const names = (view: EditorView) => { const found: string[] = []; view.state.doc.forEach(node => found.push(node.type.name)); return found; };
 
 it.each(["**bold** x", "*it* x", "_it_ x", "`co` x", "~~st~~ x", "~st~ x"])("ends a mark made by an input rule at its closing delimiter: %s", async (typed) => {
@@ -120,6 +125,21 @@ it("leaves a [[target]] being typed as written", async () => {
   const { view } = await open("");
   type(view, "see [[A->B (c)");
   expect(view.state.doc.textContent).toBe("see [[A->B (c)");
+});
+
+it("still replaces after a stray [[ further back than the [[ list looks (MAX_QUERY_LENGTH)", async () => {
+  const { view } = await open("");
+  const prose = `type [[ to link, ${"and so on ".repeat(11)}then a `;
+  type(view, `${prose}-> b`);
+  expect(view.state.doc.textContent).toBe(`${prose}→ b`);
+});
+
+it.each([["# Head", "bullet_list", "- Head"], ["- a\n- b", "ordered_list", "1. a\n2. b"]])("Mod-Shift-%s chosen with Escape is turned into a list", async (markdown, type_, expected) => {
+  const { editor, view } = await open(markdown);
+  view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, 0)));
+  mod(view, type_ === "ordered_list" ? "&" : "*", { shiftKey: true });
+  expect(view.state.doc.firstChild?.type.name).toBe(type_);
+  expect(editor.getMarkdown().trim()).toBe(expected);
 });
 
 it("leaves -- alone so that --- still makes a divider, and does not replace in code", async () => {
@@ -437,3 +457,57 @@ it("undo still works after these keys", async () => {
 });
 
 vi.fn();
+
+describe("Mod-Shift-7/8/9 on a list chosen with Escape (5: the keys toggle off)", () => {
+  it.each([
+    ["- one\n- two\n", "8", { shiftKey: true }],
+    ["1. one\n2. two\n", "7", { shiftKey: true }],
+    ["- [ ] one\n- [ ] two\n", "9", { shiftKey: true }],
+  ] as const)("turns %j back into paragraphs, and handles the key", async (markdown, key, extra) => {
+    const { editor, view } = await open(markdown);
+    caretAt(view, findText(view, "one") + 1);
+    press(view, "Escape");
+    expect(view.state.selection).toBeInstanceOf(NodeSelection);
+    const event = mod(view, key, extra);
+    expect(event.defaultPrevented).toBe(true);
+    expect(editor.getMarkdown()).toBe("one\n\ntwo\n");
+  });
+  it("leaves the key alone for a block that cannot become a list", async () => {
+    const { view } = await open("| a |\n| - |\n| b |\n");
+    caretAt(view, findText(view, "b") + 1);
+    press(view, "Escape");
+    expect(view.state.selection).toBeInstanceOf(NodeSelection);
+    expect(mod(view, "8", { shiftKey: true }).defaultPrevented).toBe(false);
+  });
+});
+
+it("[x] typed at the start of an item's later paragraph does not check the item", async () => {
+  const { editor, view } = await open("- first\n\n  later\n");
+  caretAt(view, findText(view, "later"));
+  type(view, "[x] ");
+  // Written as text (the serializer escapes it), and the item is not a to-do.
+  expect(editor.getMarkdown()).toBe("- first\n\n  \\[x] later\n");
+  expect(view.state.doc.firstChild!.firstChild!.attrs.checked).toBeNull();
+});
+
+it.each([
+  ["- one\n- two\n", "two", "- one\n- [ ] two\n"],
+  ["1. one\n2. two\n", "two", "1. one\n2. [ ] two\n"],
+  ["- outer\n  - inner\n", "inner", "- outer\n  - [ ] inner\n"],
+])("[ ] typed on an item's first line makes that item a to-do: %j", async (markdown, at, expected) => {
+  const { editor, view } = await open(markdown);
+  caretAt(view, findText(view, at));
+  type(view, "[ ] ");
+  expect(editor.getMarkdown()).toBe(expected);
+});
+
+it("Mod-Shift-8 on an Escape-chosen list keeps its links", async () => {
+  const markdown = "- see [[Target]] and [[Other|alias]]\n- read [doc](notes/a.md#Part)\n";
+  const { editor, view } = await open(markdown);
+  caretAt(view, findText(view, "see") + 1);
+  press(view, "Escape");
+  mod(view, "8", { shiftKey: true });
+  const links = (text: string) => extractDocumentLinks(text).map(({ kind, target }) => ({ kind, target }));
+  expect(editor.getMarkdown()).not.toBe(markdown);
+  expect(links(editor.getMarkdown())).toEqual(links(markdown));
+});

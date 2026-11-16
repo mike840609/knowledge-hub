@@ -38,7 +38,7 @@ function newTitle(page: Page) {
 // workspace authorization, which gives the upload tests a stable hydration
 // signal before setInputFiles dispatches the file input's change event.
 async function gotoKnowledgeReadyToUpload(page: Page, workspaceId: string) {
-  await page.goto(`/w/${workspaceId}/knowledge/new`);
+  await page.goto(`/w/${workspaceId}/knowledge/new?compose`);
   const title = newTitle(page);
   await expect(title).toBeEditable(ROUND_TRIP);
   // A temporary value proves the controlled input and submit handler are
@@ -129,7 +129,7 @@ test("never shows Edit on source-managed content", async ({ page }) => {
 // Spec §4/§10 core acceptance: the second (stale) editor is told about the conflict,
 // their typed input survives on screen, and the first editor's content is what persisted.
 // Ruling B skips React component unit tests, so this browser behavior is E2E-only.
-test("a stale second editor gets a conflict, keeps their input, and does not overwrite the winner", async ({ page }) => {
+test("a stale second editor gets a conflict, keeps their input, and does not overwrite the winner", async ({ page, browser }) => {
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
   await newTitle(page).fill("Conflict Note");
   await page.getByRole("button", { name: "Create document" }).click();
@@ -137,11 +137,13 @@ test("a stale second editor gets a conflict, keeps their input, and does not ove
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Conflict Note", ROUND_TRIP);
   const documentUrl = page.url();
 
-  // Two editors open the same base revision. A second page in the same context is
-  // the same identity — the conflict is about revision versioning, not authorization.
+  // Two editors open the same base revision. A second device of the same identity — the conflict is
+  // about revision versioning, not authorization. Not a tab of this browser: a save there is announced,
+  // and an idle tab takes it before typing (inline editing spec, "An idle tab catches up").
   await page.goto(documentUrl);
   const editorA = page.locator("main");
-  const pageB = await page.context().newPage();
+  const deviceB = await browser.newContext({ storageState: await page.context().storageState(), baseURL: new URL(page.url()).origin });
+  const pageB = await deviceB.newPage();
   pageB.on("dialog", (dialog) => void dialog.accept());
   await pageB.goto(documentUrl);
   const editorB = pageB.locator("main");
@@ -163,7 +165,7 @@ test("a stale second editor gets a conflict, keeps their input, and does not ove
   await pageB.getByRole("button", { name: "Discard and load latest", exact: true }).click();
   await expect(pageB.locator("article").first().getByText("winner body")).toBeVisible(ROUND_TRIP);
   await expect(pageB.getByText("loser body")).toHaveCount(0);
-  await pageB.close();
+  await deviceB.close();
 });
 
 // Blocking framework chunks allows streamed HTML to appear without hydration.

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { governanceFailure, governanceRequest, GovernanceRequestError } from "@/components/workspaces/governance-error";
+import { governanceFailure, governanceRequest, GovernanceRequestError, transientSaveFailure } from "@/components/workspaces/governance-error";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -42,5 +42,22 @@ describe("governance client boundary", () => {
     await expect(governanceRequest("/api/workspaces/team", "PATCH", { name: "Team" })).rejects.toThrow("offline");
     expect(dispatchEvent).not.toHaveBeenCalled();
     expect(governanceFailure(new TypeError("offline")).code).toBe("REQUEST_FAILED");
+  });
+
+  it("keeps the response status, and sends a request that outlives the page when asked", async () => {
+    vi.stubGlobal("window", { dispatchEvent: vi.fn() });
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: "INTERNAL", message: "Down" } }), { status: 503 }));
+    vi.stubGlobal("fetch", fetch);
+    const failure = await governanceRequest("/api/documents/x", "PATCH", { title: "t" }, { keepalive: true }).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(GovernanceRequestError);
+    expect((failure as GovernanceRequestError).status).toBe(503);
+    expect(fetch.mock.calls[0][1]).toMatchObject({ keepalive: true });
+  });
+
+  it("tries again on its own only after a failure that may pass", () => {
+    expect(transientSaveFailure(new TypeError("Failed to fetch"))).toBe(true);
+    for (const status of [500, 502, 503, 408, 429]) expect(transientSaveFailure(new GovernanceRequestError({ code: "X", message: "x" }, status))).toBe(true);
+    for (const status of [400, 403, 404, 409, 413]) expect(transientSaveFailure(new GovernanceRequestError({ code: "X", message: "x" }, status))).toBe(false);
+    expect(transientSaveFailure(new Error("Add a title before saving."))).toBe(false);
   });
 });

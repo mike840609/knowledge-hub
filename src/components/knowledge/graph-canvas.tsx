@@ -292,7 +292,7 @@ export function GraphCanvas({
             const unresolved = node.kind === "UNRESOLVED";
             // Where a click goes: the page, or for a target nothing answers to, the form that makes it (when the reader may).
             const destination = node.href ?? node.createHref;
-            const summary = `${node.title}${unresolved ? (node.createHref ? " (unresolved; opens the form to create it)" : " (unresolved)") : ""}, ${node.inDegree} incoming, ${node.outDegree} outgoing`;
+            const summary = `${node.title}${unresolved ? (node.createHref ? " (unresolved; click to create it)" : " (unresolved)") : ""}, ${node.inDegree} incoming, ${node.outDegree} outgoing`;
             const accent = !unresolved && (inEmphasis || found);
             const body = (
               <>

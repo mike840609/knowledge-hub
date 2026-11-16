@@ -139,8 +139,9 @@ test("favouriting from the row menu reaches the sidebar without a reload", async
   await row.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Add to favorites" }).click();
 
-  const favorites = page.getByRole("region", { name: "Favorites" });
-  await expect(favorites.getByRole("link", { name: /Runbooks/ })).toBeVisible();
+  await page.getByRole("button", { name: "Favorite documents", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: /Runbooks/ })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   // And the registry now offers the inverse, because the target's state changed.
   await row.click({ button: "right" });

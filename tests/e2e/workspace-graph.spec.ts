@@ -21,7 +21,7 @@ async function createMySpaceDocument(page: Page, title: string, body: string): P
   await page.goto("/");
   await page.waitForURL(/\/w\/[^/]+\/knowledge/);
   const workspaceId = new URL(page.url()).pathname.split("/")[2];
-  await page.goto(`/w/${workspaceId}/knowledge/new`);
+  await page.goto(`/w/${workspaceId}/knowledge/new?compose`);
   // The composer opens in rendered editing; exact Markdown is typed in its source view (composer-helpers).
   const form = page.locator("main");
   await form.getByLabel("Title", { exact: true }).fill(title);
@@ -41,7 +41,7 @@ const node = (page: Page, title: string) => page.getByRole("link", { name: new R
  * A target nothing answers to: drawn, and named. It has no page to open, so to a reader who may write
  * (My Space, here) it is the way to the form that makes one, and a link; to anyone else it is not a link.
  */
-const ghost = (page: Page, title: string) => page.getByRole("link", { name: new RegExp(`^${escape(title)} \\(unresolved; opens the form to create it\\), \\d+ incoming, \\d+ outgoing$`) });
+const ghost = (page: Page, title: string) => page.getByRole("link", { name: new RegExp(`^${escape(title)} \\(unresolved; click to create it\\), \\d+ incoming, \\d+ outgoing$`) });
 
 test.describe("the workspace graph", () => {
   test("draws documents and their links, and the filters, find box and views work", async ({ page }) => {
@@ -80,7 +80,7 @@ test.describe("the workspace graph", () => {
 
     await page.getByLabel("Unresolved").check();
     await expect(page).toHaveURL(/unresolved=1/, ROUND_TRIP);
-    await expect(ghost(page, missing)).toHaveAttribute("aria-label", `${missing} (unresolved; opens the form to create it), 1 incoming, 0 outgoing`, ROUND_TRIP);
+    await expect(ghost(page, missing)).toHaveAttribute("aria-label", `${missing} (unresolved; click to create it), 1 incoming, 0 outgoing`, ROUND_TRIP);
     await expect(node(page, a)).toHaveAttribute("aria-label", `${a}, 1 incoming, 2 outgoing`, ROUND_TRIP);
 
     await page.getByLabel("Orphans").uncheck();

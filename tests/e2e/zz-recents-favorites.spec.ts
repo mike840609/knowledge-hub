@@ -205,67 +205,49 @@ test.describe("the palette, before anything is typed", () => {
 const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
 const OBSIDIAN_SOURCE = "0199f100-0000-7000-8000-000000000101";
 
-const favoritesRegion = (page: Page) => page.getByRole("region", { name: "Favorites" });
-const showAll = (page: Page) => favoritesRegion(page).getByRole("button", { name: /^Show all \d+$/ });
+const favoritesButton = (page: Page) => page.getByRole("button", { name: "Favorite documents", exact: true });
 
 test.describe("the sidebar's Favorites", () => {
-  test("lists the newest four in place and the rest behind Show all, in a section no taller for ten than for five", async ({ page }) => {
+  test("lists every favorite from the toolbar in newest-first order", async ({ page }) => {
     const stamp = unique("Fav");
     const workspaceId = await mySpace(page);
     const titles = Array.from({ length: 10 }, (_, index) => `${stamp} Note ${String(index + 1).padStart(2, "0")}`);
     const notes: { url: string; documentId: string }[] = [];
     for (const title of titles) notes.push(await createNote(page, workspaceId, title));
-    await read(page, notes[0], titles[0]);
+    await read(page, notes[9], titles[9]);
 
-    const favorites = favoritesRegion(page);
+    const favorites = favoritesButton(page);
     for (const title of titles) {
       await page.getByRole("button", { name: `Add to favorites: ${title}`, exact: true }).click();
-      await expect(favorites.getByRole("link", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
+      await expect(page.getByRole("button", { name: `Remove from favorites: ${title}`, exact: true })).toBeAttached(ROUND_TRIP);
     }
-    // The newest four, newest first. Others in the account may be older than these, never newer.
-    const links = favorites.getByRole("link");
-    await expect(links).toHaveCount(4, ROUND_TRIP);
-    for (const [position, title] of [titles[9], titles[8], titles[7], titles[6]].entries()) {
-      await expect(links.nth(position)).toContainText(title);
+    await expect(favorites).toHaveAttribute("aria-expanded", "false");
+    await favorites.click();
+    const mine = page.getByRole("menu").getByRole("menuitem", { name: stamp });
+    await expect(mine).toHaveCount(10, ROUND_TRIP);
+    for (const [position, title] of [...titles].reverse().entries()) {
+      await expect(mine.nth(position)).toContainText(title);
     }
-    // The rest are one click away, and the section holds four rows and that one, not a list that grows.
-    await expect(showAll(page)).toBeVisible();
-    const section = await favorites.boundingBox();
-    expect(section?.height ?? Infinity).toBeLessThan(240);
-
-    // Show all lists every favorite, the oldest among them, each a link that goes to its document.
-    await showAll(page).click();
-    const menu = page.getByRole("menu");
-    const mine = menu.getByRole("menuitem", { name: stamp });
-    await expect(mine).toHaveCount(10);
     await expect(mine.filter({ hasText: titles[0] })).toHaveAttribute("href", new RegExp(`${notes[0].documentId}$`));
     await mine.filter({ hasText: titles[0] }).click();
     await expect(page).toHaveURL(notes[0].url, ROUND_TRIP);
     await expect(page.getByRole("menu")).toHaveCount(0);
 
-    // Esc closes it and gives focus back to what opened it.
-    await showAll(page).click();
-    await expect(page.getByRole("menu")).toBeVisible();
+    // The full list survives a reload and is reachable by keyboard.
+    await page.reload();
+    await expect(page.getByRole("complementary", { name: "Knowledge explorer" })).toHaveAttribute("aria-busy", "false", ROUND_TRIP);
+    await favorites.press("ArrowDown");
+    await expect(mine).toHaveCount(10, ROUND_TRIP);
+    await expect(page.getByRole("menuitem").first()).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("menu")).toHaveCount(0);
-    await expect(showAll(page)).toBeFocused();
-
-    // Reload: the same four, and Show all, from wherever they are kept.
-    await page.reload();
-    await expect(favoritesRegion(page).getByRole("link")).toHaveCount(4, ROUND_TRIP);
-    await expect(showAll(page)).toBeVisible(ROUND_TRIP);
+    await expect(favorites).toBeFocused();
   });
 
-  test("has no Show all while there are four or fewer", async ({ page }) => {
-    // A Team workspace's favorites are this browser's own, so nothing else in the account decides how many there are.
+  test("keeps the toolbar star available when there are no favorites", async ({ page }) => {
+    // Team favorites are local to this browser context.
     await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
-    const favorites = favoritesRegion(page);
-    const star = page.getByRole("button", { name: /^Add to favorites: / });
-    await expect(star.first()).toBeVisible(ROUND_TRIP);
-    await star.first().click();
-    await expect(favorites.getByRole("link")).toHaveCount(1, ROUND_TRIP);
-    await star.first().click();
-    await expect(favorites.getByRole("link")).toHaveCount(2, ROUND_TRIP);
-    await expect(favorites.getByRole("button", { name: /^Show all/ })).toHaveCount(0);
+    await favoritesButton(page).click();
+    await expect(page.getByRole("menu").getByText("No favorite documents")).toBeVisible(ROUND_TRIP);
   });
 });

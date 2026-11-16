@@ -74,7 +74,7 @@ test.describe("title keys (10)", () => {
   });
 
   test("in a new document's title Enter and ArrowDown reach an empty document's first paragraph", async ({ page }) => {
-    await page.goto(`/w/${await mySpace(page)}/knowledge/new`);
+    await page.goto(`/w/${await mySpace(page)}/knowledge/new?compose`);
     const field = main(page).getByLabel("Title", { exact: true });
     const surface = surfaceOf(page);
     await expect(surface).toBeEditable(ROUND_TRIP);
@@ -102,14 +102,14 @@ test.describe("modified Enter in a title keeps its old meaning", () => {
     await expect(field).toHaveValue(title);
   });
   test("Shift+Enter in a new document's title does not submit the form", async ({ page }) => {
-    await page.goto(`/w/${await mySpace(page)}/knowledge/new`);
+    await page.goto(`/w/${await mySpace(page)}/knowledge/new?compose`);
     const field = main(page).getByLabel("Title", { exact: true });
     await expect(surfaceOf(page)).toBeEditable(ROUND_TRIP);
     await field.fill(unique("Shift enter"));
     await field.press("Shift+Enter");
     await expect(surfaceOf(page)).toBeFocused();
     await page.waitForTimeout(500);
-    await expect(page).toHaveURL(/\/new$/);
+    await expect(page).toHaveURL(/\/new\?compose$/);
   });
 });
 

@@ -15,7 +15,7 @@ import {
 } from "@milkdown/kit/preset/commonmark";
 import { toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
 import { posToDOMRect } from "@milkdown/kit/prose";
-import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
+import { NodeSelection, Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import { $prose } from "@milkdown/kit/utils";
 import type { Mark } from "@milkdown/kit/prose/model";
 import type { EditorView } from "@milkdown/kit/prose/view";
@@ -55,13 +55,22 @@ function currentList(view: EditorView): ListName | null {
 // A pressed toggle reads as selected, as the composer's own Markdown toggle does.
 const PRESSED = "aria-pressed:bg-kh-bg-selected aria-pressed:text-kh-text";
 const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+const EMAIL = /^[^\s@/:#?]+@[^\s@/:]+\.[^\s@/:]+$/;
+// `localhost:3000/x`, `example.com:8080`: a host and a port, not a scheme (`tel:123` has no dot).
+const HOST_PORT = /^(?:localhost|[^\s/:@]+\.[^\s/:@]+):\d+(?:[/?#]|$)/i;
 
 /**
- * `example.com` is a web address; a path, an anchor, anything with a scheme (`mailto:`) or a relative
- * link to a Markdown file (`../notes/other.md`, a link to a document) is left as typed.
+ * `example.com` (and `example.com/a.md`) is a web address; a path, an anchor, anything with a scheme
+ * (`mailto:`) or an explicitly relative link (`./other.md`, `../notes/other.md`) is left as typed. A
+ * bare `notes/other.md` cannot be told from a host, so it is a web address when typed; an existing
+ * link saved unedited keeps its address, and a document link edited to another document address
+ * stays one (see `fieldHref`). `user@example.com` is mailed; `localhost:3000` is a host with a port.
  */
 export function withScheme(value: string): string {
-  if (!value || HAS_SCHEME.test(value) || value.startsWith("/") || value.startsWith("#") || parseDocumentHref(value)) return value;
+  if (!value || /^(?:\/|#|\?|\.\.?\/)/.test(value)) return value;
+  if (EMAIL.test(value)) return `mailto:${value}`;
+  if (HOST_PORT.test(value)) return `https://${value}`;
+  if (HAS_SCHEME.test(value)) return value;
   return `https://${value}`;
 }
 
@@ -69,6 +78,18 @@ type SelectedLink =
   | { kind: "none" }
   | { kind: "multiple" }
   | { kind: "one"; from: number; to: number; mark: Mark };
+
+/** Some textblock the selection reaches may carry a link, as `toggleMark` asks (a code block may not). */
+function linkAllowed(view: EditorView): boolean {
+  const type = view.state.schema.marks.link;
+  if (!type) return false;
+  const { from, to } = view.state.selection;
+  let allowed = false;
+  view.state.doc.nodesBetween(from, to, (node) => {
+    if (node.isTextblock && node.type.allowsMarkType(type)) allowed = true;
+  });
+  return allowed;
+}
 
 /** Find one complete link even when the selection covers only part of it. */
 function selectedLink(view: EditorView): SelectedLink {
@@ -160,7 +181,7 @@ const items: Item[] = [
     label: "Link",
     text: "Link",
     active: (view) => markActive(view, "link"),
-    disabled: (view) => selectedLink(view).kind === "multiple",
+    disabled: (view) => selectedLink(view).kind === "multiple" || !linkAllowed(view),
     run: (_ctx, _view, openLink) => openLink(),
   },
   ...[1, 2, 3].map<Item>((level) => ({
@@ -222,11 +243,8 @@ const pasteUrlOverSelection = $prose(
           const type = schema.marks.link;
           if (!view.editable || !type || !PASTED_URL.test(text) || !(selection instanceof TextSelection) || selection.empty) return false;
           try { new URL(text); } catch { return false; }
-          let allowed = true;
-          view.state.doc.nodesBetween(selection.from, selection.to, (node) => {
-            if (node.isTextblock && !node.type.allowsMarkType(type)) allowed = false;
-          });
-          if (!allowed) return false;
+          // As the Link button asks; `addMark` leaves a code block in the selection as it was.
+          if (!linkAllowed(view)) return false;
           event.preventDefault();
           view.dispatch(view.state.tr.addMark(selection.from, selection.to, type.create({ href: text })).scrollIntoView());
           return true;
@@ -341,7 +359,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           linkRow.appendChild(linkActions);
           let editingLink: Extract<SelectedLink, { kind: "one" }> | null = null;
           // What the field's address opens: a web address as typed, a document as the reader resolves it.
-          const fieldTarget = (value: string) => storedLinkTarget(withScheme(value.trim()), links?.());
+          const fieldTarget = (value: string) => storedLinkTarget(fieldHref(value), links?.());
           const updateLinkActions = () => {
             openButton.disabled = !fieldTarget(input.value);
             removeButton.disabled = !editingLink;
@@ -367,8 +385,19 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             setLinkMode(true);
             input.focus();
           }
+          /**
+           * The field's address as it would be saved: an existing link's own address, left unedited, stays as
+           * written, and a document link edited to another document address (`other.md#sec`) stays a document link.
+           */
+          function fieldHref(value: string): string {
+            const typed = value.trim();
+            if (!editingLink) return withScheme(typed);
+            const original = String(editingLink.mark.attrs.href ?? "").trim();
+            if (typed === original || (parseDocumentHref(original) && parseDocumentHref(typed))) return typed;
+            return withScheme(typed);
+          }
           function saveLink() {
-            const href = withScheme(input.value.trim());
+            const href = fieldHref(input.value);
             if (!href) {
               if (!editingLink) {
                 showButtons();
@@ -565,7 +594,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== "k") return;
             if (event.isComposing || event.keyCode === 229) return;
             const { selection } = editorView.state;
-            if (!editorView.editable || !(selection instanceof TextSelection) || selection.empty || selectedLink(editorView).kind === "multiple") return;
+            if (!editorView.editable || !(selection instanceof TextSelection) || selection.empty || selectedLink(editorView).kind === "multiple" || !linkAllowed(editorView)) return;
             event.preventDefault();
             hideCard();
             if (element.dataset.show !== "true") provider.show({ getBoundingClientRect: () => posToDOMRect(editorView, selection.from, selection.to), contextElement: editorView.dom }, editorView);
@@ -580,6 +609,13 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           const boundary = () => [editorView.dom, ...getOverflowAncestors(editorView.dom).filter((node): node is Element => node instanceof Element)];
           const provider = new TooltipProvider({
             content: element,
+            // Milkdown's own rule, and none over a whole block chosen with Escape: Notion shows no toolbar there.
+            shouldShow: (view) => {
+              const { selection, doc } = view.state;
+              if (!view.editable || selection.empty || (selection instanceof NodeSelection && selection.node.isBlock)) return false;
+              if (selection instanceof TextSelection && !doc.textBetween(selection.from, selection.to).length) return false;
+              return view.hasFocus() || element.contains(document.activeElement);
+            },
             floatingUIOptions: { middleware: [flip(() => ({ boundary: boundary() })), offset(8), shift()] },
           });
           provider.onHide = showButtons;

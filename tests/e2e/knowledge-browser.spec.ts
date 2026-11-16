@@ -98,7 +98,7 @@ test("reveals archived documents only with the archived toggle", async ({ page }
 
   // The toggle is a controlled checkbox driving a client navigation, so click
   // the label and wait for the URL + checked state instead of check().
-  await page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Document display options").click();
+  await page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Document options").click();
   await page.getByRole("menuitemcheckbox", { name: "Show archived" }).click();
   await expect(page).toHaveURL(/includeArchived=true/);
   // Choosing an option closes the menu: this one navigates, so leaving it open
@@ -108,7 +108,7 @@ test("reveals archived documents only with the archived toggle", async ({ page }
   // well by a menu that never closed.
   await expect(page.getByRole("menuitemcheckbox", { name: "Show archived" })).toHaveCount(0);
   // Reopen to read the state back.
-  await page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Document display options").click();
+  await page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Document options").click();
   await expect(page.getByRole("menuitemcheckbox", { name: "Show archived" })).toHaveAttribute("aria-checked", "true");
   await page.keyboard.press("Escape");
 

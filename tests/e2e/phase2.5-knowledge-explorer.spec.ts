@@ -67,7 +67,7 @@ test.describe("narrow knowledge layout", () => {
 test("reading navigation separates collections from authoring and source management", async ({ page }) => {
   await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`, { waitUntil: "networkidle" });
   const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
-  await expect(explorer.getByRole("heading", { name: "Documents" })).toBeVisible();
+  await expect(explorer.getByRole("navigation", { name: "Document tree" })).toBeVisible();
   await expect(explorer.getByRole("combobox")).toHaveCount(0);
   await expect(explorer.getByRole("button", { name: "New document" })).toHaveCount(0);
   await expect(explorer.locator('input[type="file"]')).toHaveCount(0);
@@ -79,7 +79,11 @@ test("reading navigation separates collections from authoring and source managem
   await expect(page).toHaveURL(/\/knowledge\/0199f100-0000-7000-8000-000000000105\//);
   await expect(page.getByRole("heading", { name: "Compliance Policy", exact: true })).toBeVisible();
 
+  // A new document is made at once and opened in the editor; uploading a file is on the form.
   await page.getByRole("link", { name: "Create document", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${WORKSPACE}/knowledge/[^/]+/[^/?#]+$`), { timeout: 15_000 });
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Untitled", { timeout: 15_000 });
+  await page.goto(`/w/${WORKSPACE}/knowledge/new?compose`);
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("New document");
   await expect(page.locator("main").getByRole("textbox", { name: "Content" })).toBeVisible();
   await expect(page.locator('input[type="file"]')).toBeAttached();
@@ -135,16 +139,16 @@ test("a favorite from a synced source carries the read-only cue; one from a Hub 
   await explorer.getByRole("button", { name: "Add to favorites: Compliance Policy", exact: true }).click();
   await explorer.getByRole("button", { name: "Add to favorites: Runbooks", exact: true }).click();
   try {
-    const favorites = explorer.getByRole("region", { name: "Favorites" });
-    const toggle = favorites.getByRole("button", { name: "Favorites", exact: true });
-    if (await toggle.getAttribute("aria-expanded") === "false") await toggle.click();
-    const synced = favorites.getByRole("link", { name: "Compliance Policy", exact: true });
-    const hub = favorites.getByRole("link", { name: "Runbooks", exact: true });
+    await explorer.getByRole("button", { name: "Favorite documents", exact: true }).click();
+    const favorites = page.getByRole("menu");
+    const synced = favorites.getByRole("menuitem", { name: /Compliance Policy/ });
+    const hub = favorites.getByRole("menuitem", { name: /Runbooks/ });
     await expect(synced.locator("[data-read-only-cue]")).toBeVisible();
-    await expect(synced).toHaveAccessibleDescription("Vendor Compliance Vault Synced from a folder, read-only in the Hub");
+    await expect(synced).toHaveAccessibleDescription("Synced from a folder, read-only in the Hub");
     await expect(hub.locator("[data-read-only-cue]")).toHaveCount(0);
     await expect(hub).not.toHaveAccessibleDescription(/read-only/);
   } finally {
+    await page.keyboard.press("Escape");
     for (const title of ["Compliance Policy", "Runbooks"]) {
       const remove = explorer.getByRole("button", { name: `Remove from favorites: ${title}`, exact: true }).first();
       if (await remove.count()) await remove.click();

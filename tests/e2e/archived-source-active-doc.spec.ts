@@ -23,7 +23,7 @@ test("keeps an active doc under an archived source readable in archived mode", a
   await expect(page.getByText("Knowledge Hub", { exact: true }).filter({ visible: true })).toBeVisible();
   const tree = page.getByRole("tree", { name: "Knowledge tree" });
   await expect(tree).toBeVisible();
-  await page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Document display options").click();
+  await page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Document options").click();
   await expect(page.getByRole("menuitemcheckbox", { name: "Show archived" })).toHaveAttribute("aria-checked", "true");
 
   const docLinks = tree.getByRole("treeitem").getByRole("link");
@@ -55,7 +55,7 @@ test("keeps an active doc under an archived source readable in archived mode", a
 
 test("switching to an archived Source preserves archived mode", async ({ page }) => {
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}?includeArchived=true`);
-  await page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Document display options").click();
+  await page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Document options").click();
   await expect(page.getByRole("menuitemcheckbox", { name: "Show archived" })).toHaveAttribute("aria-checked", "true");
 
   await page.keyboard.press("Escape");

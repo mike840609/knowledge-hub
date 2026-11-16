@@ -6,6 +6,10 @@ export type FormKeyEvent = {
   altKey: boolean;
   isComposing: boolean;
   keyCode: number;
+  /** The physical key, where known. */
+  code?: string;
+  /** Where the key was pressed: Mod-Shift-7 is a list key only in the rendered editor. */
+  target?: EventTarget | null;
 };
 
 export type FormKeyIntent = "save" | "toggle-mode" | "cancel" | null;
@@ -24,7 +28,18 @@ export function formKeyIntent(
   if (event.isComposing || event.keyCode === 229) return null;
   const command = event.metaKey || event.ctrlKey;
   if (command && event.key === "Enter") return "save";
-  if (command && !event.altKey && event.key === "/") return state.canToggleMode ? "toggle-mode" : null;
+  if (command && !event.altKey && event.key === "/" && !isListKey(event)) return state.canToggleMode ? "toggle-mode" : null;
   if (event.key !== "Escape") return null;
   return !state.dirty && !state.busy ? "cancel" : null;
+}
+
+/**
+ * Mod-Shift-7 is the numbered list (Notion-parity spec, decision 5). Where Shift-7 types "/" (German,
+ * Swiss, Nordic layouts) it also reads as ⌘/: inside the rendered editor the list keeps it. Elsewhere
+ * (the Markdown source, the title) there is no list, and ⌘/ still toggles back. Other Shift-"/"
+ * layouts always toggle.
+ */
+export function isListKey(event: { shiftKey: boolean; code?: string; target?: EventTarget | null }): boolean {
+  return event.shiftKey && event.code !== undefined && /^(?:Digit|Numpad)\d$/.test(event.code)
+    && typeof Element !== "undefined" && event.target instanceof Element && event.target.closest(".ProseMirror") !== null;
 }

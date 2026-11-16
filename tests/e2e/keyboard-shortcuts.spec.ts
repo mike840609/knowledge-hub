@@ -78,7 +78,7 @@ test("E does nothing on source-managed content", async ({ page }) => {
 
 /** A note of our own, so saving it cannot disturb another test's fixture. */
 async function editOwnNote(page: Page, title: string) {
-  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new?compose`);
   const field = page.locator("main").getByLabel("Title", { exact: true });
   await expect(field).toBeEditable(ROUND_TRIP);
   await field.fill(title);
@@ -148,7 +148,7 @@ test.describe("⌘\\ collapses and expands the navigation", () => {
   });
 
   test("also while writing, from the title and from the editor, without typing anything", async ({ page }) => {
-    await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/new`);
+    await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/new?compose`);
     const form = page.locator("main");
     const title = form.getByLabel("Title", { exact: true });
     await expect(title).toBeEditable(ROUND_TRIP);
@@ -216,7 +216,10 @@ async function openPersonalHome(page: Page) {
 
 test("C on Home opens a new note", async ({ page }) => {
   const workspaceId = await openPersonalHome(page);
-  await pressUntil(page, "c", () => expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge/new$`), { timeout: 1_000 }));
+  await pressUntil(page, "c", () => expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge/(?:new|[^/]+/[^/?#]+)$`), { timeout: 1_000 }));
+  // The note is made at once: the editor opens on it with "Untitled" ready to be typed over.
+  await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge/[^/]+/[^/?#]+$`), ROUND_TRIP);
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toBeFocused(ROUND_TRIP);
 });
 
 test("c typed into the palette opened from Home stays in the palette", async ({ page }) => {

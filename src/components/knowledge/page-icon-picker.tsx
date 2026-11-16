@@ -100,6 +100,8 @@ export function PageIconPicker({
     }
   }
 
+  // The buttons are only marked busy while a save is in flight (aria-disabled): disabling the focused
+  // one would drop focus to the page, and a failed save would leave the popover with nothing focused.
   async function save(next: string | null) {
     if (saving) return;
     const previous = current;
@@ -178,7 +180,7 @@ export function PageIconPicker({
                               aria-label={`Use ${choice.char}`}
                               title={choice.name}
                               aria-pressed={current === choice.char}
-                              disabled={saving}
+                              aria-disabled={saving}
                               onClick={() => void save(choice.char)}
                               className="kh-focus-ring flex h-8 w-8 items-center justify-center rounded-md text-heading hover:bg-kh-bg-hover focus-visible:ring-inset aria-pressed:bg-kh-bg-selected"
                             >
@@ -194,7 +196,7 @@ export function PageIconPicker({
               {current ? (
                 <button
                   type="button"
-                  disabled={saving}
+                  aria-disabled={saving}
                   onClick={() => void save(null)}
                   className="kh-focus-ring mt-2 w-full rounded-md px-2 py-1.5 text-left text-body-sm text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text"
                 >
