@@ -37,7 +37,7 @@ export default async function NewNotePage({
     const query = new URLSearchParams({ compose: "" });
     if (folderId) query.set("folder", folderId);
     if (seedTitle !== null) query.set("title", seedTitle);
-    return <NewNoteStarter workspaceId={workspaceId} folderId={folderId} seedTitle={seedTitle} composeHref={`/w/${workspaceId}/knowledge/new?${query.toString()}`} />;
+    return <NewNoteStarter key={query.toString()} workspaceId={workspaceId} folderId={folderId} seedTitle={seedTitle} composeHref={`/w/${workspaceId}/knowledge/new?${query.toString()}`} />;
   }
   const cancelHref = typeof from === "string" && isUuid(from) ? await findReadableDocumentHref(workspaceId, from) : null;
   return (

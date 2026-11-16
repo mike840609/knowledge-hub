@@ -8,8 +8,9 @@ import { GovernanceError, governanceFailure, governanceRequest, type GovernanceF
 
 type Created = { documentId: string; sourceId: string };
 
-// Module state: one create per address within a few seconds, so a double click or a remount of this
-// page opens the same note instead of making two.
+// Module state: one create per address within a second, so a double click or a remount of this page
+// opens the same note instead of making two, while New note asked for again makes another.
+const SAME_REQUEST_MS = 1000;
 let recent: { href: string; at: number; created: Promise<Created> } | null = null;
 let arriving: string | null = null;
 
@@ -40,7 +41,7 @@ export function NewNoteStarter({ workspaceId, folderId, seedTitle, composeHref }
     if (started.current) return;
     started.current = true;
     const address = window.location.href;
-    if (!recent || recent.href !== address || Date.now() - recent.at > 5000) {
+    if (!recent || recent.href !== address || Date.now() - recent.at > SAME_REQUEST_MS) {
       recent = { href: address, at: Date.now(), created: governanceRequest<Created>(`/api/workspaces/${workspaceId}/documents`, "POST", {
         title: seedTitle ?? "Untitled", markdown: "", ...(folderId ? { parentId: folderId } : {}),
       }) };
