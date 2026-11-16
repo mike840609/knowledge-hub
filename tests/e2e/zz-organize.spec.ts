@@ -55,15 +55,17 @@ async function chooseFromFolderMenu(page: Page, folder: string, item: string) {
   await menu.getByRole("menuitem", { name: item }).click();
 }
 
-/** New document in a folder, through the folder's own menu and the new-document page. */
+/** New document in a folder, through the folder's own menu: it is made at once and opened in the editor. */
 async function createDocumentIn(page: Page, folder: string, title: string) {
   await chooseFromFolderMenu(page, folder, "New document here");
-  await expect(page).toHaveURL(/\/knowledge\/new\?folder=[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(/\/knowledge\/[^/]+\/[^/?#]+$/, ROUND_TRIP);
   const form = page.locator("main");
+  await expect(form.getByLabel("Title", { exact: true })).toBeFocused(ROUND_TRIP);
   await form.getByLabel("Title", { exact: true }).fill(title);
   await (await showMarkdown(form)).fill(`Body of ${title}.`);
-  await expect(page.getByRole("button", { name: "Create document" })).toBeEnabled(ROUND_TRIP);
-  await page.getByRole("button", { name: "Create document" }).click();
+  await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
+  // The tree takes saved titles on its own refresh window; a load shows it now.
+  await page.reload();
   await expect(page.getByRole("region", { name: "Document content" })).toBeVisible(ROUND_TRIP);
   await expect(row(page, title)).toBeVisible(ROUND_TRIP);
   await expect(row(page, title)).toHaveAttribute("aria-current", "page", ROUND_TRIP);
@@ -285,11 +287,12 @@ test.describe("what cannot be done", () => {
     await openKnowledge(page, workspaceId);
     const folder = unique("Vanishing");
     await createFolder(page, folder);
-    await chooseFromFolderMenu(page, folder, "New document here");
-    await expect(page).toHaveURL(/\/knowledge\/new\?folder=[0-9a-f-]{36}$/);
-    const newUrl = page.url();
-    // The folder is archived while the new-document page is open.
-    const nodeId = new URL(newUrl).searchParams.get("folder")!;
+    // The folder's id from its row: following its menu would make a document in it, and a folder
+    // with a document in it is not archived.
+    const nodeId = (await row(page, folder).getAttribute("data-node-id"))!;
+    // The folder is archived while the new-document form is open.
+    const newUrl = `/w/${workspaceId}/knowledge/new?compose&folder=${nodeId}`;
+    await page.goto(newUrl);
     const archived = await page.request.post(`/api/tree-nodes/${nodeId}/archive`);
     expect(archived.status()).toBe(204);
     const form = page.locator("main");
@@ -298,9 +301,12 @@ test.describe("what cannot be done", () => {
     const accessChecks = await countAccessChecks(page);
     await page.getByRole("button", { name: "Create document" }).click();
     await expect(page.getByRole("alert").filter({ hasText: "The destination folder no longer exists, or has been archived." })).toBeVisible(ROUND_TRIP);
-    await expect(page).toHaveURL(newUrl);
+    await expect(page).toHaveURL(new RegExp(`${newUrl.replace(/[?&]/g, "\\$&")}$`));
     // A refusal about the tree says nothing about the caller's access, so it does not ask for a re-check.
     expect(await accessChecks()).toBe(0);
+    // Made at once, a note asked for in that folder is refused in the same words.
+    await page.goto(`/w/${workspaceId}/knowledge/new?folder=${nodeId}`);
+    await expect(page.getByRole("alert").filter({ hasText: "The destination folder no longer exists, or has been archived." })).toBeVisible(ROUND_TRIP);
   });
 
   test("a row in a source the Hub does not own offers nothing to arrange it with", async ({ page }) => {

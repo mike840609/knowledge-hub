@@ -27,12 +27,13 @@ test("personal rollout: disabled teams, drafts across browsers, organize, export
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(wait);
   await page.getByRole("button", { name: "Markdown source", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Markdown", exact: true })).toHaveValue("Persistent draft body", wait);
+  // Written over the current revision, the account draft goes on saving without a Resume step.
+  await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", wait);
   const other = await browser.newContext(); const resumed = await other.newPage();
   await resumed.goto(`${new URL(page.url()).origin}${href}`);
   await expect(resumed.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(wait);
   await resumed.getByRole("button", { name: "Markdown source", exact: true }).click();
   await expect(resumed.getByRole("textbox", { name: "Markdown", exact: true })).toHaveValue("Persistent draft body");
-  await resumed.getByRole("button", { name: "Resume saving", exact: true }).click();
   const savedDocument = resumed.waitForResponse(response => response.url().endsWith(`/api/documents/${doc.documentId}`) && response.request().method() === "PATCH", wait);
   await resumed.getByRole("textbox", { name: "Markdown", exact: true }).fill("Persistent draft body\n\nSaved");
   expect((await savedDocument).ok()).toBe(true);
@@ -41,8 +42,8 @@ test("personal rollout: disabled teams, drafts across browsers, organize, export
   await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge(?:/|$)`), wait);
   await page.goto(`${href}?revision=1`);
   const content = page.getByRole("region", { name: "Document content", exact: true });
-  await content.getByText("Compare revision 1 with current revision 2", { exact: true }).click();
-  await expect(content.getByRole("table", { name: "Changed lines from revision 1 to 2" })).toBeVisible();
+  await content.getByText("Compare revision 1 with current revision 3", { exact: true }).click();
+  await expect(content.getByRole("table", { name: "Changed lines from revision 1 to 3" })).toBeVisible();
   await content.getByRole("button", { name: "Restore revision 1", exact: true }).click(); await expect(page).toHaveURL(new RegExp(`${doc.documentId}$`), wait);
   await expect(content.getByRole("article").getByText("Original body", { exact: true })).toBeVisible(wait);
   await page.goto(`/w/${workspaceId}/home`);
@@ -64,7 +65,7 @@ test("personal rollout: disabled teams, drafts across browsers, organize, export
 test("a new-note draft survives closing its tab and can be resumed from Home", { tag: "@smoke-personal" }, async ({ page, context }) => {
   await page.goto("/");
   const nav = await (await page.request.get("/api/workspaces")).json(); const workspaceId = nav.items[0].id;
-  await page.goto(`/w/${workspaceId}/knowledge/new`);
+  await page.goto(`/w/${workspaceId}/knowledge/new?compose`);
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(wait);
   await page.getByRole("button", { name: /^Markdown( source)?$/ }).click();
   await page.getByRole("textbox", { name: "Markdown", exact: true }).fill("# New persistent note\n\nClose and resume");
@@ -73,7 +74,7 @@ test("a new-note draft survives closing its tab and can be resumed from Home", {
   const next = await context.newPage(); await next.goto("/");
   const draft = next.getByRole("region", { name: "Drafts", exact: true })
     .getByRole("link").filter({ has: next.getByText("New persistent note", { exact: true }) });
-  await expect(draft).toHaveAttribute("href", `/w/${workspaceId}/knowledge/new`);
+  await expect(draft).toHaveAttribute("href", `/w/${workspaceId}/knowledge/new?compose`);
   await draft.click();
   await expect(next.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(wait);
   await next.getByRole("button", { name: /^Markdown( source)?$/ }).click();

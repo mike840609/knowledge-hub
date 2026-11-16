@@ -19,7 +19,7 @@ test("the rendered editor mounts without hydration or page errors", { tag: "@smo
 });
 
 test("new documents focus Title while existing documents wait for an editing gesture", async ({ page }) => {
-  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new?compose`);
   await expect(composer(page).getByLabel("Title", { exact: true })).toBeFocused(ROUND_TRIP);
 
   const title = unique("Focus H1");
@@ -293,7 +293,7 @@ test("deleting the opening H1 brings back the title field, filled with it", asyn
 
 test("a frontmatter title survives editing the H1", async ({ page }) => {
   const title = unique("Frontmatter Title");
-  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new?compose`);
   // Enabled once hydrated and authorized.
   await expect(page.locator('input[type="file"]')).toBeEnabled(ROUND_TRIP);
   await page.setInputFiles('input[type="file"]', {
@@ -301,7 +301,7 @@ test("a frontmatter title survives editing the H1", async ({ page }) => {
     mimeType: "text/markdown",
     buffer: Buffer.from(`---\ntitle: ${title}\n---\n\n# A different heading\n\ntext\n`, "utf8"),
   });
-  await expect(page).not.toHaveURL(/\/new$/, ROUND_TRIP);
+  await expect(page).not.toHaveURL(/\/new(?:\?.*)?$/, ROUND_TRIP);
 
   const surface = await openEditor(page, page.url());
   await expect(composer(page).getByLabel("Title", { exact: true })).toHaveValue(title);

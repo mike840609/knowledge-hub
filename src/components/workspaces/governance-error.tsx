@@ -5,18 +5,30 @@ import { organizeFailure } from "@/components/knowledge/organize-messages";
 
 export type GovernanceFailure = { code: string; message: string; field?: string };
 export class GovernanceRequestError extends Error {
-  constructor(public failure: GovernanceFailure) {
+  /** `status`: the response's HTTP status, when there was a response. */
+  constructor(public failure: GovernanceFailure, public status?: number) {
     super(failure.message);
   }
+}
+/**
+ * A failure worth trying again on its own: no response (the network), or the server's or a proxy's
+ * temporary trouble. A refusal (a conflict, access, a limit) answers the same way every time.
+ */
+export function transientSaveFailure(error: unknown): boolean {
+  if (error instanceof TypeError) return true;
+  if (!(error instanceof GovernanceRequestError) || error.status === undefined) return false;
+  return error.status >= 500 || error.status === 408 || error.status === 429;
 }
 export async function governanceRequest<T>(
   url: string,
   method = "GET",
   body?: unknown,
-  options?: { notifyMutation?: boolean },
+  options?: { notifyMutation?: boolean; keepalive?: boolean },
 ): Promise<T> {
   const response = await fetch(url, {
     method,
+    // A request that outlives the page: an autosave sent as the page goes (`document-autosave`).
+    ...(options?.keepalive ? { keepalive: true } : {}),
     cache: "no-store",
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -35,6 +47,7 @@ export async function governanceRequest<T>(
         code: "REQUEST_FAILED",
         message: "Unable to complete the request. Please try again.",
       },
+      response.status,
     );
   }
   if (method !== "GET" && options?.notifyMutation !== false) window.dispatchEvent(new Event("kh:workspace-mutation"));

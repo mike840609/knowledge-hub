@@ -237,7 +237,7 @@ test.describe("code on a shared page", () => {
 test.describe("code in the composer", () => {
   test("stays as it was: not coloured, and no copy button", async ({ page }) => {
     const note = await createNote(page, unique("Composer code"), MARKDOWN);
-    await page.goto(`/w/${note.url.split("/")[2]}/knowledge/new`);
+    await page.goto(`/w/${note.url.split("/")[2]}/knowledge/new?compose`);
     await (await showMarkdown(page.locator("main"))).fill(MARKDOWN);
     await page.getByRole("button", { name: /^Markdown( source)?$/ }).click();
     const surface = page.locator("main").getByRole("textbox", { name: "Content" });
