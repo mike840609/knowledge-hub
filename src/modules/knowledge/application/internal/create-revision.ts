@@ -56,7 +56,14 @@ export async function createRevisionInTransaction(
   if (document.status !== "ACTIVE") throw new DocumentArchivedError();
   const current = await repositories.revisions.findCurrent(document.id);
   if (!current) throw new IntegrityViolationError("Document current revision is missing.");
-  if (current.id !== input.expectedCurrentRevisionId) throw new RevisionConflictError();
+  if (current.id !== input.expectedCurrentRevisionId) {
+    // A plain save of exactly what is already current changes nothing, whatever base it named:
+    // the page that sent it on leave and the reloaded page that resumes its draft both land here.
+    if ((input.saveMode === undefined || input.saveMode === "AUTOSAVE") && input.versionName === undefined && isRevisionContentUnchanged(current, input)) {
+      return { revisionId: current.id, revisionNo: current.revisionNo, changed: false, history: current.history };
+    }
+    throw new RevisionConflictError();
+  }
   if (input.versionName !== undefined && (!input.versionName.trim() || input.versionName.trim().length > 120)) throw new ValidationError("Provide a version name of up to 120 characters.");
   if (isRevisionContentUnchanged(current, input) && input.saveMode !== "RESTORE") {
     if (input.saveMode === "CHECKPOINT") {

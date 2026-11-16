@@ -1,42 +1,50 @@
+import type { Page, Route } from "@playwright/test";
 import { expect, test } from "./fixtures/test";
 import { showMarkdown } from "./composer-helpers";
 import { ROUND_TRIP, HELD, unique, composer, createNote, leaveEditor, openEditor, holdEditorCode, surfaceOf } from "./fixtures/document-composer";
 import { createHash } from "node:crypto";
 import { parseGenericMarkdownText } from "../../src/modules/sources/adapters/generic-markdown-folder-adapter";
 
-const recovered = "Your unsaved changes were recovered";
+const recovered = "changed while you were away";
 
-test("rendered edits survive leaving and only save after recovery is accepted", async ({ page }) => {
+test("leaving right after typing saves the text without asking", async ({ page }) => {
   const url = await createNote(page, unique("Draft"), "start\n");
   const surface = await openEditor(page, url);
   await surface.click();
   await page.keyboard.type("draft text");
+  // Well inside the three-second autosave delay: only the send on leave can save it.
   await leaveEditor(page, url);
+  await expect(async () => {
+    await page.reload();
+    await expect(page.getByRole("region", { name: "Document content" })).toContainText("draft text", { timeout: 1000 });
+  }).toPass(ROUND_TRIP);
 
   const back = await openEditor(page, url);
-  await expect(composer(page).getByRole("status").filter({ hasText: recovered })).toBeVisible();
   await expect(back).toContainText("draft text");
-  // Wait beyond the normal autosave delay: simply opening recovery cannot publish it.
-  const writes: string[] = [];
-  page.on("request", request => {
-    if (request.method() === "PATCH" && request.url().includes("/api/documents/")) writes.push(request.url());
-  });
-  await page.waitForTimeout(3500);
-  expect(writes).toHaveLength(0);
-  await composer(page).getByRole("button", { name: "Resume saving" }).click();
-  await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
-  expect(writes).toHaveLength(1);
-  await page.reload();
-  await expect(back).toBeEditable(ROUND_TRIP);
-  await expect(back).toContainText("draft text");
-  await expect(composer(page).getByRole("button", { name: "Resume saving" })).toHaveCount(0);
+  await expect(composer(page).getByRole("status").filter({ hasText: recovered })).toHaveCount(0);
 });
+
+const SAVES = "**/api/documents/*";
+const failPatch = (route: Route) => route.request().method() === "PATCH" ? route.abort() : route.continue();
+/** Saves from this tab fail, so what it types and leaves stays an unsent draft. */
+const failSaves = (page: Page) => page.route(SAVES, failPatch);
+/** Another tab, with its own sessionStorage, saves "theirs" over that draft; then this tab's saves work again. */
+async function saveElsewhere(page: Page, url: string) {
+  const other = await page.context().newPage();
+  await openEditor(other, url);
+  await (await showMarkdown(composer(other))).fill("theirs");
+  await expect(other.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
+  await other.close();
+  await page.unroute(SAVES, failPatch);
+}
 
 test("recovery can be discarded while rendered editing is still loading", async ({ page }) => {
   const url = await createNote(page, unique("Discard Early"), "start\n");
+  await failSaves(page);
   await openEditor(page, url);
   await (await showMarkdown(composer(page))).fill("draft text");
   await leaveEditor(page, url);
+  await saveElsewhere(page, url);
 
   const release = await holdEditorCode(page);
   try {
@@ -51,14 +59,16 @@ test("recovery can be discarded while rendered editing is still loading", async 
     release();
   }
   await expect(surfaceOf(page)).toBeEditable(ROUND_TRIP);
-  await expect(surfaceOf(page)).toHaveText("start");
+  await expect(surfaceOf(page)).toHaveText("theirs");
 });
 
 test("discarding recovered edits clears changes typed immediately before confirmation", async ({ page }) => {
   const url = await createNote(page, unique("Discard Late"), "start\n");
+  await failSaves(page);
   await openEditor(page, url);
   await (await showMarkdown(composer(page))).fill("draft text");
   await leaveEditor(page, url);
+  await saveElsewhere(page, url);
   const surface = await openEditor(page, url);
   await surface.click();
   await page.keyboard.type("typed ");
@@ -69,26 +79,22 @@ test("discarding recovered edits clears changes typed immediately before confirm
   await page.waitForTimeout(400);
   page.on("dialog", dialog => void dialog.accept());
   await dialog.getByRole("button", { name: "Discard and load latest" }).click();
-  await expect(surface).toHaveText("start", ROUND_TRIP);
+  await expect(surface).toHaveText("theirs", ROUND_TRIP);
   await page.reload();
   await expect(surface).toBeEditable(ROUND_TRIP);
-  await expect(surface).toHaveText("start");
+  await expect(surface).toHaveText("theirs");
   await expect(composer(page).getByRole("status").filter({ hasText: recovered })).toHaveCount(0);
 });
 
 test("stale recovery stays paused and can be downloaded before loading the latest version", async ({ page }) => {
   const title = unique("Stale Draft");
   const url = await createNote(page, title);
+  await failSaves(page);
   await openEditor(page, url);
   await (await showMarkdown(composer(page))).fill("mine");
   await leaveEditor(page, url);
 
-  // A new tab has its own sessionStorage and can save a newer revision.
-  const other = await page.context().newPage();
-  await openEditor(other, url);
-  await (await showMarkdown(composer(other))).fill("theirs");
-  await expect(other.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
-  await other.close();
+  await saveElsewhere(page, url);
 
   const surface = await openEditor(page, url);
   await expect(composer(page).getByRole("status").filter({ hasText: "changed while you were away" })).toBeVisible();
@@ -123,9 +129,11 @@ test("stale recovery stays paused and can be downloaded before loading the lates
 
 test("discard recovery asks for confirmation and Keep editing or Escape preserves it", async ({ page }) => {
   const url = await createNote(page, unique("Keep Recovery"));
+  await failSaves(page);
   await openEditor(page, url);
   await (await showMarkdown(composer(page))).fill("changed");
   await leaveEditor(page, url);
+  await saveElsewhere(page, url);
   await openEditor(page, url);
   const source = await showMarkdown(composer(page));
   const discard = composer(page).getByRole("button", { name: "Discard recovered changes" });

@@ -277,20 +277,23 @@ test("inline: historical revisions remain read-only", async ({ page }) => {
   await expect(page.locator("main article")).toContainText("Original paragraph.");
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toHaveCount(0);
 });
-test("inline: failed saves recover after reload without silently publishing", async ({ page }) => {
+test("inline: failed saves retry automatically and resume after reload", async ({ page }) => {
   const { url, id } = await note(page);
   const editor = await surface(page, url);
   await page.route(`**/api/documents/${id}`, route => route.request().method() === "PATCH" ? route.abort() : route.continue());
   await editor.fill("Recover me.");
   await expect(editor).toContainText("Recover me.");
   // The write only starts after the 3s autosave debounce; the default 5s left ~1.6s for a parallel run.
-  await expect(page.getByRole("button", { name: "Retry save" })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText("Trying again automatically.")).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("button", { name: "Retry save" })).toBeVisible();
   page.on("dialog", dialog => dialog.accept());
   await page.reload();
-  await expect(page.getByRole("button", { name: "Resume saving" })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Recover me.");
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Recover me.", { timeout: 15000 });
+  await expect(page.getByRole("button", { name: "Resume saving" })).toHaveCount(0);
+  await expect(page.getByText("Trying again automatically.")).toBeVisible({ timeout: 15000 });
   await page.unroute(`**/api/documents/${id}`);
-  await page.getByRole("button", { name: "Resume saving" }).click();
+  // Coming back online retries at once instead of waiting out the backoff.
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await saved(page);
   await page.reload();
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Recover me.");
@@ -375,8 +378,9 @@ test("inline: a failed document save backs up recovery to the account", async ({
   try {
     const second = await other.newPage();
     await second.goto(new URL(url, page.url()).href);
-    await expect(second.getByRole("button", { name: "Resume saving" })).toBeVisible({ timeout: 15000 });
-    await expect(second.getByRole("textbox", { name: "Content", exact: true })).toContainText("Account recovery text.");
+    await expect(second.getByRole("textbox", { name: "Content", exact: true })).toContainText("Account recovery text.", { timeout: 15000 });
+    // Written over the current revision, the recovered text goes on saving from the other device.
+    await saved(second);
   } finally { await other.close(); }
 });
 

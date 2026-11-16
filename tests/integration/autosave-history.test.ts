@@ -57,6 +57,16 @@ describe("autosave history persistence", () => {
     expect(await f.rows()).toEqual(before);
   });
 
+  it("answers a stale autosave that already matches the current content as unchanged", async () => {
+    const f = await setup();
+    const landed = await f.save("sent on leave");
+    const before = await f.rows();
+    const repeat = await f.hub.createRevision(fixtureCaller(), { documentId: f.created.documentId, expectedCurrentRevisionId: f.created.revisionId, title: "History", markdown: "sent on leave", metadata: {}, saveMode: "AUTOSAVE" });
+    expect(repeat).toMatchObject({ revisionId: landed.revisionId, revisionNo: landed.revisionNo, changed: false });
+    expect(await f.rows()).toEqual(before);
+    await expect(f.hub.createRevision(fixtureCaller(), { documentId: f.created.documentId, expectedCurrentRevisionId: f.created.revisionId, title: "History", markdown: "sent on leave", metadata: {}, saveMode: "CHECKPOINT", versionName: "v" })).rejects.toBeInstanceOf(RevisionConflictError);
+  });
+
   it("lists the same history ids as full reads, without content", async () => {
     const f = await setup();
     await f.save("draft 1");

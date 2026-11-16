@@ -3,6 +3,15 @@ export type RevisionHistory = { state: "WORKING" | "CHECKPOINT"; activityId: str
 export type SavedRevision = { revisionId: string; revisionNo: number; changed: boolean; history?: RevisionHistory; preservedRevision?: { id: string; revisionNo: number; createdAt: Date | string; createdBy: string; history?: RevisionHistory } };
 export type AutosaveStatus = "saved" | "pending" | "saving" | "error";
 const equal = (a: DocumentContent, b: DocumentContent) => a.title === b.title && a.markdown === b.markdown;
+/**
+ * What a request that outlives the page (`fetch` with `keepalive`) may carry: browsers allow 64 KiB in
+ * flight, and the request's JSON wraps the content in a few fields.
+ */
+export const KEEPALIVE_BYTES = 60_000;
+const RETRY_FIRST = 2000;
+const RETRY_LONGEST = 30_000;
+export type WriteOptions = { keepalive: true };
+const fitsKeepalive = (content: DocumentContent) => new TextEncoder().encode(content.title + content.markdown).length <= KEEPALIVE_BYTES;
 
 /** One writer per mounted document. Only acknowledged snapshots advance the revision/baseline. */
 export class DocumentAutosave {
@@ -15,14 +24,20 @@ export class DocumentAutosave {
   private flight = false;
   private dirtySince: number | undefined;
   private disposed = false;
+  /** Gone from the page, with what was unsaved still to send (`leave`). */
+  private leaving = false;
+  private retryTimer?: ReturnType<typeof setTimeout>;
+  private attempts = 0;
   private paused = false;
   private settled = new Set<() => void>();
   constructor(content: DocumentContent, revisionId: string, private readonly options: {
-    write: (content: DocumentContent, revisionId: string) => Promise<SavedRevision>;
+    write: (content: DocumentContent, revisionId: string, options?: WriteOptions) => Promise<SavedRevision>;
     change: () => void;
     saved: (content: DocumentContent, revision: SavedRevision) => void;
     delay?: number;
     maxWait?: number;
+    /** A failure worth trying again on its own (the network, a server error); a conflict is not. */
+    retryable?: (error: unknown) => boolean;
   }) {
     this.current = this.saved = content;
     this.revisionId = revisionId;
@@ -48,16 +63,22 @@ export class DocumentAutosave {
     const remaining = (this.options.maxWait ?? 15_000) - (Date.now() - (this.dirtySince ?? Date.now()));
     this.timer = setTimeout(() => { void this.flush(); }, Math.max(0, Math.min(this.options.delay ?? 3000, remaining)));
   }
-  async flush() {
+  /** A failure is being tried again on its own. */
+  get retrying() { return this.retryTimer !== undefined; }
+  /** `keepalive`: the page may be going (hidden, closing); the request outlives it. */
+  async flush({ keepalive = false }: { keepalive?: boolean } = {}) {
     clearTimeout(this.timer);
-    if (this.disposed || this.paused || this.flight || this.error || !this.dirty) return;
+    if ((this.disposed && !this.leaving) || this.paused || this.flight || this.error || !this.dirty) return;
     const snapshot = this.current;
+    // Over the browser's limit such a request is refused outright: a normal one at least may finish.
+    keepalive &&= fitsKeepalive(snapshot);
     this.dirtySince = undefined;
     this.flight = true;
     this.status = "saving";
     this.options.change();
     try {
-      const revision = await this.options.write(snapshot, this.revisionId);
+      const revision = await (keepalive ? this.options.write(snapshot, this.revisionId, { keepalive }) : this.options.write(snapshot, this.revisionId));
+      this.attempts = 0;
       this.revisionId = revision.revisionId;
       this.saved = snapshot;
       this.flight = false;
@@ -66,7 +87,8 @@ export class DocumentAutosave {
       this.status = this.dirty ? "pending" : "saved";
       // Also rebase the recovery copy when navigation happened during the request.
       this.options.saved(snapshot, revision);
-      if (!this.disposed) {
+      if (this.leaving) void this.flush({ keepalive: true });
+      else if (!this.disposed) {
         this.options.change();
         if (this.dirty && !this.paused) this.schedule();
       }
@@ -74,7 +96,15 @@ export class DocumentAutosave {
       this.flight = false;
       this.error = error;
       this.status = "error";
-      if (!this.disposed) this.options.change();
+      if (!this.disposed) {
+        if (this.options.retryable?.(error)) {
+          // 2s, 4s, 8s … at most 30s apart, until one succeeds or the editor goes.
+          const wait = Math.min(RETRY_FIRST * 2 ** this.attempts, RETRY_LONGEST);
+          this.attempts++;
+          this.retryTimer = setTimeout(() => { this.retryTimer = undefined; void this.retry(); }, wait);
+        }
+        this.options.change();
+      }
     } finally {
       for (const resolve of this.settled) resolve();
       this.settled.clear();
@@ -102,8 +132,30 @@ export class DocumentAutosave {
     return true;
   }
   retry() {
+    clearTimeout(this.retryTimer);
+    this.retryTimer = undefined;
     this.error = undefined;
     return this.flush();
   }
-  dispose() { this.disposed = true; clearTimeout(this.timer); }
+  /** The connection came back, or the page did: a failure being tried again is tried now. */
+  retryNow() {
+    if (this.retrying) void this.retry();
+  }
+  /** Whether what is unsaved could go with the page (`leave`, or `flush` with `keepalive`), or would be left behind. */
+  canSendOnLeave() {
+    if (!this.dirty) return true;
+    if (this.paused || this.error || this.flight) return false;
+    return fitsKeepalive(this.current);
+  }
+  /**
+   * The editor goes (navigation inside the app): what is unsaved is sent now, or after the write in
+   * flight, with a request that outlives the page; then nothing more is saved or tried again.
+   */
+  leave() {
+    if (this.disposed) return;
+    this.leaving = true;
+    this.dispose();
+    void this.flush({ keepalive: true });
+  }
+  dispose() { this.disposed = true; clearTimeout(this.timer); clearTimeout(this.retryTimer); this.retryTimer = undefined; }
 }

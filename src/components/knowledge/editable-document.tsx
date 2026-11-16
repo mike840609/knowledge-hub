@@ -11,7 +11,7 @@ import { FileCode2, Pencil } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { readStored, writeStored } from "@/components/shell/use-persisted-state";
-import { governanceFailure, governanceRequest, GovernanceError } from "@/components/workspaces/governance-error";
+import { governanceFailure, governanceRequest, GovernanceError, transientSaveFailure } from "@/components/workspaces/governance-error";
 import { DocumentAutosave, type DocumentContent, type SavedRevision } from "@/lib/document-autosave";
 import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } from "@/lib/document-draft";
 import { PersistentDraft } from "@/lib/persistent-draft";
@@ -83,7 +83,9 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   const sourceTextarea = useRef<HTMLTextAreaElement>(null);
   const titleInput = useRef<HTMLTextAreaElement>(null);
   const [Editor, setEditor] = useState<ComponentType<RenderedEditorProps>>();
-  const [recovery, setRecovery] = useState<"current" | "stale" | null>(null);
+  // Only a draft written over an older version waits for a decision: one over the current version
+  // goes on saving as it opens (inline-editing spec, "Leaving and failures").
+  const [recovery, setRecovery] = useState<"stale" | null>(null);
   const [recoveryMetadata, setRecoveryMetadata] = useState<"ready" | "loading" | "unavailable">("ready");
   const [discarding, setDiscarding] = useState(false);
   const [, render] = useState(0);
@@ -154,15 +156,16 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     let live = true;
     let previousStatus: string | undefined;
     const writer = new DocumentAutosave({ title: initialTitle, markdown }, revisionId, {
-      write: async (snapshot, expectedRevisionId) => {
+      write: async (snapshot, expectedRevisionId, options) => {
         if (!authorization.current) throw new Error("Editing is unavailable.");
         const title = resolve(snapshot).title;
         if (!title) throw new Error("Add a title before saving.");
         return governanceRequest<SavedRevision>(`/api/documents/${detail.inspectorData.documentId}`, "PATCH", {
           title, markdown: snapshot.markdown, expectedCurrentRevisionId: expectedRevisionId, autosave: true,
           ...(hasMetadataTitle() ? { updateMetadataTitle: true } : {}),
-        }, { notifyMutation: false });
+        }, { notifyMutation: false, keepalive: options?.keepalive });
       },
+      retryable: transientSaveFailure,
       change: () => {
         if (live) render(value => value + 1);
         // A failed document write gets an account recovery copy; normal saves only use local storage.
@@ -205,12 +208,14 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       if (!live) return;
       const draft = local ?? account;
       if (draft && (draft.title !== initialTitle || draft.markdown !== markdown)) {
-        // Never publish a recovered draft merely because the user opened a page.
+        // Written over the current version, it is this writer's own unsaved text: it goes on saving,
+        // as Notion's does. Over an older one, saving it would overwrite what was saved since.
         if (draft.baseRevisionId !== revisionId) staleDraftBase.current = { revisionId: draft.baseRevisionId };
         writer.change({ title: draft.title, markdown: draft.markdown });
         setContent(writer.current);
-        setRecovery(draft.baseRevisionId === revisionId ? "current" : "stale");
-        if (draft.baseRevisionId !== revisionId) {
+        if (draft.baseRevisionId === revisionId) writer.pause(!authorization.current);
+        else {
+          setRecovery("stale");
           const { revisions } = detail.inspectorData;
           const base = revisions.find(item => item.id === draft.baseRevisionId);
           if (!base) setRecoveryMetadata("unavailable");
@@ -245,13 +250,26 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       // A mouse release dispatches pointerup, mouseup and click in one task; the next task is after them.
       setTimeout(() => { if (live) setReady(true); }, 0);
     };
-    const visibility = () => { if (document.visibilityState === "hidden") persist(); };
+    // The page may be going (a closed tab, a reload, a phone putting it away): what is unsaved is sent
+    // now, with a request that outlives the page. The recovery copy stays until the save is acknowledged.
+    const sendNow = () => {
+      persist();
+      void writer.flush({ keepalive: true });
+    };
+    const visibility = () => {
+      if (document.visibilityState === "hidden") sendNow();
+      else writer.retryNow();
+    };
+    const online = () => writer.retryNow();
     const unload = (event: BeforeUnloadEvent) => {
       persist();
-      if (writer.dirty && !discardingRef.current) event.preventDefault();
+      // Asked only when what is unsaved cannot go with the page: too large for that request, a failed
+      // or paused save (composing, recovering, no title), or a save still in flight.
+      if (writer.dirty && !discardingRef.current && !writer.canSendOnLeave()) event.preventDefault();
     };
-    window.addEventListener("pagehide", persist);
+    window.addEventListener("pagehide", sendNow);
     window.addEventListener("beforeunload", unload);
+    window.addEventListener("online", online);
     document.addEventListener("visibilitychange", visibility);
     for (const type of ["pointerup", "pointercancel"]) window.addEventListener(type, pressEnded, true);
     // Not captured: a captured blur is any element's, and a press moves focus.
@@ -262,10 +280,12 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       alive.current = false;
       clearTimeout(timer);
       clearTimeout(refreshTimer.current);
-      writer.dispose();
+      // Navigation inside the app: what is unsaved goes with it, as the page would on a reload.
+      writer.leave();
       remote?.dispose();
-      window.removeEventListener("pagehide", persist);
+      window.removeEventListener("pagehide", sendNow);
       window.removeEventListener("beforeunload", unload);
+      window.removeEventListener("online", online);
       document.removeEventListener("visibilitychange", visibility);
       for (const type of ["pointerup", "pointercancel"]) window.removeEventListener(type, pressEnded, true);
       window.removeEventListener("blur", pressEnded);
@@ -417,14 +437,14 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   </Button>;
   const article = <>
     {recovery && <p role="status" className="mb-3 text-body-sm">
-      {recovery === "stale" ? "This document changed while you were away. Your recovered text is kept here; download it before loading the latest version." : "Your unsaved changes were recovered."}
-      {recovery === "current" && <Button variant="link" onClick={() => setRecovery(null)}>Resume saving</Button>}
+      This document changed while you were away. Your recovered text is kept here; download it before loading the latest version.
       <Button variant="link" onClick={() => setDiscarding(true)}>Discard recovered changes</Button>
     </p>}
     {recovery === "stale" && recoveryMetadata === "loading" ? <p role="status" className="mb-3 text-body-sm">Loading the draft's original metadata…</p> : null}
     {recovery === "stale" && recoveryMetadata === "unavailable" ? <p role="status" className="mb-3 text-body-sm">The draft's original metadata is unavailable; the download uses metadata from the latest saved version.</p> : null}
     {error && <div className="mb-3"><GovernanceError error={error} />
       {conflict ? <p className="text-body-sm">Someone updated this document. Your text is still here. Download your changes before loading the latest version.</p> : null}
+      {writer?.retrying ? <p className="text-body-sm">Your text is kept here. Trying again automatically.</p> : null}
       {!conflict && <Button variant="link" disabled={!editable} onClick={() => void writer?.retry()}>Retry save</Button>}
       <Button variant="link" onClick={() => setDiscarding(true)}>Load latest version</Button>
     </div>}
