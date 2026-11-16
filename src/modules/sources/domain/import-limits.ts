@@ -25,3 +25,13 @@ export const DEFAULT_IMPORT_LIMITS: ImportLimits = {
   maxBuildingSnapshotsPerUser: 3,
   maxReadySnapshotsPerUser: 10,
 };
+
+/** A byte limit as the person reading a refusal sees it: "3.5 MiB". */
+export function formatLimitBytes(bytes: number): string {
+  return `${Math.round((bytes / 1024 / 1024) * 10) / 10} MiB`;
+}
+
+/** The refusal of one Markdown file, by name, so the writer knows which file to split. */
+export function markdownFileTooLargeMessage(path: string | null, limit: number): string {
+  return `${path ? `"${path}"` : "A Markdown file"} is larger than the ${formatLimitBytes(limit)} one Markdown file may hold. Split it, then import again.`;
+}

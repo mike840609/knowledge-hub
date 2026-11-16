@@ -57,7 +57,7 @@ describe("folder-import upload batches", () => {
       sourceName: "Notes",
       onProgress: () => {},
       limits,
-    })).rejects.toMatchObject({ code: "IMPORT_LIMIT_EXCEEDED" });
+    })).rejects.toMatchObject({ code: "IMPORT_LIMIT_EXCEEDED", message: expect.stringMatching(/big\.md.*4 MiB/) });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

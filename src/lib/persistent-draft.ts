@@ -10,6 +10,11 @@ export class PersistentDraft {
   private synced: Draft | null | undefined;
   private stopped = false;
   private tooLarge = false;
+  /** The length the database refused (CONTENT_TOO_LARGE), below the authoring limit: only shorter text is sent again. */
+  private refusedLength: number | undefined;
+  private fitsAfterRefusal(markdown: string) {
+    return this.refusedLength === undefined ? !markdownTooLarge(markdown) : markdown.length < this.refusedLength;
+  }
   private timer: ReturnType<typeof setTimeout> | undefined;
   private flight: Promise<void> | undefined;
   constructor(private readonly endpoint: string, private readonly key: string, private readonly onStatus: (s: DraftStatus) => void, private readonly options: { autoSync?: boolean; delay?: number } = {}) {}
@@ -52,7 +57,7 @@ export class PersistentDraft {
   }
   change(value: Draft | null, sync = this.options.autoSync !== false) {
     this.pending = value;
-    if (this.tooLarge && (value === null || !markdownTooLarge(value.markdown))) this.tooLarge = false;
+    if (this.tooLarge && (value === null || this.fitsAfterRefusal(value.markdown))) { this.tooLarge = false; this.refusedLength = undefined; }
     const kept = this.keepLocal(value);
     this.onStatus(this.stopped ? "conflict" : !kept ? (this.tooLarge ? "too-large-unstored" : "error") : this.tooLarge ? "too-large" : "local");
     clearTimeout(this.timer);
@@ -82,11 +87,13 @@ export class PersistentDraft {
         const response = await fetch(this.endpoint, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: this.key, value, version: this.version }) });
         if (!response.ok) {
           const failure = await response.json().catch(() => null) as { error?: { code?: string } } | null;
-          if (failure?.error?.code === "DRAFT_TOO_LARGE") {
+          // Larger than the database accepts at once (CONTENT_TOO_LARGE) is the same refusal, met later.
+          if (failure?.error?.code === "DRAFT_TOO_LARGE" || failure?.error?.code === "CONTENT_TOO_LARGE") {
+            this.refusedLength = failure.error.code === "CONTENT_TOO_LARGE" && value ? value.markdown.length : undefined;
             // A discard or a smaller edit made in flight supersedes this refusal;
             // a still-oversized edit does not, or typing would resend it on every pause.
             const newer = this.pending;
-            if (newer === null || (newer !== undefined && !markdownTooLarge(newer.markdown))) return;
+            if (newer === null || (newer !== undefined && this.fitsAfterRefusal(newer.markdown))) return;
             this.tooLarge = true;
             this.onStatus(this.keepLocal(newer ?? value) ? "too-large" : "too-large-unstored");
             return;

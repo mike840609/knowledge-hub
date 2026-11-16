@@ -48,8 +48,9 @@ const ROW_PLACEHOLDERS = "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
 /**
  * Item 17b: `raw_markdown` admits rows up to 5 MiB, so pure row-count
  * chunking could still blow `max_allowed_packet`. Chunks accumulate until
- * either cap is hit; a single row past the solo threshold goes out alone so
- * it fails naturally at the server (existing 1406 mapping) instead of
+ * either cap is hit, both sized from the server's limit (`insertBudget`); a
+ * single row past the solo threshold goes out alone, and one too large even
+ * alone is refused before sending (`PacketTooLargeError`) instead of
  * poisoning a whole chunk.
  */
 const MAX_CHUNK_ROWS = 1000;

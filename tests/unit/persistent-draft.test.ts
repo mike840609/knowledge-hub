@@ -82,6 +82,24 @@ it("resumes saving after the text shrinks below the limit", async () => {
   expect(status).toHaveBeenLastCalledWith("saved");
   expect(fetcher).toHaveBeenCalledTimes(3);
 });
+it("does not resend text the database refused as too large until it is shorter", async () => {
+  const status = vi.fn();
+  const fetcher = vi.fn()
+    .mockResolvedValueOnce(Response.json({ value: null, version: 0 }))
+    .mockResolvedValueOnce(Response.json({ error: { code: "CONTENT_TOO_LARGE", message: "Too large." } }, { status: 413 }))
+    .mockResolvedValueOnce(Response.json({ version: 1 }));
+  vi.stubGlobal("fetch", fetcher);
+  const client = new PersistentDraft("/personal", "draft:doc", status);
+  const refused = { ...draft, markdown: "x".repeat(1000) };
+  await client.load(); client.change(refused); await client.flush();
+  expect(status).toHaveBeenLastCalledWith("too-large");
+  // Under the authoring limit, but not shorter than what was refused: kept here, not sent.
+  client.change({ ...refused, markdown: `${refused.markdown}y` }); await client.flush();
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  client.change({ ...refused, markdown: "short" }); await client.flush();
+  expect(fetcher).toHaveBeenCalledTimes(3);
+  expect(status).toHaveBeenLastCalledWith("saved");
+});
 it("deletes the server copy when discarding an oversized draft", async () => {
   const status = vi.fn();
   const earlier = { ...draft, markdown: "Earlier server copy" };

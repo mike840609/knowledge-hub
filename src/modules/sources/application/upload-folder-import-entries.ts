@@ -3,7 +3,7 @@ import { lockWorkspaceForMutation } from "@/modules/workspaces/application/works
 import { decodeUtf8Markdown, sourceFileHash } from "@/modules/sources/adapters/generic-markdown-folder-adapter";
 import type { ImportDiagnostic } from "@/modules/sources/domain/import-diagnostic";
 import { importError, SourceImportError } from "@/modules/sources/domain/import-errors";
-import { DEFAULT_IMPORT_LIMITS, type ImportLimits } from "@/modules/sources/domain/import-limits";
+import { DEFAULT_IMPORT_LIMITS, markdownFileTooLargeMessage, type ImportLimits } from "@/modules/sources/domain/import-limits";
 import type { SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
 import { translateKnownSnapshotAccessError } from "./import-snapshot-access";
 
@@ -31,7 +31,10 @@ export class UploadFolderImportEntriesService {
       }
       seen.add(entry.uploadKey);
       total += entry.bytes.byteLength;
-      if (entry.bytes.byteLength > this.limits.maxMarkdownFileBytes || total > this.limits.maxUploadBatchBytes) {
+      if (entry.bytes.byteLength > this.limits.maxMarkdownFileBytes) {
+        throw importError("IMPORT_LIMIT_EXCEEDED", markdownFileTooLargeMessage(null, this.limits.maxMarkdownFileBytes));
+      }
+      if (total > this.limits.maxUploadBatchBytes) {
         throw importError("IMPORT_LIMIT_EXCEEDED", "Upload batch exceeds the configured byte limits.");
       }
     }

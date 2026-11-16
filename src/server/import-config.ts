@@ -20,8 +20,8 @@ export function importRuntimeConfig(): ImportRuntimeConfig {
   const markdownFileBytes = positiveInt("KM_IMPORT_MAX_MARKDOWN_FILE_BYTES", DEFAULT_IMPORT_LIMITS.maxMarkdownFileBytes);
   return {
     limits: {
-      // No larger than the database can store in one write: the file is refused, by name, when it is
-      // picked or uploaded, instead of failing the import later. Read on each use, because the
+      // No larger than the database can store in one write: the file is refused by name before
+      // anything is uploaded, instead of failing the import later. Read on each use, because the
       // server's max_allowed_packet is known only once a connection has asked (packet-limit.ts).
       get maxMarkdownFileBytes() { return Math.min(markdownFileBytes, markdownFileCeiling()); },
       maxManifestEntries: positiveInt("KM_IMPORT_MAX_MANIFEST_ENTRIES", DEFAULT_IMPORT_LIMITS.maxManifestEntries),

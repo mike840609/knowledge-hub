@@ -13,29 +13,45 @@ export class PacketTooLargeError extends Error {
   }
 }
 
-/** What the server accepts, once any connection has read it; undefined before that. */
-let known: number | undefined;
-export const knownPacketLimit = () => known;
+/**
+ * What the server accepts, once any connection has read it; undefined before that. Kept on
+ * `globalThis` beside the pool (`database-pool.ts`): `next dev` re-evaluates this module on every
+ * reload while the pool, and the guard that sets this, live on.
+ */
+const store = globalThis as typeof globalThis & { __khPacketLimit?: number };
+export const knownPacketLimit = () => store.__khPacketLimit;
+/** What a server's value is taken to be when it cannot be read as a size: MariaDB's default. */
+const ASSUMED = 16 * 1024 * 1024;
 
 // The characters the driver's text protocol escapes, each sent as two bytes (mariadb lib/misc/utils.js).
-const ESCAPED = /[\0\x1a"'\\\b\n\r\t]/g;
+const ESCAPED = new Set([0, 0x1a, 0x22, 0x27, 0x5c, 0x08, 0x0a, 0x0d, 0x09]);
 // Room for the packet header and the server's own framing.
 const HEADROOM = 1024;
 
+function stringBytes(value: string): number {
+  let escapes = 0;
+  for (let i = 0; i < value.length; i++) if (ESCAPED.has(value.charCodeAt(i))) escapes++;
+  return Buffer.byteLength(value) + escapes + 2;
+}
+
 function valueBytes(value: unknown): number {
   if (value === null || value === undefined) return 4;
-  if (typeof value === "string") return Buffer.byteLength(value) + (value.match(ESCAPED)?.length ?? 0) + 2;
+  if (typeof value === "string") return stringBytes(value);
+  if (typeof value === "bigint") return String(value).length;
   if (Buffer.isBuffer(value)) return value.length * 2 + 10;
   if (Array.isArray(value)) return value.reduce<number>((total, item) => total + valueBytes(item) + 2, 0);
   if (value instanceof Date) return 32;
-  if (typeof value === "object") return valueBytes(JSON.stringify(value));
+  if (typeof value === "object" && typeof (value as { toSqlString?: unknown }).toSqlString === "function") return stringBytes(String((value as { toSqlString: () => unknown }).toSqlString()));
+  if (typeof value === "object") return stringBytes(JSON.stringify(value));
   return 24;
 }
 
 /** The bytes a text-protocol statement occupies on the wire, never less than the driver sends. */
 export function statementBytes(sql: unknown, values?: unknown): number {
-  const text = typeof sql === "string" ? sql : typeof sql === "object" && sql !== null && "sql" in sql ? String((sql as { sql: unknown }).sql) : "";
-  return Buffer.byteLength(text) + (values === undefined ? 0 : valueBytes(values));
+  const options = typeof sql === "object" && sql !== null ? sql as { sql?: unknown; values?: unknown } : undefined;
+  const text = typeof sql === "string" ? sql : String(options?.sql ?? "");
+  const params = values ?? options?.values;
+  return Buffer.byteLength(text) + (params === undefined ? 0 : valueBytes(params));
 }
 
 type Queryable = { query: (sql: never, values?: never) => Promise<unknown> };
@@ -43,18 +59,14 @@ type Run = (sql: unknown, values?: unknown) => Promise<unknown>;
 type Limit = (run: Run) => Promise<number>;
 
 /** Replaces `query` on the object itself, so a test that records or spies on it still sees every call. */
-function guard<T extends Queryable>(target: T, limit: Limit, mark: symbol): T {
-  const marked = target as unknown as Record<symbol, true>;
-  if (marked[mark]) return target; // a pooled connection handed out again
+function guard<T extends Queryable>(target: T, limit: Limit): T {
   const run = (target.query as Run).bind(target);
   (target as unknown as { query: Run }).query = async (sql, values) => {
-    // Read through this same connection: a transaction never waits on a second one from the pool.
     const max = await limit(run);
     const bytes = statementBytes(sql, values);
     if (bytes > max - HEADROOM) throw new PacketTooLargeError(bytes, max);
     return run(sql, values);
   };
-  marked[mark] = true;
   return target;
 }
 
@@ -64,13 +76,19 @@ function guard<T extends Queryable>(target: T, limit: Limit, mark: symbol): T {
  * ponytail: checks text-protocol `query` only; nothing here uses `execute` or `batch`.
  */
 export function guardPool(pool: Pool, fixed?: number): Pool {
-  let reading: Promise<number> | undefined;
-  const limit: Limit = run => fixed !== undefined ? Promise.resolve(fixed) : known !== undefined ? Promise.resolve(known) : (reading ??= run("SELECT @@max_allowed_packet AS `limit`")
-    .then(rows => (known = Number((rows as { limit: unknown }[])[0]?.limit)), error => { reading = undefined; throw error; }));
-  const mark = Symbol("packet-limit");
-  guard(pool, limit, mark);
+  // Each caller reads through itself, the connection about to write: a transaction never waits on
+  // a read that needs a second connection from the pool. Until one read lands, a few may overlap.
+  const limit: Limit = async run => {
+    if (fixed !== undefined) return fixed;
+    if (store.__khPacketLimit !== undefined) return store.__khPacketLimit;
+    const rows = await run("SELECT @@max_allowed_packet AS `limit`") as { limit: unknown }[];
+    const read = Number(rows[0]?.limit);
+    return (store.__khPacketLimit = Number.isSafeInteger(read) && read > 0 ? read : ASSUMED);
+  };
+  guard(pool, limit);
   const getConnection = pool.getConnection.bind(pool);
-  pool.getConnection = async () => guard(await getConnection(), limit, mark);
+  // The driver hands out a new connection object each time, so each is guarded once.
+  pool.getConnection = async () => guard(await getConnection(), limit);
   return pool;
 }
 
@@ -78,14 +96,14 @@ export function guardPool(pool: Pool, fixed?: number): Pool {
  * Bytes per multi-row INSERT: a quarter of what the server accepts, at most 4 MiB, so a batch's
  * estimate can be off by escaping and still fit.
  */
-export function insertBudget(limit = known): number {
-  return Math.min(4 * 1024 * 1024, Math.floor((limit ?? 16 * 1024 * 1024) / 4));
+export function insertBudget(limit = knownPacketLimit()): number {
+  return Math.min(4 * 1024 * 1024, Math.floor((limit ?? ASSUMED) / 4));
 }
 
 /**
  * The largest Markdown file an import can hold: a staged entry row carries the file twice (raw and
  * normalized), and escaping can double each copy.
  */
-export function markdownFileCeiling(limit = known): number {
+export function markdownFileCeiling(limit = knownPacketLimit()): number {
   return limit === undefined ? Number.POSITIVE_INFINITY : Math.floor((limit - 64 * 1024) / 4);
 }

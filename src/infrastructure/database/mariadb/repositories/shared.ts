@@ -1,6 +1,6 @@
 import { IntegrityError, IntegrityViolationError } from "@/modules/knowledge/domain/errors";
 import { importError } from "@/modules/sources/domain/import-errors";
-import { WorkspaceBusyError } from "@/shared/domain/errors";
+import { ContentTooLargeError, WorkspaceBusyError } from "@/shared/domain/errors";
 import type { DatabaseConnection } from "../pool";
 import { insertBudget, PacketTooLargeError } from "../packet-limit";
 
@@ -67,7 +67,7 @@ const DATA_BOUND_ERRNOS = [1406, 1292];
 /**
  * A statement over max_allowed_packet: refused before sending (`PacketTooLargeError`), or by a server
  * that answers with an error rather than closing the connection (1153, or 1301 for a function result).
- * The writer is told what was too large, never asked to try the same thing again.
+ * The writer is told how much fits, never asked to try the same thing again.
  */
 const PACKET_ERRNOS = [1153, 1301];
 
@@ -76,8 +76,7 @@ export function mapDatabaseError(error: unknown): Error {
   const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
   const errno = typeof error === "object" && error !== null && "errno" in error ? Number(error.errno) : Number.NaN;
   if (error instanceof PacketTooLargeError || code === "ER_NET_PACKET_TOO_LARGE" || PACKET_ERRNOS.includes(errno)) {
-    const limit = error instanceof PacketTooLargeError ? ` (${formatMebibytes(error.limit)} per write)` : "";
-    return importError("IMPORT_LIMIT_EXCEEDED", `This content is larger than the database accepts in one write${limit}. Split large files, or ask the operator to raise max_allowed_packet.`);
+    return new ContentTooLargeError(error instanceof PacketTooLargeError ? error.limit : undefined);
   }
   if (RETRYABLE_CODES.includes(code) || RETRYABLE_ERRNOS.includes(errno)) {
     return new WorkspaceBusyError();
@@ -92,8 +91,6 @@ export function mapDatabaseError(error: unknown): Error {
   wrapped.cause = { code, message };
   return wrapped;
 }
-
-const formatMebibytes = (bytes: number) => `${Math.round((bytes / 1024 / 1024) * 10) / 10} MiB`;
 
 export function affectedRows(result: unknown): number {
   if (typeof result !== "object" || result === null || !("affectedRows" in result)) return 0;

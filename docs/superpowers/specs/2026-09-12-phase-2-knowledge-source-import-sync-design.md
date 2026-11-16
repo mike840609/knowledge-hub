@@ -863,10 +863,10 @@ These are configurable application limits, not core domain semantics.
 - Several server processes each have their own budget.
 
 **The database's packet limit (2026-11-16).** A statement larger than the server's `max_allowed_packet` is not answered with an error: the server closes the connection, the driver reports `ECONNRESET`, and the request ended as a 500 with no reason, which the import form retried as transient. The code assumed 16 MiB; a deployed server may accept less. Now (`src/infrastructure/database/mariadb/packet-limit.ts`):
-- The limit is read from the server once per process (`SELECT @@max_allowed_packet`), through the connection about to write.
-- Every statement is measured before it is sent, counting what the driver escapes, and one over the limit is refused as `IMPORT_LIMIT_EXCEEDED` (400) saying how much one write may hold; the connection stays usable and the transaction rolls back. A server that answers 1153 or 1301 instead is reported the same way.
+- The limit is read from the server once per process (`SELECT @@max_allowed_packet`), through the connection about to write; a value that is not a size is taken as 16 MiB.
+- Every statement is measured before it is sent, counting what the driver escapes, and one over the limit is refused as `CONTENT_TOO_LARGE` saying how much fits at once; the connection stays usable and the transaction rolls back. A server that answers 1153 or 1301 instead is reported the same way. It is not a 5xx, so nothing retries it: imports answer 400 (their form reads 413 as the platform's request cap), Hub writes 413, and an account draft refused this way is kept locally and sent again only once shorter. Any write can meet it, so the error is shared, not an import code.
 - Multi-row inserts are sized from it: a quarter of the limit, at most 4 MiB a statement.
-- Max one Markdown file is no larger than the database can store: a staged entry carries the file twice, each possibly doubled by escaping, so the effective limit is `(max_allowed_packet − 64 KiB) / 4` when that is below the configured one (about 4 MiB at 16 MiB, so the default is unchanged). The page and the upload check use the effective limit, so a file too large is named when it is picked, not when the import fails.
+- Max one Markdown file is no larger than the database can store: a staged entry carries the file twice, each possibly doubled by escaping, so the effective limit is `(max_allowed_packet − 64 KiB) / 4` when that is below the configured one (about 4 MiB at 16 MiB, so the default is unchanged). The form, the manifest check and the upload check use the effective limit and name the file and the limit, so a file too large is refused when the import starts, before anything is uploaded.
 
 Retention：
 
