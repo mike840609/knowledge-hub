@@ -57,7 +57,8 @@ describe("the guard", () => {
     const { pool, sent } = fakePool({ limit: 4096 });
     guardPool(pool);
     const connection = await pool.getConnection();
-    await expect(connection.query("INSERT ?", ["x".repeat(5000)])).rejects.toBeInstanceOf(PacketTooLargeError);
+    // The shared domain error itself: a write that reaches the pool directly is answered alike.
+    await expect(connection.query("INSERT ?", ["x".repeat(5000)])).rejects.toBeInstanceOf(ContentTooLargeError);
     expect(sent).toEqual(["conn:SELECT @@max_allowed_packet AS `limit`"]);
     expect(knownPacketLimit()).toBe(4096);
     await connection.query("SELECT 1");
@@ -79,7 +80,7 @@ describe("a statement too large for the server", () => {
       expect(mapDatabaseError(error)).toBeInstanceOf(ContentTooLargeError);
     }
     const mapped = mapDatabaseError(new PacketTooLargeError(5_000_000, 4 * 1024 * 1024));
-    expect(mapped.message).toContain("4 MiB at once");
+    expect(mapped.message).toContain("larger than the database accepts at once");
     expect(mapped.message).not.toContain("max_allowed_packet");
     expect(toWorkspaceErrorResponse(mapped)).toMatchObject({ status: 413, body: { error: { code: "CONTENT_TOO_LARGE" } } });
     // The import form reads 413 as the platform's request-size cap, so imports answer 400.

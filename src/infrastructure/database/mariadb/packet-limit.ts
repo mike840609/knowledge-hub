@@ -1,14 +1,16 @@
 import type { Pool } from "mariadb";
+import { ContentTooLargeError } from "@/shared/domain/errors";
 
 /**
  * A statement over the server's `max_allowed_packet` is not refused with an error: the server closes
  * the connection, and the driver reports only ECONNRESET, which reads as any network failure. So the
  * size is checked here, before sending, and refused with this error while the connection stays usable.
+ * It is the shared domain error itself, so a write that reaches the pool directly, outside a unit of
+ * work and `mapDatabaseError` (account drafts, feedback), is answered the same way: never a 500.
  */
-export class PacketTooLargeError extends Error {
-  readonly code = "ER_NET_PACKET_TOO_LARGE";
+export class PacketTooLargeError extends ContentTooLargeError {
   constructor(readonly bytes: number, readonly limit: number) {
-    super(`A ${bytes}-byte statement exceeds the database's max_allowed_packet of ${limit} bytes.`);
+    super();
     this.name = "PacketTooLargeError";
   }
 }
@@ -23,7 +25,9 @@ export const knownPacketLimit = () => store.__khPacketLimit;
 /** What a server's value is taken to be when it cannot be read as a size: MariaDB's default. */
 const ASSUMED = 16 * 1024 * 1024;
 
-// The characters the driver's text protocol escapes, each sent as two bytes (mariadb lib/misc/utils.js).
+// Counted as two bytes each: the characters any of the driver's escapers may write escaped. The
+// connection's own writer escapes fewer (only ' " \ and NUL), so a newline-heavy statement is
+// overestimated, by at most double; that is the margin, not a miscount.
 const ESCAPED = new Set([0, 0x1a, 0x22, 0x27, 0x5c, 0x08, 0x0a, 0x0d, 0x09]);
 // Room for the packet header and the server's own framing.
 const HEADROOM = 1024;

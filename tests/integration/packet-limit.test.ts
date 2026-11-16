@@ -4,6 +4,8 @@ import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { guardPool, knownPacketLimit } from "@/infrastructure/database/mariadb/packet-limit";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
+import { MariaDbPersonalStore } from "@/infrastructure/database/mariadb/repositories/personal-items";
+import { toWorkspaceErrorResponse } from "@/server/http-error-response";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import { disposeIsolatedDatabase, provisionIsolatedDatabase } from "../../scripts/db/test-database";
 import { runMigrations, type IsolatedDatabaseHandle } from "../../scripts/db/migrate";
@@ -43,8 +45,14 @@ it("refuses a write over the limit with a reason, and the connection stays usabl
   if (previous === undefined) delete process.env.KM_TEST_DB_NAME; else process.env.KM_TEST_DB_NAME = previous;
   const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(small));
   await expect(hub.createDocument(fixtureCaller(), { sourceId: source.id, parentId: folderId, title: "Large", markdown: "line\n".repeat(400_000), metadata: {} }))
-    .rejects.toMatchObject({ code: "CONTENT_TOO_LARGE", message: expect.stringContaining("1 MiB at once") });
+    .rejects.toMatchObject({ code: "CONTENT_TOO_LARGE" });
   const created = await hub.createDocument(fixtureCaller(), { sourceId: source.id, parentId: folderId, title: "Small", markdown: "fits", metadata: {} });
   expect(created.documentId).toBeTruthy();
+
+  // An account draft is written to the pool directly, outside a unit of work: still a 413 with a
+  // reason, which the draft client keeps locally instead of resending, never a retried 500.
+  const drafts = new MariaDbPersonalStore(small);
+  const refused = await drafts.put("user", "workspace", "draft:doc", { title: "Large", markdown: "line\n".repeat(400_000), baseRevisionId: null }, 0).catch((error: unknown) => error);
+  expect(toWorkspaceErrorResponse(refused)).toMatchObject({ status: 413, body: { error: { code: "CONTENT_TOO_LARGE" } } });
   await small.end();
 });

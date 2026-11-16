@@ -76,7 +76,7 @@ export function mapDatabaseError(error: unknown): Error {
   const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
   const errno = typeof error === "object" && error !== null && "errno" in error ? Number(error.errno) : Number.NaN;
   if (error instanceof PacketTooLargeError || code === "ER_NET_PACKET_TOO_LARGE" || PACKET_ERRNOS.includes(errno)) {
-    return new ContentTooLargeError(error instanceof PacketTooLargeError ? error.limit : undefined);
+    return error instanceof PacketTooLargeError ? error : new ContentTooLargeError();
   }
   if (RETRYABLE_CODES.includes(code) || RETRYABLE_ERRNOS.includes(errno)) {
     return new WorkspaceBusyError();

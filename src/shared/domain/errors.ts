@@ -28,9 +28,10 @@ export class WorkspaceBusyError extends DomainError {
  * document, a draft, an import — so it carries no feature's name.
  */
 export class ContentTooLargeError extends DomainError {
-  constructor(limitBytes?: number) {
-    const limit = limitBytes === undefined ? "" : ` (${Math.round((limitBytes / 1024 / 1024) * 10) / 10} MiB at once)`;
-    super("CONTENT_TOO_LARGE", `This is larger than the database accepts${limit}. Nothing was saved; make it smaller and try again.`);
+  // No size in the message: what fits depends on escaping, metadata and how many copies a row keeps,
+  // so the packet limit would mislead the writer about how small to make it.
+  constructor() {
+    super("CONTENT_TOO_LARGE", "This is larger than the database accepts at once. Nothing was saved; make it smaller and try again.");
     this.name = "ContentTooLargeError";
   }
 }
