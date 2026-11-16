@@ -155,6 +155,7 @@ describe("the selection toolbar's DOM contract", () => {
       "Bulleted list",
       "Numbered list",
       "Toggle section",
+      "Clear formatting",
     ]);
     for (const b of buttons) expect(b.getAttribute("type")).toBe("button");
     expect(toolbarElement().getAttribute("role")).toBe("toolbar");
@@ -175,6 +176,7 @@ describe("the selection toolbar's DOM contract", () => {
       "Bulleted list",
       "Numbered list",
       "Toggle section",
+      "Clear formatting",
       "Comment on selection",
     ]);
   });
@@ -658,4 +660,52 @@ describe("the React wrapper", () => {
       expect(open).not.toHaveBeenCalled();
     });
   });
+});
+
+// Launcher audit (2026-11-18): Notion's clear-formatting habit (Cmd+\) had no equivalent; the
+// selection toolbar could add marks but never take them all away.
+it("clears every inline mark from a selection, and from the next character at a caret", async () => {
+  const editor = await open("**bold** and *italic*");
+  mountToolbar(editor);
+  select(editor, 1, 5);
+  await throttleWindow();
+  button("Clear formatting").click();
+  expect(editor.getMarkdown()).toBe("bold and *italic*\n");
+  // Select the italic word and use the keyboard habit.
+  select(editor, 10, 16);
+  await throttleWindow();
+  const event = key(editorDom(editor), { key: "\\", metaKey: true });
+  expect(event.defaultPrevented).toBe(true);
+  expect(editor.getMarkdown()).toBe("bold and italic\n");
+});
+
+it("drops the mark the caret would type with when nothing is selected", async () => {
+  const editor = await open("**bold** and plain");
+  mountToolbar(editor);
+  select(editor, 3, 3);
+  await throttleWindow();
+  button("Clear formatting").click();
+  editor.action(ctx => {
+    const view = ctx.get(editorViewCtx);
+    view.dispatch(view.state.tr.insertText("x"));
+  });
+  expect(editor.getMarkdown()).toBe("**bo**x**ld** and plain\n");
+});
+
+// Launcher audit (2026-11-18): Notion's link card copies the address; ours only opened, edited or
+// removed it.
+it("copies the link address from its card", async () => {
+  const writeText = vi.fn(async () => {});
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  const editor = await open("[example](https://example.com) after\n");
+  mountToolbar(editor);
+  select(editor, 4, 4);
+  await wait(320);
+  const card = document.querySelector<HTMLElement>(".kh-link-card")!;
+  expect(card.dataset.show).toBe("true");
+  const copy = card.querySelector<HTMLButtonElement>('button[aria-label="Copy link"]')!;
+  expect(copy.type).toBe("button");
+  copy.click();
+  expect(writeText).toHaveBeenCalledWith("https://example.com");
+  expect(editor.getMarkdown()).toBe("[example](https://example.com) after\n");
 });

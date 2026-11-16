@@ -1127,6 +1127,10 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-block-move-menu button[aria-current="true"], .kh-block-move-menu button[aria-checked="true"] { @apply bg-kh-bg-selected font-medium text-kh-selected-text; }
 .kh-block-menu-separator { height: 1px; margin: 4px; background: var(--kh-border); }
 .kh-slash-menu { width: 18rem; max-width: calc(100vw - 1rem); max-height: min(24rem, 60vh); overflow-y: auto; }
+.kh-emoji-menu { position: fixed; z-index: 50; width: 18rem; max-width: calc(100vw - 1rem); max-height: min(20rem, 50vh); overflow-y: auto; border: 1px solid var(--kh-border); border-radius: 6px; background: var(--kh-bg-raised); box-shadow: var(--kh-shadow-popover); padding: 3px; }
+.kh-emoji-menu[hidden] { display: none; }
+.kh-emoji-option { @apply flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-body-sm; }
+.kh-emoji-option[aria-selected="true"] { @apply bg-kh-bg-selected text-kh-selected-text; }
 .kh-slash-option { @apply flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-body-sm text-kh-text hover:bg-kh-bg-hover; }
 .kh-slash-option[aria-selected="true"] { @apply bg-kh-bg-selected text-kh-selected-text; }
 .kh-tree-drop-line, .kh-block-drop-line { position: fixed; z-index: 50; height: 2px; background: var(--kh-primary); pointer-events: none; }

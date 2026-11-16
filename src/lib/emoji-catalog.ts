@@ -402,3 +402,43 @@ export function searchEmoji(query: string): Emoji[] {
   if (!needle) return EMOJI_CATALOG;
   return EMOJI_CATALOG.filter((entry) => entry.name.toLowerCase().includes(needle) || entry.keywords.some((word) => word.toLowerCase().includes(needle)));
 }
+
+/** The name as a shortcode: `grinning face` becomes `grinning_face`. */
+export function emojiShortcode(emoji: Emoji): string {
+  return emoji.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+/**
+ * What `:query` should offer, best first: an exact shortcode or keyword, then a prefix of either,
+ * then a substring. Catalog order breaks ties, so the same query always offers the same first row.
+ */
+export function emojiMatches(query: string, limit = 8): Emoji[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [];
+  const score = (entry: Emoji) => {
+    const name = entry.name.toLowerCase();
+    const code = emojiShortcode(entry);
+    if (code === needle || name === needle) return 0;
+    if (entry.keywords.some((word) => word.toLowerCase() === needle)) return 1;
+    if (code.startsWith(needle) || name.startsWith(needle)) return 2;
+    if (entry.keywords.some((word) => word.toLowerCase().startsWith(needle))) return 3;
+    if (name.includes(needle)) return 4;
+    if (entry.keywords.some((word) => word.toLowerCase().includes(needle))) return 5;
+    return Infinity;
+  };
+  return EMOJI_CATALOG
+    .map((entry, index) => ({ entry, index, score: score(entry) }))
+    .filter(({ score }) => score !== Infinity)
+    .sort((a, b) => a.score - b.score || a.index - b.index)
+    .slice(0, limit)
+    .map(({ entry }) => entry);
+}
+
+/** The emoji a fully typed `:code:` names, when the code is an exact shortcode or keyword. */
+export function emojiForShortcode(code: string): Emoji | null {
+  const needle = code.trim().toLowerCase();
+  if (!needle) return null;
+  return EMOJI_CATALOG.find((entry) => emojiShortcode(entry) === needle || entry.name.toLowerCase() === needle)
+    ?? EMOJI_CATALOG.find((entry) => entry.keywords.some((word) => word.toLowerCase() === needle))
+    ?? null;
+}

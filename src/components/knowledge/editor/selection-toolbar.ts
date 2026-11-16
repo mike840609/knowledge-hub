@@ -15,6 +15,7 @@ import {
 } from "@milkdown/kit/preset/commonmark";
 import { toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
 import { posToDOMRect } from "@milkdown/kit/prose";
+import { closeHistory } from "@milkdown/kit/prose/history";
 import { NodeSelection, Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import { $prose } from "@milkdown/kit/utils";
 import type { Mark } from "@milkdown/kit/prose/model";
@@ -223,7 +224,21 @@ const items: Item[] = [
       convertBlockToDetails(view);
     },
   },
+  // Notion's clear-formatting habit: one press takes every inline mark off the selection, or the
+  // mark the caret would type with. Cmd/Ctrl-\ runs the same action (the editor's shortcut).
+  { label: "Clear formatting", text: "Tx", className: "text-caption", active: () => false, run: (_ctx, view) => { clearFormatting(view); } },
 ];
+
+function clearFormatting(view: EditorView): boolean {
+  if (!view.editable) return false;
+  const { from, to, empty } = view.state.selection;
+  const transaction = view.state.tr;
+  if (empty) transaction.setStoredMarks([]);
+  else transaction.removeMark(from, to);
+  view.dispatch(empty ? transaction : closeHistory(transaction));
+  view.focus();
+  return true;
+}
 
 const PASTED_URL = /^https?:\/\/\S+$/i;
 
@@ -460,7 +475,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           cardAddress.className = "kh-link-card-address truncate px-2 text-caption text-kh-text-muted";
           card.appendChild(cardAddress);
           const cardButtons = new Map<string, HTMLButtonElement>();
-          for (const [label, text] of [["Open link", "Open"], ["Edit link", "Edit"], ["Remove link", "Remove"]] as const) {
+          for (const [label, text] of [["Copy link", "Copy"], ["Open link", "Open"], ["Edit link", "Edit"], ["Remove link", "Remove"]] as const) {
             const cardButton = document.createElement("button");
             cardButton.type = "button";
             cardButton.textContent = text;
@@ -486,11 +501,14 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             cardLink = null;
             if (card.dataset.show !== "false") card.dataset.show = "false";
           }
+          let copyTimer: ReturnType<typeof setTimeout> | undefined;
           function showCard(link: Extract<SelectedLink, { kind: "one" }>) {
             const href = String(link.mark.attrs.href ?? "");
             cardLink = link;
             cardAddress.textContent = href;
             cardAddress.title = href;
+            clearTimeout(copyTimer);
+            cardButtons.get("Copy link")!.textContent = "Copy";
             cardButtons.get("Open link")!.disabled = !storedLinkTarget(href, links?.());
             if (!card.isConnected) (editorView.dom.parentElement ?? document.body).appendChild(card);
             card.dataset.show = "true";
@@ -526,6 +544,16 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             pointerDown = true;
             clearTimeout(pointerTimer);
             pointerTimer = setTimeout(() => { pointerDown = false; }, 600);
+          });
+          cardButtons.get("Copy link")!.addEventListener("click", () => {
+            const href = String(cardLink?.mark.attrs.href ?? "");
+            if (!href || !navigator.clipboard) return;
+            void navigator.clipboard.writeText(href).then(() => {
+              const button = cardButtons.get("Copy link")!;
+              button.textContent = "Copied";
+              clearTimeout(copyTimer);
+              copyTimer = setTimeout(() => { button.textContent = "Copy"; }, 1500);
+            }, () => { /* a refused clipboard leaves the card as it was */ });
           });
           cardButtons.get("Open link")!.addEventListener("click", () => {
             const target = storedLinkTarget(String(cardLink?.mark.attrs.href ?? ""), links?.());
@@ -601,6 +629,14 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             openLink();
           }
           editorView.dom.addEventListener("keydown", openLinkOnModK);
+          // The same action as the toolbar's Clear formatting, for the habit Notion taught.
+          function clearOnModBackslash(event: KeyboardEvent) {
+            if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey || event.key !== "\\") return;
+            if (event.isComposing || event.keyCode === 229) return;
+            if (!clearFormatting(editorView)) return;
+            event.preventDefault();
+          }
+          editorView.dom.addEventListener("keydown", clearOnModBackslash);
 
           // Above the first line is the document's header ("Updated …"), not free space: flip below a
           // selection with no room above it inside the editor, as well as inside the panes that clip it
@@ -674,9 +710,11 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
               editorView.dom.removeEventListener("focus", showOnFocus);
               editorView.dom.removeEventListener("keydown", closeCardOnEscape, true);
               editorView.dom.removeEventListener("keydown", openLinkOnModK);
+              editorView.dom.removeEventListener("keydown", clearOnModBackslash);
               editorView.dom.removeEventListener("blur", hideCardOnBlur);
               window.removeEventListener("scroll", onScroll, true);
               clearTimeout(pointerTimer);
+              clearTimeout(copyTimer);
               card.remove();
               provider.destroy();
               element.remove();
