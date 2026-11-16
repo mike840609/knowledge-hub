@@ -21,3 +21,17 @@ export class WorkspaceBusyError extends DomainError {
     this.name = "WorkspaceBusyError";
   }
 }
+
+/**
+ * A statement larger than the database accepts at once (its max_allowed_packet): nothing was written,
+ * and the same request would fail again, so it is not retried. Any write can meet this — a Hub
+ * document, a draft, an import — so it carries no feature's name.
+ */
+export class ContentTooLargeError extends DomainError {
+  // No size in the message: what fits depends on escaping, metadata and how many copies a row keeps,
+  // so the packet limit would mislead the writer about how small to make it.
+  constructor() {
+    super("CONTENT_TOO_LARGE", "This is larger than the database accepts at once. Nothing was saved; make it smaller and try again.");
+    this.name = "ContentTooLargeError";
+  }
+}

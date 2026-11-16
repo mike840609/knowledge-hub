@@ -1,7 +1,8 @@
 import { IntegrityError, IntegrityViolationError } from "@/modules/knowledge/domain/errors";
 import { importError } from "@/modules/sources/domain/import-errors";
-import { WorkspaceBusyError } from "@/shared/domain/errors";
+import { ContentTooLargeError, WorkspaceBusyError } from "@/shared/domain/errors";
 import type { DatabaseConnection } from "../pool";
+import { insertBudget, PacketTooLargeError } from "../packet-limit";
 
 export type DbRow = Record<string, unknown>;
 export type QueryConnection = Pick<DatabaseConnection, "query">;
@@ -63,10 +64,20 @@ const RETRYABLE_ERRNOS = [1213, 1205];
 const DATA_BOUND_CODES = ["ER_DATA_TOO_LONG", "ER_TRUNCATED_WRONG_VALUE_FOR_FIELD"];
 const DATA_BOUND_ERRNOS = [1406, 1292];
 
+/**
+ * A statement over max_allowed_packet: refused before sending (`PacketTooLargeError`), or by a server
+ * that answers with an error rather than closing the connection (1153, or 1301 for a function result).
+ * The writer is told how much fits, never asked to try the same thing again.
+ */
+const PACKET_ERRNOS = [1153, 1301];
+
 export function mapDatabaseError(error: unknown): Error {
   const message = error instanceof Error ? error.message : "Database operation failed.";
   const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
   const errno = typeof error === "object" && error !== null && "errno" in error ? Number(error.errno) : Number.NaN;
+  if (error instanceof PacketTooLargeError || code === "ER_NET_PACKET_TOO_LARGE" || PACKET_ERRNOS.includes(errno)) {
+    return error instanceof PacketTooLargeError ? error : new ContentTooLargeError();
+  }
   if (RETRYABLE_CODES.includes(code) || RETRYABLE_ERRNOS.includes(errno)) {
     return new WorkspaceBusyError();
   }
@@ -88,10 +99,10 @@ export function affectedRows(result: unknown): number {
 
 /**
  * Splits rows for multi-row INSERTs: at most `maxRows` a statement, and about `maxBytes` of
- * payload, well under MariaDB's 16 MiB max_allowed_packet. A single row larger than that still
- * goes alone, as a one-row insert always did.
+ * payload, a quarter of the server's max_allowed_packet (`insertBudget`). A single row larger than
+ * that still goes alone, as a one-row insert always did.
  */
-export function insertBatches<T>(items: readonly T[], bytesOf: (item: T) => number = () => 0, maxRows = 500, maxBytes = 4 * 1024 * 1024): T[][] {
+export function insertBatches<T>(items: readonly T[], bytesOf: (item: T) => number = () => 0, maxRows = 500, maxBytes = insertBudget()): T[][] {
   const batches: T[][] = [];
   let current: T[] = [];
   let bytes = 0;

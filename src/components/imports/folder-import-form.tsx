@@ -20,7 +20,7 @@ import {
   type FileSystemDirectoryHandle,
 } from "@/components/imports/folder-handle-store";
 import type { ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
-import { DEFAULT_IMPORT_LIMITS, type ImportLimits } from "@/modules/sources/domain/import-limits";
+import { DEFAULT_IMPORT_LIMITS, markdownFileTooLargeMessage, type ImportLimits } from "@/modules/sources/domain/import-limits";
 import { MAX_UPLOAD_BATCH_BYTES } from "@/lib/upload-limits";
 import { Label } from "@/components/ui/label";
 
@@ -123,9 +123,8 @@ async function buildManifest(
     if (entry.markdown) {
       // The server limit can be higher than the request cap; clamp so a single
       // file can never produce an over-cap multipart request.
-      if (entry.file.size > Math.min(limits.maxMarkdownFileBytes, MAX_UPLOAD_BATCH_BYTES)) {
-        throw importLimitError("Markdown file exceeds the configured per-file byte limit.");
-      }
+      const fileLimit = Math.min(limits.maxMarkdownFileBytes, MAX_UPLOAD_BATCH_BYTES);
+      if (entry.file.size > fileLimit) throw importLimitError(markdownFileTooLargeMessage(entry.relativePath, fileLimit));
       manifest[index] = { uploadKey: entry.uploadKey, relativePath: entry.relativePath, kind: "MARKDOWN", size: entry.file.size };
       return;
     }

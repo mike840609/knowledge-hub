@@ -88,6 +88,8 @@ export function toWorkspaceErrorResponse(error: unknown): { status: number; body
     if (error.code === "REVIEW_NOT_FOUND") return { status: 404, body: { error: { code: "NOT_FOUND", message: "The requested resource was not found." } } };
     if (WORKSPACE_HIDDEN_NOT_FOUND.has(error.code)) return { status: 404, body: { error: { code: "NOT_FOUND", message: "The requested resource was not found." } } };
     if (error.code === "WORKSPACE_BUSY") return { status: 503, body: { error: { code: error.code, message: error.message } } };
+    // Not a 5xx: the same write would fail again, so the editor and drafts must not retry it.
+    if (error.code === "CONTENT_TOO_LARGE") return { status: 413, body: { error: { code: error.code, message: error.message } } };
     const status = ["INSUFFICIENT_WORKSPACE_CAPABILITY", "TEAM_CREATION_DENIED", "PERSONAL_WORKSPACE_FROZEN"].includes(error.code) ? 403
       : ["WORKSPACE_ARCHIVED", "LAST_DIRECT_OWNER", "MEMBER_ALREADY_EXISTS", "GROUP_MAPPING_ALREADY_EXISTS", "WORKSPACE_LIFECYCLE_VIOLATION",
          "PERSONAL_ITEM_CONFLICT", "REVISION_CONFLICT", "SOURCE_MANAGED_READ_ONLY", "SOURCE_ARCHIVED", "DOCUMENT_ARCHIVED",

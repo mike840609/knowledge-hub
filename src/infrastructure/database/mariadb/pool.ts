@@ -1,5 +1,6 @@
 import mariadb, { type Pool, type PoolConnection } from "mariadb";
 import type { DatabaseConfig } from "./config";
+import { guardPool } from "./packet-limit";
 
 /**
  * Every transaction runs READ COMMITTED. Set once per connection rather than
@@ -33,7 +34,7 @@ export function createDatabasePool(config: DatabaseConfig): Pool {
   if (config.ssl && config.ssl.rejectUnauthorized === false) {
     console.warn("KM_DB_SSL=trust disables database certificate verification; use verify unless the endpoint cannot present a valid certificate.");
   }
-  return mariadb.createPool({
+  return guardPool(mariadb.createPool({
     host: config.host,
     port: config.port,
     user: config.user,
@@ -60,7 +61,7 @@ export function createDatabasePool(config: DatabaseConfig): Pool {
     // keeps the same call sites working through a pooler; the affected reads
     // are a handful of small index probes.
     pipelining: false,
-  });
+  }));
 }
 
 export type DatabaseConnection = PoolConnection;

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const createPool = vi.hoisted(() => vi.fn(() => ({}) as never));
+const createPool = vi.hoisted(() => vi.fn(() => ({ query: async () => [], getConnection: async () => ({ query: async () => [] }) }) as never));
 vi.mock("mariadb", () => ({ default: { createPool } }));
 
 import { createDatabasePool, SESSION_INIT_SQL } from "@/infrastructure/database/mariadb/pool";

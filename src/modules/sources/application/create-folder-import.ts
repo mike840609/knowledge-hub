@@ -5,7 +5,7 @@ import { lockWorkspaceForMutation } from "@/modules/workspaces/application/works
 import { normalizeImportPath } from "../domain/import-path";
 import { compareImportText } from "@/modules/sources/domain/import-path";
 import { importError } from "@/modules/sources/domain/import-errors";
-import { DEFAULT_IMPORT_LIMITS, type ImportLimits } from "@/modules/sources/domain/import-limits";
+import { DEFAULT_IMPORT_LIMITS, markdownFileTooLargeMessage, type ImportLimits } from "@/modules/sources/domain/import-limits";
 import type { ImportSnapshot, ImportSnapshotEntry } from "@/modules/sources/domain/import-snapshot";
 import type { SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
 import { uuidv7 } from "@/shared/ids/uuidv7";
@@ -80,7 +80,7 @@ function validateManifest(manifest: readonly ImportManifestEntry[], limits: Impo
     if (!Number.isSafeInteger(raw.size) || raw.size < 0) throw importError("INVALID_IMPORT_MANIFEST", "Manifest size must be a non-negative integer.");
 
     if (MARKDOWN_EXTENSION.test(raw.relativePath)) {
-      if (raw.size > limits.maxMarkdownFileBytes) throw importError("IMPORT_LIMIT_EXCEEDED", "Markdown file exceeds the per-file byte limit.");
+      if (raw.size > limits.maxMarkdownFileBytes) throw importError("IMPORT_LIMIT_EXCEEDED", markdownFileTooLargeMessage(raw.relativePath, limits.maxMarkdownFileBytes));
       markdownBytes += raw.size;
       if (markdownBytes > limits.maxMarkdownTotalBytes) throw importError("IMPORT_LIMIT_EXCEEDED", "Markdown files exceed the total import byte limit.");
       continue;
