@@ -29,7 +29,7 @@ test("an untouched rendered editor is not a modification: Esc leaves it", async 
 
 test("typing Markdown syntax writes a heading and a list, and Create saves it", { tag: "@smoke-team" }, async ({ page }) => {
   const title = unique("Typed Heading");
-  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new?compose`);
   const surface = surfaceOf(page);
   await expect(surface).toBeEditable(ROUND_TRIP);
   await surface.click();
@@ -161,20 +161,20 @@ test("a document whose H1 already matches its stored title shows no rename warni
 });
 
 test("Enter in the title field moves to the content instead of submitting", async ({ page }) => {
-  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new?compose`);
   const form = composer(page);
   const titleField = form.getByLabel("Title", { exact: true });
   await expect(titleField).toBeEditable(ROUND_TRIP);
   await titleField.fill(unique("Enter In Title"));
 
   await titleField.press("Enter");
-  await expect(page).toHaveURL(/\/new$/);
+  await expect(page).toHaveURL(/\/new\?compose$/);
   await expect(surfaceOf(page)).toBeFocused();
 });
 
 test("a new document can be named by its H1 alone", async ({ page }) => {
   const title = unique("Only H1");
-  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new?compose`);
   const form = composer(page);
   await expect(form.getByLabel("Title", { exact: true })).toBeEditable(ROUND_TRIP);
   const source = await showMarkdown(form);
@@ -190,7 +190,7 @@ test("a new document can be named by its H1 alone", async ({ page }) => {
 // or the two could race two documents and two competing refreshOnArrival calls.
 test("an upload in flight disables Create, so the two cannot race", async ({ page }) => {
   const title = unique("Held Upload");
-  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new?compose`);
   const form = composer(page);
   const titleField = form.getByLabel("Title", { exact: true });
   await expect(titleField).toBeEditable(ROUND_TRIP);
@@ -223,7 +223,7 @@ test("an upload in flight disables Create, so the two cannot race", async ({ pag
 // label, not the idle one.
 test("a create in flight reads Creating…, so the save looks busy", async ({ page }) => {
   const title = unique("Held Create");
-  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new?compose`);
   const form = composer(page);
   const titleField = form.getByLabel("Title", { exact: true });
   await expect(titleField).toBeEditable(ROUND_TRIP);
@@ -273,7 +273,7 @@ test("a save in flight reads Saving…, so the edit looks busy", async ({ page }
 
 test("Upload .md is a focusable button that opens the file picker", async ({ page }) => {
   const title = unique("Picked Upload");
-  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new?compose`);
   const upload = page.getByRole("button", { name: "Upload .md" });
   await expect(upload).toBeEnabled(ROUND_TRIP);
   await surfaceOf(page).focus();

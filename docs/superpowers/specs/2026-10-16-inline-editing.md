@@ -8,7 +8,7 @@ Save changed snapshots after one second of inactivity, with a five-second maximu
 
 Comment creation and passage locations wait while the editor has unsaved content; existing discussions remain accessible. Update the title, timestamp and revision list locally after saves. Coalesce server-owned metadata and navigation refreshes into one thirty-second window, or refresh earlier when Details is opened, without replacing the editor. Do not rewrite immutable revisions or introduce collaborative merge semantics in this increment (a conflict whose sides changed different lines is merged since 2026-11-16, "Leaving and failures"; there is still no live co-editing).
 
-Verification covers no-write visits, save/reload, slow network typing, conflicts, recovery, readonly history, source fallback, and composition. Existing manual-save E2E scenarios need migration to the new interaction contract; new-document creation still uses its explicit Create workflow.
+Verification covers no-write visits, save/reload, slow network typing, conflicts, recovery, readonly history, source fallback, and composition. Existing manual-save E2E scenarios need migration to the new interaction contract. New-document creation used its explicit Create workflow until 2026-11-16; a new note is now made at once ("Leaving and failures").
 
 Normal saves show no status. A request still pending after one second shows Saving; its success is confirmed for two seconds. Failures and recovery remain visible in a stable toolbar slot.
 
@@ -27,8 +27,9 @@ Notion keeps what was typed without asking; this section brings leaving and fail
 - **An untitled page saves.** When metadata, an opening H1 and the typed title are all empty, the page is saved with the title "Untitled" instead of pausing with "Add a title"; the next title typed replaces it. The stored title is never empty, so lists, search and links need nothing new.
 
 - **A conflict on different lines merges.** When a save is refused as a conflict, the editor reads the current revision (`/peek?brief`) and merges by lines, three ways: the last acknowledged text is the base, the editor's text is mine, the current revision is theirs (`src/lib/merge-text.ts`, the rule `git merge-file` uses). If the two sides changed different lines, not neighbouring ones, the merged text is shown in the editor and saved against the current revision with no notice. A title merges the same way: whichever side changed it wins, and both changing it differently is a conflict. Changes to the same or neighbouring lines, or to the title on both sides, stop as before with "Someone updated this document" and Download. The merge replaces the editor's document, so the caret may move. A stale recovered draft is not merged: its base text is not in the page.
+- **A new note exists at once.** `/knowledge/new` (New note, `C` on Home, Create document, New document here, a broken link's create) creates the document "Untitled" — or with the title a broken link gave it — in the asked folder, and replaces itself in history with the document in the inline editor, the title focused and "Untitled" selected. From there it is an ordinary document: autosave, leaving, recovery. A refusal (no write access, a folder gone) is shown in words on that page. A note left empty stays, as an empty Notion page does; archive it like any other. The form with a Create button remains at `/knowledge/new?compose`: for uploading a `.md` file, and for a new-note draft written there before (Home's Drafts link to it). The page is server-rendered only for writers, so a prefetch creates nothing; the create runs in the browser, once per address within five seconds (a double click or a remount opens the same note).
 
-Not changed: composition pauses and the new-document Create workflow.
+Not changed: composition pauses.
 
 ## Typing-first keyboard behavior
 

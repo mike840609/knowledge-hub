@@ -24,6 +24,7 @@ test("an empty workspace offers its first import regardless of other test data",
     await expect(page.getByRole("menuitem", { name: "Import folder", exact: true })).toHaveAttribute("href", `/w/${workspace.id}/sources/import`);
     await page.keyboard.press("Escape");
     await page.getByRole("link", { name: "Create document", exact: true }).click();
-    await expect(page).toHaveURL(`/w/${workspace.id}/knowledge/new`);
+    // The note is made at once and opened in the editor.
+    await expect(page).toHaveURL(new RegExp(`/w/${workspace.id}/knowledge/[^/]+/[^/?#]+$`));
   } finally { await context.close(); }
 });

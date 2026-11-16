@@ -14,6 +14,7 @@ import { readStored, writeStored } from "@/components/shell/use-persisted-state"
 import { governanceFailure, governanceRequest, GovernanceError, transientSaveFailure } from "@/components/workspaces/governance-error";
 import { DocumentAutosave, type DocumentContent, type SavedRevision } from "@/lib/document-autosave";
 import { mergeText } from "@/lib/merge-text";
+import { takeNewNote } from "./new-note-starter";
 import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } from "@/lib/document-draft";
 import { PersistentDraft } from "@/lib/persistent-draft";
 import { caretOnLastLine } from "@/lib/title-keys";
@@ -452,6 +453,13 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       textarea?.setSelectionRange(0, 0);
     } else editor.current?.focusStart();
   }
+  // Arriving from a new note (`/knowledge/new` created it): the title is where to start typing, with
+  // "Untitled" selected so the first keystroke replaces it.
+  useEffect(() => {
+    if (!editable || !takeNewNote(detail.inspectorData.documentId)) return;
+    titleInput.current?.focus();
+    if (titleInput.current?.value === "Untitled") titleInput.current.select();
+  }, [editable]);
   function focusTitle() {
     flushEditor();
     if (resolve(queue.current!.current).source !== "H1") {

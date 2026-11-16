@@ -79,7 +79,11 @@ test("reading navigation separates collections from authoring and source managem
   await expect(page).toHaveURL(/\/knowledge\/0199f100-0000-7000-8000-000000000105\//);
   await expect(page.getByRole("heading", { name: "Compliance Policy", exact: true })).toBeVisible();
 
+  // A new document is made at once and opened in the editor; uploading a file is on the form.
   await page.getByRole("link", { name: "Create document", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${WORKSPACE}/knowledge/[^/]+/[^/?#]+$`), { timeout: 15_000 });
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Untitled", { timeout: 15_000 });
+  await page.goto(`/w/${WORKSPACE}/knowledge/new?compose`);
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("New document");
   await expect(page.locator("main").getByRole("textbox", { name: "Content" })).toBeVisible();
   await expect(page.locator('input[type="file"]')).toBeAttached();

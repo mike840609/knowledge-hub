@@ -65,7 +65,7 @@ test("personal rollout: disabled teams, drafts across browsers, organize, export
 test("a new-note draft survives closing its tab and can be resumed from Home", { tag: "@smoke-personal" }, async ({ page, context }) => {
   await page.goto("/");
   const nav = await (await page.request.get("/api/workspaces")).json(); const workspaceId = nav.items[0].id;
-  await page.goto(`/w/${workspaceId}/knowledge/new`);
+  await page.goto(`/w/${workspaceId}/knowledge/new?compose`);
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(wait);
   await page.getByRole("button", { name: /^Markdown( source)?$/ }).click();
   await page.getByRole("textbox", { name: "Markdown", exact: true }).fill("# New persistent note\n\nClose and resume");
@@ -74,7 +74,7 @@ test("a new-note draft survives closing its tab and can be resumed from Home", {
   const next = await context.newPage(); await next.goto("/");
   const draft = next.getByRole("region", { name: "Drafts", exact: true })
     .getByRole("link").filter({ has: next.getByText("New persistent note", { exact: true }) });
-  await expect(draft).toHaveAttribute("href", `/w/${workspaceId}/knowledge/new`);
+  await expect(draft).toHaveAttribute("href", `/w/${workspaceId}/knowledge/new?compose`);
   await draft.click();
   await expect(next.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(wait);
   await next.getByRole("button", { name: /^Markdown( source)?$/ }).click();

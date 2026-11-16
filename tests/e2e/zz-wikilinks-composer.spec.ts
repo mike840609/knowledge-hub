@@ -144,7 +144,7 @@ test.describe("wikilinks in the rendered editor", () => {
     const workspaceId = await mySpace(page);
     const targetUrl = await createNote(page, workspaceId, target, "The target document.");
 
-    await page.goto(`/w/${workspaceId}/knowledge/new`);
+    await page.goto(`/w/${workspaceId}/knowledge/new?compose`);
     await composer(page).getByLabel("Title", { exact: true }).fill(`Source ${stamp}`);
     const surface = surfaceOf(page);
     await expect(surface).toBeEditable(ROUND_TRIP);
@@ -161,14 +161,14 @@ test.describe("wikilinks in the rendered editor", () => {
     expect(markdown).toContain(`See [[${target}]] for details.`);
     expect(markdown).not.toContain("\\[");
 
-    await expect(page).not.toHaveURL(/\/new$/, ROUND_TRIP);
+    await expect(page).not.toHaveURL(/\/new(?:\?.*)?$/, ROUND_TRIP);
     await expect(page.locator("article").first().getByRole("link", { name: target, exact: true })).toBeVisible(ROUND_TRIP);
     await expectBacklinkFrom(page, targetUrl);
   });
 
   test("wikilinks in pasted text become links", async ({ page }) => {
     const stamp = unique("Pasted");
-    await page.goto(`/w/${await mySpace(page)}/knowledge/new`);
+    await page.goto(`/w/${await mySpace(page)}/knowledge/new?compose`);
     await composer(page).getByLabel("Title", { exact: true }).fill(`Source ${stamp}`);
     const surface = surfaceOf(page);
     await expect(surface).toBeEditable(ROUND_TRIP);
@@ -191,7 +191,7 @@ test.describe("wikilinks in the rendered editor", () => {
 
   test("Backspace right after a wikilink removes all of it, and undo brings it back", async ({ page }) => {
     const stamp = unique("Backspace");
-    await page.goto(`/w/${await mySpace(page)}/knowledge/new`);
+    await page.goto(`/w/${await mySpace(page)}/knowledge/new?compose`);
     const surface = surfaceOf(page);
     await expect(surface).toBeEditable(ROUND_TRIP);
     await surface.click();
@@ -223,7 +223,7 @@ test.describe("wikilinks in the rendered editor", () => {
     // The target exists, so the link is one that could be followed — and still is not, from here.
     const workspaceId = await mySpace(page);
     await createNote(page, workspaceId, `Target ${stamp}`, "The target document.");
-    await page.goto(`/w/${workspaceId}/knowledge/new`);
+    await page.goto(`/w/${workspaceId}/knowledge/new?compose`);
     const surface = surfaceOf(page);
     await expect(surface).toBeEditable(ROUND_TRIP);
     await surface.click();
@@ -243,6 +243,6 @@ test.describe("wikilinks in the rendered editor", () => {
       return { shown: getComputedStyle(element).backgroundColor, selected };
     });
     expect(backgrounds.shown).toBe(backgrounds.selected);
-    await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge/new$`));
+    await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge/new\\?compose$`));
   });
 });
