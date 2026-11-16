@@ -3,6 +3,7 @@ import type { FinalizedImportSnapshotEntry, ImportSnapshotEntry } from "@/module
 import type { ImportSnapshotEntryRepository } from "@/modules/sources/ports/import-snapshot-entry-repository";
 import type { DbRow, QueryConnection } from "./shared";
 import { asNullableDate, asNumber } from "./shared";
+import { insertBudget } from "../packet-limit";
 
 function parsed<T>(value: unknown, fallback: T): T {
   if (value === null || typeof value === "undefined") return fallback;
@@ -52,8 +53,6 @@ const ROW_PLACEHOLDERS = "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
  * poisoning a whole chunk.
  */
 const MAX_CHUNK_ROWS = 1000;
-const MAX_CHUNK_BYTES = 4 * 1024 * 1024;
-const SOLO_ROW_BYTES = 8 * 1024 * 1024;
 
 function toRowArgs(entry: ImportSnapshotEntry): unknown[] {
   return [
@@ -95,7 +94,9 @@ export class MariaDbImportSnapshotEntryRepository implements ImportSnapshotEntry
     for (const entry of entries) {
       const args = toRowArgs(entry);
       const size = estimatedBytes(args);
-      if (size > SOLO_ROW_BYTES) {
+      // Sized from the server's max_allowed_packet (packet-limit.ts); a row too large even alone is
+      // refused before sending, as PacketTooLargeError.
+      if (size > 2 * insertBudget()) {
         await flush();
         await this.connection.query(
           `INSERT INTO source_import_snapshot_entries (${INSERT_COLUMNS}) VALUES ${ROW_PLACEHOLDERS}`,
@@ -103,7 +104,7 @@ export class MariaDbImportSnapshotEntryRepository implements ImportSnapshotEntry
         );
         continue;
       }
-      if (chunk.length >= MAX_CHUNK_ROWS || (chunk.length > 0 && chunkBytes + size > MAX_CHUNK_BYTES)) {
+      if (chunk.length >= MAX_CHUNK_ROWS || (chunk.length > 0 && chunkBytes + size > insertBudget())) {
         await flush();
       }
       chunk.push(args);

@@ -862,6 +862,12 @@ These are configurable application limits, not core domain semantics.
 - Imports that fit run side by side. One that does not fit **waits**, never fails, because a refused finalize makes the browser abandon the upload. An import larger than the budget runs alone.
 - Several server processes each have their own budget.
 
+**The database's packet limit (2026-11-16).** A statement larger than the server's `max_allowed_packet` is not answered with an error: the server closes the connection, the driver reports `ECONNRESET`, and the request ended as a 500 with no reason, which the import form retried as transient. The code assumed 16 MiB; a deployed server may accept less. Now (`src/infrastructure/database/mariadb/packet-limit.ts`):
+- The limit is read from the server once per process (`SELECT @@max_allowed_packet`), through the connection about to write.
+- Every statement is measured before it is sent, counting what the driver escapes, and one over the limit is refused as `IMPORT_LIMIT_EXCEEDED` (400) saying how much one write may hold; the connection stays usable and the transaction rolls back. A server that answers 1153 or 1301 instead is reported the same way.
+- Multi-row inserts are sized from it: a quarter of the limit, at most 4 MiB a statement.
+- Max one Markdown file is no larger than the database can store: a staged entry carries the file twice, each possibly doubled by escaping, so the effective limit is `(max_allowed_packet − 64 KiB) / 4` when that is below the configured one (about 4 MiB at 16 MiB, so the default is unchanged). The page and the upload check use the effective limit, so a file too large is named when it is picked, not when the import fails.
+
 Retention：
 
 ```text

@@ -1,4 +1,5 @@
 import { DEFAULT_IMPORT_LIMITS, type ImportLimits } from "@/modules/sources/domain/import-limits";
+import { markdownFileCeiling } from "@/infrastructure/database/mariadb/packet-limit";
 
 function positiveInt(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -16,11 +17,15 @@ export type ImportRuntimeConfig = {
 };
 
 export function importRuntimeConfig(): ImportRuntimeConfig {
+  const markdownFileBytes = positiveInt("KM_IMPORT_MAX_MARKDOWN_FILE_BYTES", DEFAULT_IMPORT_LIMITS.maxMarkdownFileBytes);
   return {
     limits: {
+      // No larger than the database can store in one write: the file is refused, by name, when it is
+      // picked or uploaded, instead of failing the import later. Read on each use, because the
+      // server's max_allowed_packet is known only once a connection has asked (packet-limit.ts).
+      get maxMarkdownFileBytes() { return Math.min(markdownFileBytes, markdownFileCeiling()); },
       maxManifestEntries: positiveInt("KM_IMPORT_MAX_MANIFEST_ENTRIES", DEFAULT_IMPORT_LIMITS.maxManifestEntries),
       maxPathBytes: positiveInt("KM_IMPORT_MAX_PATH_BYTES", DEFAULT_IMPORT_LIMITS.maxPathBytes),
-      maxMarkdownFileBytes: positiveInt("KM_IMPORT_MAX_MARKDOWN_FILE_BYTES", DEFAULT_IMPORT_LIMITS.maxMarkdownFileBytes),
       maxMarkdownTotalBytes: positiveInt("KM_IMPORT_MAX_MARKDOWN_TOTAL_BYTES", DEFAULT_IMPORT_LIMITS.maxMarkdownTotalBytes),
       maxAssetFileBytes: positiveInt("KM_IMPORT_MAX_ASSET_FILE_BYTES", DEFAULT_IMPORT_LIMITS.maxAssetFileBytes),
       maxAssetTotalBytes: positiveInt("KM_IMPORT_MAX_ASSET_TOTAL_BYTES", DEFAULT_IMPORT_LIMITS.maxAssetTotalBytes),
