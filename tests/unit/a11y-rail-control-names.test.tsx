@@ -45,14 +45,16 @@ describe("the rail's control names", () => {
   });
 
   // WCAG 2.5.3 (Label in Name): the shortcut is part of what the row shows, so it is part of
-  // the name. aria-keyshortcuts still carries the key for assistive tech.
+  // the name. axe checks containment in the visible text *as the DOM joins it* — child text nodes
+  // with no separator — so the space between the label and the badge has to be a real text node;
+  // a `gap` alone fails the rule. aria-keyshortcuts still carries the key for assistive tech.
   it("announces the whole visible label, ⌘K included", () => {
     const root = mount(renderToStaticMarkup(<SearchNavItem />));
     const button = buttonIn(root)!;
     const name = button.getAttribute("aria-label")!;
     expect(name).toBe("Search ⌘K");
-    // Every visible run of text is in the name, which is what the rule asks for.
-    expect(name).toContain("Search");
-    expect(name).toContain("⌘K");
+    // The same string a reader (and axe) sees, whitespace collapsed: the name is inside it.
+    expect(button.textContent!.replace(/\s+/g, " ")).toBe(name);
+    expect(button.textContent!.replace(/\s+/g, " ")).toContain(name);
   });
 });

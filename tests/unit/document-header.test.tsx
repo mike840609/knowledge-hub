@@ -87,9 +87,26 @@ it("still heads the page when the title is an editable field", async () => {
   });
   try {
     const heading = host.querySelector("h1");
+    expect(host.querySelectorAll("h1")).toHaveLength(1);
     expect(heading?.textContent).toBe("First");
     // The field is the visible title; the heading is for assistive tech only.
     expect(heading?.className).toContain("sr-only");
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
+
+// A frontmatter title wins the resolver even when the markdown opens with its own `#` heading, so
+// a field and the article's heading can both be present. The hidden heading must not join it: one
+// page, one h1 — the one the reader sees in the text.
+it("adds no second heading when the markdown already opens with one", async () => {
+  const { host, root } = await renderHeader({
+    titleControl: <textarea aria-label="Title" name="title" defaultValue="Expense rules" />,
+    contentOwnsTitle: true,
+  });
+  try {
+    expect(host.querySelectorAll("h1")).toHaveLength(0);
+    expect(host.querySelector("textarea")).not.toBeNull();
   } finally {
     await act(async () => root.unmount());
   }
@@ -106,6 +123,8 @@ it("separates the edit hint from the update time", async () => {
     const text = meta.textContent ?? "";
     expect(text.indexOf("·")).toBeGreaterThan(text.indexOf("Updated"));
     expect(text.indexOf("Click anywhere")).toBeGreaterThan(text.indexOf("·"));
+    // The dot is for the eye; a comma is what a screen reader hears between the two runs.
+    expect(meta.querySelector(".sr-only")?.textContent).toContain(",");
   } finally {
     await act(async () => root.unmount());
   }

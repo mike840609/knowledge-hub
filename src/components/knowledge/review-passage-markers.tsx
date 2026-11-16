@@ -81,7 +81,9 @@ export function ReviewPassageMarkers({ readingRef, markdown, threads }: {
   }, [readingRef, markdown, threads, domVersion]);
 
   // Named group: one control per passage. `aria-label` needs a role to sit on (axe
-  // `aria-prohibited-attr`), and "group" is what a set of markers is.
+  // `aria-prohibited-attr`), and "group" is what a set of markers is. A group with nothing in
+  // it is a dead stop for a screen reader, so it is not drawn until a passage has a marker.
+  if (!markers.length) return null;
   return <div role="group" className="pointer-events-none absolute inset-0" aria-label="Passage comments">
     {markers.map(marker => <button key={marker.id} type="button" data-review-marker={marker.id}
       aria-label={`${marker.count} ${marker.count === 1 ? "comment" : "comments"} on passage: ${marker.quote.slice(0, 80)}`}

@@ -182,8 +182,10 @@ export function DocumentHeader({
           {titleControl ? (
             <>
               {/* The field is the visible title; a heading is what assistive tech navigates by,
-                  and a document whose markdown has no `#` line has no other one. */}
-              {title ? <h1 className="sr-only">{title}</h1> : null}
+                  and a document whose markdown has no `#` line has no other one. When the markdown
+                  does open with `#`, that heading is the only h1: a field can still be drawn over
+                  it (a frontmatter title wins the resolver), so this must not add a second. */}
+              {title && !contentOwnsTitle ? <h1 className="sr-only">{title}</h1> : null}
               {titleControl}
             </>
           ) : contentOwnsTitle ? null : (
@@ -203,8 +205,10 @@ export function DocumentHeader({
             <time dateTime={new Date(updatedAt).toISOString()} title={formatDateTime(updatedAt, zone)}>Updated {relative}</time>
             {editHint ? <>
               {/* The meta line is a row of separate facts; without a separator "10 days ago"
-                  and the hint after it read as one sentence. */}
-              <span aria-hidden="true" className="text-kh-text-subtle">·</span>
+                  and the hint after it read as one sentence. `gap` is not text, so copy/paste
+                  and speech both need a real one: a dot for the eye, a comma for AT. */}
+              <span aria-hidden="true" className="text-kh-text-faint">·</span>
+              <span className="sr-only">, </span>
               <span>{editHint}</span>
             </> : null}
             {linkSummary ? (

@@ -18,6 +18,11 @@ export function requestQuickSearch(): void {
 export function SearchNavItem({ compact = false }: { compact?: boolean }) {
   // WCAG 2.5.3 (Label in Name): the shortcut badge is part of what the row shows, so it is part
   // of the name. aria-keyshortcuts still carries the key itself.
+  //
+  // The literal space between the label and the badge is load-bearing: `label-content-name-mismatch`
+  // joins the visible text nodes with no separator and then looks for the name inside it, so the
+  // row reads "Search⌘K" unless that space is really in the DOM. A whitespace-only text node is not
+  // a flex item (Flexbox §4), so it changes nothing on screen.
   const button = (
     <button
       type="button"
@@ -28,7 +33,7 @@ export function SearchNavItem({ compact = false }: { compact?: boolean }) {
     >
       <Search size={15} aria-hidden="true" />
       {compact ? null : <>
-        <span className="min-w-0 flex-1 truncate text-left">Search</span>
+        <span className="min-w-0 flex-1 truncate text-left">Search</span>{" "}
         <Kbd className="shrink-0">⌘K</Kbd>
       </>}
     </button>
