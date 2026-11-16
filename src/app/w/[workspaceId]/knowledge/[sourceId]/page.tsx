@@ -1,3 +1,4 @@
+import { WorkspaceNotFound } from "@/components/shell/workspace-not-found";
 import { FileText } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import Link from "next/link";
@@ -5,7 +6,6 @@ import { redirect } from "next/navigation";
 import { findFirstReadableDocument } from "@/lib/knowledge-navigation";
 import { getKnowledgeExplorerModel } from "@/server/knowledge-read";
 import { buttonClasses } from "@/components/ui/button";
-import { StatusMessage } from "@/components/ui/status-message";
 import { RefreshOnArrival } from "@/components/shell/refresh-on-arrival";
 
 export default async function SourceKnowledgePage({
@@ -23,10 +23,7 @@ export default async function SourceKnowledgePage({
   if (!model) {
     return (
       <main className="flex min-h-full flex-col justify-center">
-        <StatusMessage
-          title="Not found or no access"
-          description="This content does not exist or you do not have access to it."
-        />
+        <WorkspaceNotFound />
       </main>
     );
   }

@@ -1,9 +1,9 @@
+import { WorkspaceNotFound } from "@/components/shell/workspace-not-found";
 import { GraphExplorer, type GraphFilters } from "@/components/knowledge/graph-explorer";
 import { graphViewFrom } from "@/components/knowledge/graph-model";
 import { graphFocusContextHref } from "@/server/document-inspector-data";
 import { createHrefForNode } from "@/lib/create-from-link";
 import { PageHeader } from "@/components/shell/page-header";
-import { StatusMessage } from "@/components/ui/status-message";
 import { firstSearchParam, type SearchParamValue } from "@/lib/search-params";
 import { getWorkspaceShellModel } from "@/server/knowledge-read";
 import { getWorkspaceGraphModel } from "@/server/link-graph-read";
@@ -38,7 +38,7 @@ export default async function WorkspaceGraphPage({
     }),
   ]);
   if (!shell || !graph) {
-    return <StatusMessage title="Not found or no access" description="This content does not exist or you do not have access to it." />;
+    return <WorkspaceNotFound />;
   }
 
   // Whether an unresolved node offers to make its document is the reader's capability; what happens when it is followed is the create request's.

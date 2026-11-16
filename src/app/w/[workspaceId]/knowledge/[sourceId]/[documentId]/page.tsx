@@ -1,3 +1,4 @@
+import { WorkspaceNotFound } from "@/components/shell/workspace-not-found";
 import { EditableDocument } from "@/components/knowledge/editable-document";
 import { OwnerReviewPanel } from "@/components/knowledge/owner-review-panel";
 import { ReadRevisionMarker } from "@/components/knowledge/read-revision-marker";
@@ -10,7 +11,6 @@ import { documentInspectorData } from "@/server/document-inspector-data";
 import { DocumentViewer } from "@/components/knowledge/document-viewer";
 import { BacklinksFooter } from "@/components/knowledge/backlinks-footer";
 import { renderedLinksFrom } from "@/components/knowledge/rendered-links";
-import { StatusMessage } from "@/components/ui/status-message";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { extractOutline } from "@/shared/markdown/outline";
 
@@ -29,19 +29,13 @@ export default async function KnowledgeDocumentPage({
   if (query?.revision !== undefined) {
     if (!/^[0-9]+$/.test(query.revision)) {
       return (
-        <StatusMessage
-          title="Not found or no access"
-          description="This content does not exist or you do not have access to it."
-        />
+        <WorkspaceNotFound />
       );
     }
     const parsed = Number(query.revision);
     if (!Number.isSafeInteger(parsed) || parsed < 1) {
       return (
-        <StatusMessage
-          title="Not found or no access"
-          description="This content does not exist or you do not have access to it."
-        />
+        <WorkspaceNotFound />
       );
     }
     revisionNo = parsed;
@@ -59,10 +53,7 @@ export default async function KnowledgeDocumentPage({
   ]);
   if (!model) {
     return (
-      <StatusMessage
-        title="Not found or no access"
-        description="This content does not exist or you do not have access to it."
-      />
+      <WorkspaceNotFound />
     );
   }
 

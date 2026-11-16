@@ -1,8 +1,8 @@
+import { WorkspaceNotFound } from "@/components/shell/workspace-not-found";
 import { PageHeader } from "@/components/shell/page-header";
 import { FolderImportForm } from "@/components/imports/folder-import-form";
 import { isFolderSyncable } from "@/modules/knowledge/domain/source-policy";
 import { getSourceDetailModel } from "@/server/source-read";
-import { StatusMessage } from "@/components/ui/status-message";
 import { importRuntimeConfig } from "@/server/import-config";
 
 export default async function WorkspaceSourceUpdatePage({
@@ -16,10 +16,7 @@ export default async function WorkspaceSourceUpdatePage({
   if (!model || !isFolderSyncable(model.source)) {
     return (
       <main className="flex min-h-screen flex-col justify-center">
-        <StatusMessage
-          title="Not found or no access"
-          description="This content does not exist or you do not have access to it."
-        />
+        <WorkspaceNotFound />
       </main>
     );
   }

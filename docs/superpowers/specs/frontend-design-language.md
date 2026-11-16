@@ -1631,7 +1631,12 @@ discard answer.
 
 Error and not-found states take their shape from `StatusMessage` — heading,
 one line, optional action — so that a new boundary cannot invent a fourth
-spelling. Boundaries are placed where the shell survives them: the workspace
+spelling. A not-found is never a dead end (2026-11-16): inside a Workspace
+(`WorkspaceNotFound`) it offers that Workspace and the reader's own and stays
+put, so the address can still be read and reported; an address that matches
+nothing at all (the root `not-found`) also counts down three seconds and then
+replaces itself with `/`. A dead share link (`/s/*`) is never redirected: its
+holder must learn that the link is dead. Boundaries are placed where the shell survives them: the workspace
 boundary keeps the topbar and sidebar mounted so the reader can navigate away
 instead of reloading. `global-error` replaces the root layout, so it restates
 the stylesheet, the typeface and the theme stamp; without the last of those a
