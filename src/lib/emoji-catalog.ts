@@ -419,8 +419,9 @@ export function emojiMatches(query: string, limit = 8): Emoji[] {
     const name = entry.name.toLowerCase();
     const code = emojiShortcode(entry);
     if (code === needle || name === needle) return 0;
-    if (entry.keywords.some((word) => word.toLowerCase() === needle)) return 1;
-    if (code.startsWith(needle) || name.startsWith(needle)) return 2;
+    // A name or shortcode prefix is what the writer is naming; a keyword match comes after it.
+    if (code.startsWith(needle) || name.startsWith(needle)) return 1;
+    if (entry.keywords.some((word) => word.toLowerCase() === needle)) return 2;
     if (entry.keywords.some((word) => word.toLowerCase().startsWith(needle))) return 3;
     if (name.includes(needle)) return 4;
     if (entry.keywords.some((word) => word.toLowerCase().includes(needle))) return 5;
