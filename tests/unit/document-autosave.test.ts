@@ -82,28 +82,28 @@ it("cancels pending writes on disposal", async () => {
   expect(write).not.toHaveBeenCalled();
 });
 
-it("waits three seconds after the most recent change", async () => {
+it("waits one second after the most recent change", async () => {
   const { queue, write } = setup();
   queue.change({ ...original, markdown: "First" });
-  await vi.advanceTimersByTimeAsync(2999);
+  await vi.advanceTimersByTimeAsync(999);
   expect(write).not.toHaveBeenCalled();
   queue.change({ ...original, markdown: "Second" });
-  await vi.advanceTimersByTimeAsync(2999);
+  await vi.advanceTimersByTimeAsync(999);
   expect(write).not.toHaveBeenCalled();
   await vi.advanceTimersByTimeAsync(1);
   expect(write).toHaveBeenCalledWith({ ...original, markdown: "Second" }, "r1");
 });
-it("saves sustained typing at fifteen seconds and starts a new deadline", async () => {
+it("saves sustained typing at five seconds and starts a new deadline", async () => {
   const { queue, write } = setup();
-  for (let i = 0; i < 15; i++) {
+  for (let i = 0; i < 10; i++) {
     queue.change({ ...original, markdown: `Typing ${i}` });
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(500);
   }
   expect(write).toHaveBeenCalledTimes(1);
-  expect(write).toHaveBeenLastCalledWith({ ...original, markdown: "Typing 14" }, "r1");
-  for (let i = 15; i < 30; i++) {
+  expect(write).toHaveBeenLastCalledWith({ ...original, markdown: "Typing 9" }, "r1");
+  for (let i = 10; i < 20; i++) {
     queue.change({ ...original, markdown: `Typing ${i}` });
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(500);
   }
   expect(write).toHaveBeenCalledTimes(2);
 });
@@ -174,7 +174,7 @@ describe("transient failures", () => {
       .mockResolvedValue({ revisionId: "r2", revisionNo: 2, changed: true });
     const { queue } = retrying(write);
     queue.change({ ...original, markdown: "Mine" });
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(1000);
     expect(write).toHaveBeenCalledTimes(1);
     expect(queue.status).toBe("error");
     expect(queue.retrying).toBe(true);
@@ -196,7 +196,7 @@ describe("transient failures", () => {
     const write = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
     const { queue } = retrying(write);
     queue.change({ ...original, markdown: "Mine" });
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(1000);
     await vi.advanceTimersByTimeAsync(2000 + 4000 + 8000 + 16000);
     expect(write).toHaveBeenCalledTimes(5);
     await vi.advanceTimersByTimeAsync(29_999);
@@ -208,7 +208,7 @@ describe("transient failures", () => {
     const write = vi.fn().mockRejectedValueOnce(new TypeError("Failed to fetch")).mockResolvedValue({ revisionId: "r2", revisionNo: 2, changed: true });
     const { queue } = retrying(write);
     queue.change({ ...original, markdown: "Mine" });
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(1000);
     queue.retryNow();
     await vi.advanceTimersByTimeAsync(0);
     expect(write).toHaveBeenCalledTimes(2);
@@ -218,7 +218,7 @@ describe("transient failures", () => {
     const write = vi.fn().mockRejectedValue(new Error("conflict"));
     const { queue } = retrying(write);
     queue.change({ ...original, markdown: "Mine" });
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(1000);
     queue.retryNow();
     await vi.advanceTimersByTimeAsync(60_000);
     expect(write).toHaveBeenCalledTimes(1);
@@ -229,7 +229,7 @@ describe("transient failures", () => {
     const write = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
     const { queue } = retrying(write);
     queue.change({ ...original, markdown: "Mine" });
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(1000);
     queue.dispose();
     await vi.advanceTimersByTimeAsync(60_000);
     expect(write).toHaveBeenCalledTimes(1);

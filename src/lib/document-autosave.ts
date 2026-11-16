@@ -60,8 +60,8 @@ export class DocumentAutosave {
   private schedule() {
     clearTimeout(this.timer);
     if (this.disposed || this.flight) return;
-    const remaining = (this.options.maxWait ?? 15_000) - (Date.now() - (this.dirtySince ?? Date.now()));
-    this.timer = setTimeout(() => { void this.flush(); }, Math.max(0, Math.min(this.options.delay ?? 3000, remaining)));
+    const remaining = (this.options.maxWait ?? 5000) - (Date.now() - (this.dirtySince ?? Date.now()));
+    this.timer = setTimeout(() => { void this.flush(); }, Math.max(0, Math.min(this.options.delay ?? 1000, remaining)));
   }
   /** A failure is being tried again on its own. */
   get retrying() { return this.retryTimer !== undefined; }

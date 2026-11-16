@@ -213,7 +213,7 @@ test("inline: content and title autosave without navigating or losing focus", as
     if (request.method() === "PUT" && request.url().includes("/personal") || request.headers()["rsc"] === "1" && new URL(request.url()).pathname === url && !request.headers()["next-router-prefetch"]) traffic.push(request.url());
   });
   await editor.fill("Changed inline.");
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(500);
   await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "pending");
   await expect(page.locator("[data-autosave-status]")).toHaveText("");
   await saved(page);
@@ -283,7 +283,7 @@ test("inline: failed saves retry automatically and resume after reload", async (
   await page.route(`**/api/documents/${id}`, route => route.request().method() === "PATCH" ? route.abort() : route.continue());
   await editor.fill("Recover me.");
   await expect(editor).toContainText("Recover me.");
-  // The write only starts after the 3s autosave debounce; the default 5s left ~1.6s for a parallel run.
+  // The write only starts after the autosave delay; the default 5s is tight for a parallel run.
   await expect(page.getByText("Trying again automatically.")).toBeVisible({ timeout: 15000 });
   await expect(page.getByRole("button", { name: "Retry save" })).toBeVisible();
   page.on("dialog", dialog => dialog.accept());
@@ -356,15 +356,16 @@ test("inline: continuous typing submits by the maximum wait without account draf
     if (request.method() === "PATCH" && request.url().endsWith(`/api/documents/${id}`)) patches++;
     if (request.method() === "PUT" && request.url().includes("/personal")) drafts++;
   });
-  for (let i = 0; i < 15; i++) {
+  // Changes 300 ms apart never reach the one-second delay; only the five-second maximum wait saves.
+  for (let i = 0; i < 20; i++) {
     await editor.fill(`Continuous typing ${i}`);
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(300);
   }
   await expect.poll(() => patches).toBeGreaterThanOrEqual(1);
   await saved(page);
   expect(drafts).toBe(0);
   await page.reload();
-  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Continuous typing 14");
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Continuous typing 19");
 });
 
 test("inline: a failed document save backs up recovery to the account", async ({ page, browser }) => {
