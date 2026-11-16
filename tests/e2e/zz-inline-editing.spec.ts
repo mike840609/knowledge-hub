@@ -419,6 +419,17 @@ test("inline: an idle tab shows what another tab or device saved, then saves on 
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Saved on the phone. And more here.");
 });
 
+test("inline: a page without a title saves as Untitled", async ({ page }) => {
+  const { url } = await note(page);
+  const editor = await surface(page, url);
+  await page.getByRole("textbox", { name: "Title", exact: true }).fill("");
+  await editor.fill("Body without a title.");
+  await saved(page);
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Body without a title.", { timeout: 15000 });
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Untitled");
+});
+
 test("inline: action letters type normally in title and body", async ({ page }) => {
   const { url } = await note(page);
   const editor = await surface(page, url);

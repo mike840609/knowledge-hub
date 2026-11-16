@@ -159,8 +159,8 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     const writer = new DocumentAutosave({ title: initialTitle, markdown }, revisionId, {
       write: async (snapshot, expectedRevisionId, options) => {
         if (!authorization.current) throw new Error("Editing is unavailable.");
-        const title = resolve(snapshot).title;
-        if (!title) throw new Error("Add a title before saving.");
+        // An untitled page saves as "Untitled", as Notion's does; typing a title later replaces it.
+        const title = resolve(snapshot).title || "Untitled";
         return governanceRequest<SavedRevision>(`/api/documents/${detail.inspectorData.documentId}`, "PATCH", {
           title, markdown: snapshot.markdown, expectedCurrentRevisionId: expectedRevisionId, autosave: true,
           ...(hasMetadataTitle() ? { updateMetadataTitle: true } : {}),
@@ -277,7 +277,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     const unload = (event: BeforeUnloadEvent) => {
       persist();
       // Asked only when what is unsaved cannot go with the page: too large for that request, a failed
-      // or paused save (composing, recovering, no title), or a save still in flight.
+      // or paused save (composing, recovering), or a save still in flight.
       if (writer.dirty && !discardingRef.current && !writer.canSendOnLeave()) event.preventDefault();
     };
     window.addEventListener("pagehide", sendNow);
@@ -308,8 +308,8 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   }, []);
 
   useEffect(() => {
-    queue.current?.pause(!loaded || !authorization.current || !!recovery || composing.current || !resolved.title);
-  }, [loaded, confirmed, access.actions.canWrite, access.workspace.lifecycleState, recovery, resolved.title]);
+    queue.current?.pause(!loaded || !authorization.current || !!recovery || composing.current);
+  }, [loaded, confirmed, access.actions.canWrite, access.workspace.lifecycleState, recovery]);
   useEffect(() => {
     const timer = setTimeout(() => {
       void import("@/shared/markdown/outline").then(({ extractOutline }) => {
@@ -375,8 +375,8 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   const conflict = error?.code === "REVISION_CONFLICT";
   const dirty = !!writer?.dirty || pending.current;
   const editable = loaded && authorization.current;
-  const status = !loaded ? "loading" : recovery ? "recovery" : !resolved.title ? "invalid" : error ? "error" : writer?.status === "saving" ? "saving" : dirty ? "pending" : "saved";
-  const attention = recovery ? "Recovered changes" : !resolved.title ? "Add a title" : error ? "Not saved" : undefined;
+  const status = !loaded ? "loading" : recovery ? "recovery" : error ? "error" : writer?.status === "saving" ? "saving" : dirty ? "pending" : "saved";
+  const attention = recovery ? "Recovered changes" : error ? "Not saved" : undefined;
   // The page is the editor: a first visit says so once, then the hint stays out of the way.
   const [showEditHint, setShowEditHint] = useState(false);
   useEffect(() => {
