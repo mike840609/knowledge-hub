@@ -302,3 +302,20 @@ describe("leaving", () => {
     expect(write).toHaveBeenLastCalledWith({ ...original, markdown: "Back again" }, "r2");
   });
 });
+
+describe("rebasing after a merged conflict", () => {
+  it("saves the merged text against the revision saved elsewhere", async () => {
+    vi.useFakeTimers();
+    const write = vi.fn().mockRejectedValueOnce(new Error("conflict")).mockResolvedValue({ revisionId: "r3", revisionNo: 3, changed: true });
+    const queue = new DocumentAutosave(original, "r1", { write, saved: vi.fn(), change: vi.fn() });
+    queue.change({ ...original, markdown: "Mine" });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(queue.status).toBe("error");
+    expect(queue.rebase({ ...original, markdown: "Theirs" }, "r2", { ...original, markdown: "Theirs and mine" })).toBe(true);
+    expect(queue.error).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(write).toHaveBeenLastCalledWith({ ...original, markdown: "Theirs and mine" }, "r2");
+    expect(queue.status).toBe("saved");
+    expect(queue.rebase({ ...original, markdown: "x" }, "r9", original)).toBe(false);
+  });
+});

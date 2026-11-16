@@ -13,6 +13,7 @@ import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-auth
 import { readStored, writeStored } from "@/components/shell/use-persisted-state";
 import { governanceFailure, governanceRequest, GovernanceError, transientSaveFailure } from "@/components/workspaces/governance-error";
 import { DocumentAutosave, type DocumentContent, type SavedRevision } from "@/lib/document-autosave";
+import { mergeText } from "@/lib/merge-text";
 import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } from "@/lib/document-draft";
 import { PersistentDraft } from "@/lib/persistent-draft";
 import { caretOnLastLine } from "@/lib/title-keys";
@@ -170,7 +171,10 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       change: () => {
         if (live) render(value => value + 1);
         // A failed document write gets an account recovery copy; normal saves only use local storage.
-        if (writer.status === "error" && previousStatus !== "error") void persistent.current?.flush();
+        if (writer.status === "error" && previousStatus !== "error") {
+          void persistent.current?.flush();
+          if (governanceFailure(writer.error).code === "REVISION_CONFLICT") void settleConflict();
+        }
         previousStatus = writer.status;
       },
       saved: (snapshot, revision) => {
@@ -200,6 +204,30 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
         }
       },
     });
+    // A conflict whose two sides changed different lines is merged and goes on saving, as Notion's
+    // does; changes to the same lines still stop for the writer to decide (inline editing spec).
+    const settleConflict = async () => {
+      const expected = writer.revisionId;
+      let theirs: { title: string; markdown: string; revisionId: string };
+      try {
+        theirs = await governanceRequest(`/api/documents/${detail.inspectorData.documentId}/peek?brief`);
+      } catch { return; }
+      if (!live || !writer.error || writer.revisionId !== expected || theirs.revisionId === expected) return;
+      flushRef.current();
+      const base = writer.saved, mine = writer.current;
+      const markdown = mergeText(base.markdown, mine.markdown, theirs.markdown);
+      // The title field holds what was typed; a revision title equal to the base's resolved one is no change.
+      const theirsTitle = resolve(mine).source === "H1" || theirs.title === resolve(base).title ? base.title : theirs.title;
+      const title = mine.title === base.title ? theirsTitle : theirsTitle === base.title || theirsTitle === mine.title ? mine.title : null;
+      if (markdown === null || title === null) return;
+      if (!writer.rebase({ title: theirsTitle, markdown: theirs.markdown }, theirs.revisionId, { title, markdown })) return;
+      // ponytail: the whole document is replaced, so the caret moves; map the selection if merges become common.
+      if (editor.current && !sourceRef.current && editor.current.getMarkdown() !== markdown) {
+        try { editor.current.replaceMarkdown(markdown); } catch { setFailed(true); }
+      }
+      setContent(writer.current);
+      keepRecovery();
+    };
     writer.pause(true);
     queue.current = writer;
     const remote = personal ? new PersistentDraft(`/api/workspaces/${detail.inspectorData.workspaceId}/personal`, `draft:${detail.inspectorData.documentId}`, () => {}, { autoSync: false, delay: 15_000 }) : null;

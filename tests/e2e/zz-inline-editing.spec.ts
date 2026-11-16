@@ -430,6 +430,33 @@ test("inline: a page without a title saves as Untitled", async ({ page }) => {
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Untitled");
 });
 
+test("inline: a conflict on different paragraphs merges and saves; on the same paragraph it stops", async ({ page }) => {
+  const workspace = await personalWorkspaceId(page);
+  const created = await (await page.request.post(`/api/workspaces/${workspace}/documents`, { data: { title: "Merge", markdown: "First.\n\nSecond.\n\nThird." } })).json();
+  const editor = await surface(page, `/w/${workspace}/knowledge/${created.sourceId}/${created.documentId}`);
+  // Saved elsewhere without telling this tab (no shared browser, no return to the page).
+  const elsewhere = await page.request.patch(`/api/documents/${created.documentId}`, { data: { title: "Merge", markdown: "First.\n\nSecond.\n\nThird, from elsewhere.", expectedCurrentRevisionId: created.revisionId } });
+  expect(elsewhere.ok()).toBe(true);
+  await editor.getByText("First.").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Mine.");
+  await saved(page);
+  await expect(editor).toContainText("Third, from elsewhere.");
+  await expect(page.getByText("Someone updated this document.", { exact: false })).toHaveCount(0);
+  await page.reload();
+  const reloaded = page.getByRole("textbox", { name: "Content", exact: true });
+  await expect(reloaded).toContainText("First. Mine.", { timeout: 15000 });
+  await expect(reloaded).toContainText("Third, from elsewhere.");
+
+  const current = await page.request.patch(`/api/documents/${created.documentId}`, { data: { title: "Merge", markdown: "First. Mine.\n\nSecond, theirs.\n\nThird, from elsewhere.", expectedCurrentRevisionId: (await (await page.request.get(`/api/documents/${created.documentId}/peek?brief`)).json()).revisionId } });
+  expect(current.ok()).toBe(true);
+  await reloaded.getByText("Second.").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Mine too.");
+  await expect(page.getByText("Someone updated this document.", { exact: false })).toBeVisible({ timeout: 15000 });
+  await expect(reloaded).toContainText("Second. Mine too.");
+});
+
 test("inline: action letters type normally in title and body", async ({ page }) => {
   const { url } = await note(page);
   const editor = await surface(page, url);

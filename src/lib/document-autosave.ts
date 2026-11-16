@@ -63,6 +63,19 @@ export class DocumentAutosave {
     const remaining = (this.options.maxWait ?? 5000) - (Date.now() - (this.dirtySince ?? Date.now()));
     this.timer = setTimeout(() => { void this.flush(); }, Math.max(0, Math.min(this.options.delay ?? 1000, remaining)));
   }
+  /**
+   * A conflict settled by merging: `theirs`, saved elsewhere as `revisionId`, becomes the base, and
+   * `merged` is what goes on saving against it. Only while that conflict is still the failure.
+   */
+  rebase(theirs: DocumentContent, revisionId: string, merged: DocumentContent) {
+    if (this.disposed || this.flight || !this.error) return false;
+    this.error = undefined;
+    this.saved = theirs;
+    this.revisionId = revisionId;
+    this.dirtySince = undefined;
+    this.change(merged);
+    return true;
+  }
   /** A failure is being tried again on its own. */
   get retrying() { return this.retryTimer !== undefined; }
   /** `keepalive`: the page may be going (hidden, closing); the request outlives it. */
