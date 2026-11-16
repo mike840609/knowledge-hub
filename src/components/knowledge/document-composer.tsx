@@ -74,6 +74,45 @@ export type ComposerSubmit = { title: string; markdown: string; expectedRevision
 const NO_OUTLINE: OutlineEntry[] = [];
 
 /**
+ * The composer's muted line: the facts it has to state, then the draft's own status. Split out so
+ * the line can be read (and tested) without mounting the whole composer — the draft status is a
+ * live region, and what is inside it is what gets announced.
+ */
+export function ComposerDraftMeta({ untitled, metadataTitle, renameTarget, durableDraft, draftStatus, onRetry }: {
+  /** Nothing supplies a title yet, so the document cannot save. */
+  untitled: boolean;
+  /** The title comes from the uploaded file's frontmatter. */
+  metadataTitle: boolean;
+  /** The title saving will rename the document to, when that differs from the stored one. */
+  renameTarget: string | null;
+  durableDraft: boolean;
+  draftStatus: DraftStatus;
+  onRetry: () => void;
+}) {
+  // Every fact that can precede the draft status, in one list, so the separator cannot drift from
+  // what actually renders before it.
+  const hasFacts = untitled || metadataTitle || renameTarget !== null;
+  return <>
+    {/* Visible, not a `title`: a disabled button's reason must reach keyboard and touch users too (§10). */}
+    {untitled ? <span id="composer-untitled-hint">Add a title, or start the document with a # heading, to save</span> : null}
+    {metadataTitle ? <span>Title comes from the uploaded file’s frontmatter</span> : null}
+    {renameTarget !== null ? <span>Saving will rename this document to “{renameTarget}”</span> : null}
+    {/* The line is a row of separate facts: without a separator the sentence before the status runs
+        straight into it. It sits outside `role="status"` on purpose — a live region is announced
+        whole, so a dot or comma inside would prefix every announcement ("Saving draft…" included)
+        and the status would stop reading as its own sentence. */}
+    {durableDraft && hasFacts ? <>
+      <span aria-hidden="true" className="text-kh-text-faint">·</span>
+      <span className="sr-only">, </span>
+    </> : null}
+    {durableDraft ? <span role="status">
+      {({ loading: "Loading draft…", saved: "Draft saved to your account", saving: "Saving draft…", local: "Draft kept on this device · syncing…", error: "Draft sync failed. Keep this page open and retry.", conflict: "Draft changed on another device. Your text is preserved here; copy it before loading another draft.", "too-large": "Draft is too large to save to your account. Download or copy it before leaving.", "too-large-unstored": "Draft is too large to save, and this browser could not keep a local copy. Download it before leaving." })[draftStatus]}
+      {draftStatus === "error" && <Button type="button" variant="link" onClick={onRetry}>Retry draft save</Button>}
+    </span> : null}
+  </>;
+}
+
+/**
  * Writing a document, laid out like reading one (composer spec). The header row
  * is the reader's with the actions swapped; the column is the reader's with the
  * article swapped for an editor: the rendered document by default, its Markdown
@@ -664,23 +703,9 @@ export function DocumentComposer({
           ) : null}
           {/* Always one line tall, as the reader's is, even with nothing to say. */}
           <div className="mt-1.5 flex min-h-4 flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">
-            {/* Visible, not a `title`: a disabled button's reason must reach keyboard and touch users too (§10). */}
-            {untitled ? <span id="composer-untitled-hint">Add a title, or start the document with a # heading, to save</span> : null}
-            {resolved.source === "METADATA" ? <span>Title comes from the uploaded file’s frontmatter</span> : null}
-            {renamesOnSave ? <span>Saving will rename this document to “{resolved.title}”</span> : null}
-            {durableDraft && <span role="status">
-              {/* The meta line is a row of separate facts: without a separator the sentence
-                  before this ("… to save") runs straight into the draft status. The dot is for
-                  the eye; the comma is what assistive tech hears between the two. It is only
-                  drawn when something actually precedes it (a personal draft can be the first
-                  fact on the line). */}
-              {untitled || resolved.source === "METADATA" || renamesOnSave ? <>
-                <span aria-hidden="true" className="text-kh-text-faint">·</span>
-                <span className="sr-only">, </span>
-              </> : null}
-              {({ loading: "Loading draft…", saved: "Draft saved to your account", saving: "Saving draft…", local: "Draft kept on this device · syncing…", error: "Draft sync failed. Keep this page open and retry.", conflict: "Draft changed on another device. Your text is preserved here; copy it before loading another draft.", "too-large": "Draft is too large to save to your account. Download or copy it before leaving.", "too-large-unstored": "Draft is too large to save, and this browser could not keep a local copy. Download it before leaving." })[draftStatus]}
-              {draftStatus === "error" && <Button type="button" variant="link" onClick={() => void persistent.current?.retry()}>Retry draft save</Button>}
-            </span>}
+            <ComposerDraftMeta untitled={untitled} metadataTitle={resolved.source === "METADATA"}
+              renameTarget={renamesOnSave ? resolved.title : null} durableDraft={durableDraft}
+              draftStatus={draftStatus} onRetry={() => void persistent.current?.retry()} />
             <DraftSizeHint bytes={draftBytes} />
             {(draftStatus === "too-large" || draftStatus === "too-large-unstored" || draftBytes > MAX_MARKDOWN_BYTES) && (
               <><Button type="button" variant="link" onClick={async () => {

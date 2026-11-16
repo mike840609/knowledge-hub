@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ReviewPassageMarkers } from "@/components/knowledge/review-passage-markers";
 import type { ReviewThreadView } from "@/modules/knowledge/domain/document-review";
 
@@ -9,12 +9,17 @@ import type { ReviewThreadView } from "@/modules/knowledge/domain/document-revie
 
 // Markers are placed after layout measures the article, so a static render never has one; these
 // tests give the component a real article to measure.
-vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
-// jsdom has no layout: a Range reports no rectangles, so the marker sits at the article's origin.
-Range.prototype.getClientRects = () => ({ length: 0, item: () => null, [Symbol.iterator]: function* () {} }) as unknown as DOMRectList;
+const originalRects = Range.prototype.getClientRects;
+beforeEach(() => {
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+  // jsdom has no layout: a Range reports no rectangles, so the marker sits at the article's origin.
+  Range.prototype.getClientRects = () => ({ length: 0, item: () => null, [Symbol.iterator]: function* () {} }) as unknown as DOMRectList;
+});
 
 afterEach(() => {
   document.body.innerHTML = "";
+  vi.unstubAllGlobals();
+  Range.prototype.getClientRects = originalRects;
 });
 
 const markdown = "A paragraph.";
