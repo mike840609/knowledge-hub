@@ -10,9 +10,10 @@ import { emojiForShortcode, emojiMatches, emojiShortcode, type Emoji } from "@/l
 type Trigger = { from: number; to: number; query: string };
 type State = { trigger: Trigger | null; dismissed: number | null; index: number };
 const key = new PluginKey<State>("khEmojiSuggest");
+let sequence = 0;
 
 /** A colon at the start of a word (or after an opening bracket); not `http://` or `12:30`. */
-const TRIGGER = /(^|[\s([{"'“‘]):([\p{L}\p{N}_+-]{2,30})$/u;
+const TRIGGER = /(^|[\s([{"'“‘]|\p{Script=Han}):([\p{L}\p{N}_+-]{2,40})$/u;
 const CODE_MARKS = new Set(["inlineCode", "code_inline"]);
 
 function inCode(state: EditorState): boolean {
@@ -60,6 +61,7 @@ export function emojiSuggest(): { plugins: MilkdownPlugin[]; configure: (ctx: Ct
     },
     view(view) {
       const popup = document.createElement("div");
+      popup.id = `kh-emoji-${++sequence}`;
       popup.className = "kh-emoji-menu";
       popup.hidden = true;
       popup.setAttribute("role", "listbox");
@@ -135,6 +137,8 @@ export function emojiSuggest(): { plugins: MilkdownPlugin[]; configure: (ctx: Ct
         popup.children[active]?.scrollIntoView?.({ block: "nearest" });
       }
 
+      // The popup's padding and scrollbar are part of it: a press there must not blur the editor.
+      popup.addEventListener("mousedown", (event) => { if (event.button === 0) event.preventDefault(); });
       const onFocus = () => sync();
       const onBlur = () => close();
       const onCompositionStart = () => close();
@@ -163,12 +167,14 @@ export function emojiSuggest(): { plugins: MilkdownPlugin[]; configure: (ctx: Ct
 
   // A fully typed `:name:` converts when the space is typed, as Notion's does. The boundary and
   // the space stay; only the code inside them becomes the glyph.
-  const inputRule = $inputRule(() => new InputRule(/(?:^|[\s([{"'“‘])(:[\p{L}\p{N}_+-]{2,30}:)\s$/u, (state, match, start) => {
+  const inputRule = $inputRule(() => new InputRule(/(?:^|[\s([{"'“‘]|\p{Script=Han})(:[\p{L}\p{N}_+-]{2,40}:)\s$/u, (state, match, start) => {
     if (inCode(state)) return null;
     const emoji = emojiForShortcode(match[1].slice(1, -1));
     if (!emoji) return null;
     const from = start + match[0].indexOf(":");
-    return state.tr.insertText(emoji.char, from, from + match[1].length);
+    // The typed space never reached the document: returning a transaction suppresses it. Insert the
+    // glyph and the space together, as its own undo step.
+    return closeHistory(state.tr.insertText(`${emoji.char} `, from, from + match[1].length));
   }));
 
   return {
@@ -188,7 +194,7 @@ export function emojiSuggest(): { plugins: MilkdownPlugin[]; configure: (ctx: Ct
             view.dispatch(view.state.tr.setMeta(key, { index }));
             return true;
           }
-          if (event.key === "Enter" || event.key === "Tab") {
+          if ((event.key === "Enter" || event.key === "Tab") && !event.shiftKey) {
             event.preventDefault();
             choose(view, shown[Math.min(state.index, shown.length - 1)]);
             return true;
@@ -212,9 +218,17 @@ function detect(state: EditorState): Trigger | null {
   const { $from } = selection;
   const parent = $from.parent;
   if (!parent.isTextblock || inCode(state)) return null;
-  const before = parent.textBetween(0, $from.parentOffset, undefined, "\n");
+  // Only the end of a huge pasted paragraph can hold a trigger; do not rebuild all of it per key.
+  const offset = Math.max(0, $from.parentOffset - 40);
+  const before = parent.textBetween(offset, $from.parentOffset, undefined, "\n");
   const found = TRIGGER.exec(before);
   if (!found) return null;
-  const from = $from.start() + before.length - found[2].length - 1;
-  return { from, to: $from.pos, query: found[2] };
+  const from = $from.start() + offset + before.length - found[2].length - 1;
+  // `textBetween` drops mark boundaries: the caret can sit just after an inline-code span while
+  // the code itself is the query. Look at the range, as the `[[` list does.
+  let protectedText = false;
+  state.doc.nodesBetween(from, $from.pos, (node) => {
+    if (node.marks.some((mark) => CODE_MARKS.has(mark.type.name))) protectedText = true;
+  });
+  return protectedText ? null : { from, to: $from.pos, query: found[2] };
 }

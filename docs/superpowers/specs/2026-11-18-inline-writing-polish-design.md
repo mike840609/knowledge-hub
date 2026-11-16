@@ -11,7 +11,8 @@ emoji is text and clearing marks only removes them.
 1. **`:shortcode` offers emoji.** Typing `:` after the start of a word (a
    space, an opening bracket or the start of a line) and at least two letters
    opens a list of the bundled emoji (`lib/emoji-catalog.ts`), best match first:
-   an exact shortcode or keyword, then a prefix, then a substring. The name's
+   an exact shortcode or keyword, or a name/shortcode prefix (catalog order
+   breaks that tie), then a keyword prefix, then a substring. The name's
    slug is the shortcode (`grinning face` → `grinning_face`); keywords are
    English and Traditional Chinese. Enter, Tab or a click inserts the glyph;
    ArrowUp/Down move; Escape closes without changing the text. A fully typed
@@ -19,7 +20,8 @@ emoji is text and clearing marks only removes them.
    (a code block or inline code), or after a word character (`http://`,
    `12:30`). One undo step.
 2. **Clear formatting.** The selection toolbar adds **Clear formatting** (the
-   `Tx` glyph), and `Mod-\` runs the same action: every inline mark comes off
+   `Tx` glyph), and `Mod-Shift-\` runs the same action (`Mod-\` alone stays the
+   app's navigation toggle and the editor must not take it): every inline mark comes off
    the selection; at a caret it drops the mark the next character would carry.
    It does not change the block type (a heading stays a heading), which is
    Notion's `Cmd+\` behaviour.

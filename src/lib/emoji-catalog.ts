@@ -409,22 +409,25 @@ export function emojiShortcode(emoji: Emoji): string {
 }
 
 /**
- * What `:query` should offer, best first: an exact shortcode or keyword, then a prefix of either,
- * then a substring. Catalog order breaks ties, so the same query always offers the same first row.
+ * What `:query` should offer, best first: an exact shortcode or keyword, or a name/shortcode prefix
+ * (catalog order breaks that tie, so `:grin` offers `grinning face` before `beaming face`), then a
+ * keyword prefix, then a name or keyword substring.
  */
 export function emojiMatches(query: string, limit = 8): Emoji[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return [];
+  const alias = aliasFor(needle);
   const score = (entry: Emoji) => {
     const name = entry.name.toLowerCase();
     const code = emojiShortcode(entry);
-    if (code === needle || name === needle) return 0;
-    // A name or shortcode prefix is what the writer is naming; a keyword match comes after it.
+    if (code === needle || name === needle || entry === alias) return 0;
+    // A name/shortcode prefix ties with an exact keyword; catalog order keeps `:grin` on grinning
+    // face and `:joy` on a smiley rather than the joystick.
     if (code.startsWith(needle) || name.startsWith(needle)) return 1;
-    if (entry.keywords.some((word) => word.toLowerCase() === needle)) return 2;
-    if (entry.keywords.some((word) => word.toLowerCase().startsWith(needle))) return 3;
-    if (name.includes(needle)) return 4;
-    if (entry.keywords.some((word) => word.toLowerCase().includes(needle))) return 5;
+    if (entry.keywords.some((word) => word.toLowerCase() === needle)) return 1;
+    if (entry.keywords.some((word) => word.toLowerCase().startsWith(needle))) return 2;
+    if (name.includes(needle)) return 3;
+    if (entry.keywords.some((word) => word.toLowerCase().includes(needle))) return 4;
     return Infinity;
   };
   return EMOJI_CATALOG
@@ -435,11 +438,29 @@ export function emojiMatches(query: string, limit = 8): Emoji[] {
     .map(({ entry }) => entry);
 }
 
-/** The emoji a fully typed `:code:` names, when the code is an exact shortcode or keyword. */
+/**
+ * The emoji a fully typed `:code:` names, when the code is an exact shortcode, name, alias or
+ * keyword. It resolves through the same ranking the list uses, so Enter on the first row and the
+ * `:code: ` conversion cannot pick different emoji.
+ */
 export function emojiForShortcode(code: string): Emoji | null {
   const needle = code.trim().toLowerCase();
   if (!needle) return null;
-  return EMOJI_CATALOG.find((entry) => emojiShortcode(entry) === needle || entry.name.toLowerCase() === needle)
-    ?? EMOJI_CATALOG.find((entry) => entry.keywords.some((word) => word.toLowerCase() === needle))
-    ?? null;
+  const exact = EMOJI_CATALOG.find((entry) => emojiShortcode(entry) === needle || entry.name.toLowerCase() === needle);
+  if (exact) return exact;
+  if (aliasFor(needle)) return aliasFor(needle);
+  const keyword = EMOJI_CATALOG.some((entry) => entry.keywords.some((word) => word.toLowerCase() === needle));
+  return keyword ? emojiMatches(needle, 1)[0] ?? null : null;
+}
+
+/** The short codes people bring from GitHub/Notion, mapped by the catalog's English name. */
+const ALIASES: Readonly<Record<string, string>> = {
+  tada: "party popper",
+  thumbsup: "thumbs up",
+  "+1": "thumbs up",
+  "100": "hundred points",
+};
+function aliasFor(code: string): Emoji | null {
+  const name = ALIASES[code];
+  return name ? EMOJI_CATALOG.find((entry) => entry.name === name) ?? null : null;
 }

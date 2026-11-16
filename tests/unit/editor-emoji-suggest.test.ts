@@ -70,6 +70,38 @@ it("moves through the list with the arrow keys", async () => {
   expect(view.state.doc.textContent).toBe(second.char);
 });
 
+it("announces the listbox it controls and the active option", async () => {
+  const { view } = await open();
+  type(view, ":sm");
+  expect(view.dom.getAttribute("aria-controls")).toBe(menu().id);
+  expect(menu().id).not.toBe("");
+  const active = menu().querySelector('[aria-selected="true"]')!;
+  expect(view.dom.getAttribute("aria-activedescendant")).toBe(active.id);
+});
+
+it("leaves Shift-Tab to the editor while the list is open", async () => {
+  const { view } = await open("- item\n");
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 4)));
+  type(view, ":sm");
+  key(view, "Tab", { shiftKey: true });
+  expect(menu().hidden).toBe(true);
+  expect(view.state.doc.textContent).toContain(":sm");
+});
+
+it("opens after a CJK character, where a space is not written", async () => {
+  const { view } = await open("中文");
+  view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)));
+  type(view, ":sm");
+  expect(menu().hidden).toBe(false);
+});
+
+it("opens at the end of a very long paragraph", async () => {
+  const { view } = await open("a".repeat(200));
+  view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)));
+  type(view, " :sm");
+  expect(menu().hidden).toBe(false);
+});
+
 it("closes on Escape without inserting anything", async () => {
   const { editor, view } = await open();
   type(view, ":sm");
@@ -78,11 +110,20 @@ it("closes on Escape without inserting anything", async () => {
   expect(editor.getMarkdown()).toBe(":sm\n");
 });
 
-it("converts a fully typed :shortcode: on the space", async () => {
+it("converts a fully typed :shortcode: on the space, keeping the space", async () => {
   const { editor, view } = await open();
   type(view, ":grinning_face: ");
-  expect(editor.getMarkdown()).toContain("😀");
-  expect(editor.getMarkdown()).not.toContain(":grinning_face:");
+  expect(editor.getMarkdown()).toBe("😀 \n");
+  type(view, "next");
+  expect(editor.getMarkdown()).toBe("😀 next\n");
+});
+
+it("converts as its own undo step, back to the typed code", async () => {
+  const { view } = await open();
+  const { undo } = await import("@milkdown/kit/prose/history");
+  type(view, ":grinning_face: ");
+  undo(view.state, view.dispatch);
+  expect(view.state.doc.textContent).toBe(":grinning_face:");
 });
 
 it("takes a Traditional Chinese keyword too", async () => {
@@ -92,12 +133,22 @@ it("takes a Traditional Chinese keyword too", async () => {
   expect(editor.getMarkdown()).toMatch(/\p{Extended_Pictographic}/u);
 });
 
-it("does not open after a word character, in inline code, or in a code block", async () => {
-  const { view } = await open("12:30\n");
+it.each(["12", "see http://", "a@b"])("does not open after a word character: %j", async (prefix) => {
+  const { view } = await open(prefix);
   view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)));
-  type(view, "");
+  type(view, ":smi");
   expect(menu().hidden).toBe(true);
+  expect(view.state.doc.textContent).toBe(`${prefix}:smi`);
+});
 
+it("does not convert a code after a word character", async () => {
+  const { view } = await open("x");
+  view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)));
+  type(view, ":grinning_face: ");
+  expect(view.state.doc.textContent).toBe("x:grinning_face: ");
+});
+
+it("does not open in inline code or in a code block", async () => {
   const inline = await open("text");
   inline.view.dispatch(inline.view.state.tr.insertText(":sm"));
   // Select the typed text and make it inline code, then put the caret at its end.

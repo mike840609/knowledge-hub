@@ -47,9 +47,11 @@ test.describe("inline writing polish", () => {
     await page.keyboard.type(" :grin");
     const list = page.getByRole("listbox", { name: "Emoji" });
     await expect(list).toBeVisible(ROUND_TRIP);
-    await list.getByRole("option").first().click();
+    const first = list.getByRole("option").first();
+    await expect(first).toContainText(":grinning_face:");
+    await first.click();
     const markdown = await saved(page);
-    expect(markdown).toMatch(/Start here\. \p{Extended_Pictographic}/u);
+    expect(markdown).toContain("Start here. 😀");
     expect(markdown).not.toContain(":grin");
   });
 
@@ -73,7 +75,8 @@ test.describe("inline writing polish", () => {
     const card = page.locator(".kh-link-card");
     await expect(card).toHaveAttribute("data-show", "true", ROUND_TRIP);
     await card.getByRole("button", { name: "Copy link" }).click();
-    await expect(card.getByRole("button", { name: "Copy link" })).toHaveText("Copied");
+    await expect(card.getByRole("button", { name: "Copied" })).toBeVisible();
+    await expect(card.getByRole("status")).toHaveText("Link copied");
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("https://example.com");
   });
 });

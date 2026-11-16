@@ -474,6 +474,9 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           const cardAddress = document.createElement("span");
           cardAddress.className = "kh-link-card-address truncate px-2 text-caption text-kh-text-muted";
           card.appendChild(cardAddress);
+          const copyStatus = document.createElement("span");
+          copyStatus.className = "sr-only";
+          copyStatus.setAttribute("role", "status");
           const cardButtons = new Map<string, HTMLButtonElement>();
           for (const [label, text] of [["Copy link", "Copy"], ["Open link", "Open"], ["Edit link", "Edit"], ["Remove link", "Remove"]] as const) {
             const cardButton = document.createElement("button");
@@ -484,6 +487,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             card.appendChild(cardButton);
             cardButtons.set(label, cardButton);
           }
+          card.appendChild(copyStatus);
           // Pressing the card must not take the caret (and the link with it) out of the editor.
           card.addEventListener("mousedown", (event) => event.preventDefault());
           let cardLink: Extract<SelectedLink, { kind: "one" }> | null = null;
@@ -508,7 +512,9 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             cardAddress.textContent = href;
             cardAddress.title = href;
             clearTimeout(copyTimer);
+            copyStatus.textContent = "";
             cardButtons.get("Copy link")!.textContent = "Copy";
+            cardButtons.get("Copy link")!.setAttribute("aria-label", "Copy link");
             cardButtons.get("Open link")!.disabled = !storedLinkTarget(href, links?.());
             if (!card.isConnected) (editorView.dom.parentElement ?? document.body).appendChild(card);
             card.dataset.show = "true";
@@ -550,9 +556,17 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             if (!href || !navigator.clipboard) return;
             void navigator.clipboard.writeText(href).then(() => {
               const button = cardButtons.get("Copy link")!;
+              // The visible word and the accessible name change together (Label in Name), and the
+              // status announces the copy to a screen reader.
               button.textContent = "Copied";
+              button.setAttribute("aria-label", "Copied");
+              copyStatus.textContent = "Link copied";
               clearTimeout(copyTimer);
-              copyTimer = setTimeout(() => { button.textContent = "Copy"; }, 1500);
+              copyTimer = setTimeout(() => {
+                button.textContent = "Copy";
+                button.setAttribute("aria-label", "Copy link");
+                copyStatus.textContent = "";
+              }, 1500);
             }, () => { /* a refused clipboard leaves the card as it was */ });
           });
           cardButtons.get("Open link")!.addEventListener("click", () => {
@@ -629,14 +643,15 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             openLink();
           }
           editorView.dom.addEventListener("keydown", openLinkOnModK);
-          // The same action as the toolbar's Clear formatting, for the habit Notion taught.
-          function clearOnModBackslash(event: KeyboardEvent) {
-            if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey || event.key !== "\\") return;
+          // The same action as the toolbar's Clear formatting. Shift is required: Cmd/Ctrl-\ is the
+          // app's navigation toggle, and the editor must not take it (keyboard-shortcuts spec §10).
+          function clearOnModShiftBackslash(event: KeyboardEvent) {
+            if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.altKey || event.key !== "\\") return;
             if (event.isComposing || event.keyCode === 229) return;
             if (!clearFormatting(editorView)) return;
             event.preventDefault();
           }
-          editorView.dom.addEventListener("keydown", clearOnModBackslash);
+          editorView.dom.addEventListener("keydown", clearOnModShiftBackslash);
 
           // Above the first line is the document's header ("Updated …"), not free space: flip below a
           // selection with no room above it inside the editor, as well as inside the panes that clip it
@@ -710,7 +725,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
               editorView.dom.removeEventListener("focus", showOnFocus);
               editorView.dom.removeEventListener("keydown", closeCardOnEscape, true);
               editorView.dom.removeEventListener("keydown", openLinkOnModK);
-              editorView.dom.removeEventListener("keydown", clearOnModBackslash);
+              editorView.dom.removeEventListener("keydown", clearOnModShiftBackslash);
               editorView.dom.removeEventListener("blur", hideCardOnBlur);
               window.removeEventListener("scroll", onScroll, true);
               clearTimeout(pointerTimer);

@@ -674,7 +674,10 @@ it("clears every inline mark from a selection, and from the next character at a 
   // Select the italic word and use the keyboard habit.
   select(editor, 10, 16);
   await throttleWindow();
-  const event = key(editorDom(editor), { key: "\\", metaKey: true });
+  // Cmd/Ctrl-\ alone stays the app's navigation toggle; the editor must not take it.
+  const rail = key(editorDom(editor), { key: "\\", metaKey: true });
+  expect(rail.defaultPrevented).toBe(false);
+  const event = key(editorDom(editor), { key: "\\", metaKey: true, shiftKey: true });
   expect(event.defaultPrevented).toBe(true);
   expect(editor.getMarkdown()).toBe("bold and italic\n");
 });
@@ -706,6 +709,55 @@ it("copies the link address from its card", async () => {
   const copy = card.querySelector<HTMLButtonElement>('button[aria-label="Copy link"]')!;
   expect(copy.type).toBe("button");
   copy.click();
+  await wait(20);
   expect(writeText).toHaveBeenCalledWith("https://example.com");
+  expect(copy.getAttribute("aria-label")).toBe("Copied");
+  expect(card.querySelector('[role="status"]')?.textContent).toBe("Link copied");
   expect(editor.getMarkdown()).toBe("[example](https://example.com) after\n");
+});
+
+
+it("copies a relative document link exactly as written", async () => {
+  const writeText = vi.fn(async () => {});
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  const editor = await open("[doc](notes/other.md) after\n");
+  mountToolbar(editor);
+  select(editor, 3, 3);
+  await wait(320);
+  document.querySelector<HTMLButtonElement>('.kh-link-card button[aria-label="Copy link"]')!.click();
+  expect(writeText).toHaveBeenCalledWith("notes/other.md");
+});
+
+it("leaves the card alone when the clipboard refuses", async () => {
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn(async () => { throw new Error("denied"); }) } });
+  const editor = await open("[site](https://example.com) after\n");
+  mountToolbar(editor);
+  select(editor, 3, 3);
+  await wait(320);
+  const card = document.querySelector<HTMLElement>(".kh-link-card")!;
+  card.querySelector<HTMLButtonElement>('button[aria-label="Copy link"]')!.click();
+  await wait(20);
+  expect(card.querySelector<HTMLButtonElement>('button[aria-label="Copy link"]')?.textContent).toBe("Copy");
+  expect(card.querySelector('[role="status"]')?.textContent).toBe("");
+});
+
+it("keeps the block type when clearing a heading's marks, and can be undone", async () => {
+  const { undo } = await import("@milkdown/kit/prose/history");
+  const editor = await open("## Heading **bold**");
+  mountToolbar(editor);
+  select(editor, 9, 13);
+  await throttleWindow();
+  button("Clear formatting").click();
+  expect(editor.getMarkdown()).toBe("## Heading bold\n");
+  editor.action(ctx => { const view = ctx.get(editorViewCtx); undo(view.state, view.dispatch); });
+  expect(editor.getMarkdown()).toBe("## Heading **bold**\n");
+});
+
+it("removes a link mark without removing its text", async () => {
+  const editor = await open("[linked](https://example.com) text\n");
+  mountToolbar(editor);
+  select(editor, 1, 7);
+  await throttleWindow();
+  button("Clear formatting").click();
+  expect(editor.getMarkdown()).toBe("linked text\n");
 });
