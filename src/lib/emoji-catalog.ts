@@ -38,6 +38,7 @@ const SOURCE: ReadonlyArray<readonly [id: string, label: string, rows: Row[]]> =
     ["😅", "grinning face with sweat", "relief nervous", "冷汗 尷尬"],
     ["🤣", "rolling on the floor laughing", "lol funny", "笑翻 爆笑"],
     ["😂", "face with tears of joy", "laugh cry funny", "笑哭 好笑"],
+    ["💩", "pile of poo", "poop funny", "大便 便便"],
     ["🙂", "slightly smiling face", "smile calm", "微笑 淡定"],
     ["😉", "winking face", "wink flirt", "眨眼 俏皮"],
     ["😊", "smiling face with smiling eyes", "blush warm", "害羞 溫暖 微笑"],
@@ -459,6 +460,9 @@ const ALIASES: Readonly<Record<string, string>> = {
   thumbsup: "thumbs up",
   "+1": "thumbs up",
   "100": "hundred points",
+  heart: "red heart",
+  poop: "pile of poo",
+  joy: "face with tears of joy",
 };
 function aliasFor(code: string): Emoji | null {
   const name = ALIASES[code];

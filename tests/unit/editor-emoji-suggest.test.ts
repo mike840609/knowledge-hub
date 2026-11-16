@@ -88,6 +88,19 @@ it("leaves Shift-Tab to the editor while the list is open", async () => {
   expect(view.state.doc.textContent).toContain(":sm");
 });
 
+it("converts after a CJK character, where a space is not written", async () => {
+  const { view } = await open("中文");
+  view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)));
+  type(view, ":grinning_face: ");
+  expect(view.state.doc.textContent).toBe("中文😀 ");
+});
+
+it("converts the longest shortcode the catalog has", async () => {
+  const { view } = await open();
+  type(view, ":grinning_face_with_smiling_eyes: ");
+  expect(view.state.doc.textContent).toBe("😄 ");
+});
+
 it("opens after a CJK character, where a space is not written", async () => {
   const { view } = await open("中文");
   view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)));

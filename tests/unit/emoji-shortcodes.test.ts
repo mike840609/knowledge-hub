@@ -11,8 +11,7 @@ describe("the emoji shortcode index", () => {
     expect(emojiMatches("grinning_face")[0].name).toBe("grinning face");
     // A name prefix ties with an exact keyword; catalog order puts the name first.
     expect(emojiMatches("grin")[0].name).toBe("grinning face");
-    expect(emojiMatches("joy")[0].name).not.toBe("joystick");
-    expect(emojiMatches("joy")[0].keywords).toContain("joy");
+    expect(emojiMatches("joy")[0].name).toBe("face with tears of joy");
     expect(emojiMatches("smile")[0].keywords).toContain("smile");
     expect(emojiMatches("heart")[0].name.toLowerCase().includes("heart") || emojiMatches("heart")[0].keywords.some((word) => word.startsWith("heart"))).toBe(true);
     expect(emojiMatches("zzzz")).toEqual([]);
@@ -31,6 +30,8 @@ describe("the emoji shortcode index", () => {
     expect(emojiForShortcode("tada")?.name).toBe("party popper");
     expect(emojiForShortcode("thumbsup")?.name).toBe("thumbs up");
     expect(emojiForShortcode("100")?.name).toBe("hundred points");
+    expect(emojiForShortcode("heart")?.name).toBe("red heart");
+    expect(emojiForShortcode("poop")?.name).toBe("pile of poo");
   });
 
   it("accepts the longest code the catalog has", () => {

@@ -476,7 +476,8 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           card.appendChild(cardAddress);
           const copyStatus = document.createElement("span");
           copyStatus.className = "sr-only";
-          copyStatus.setAttribute("role", "status");
+          copyStatus.setAttribute("aria-live", "polite");
+          copyStatus.setAttribute("data-copy-status", "");
           const cardButtons = new Map<string, HTMLButtonElement>();
           for (const [label, text] of [["Copy link", "Copy"], ["Open link", "Open"], ["Edit link", "Edit"], ["Remove link", "Remove"]] as const) {
             const cardButton = document.createElement("button");
@@ -554,7 +555,9 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           cardButtons.get("Copy link")!.addEventListener("click", () => {
             const href = String(cardLink?.mark.attrs.href ?? "");
             if (!href || !navigator.clipboard) return;
+            const copied = href;
             void navigator.clipboard.writeText(href).then(() => {
+              if (String(cardLink?.mark.attrs.href ?? "") !== copied) return;
               const button = cardButtons.get("Copy link")!;
               // The visible word and the accessible name change together (Label in Name), and the
               // status announces the copy to a screen reader.
@@ -646,7 +649,9 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           // The same action as the toolbar's Clear formatting. Shift is required: Cmd/Ctrl-\ is the
           // app's navigation toggle, and the editor must not take it (keyboard-shortcuts spec §10).
           function clearOnModShiftBackslash(event: KeyboardEvent) {
-            if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.altKey || event.key !== "\\") return;
+            // Shift+Backslash is "|" on a US keyboard; match the physical key as well as both labels.
+            if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.altKey) return;
+            if (event.code !== "Backslash" && event.key !== "\\" && event.key !== "|") return;
             if (event.isComposing || event.keyCode === 229) return;
             if (!clearFormatting(editorView)) return;
             event.preventDefault();

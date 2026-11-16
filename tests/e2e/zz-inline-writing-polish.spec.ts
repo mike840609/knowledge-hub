@@ -66,6 +66,17 @@ test.describe("inline writing polish", () => {
     expect(markdown).not.toContain("**bold**");
   });
 
+  test("Mod-Shift-\\ clears formatting from the keyboard", async ({ page }) => {
+    const workspaceId = await mySpace(page);
+    const url = await createNote(page, workspaceId, unique("Clear key"), "**bold** and plain\n");
+    await openEditor(page, url);
+    await page.getByText("bold", { exact: true }).dblclick();
+    await page.keyboard.press("ControlOrMeta+Shift+Backslash");
+    const markdown = await saved(page);
+    expect(markdown).toContain("bold and plain");
+    expect(markdown).not.toContain("**bold**");
+  });
+
   test("Copy on the link card writes the address to the clipboard", async ({ page }) => {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     const workspaceId = await mySpace(page);
@@ -76,7 +87,7 @@ test.describe("inline writing polish", () => {
     await expect(card).toHaveAttribute("data-show", "true", ROUND_TRIP);
     await card.getByRole("button", { name: "Copy link" }).click();
     await expect(card.getByRole("button", { name: "Copied" })).toBeVisible();
-    await expect(card.getByRole("status")).toHaveText("Link copied");
+    await expect(card.locator("[data-copy-status]")).toHaveText("Link copied");
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("https://example.com");
   });
 });

@@ -948,8 +948,8 @@ caret leaves the link, on Escape (which it takes ahead of the block-selecting
 Escape), or when the link scrolls out of view. No token was added.
 
 **Emoji completion** (2026-11-18, `editor/emoji-suggest.ts`). Typing `:` after
-the start of a word and two or more letters opens `.kh-emoji-menu`, the `[[`
-list's surface, with the bundled catalog's best matches: exact shortcode or
+the start of a word (including after a Han character) and two or more letters
+opens `.kh-emoji-menu`, the `[[` list's surface, with the bundled catalog's best matches: exact shortcode or
 keyword, or a name/shortcode prefix (catalog order breaks that tie), then a
 keyword prefix, then a substring. The shortcode is the name's slug
 (`grinning_face`); keywords are English and Traditional Chinese. Enter, Tab or
@@ -959,7 +959,7 @@ converts on the space after it. It never opens in a code block or inline code,
 or after a word character (`http://`, `12:30`). One undo step; the glyph is
 plain Markdown text.
 
-Layers: the controls sit at 30, under the app's popovers; the two menus and
+Layers: the controls sit at 30, under the app's popovers; the three menus and
 the drop line at 50. None of it is printed.
 
 Both rewrite the document through the rendered editor and are held to the

@@ -677,7 +677,7 @@ it("clears every inline mark from a selection, and from the next character at a 
   // Cmd/Ctrl-\ alone stays the app's navigation toggle; the editor must not take it.
   const rail = key(editorDom(editor), { key: "\\", metaKey: true });
   expect(rail.defaultPrevented).toBe(false);
-  const event = key(editorDom(editor), { key: "\\", metaKey: true, shiftKey: true });
+  const event = key(editorDom(editor), { key: "|", code: "Backslash", metaKey: true, shiftKey: true });
   expect(event.defaultPrevented).toBe(true);
   expect(editor.getMarkdown()).toBe("bold and italic\n");
 });
@@ -712,7 +712,7 @@ it("copies the link address from its card", async () => {
   await wait(20);
   expect(writeText).toHaveBeenCalledWith("https://example.com");
   expect(copy.getAttribute("aria-label")).toBe("Copied");
-  expect(card.querySelector('[role="status"]')?.textContent).toBe("Link copied");
+  expect(card.querySelector("[data-copy-status]")?.textContent).toBe("Link copied");
   expect(editor.getMarkdown()).toBe("[example](https://example.com) after\n");
 });
 
@@ -738,7 +738,7 @@ it("leaves the card alone when the clipboard refuses", async () => {
   card.querySelector<HTMLButtonElement>('button[aria-label="Copy link"]')!.click();
   await wait(20);
   expect(card.querySelector<HTMLButtonElement>('button[aria-label="Copy link"]')?.textContent).toBe("Copy");
-  expect(card.querySelector('[role="status"]')?.textContent).toBe("");
+  expect(card.querySelector("[data-copy-status]")?.textContent).toBe("");
 });
 
 it("keeps the block type when clearing a heading's marks, and can be undone", async () => {
