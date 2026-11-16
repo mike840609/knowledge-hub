@@ -386,6 +386,39 @@ test("inline: a failed document save backs up recovery to the account", async ({
 });
 
 
+test("inline: an idle tab shows what another tab or device saved, then saves on top of it", async ({ page, browser }) => {
+  const { url, id } = await note(page);
+  const editor = await surface(page, url);
+  // Another tab of this browser: its save is announced to this one.
+  const other = await page.context().newPage();
+  const otherEditor = await surface(other, url);
+  const otherSave = other.waitForResponse(response => response.request().method() === "PATCH" && response.url().endsWith(`/api/documents/${id}`) && response.ok());
+  await otherEditor.fill("Saved in the other tab.");
+  const { revisionId } = await (await otherSave).json();
+  const title = await other.getByRole("textbox", { name: "Title", exact: true }).inputValue();
+  await saved(other);
+  await other.close();
+  await expect(editor).toContainText("Saved in the other tab.", { timeout: 15000 });
+  // Another device: nothing is announced; coming back to the tab looks.
+  const device = await browser.newContext({ storageState: await page.context().storageState() });
+  try {
+    const response = await device.request.patch(new URL(`/api/documents/${id}`, page.url()).href, { data: { title, markdown: "Saved on the phone.", expectedCurrentRevisionId: revisionId } });
+    expect(response.ok()).toBe(true);
+  } finally { await device.close(); }
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(editor).toContainText("Saved on the phone.", { timeout: 15000 });
+  await editor.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" And more here.");
+  await saved(page);
+  await expect(page.getByText("Someone updated this document.", { exact: false })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Saved on the phone. And more here.");
+});
+
 test("inline: action letters type normally in title and body", async ({ page }) => {
   const { url } = await note(page);
   const editor = await surface(page, url);

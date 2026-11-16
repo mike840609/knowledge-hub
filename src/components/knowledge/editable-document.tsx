@@ -148,6 +148,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       return revision;
     } };
   }
+  const savesRef = useRef<BroadcastChannel | null>(null);
   const flushRef = useRef(flushEditor);
   flushRef.current = flushEditor;
 
@@ -188,6 +189,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
           if (preserved) retained.push({ ...preserved, createdAt: new Date(preserved.createdAt), history: preserved.history ? { ...preserved.history, windowStartedAt: preserved.history.windowStartedAt ? new Date(preserved.history.windowStartedAt) : null } : undefined });
           return [...retained, { id: revision.revisionId, revisionNo: revision.revisionNo, createdAt, history: revision.history ? { ...revision.history, windowStartedAt: revision.history.windowStartedAt ? new Date(revision.history.windowStartedAt) : null } : undefined }];
         });
+        savesRef.current?.postMessage({ documentId: detail.inspectorData.documentId, revisionId: revision.revisionId });
         metadataDirty.current = true;
         const targets = JSON.stringify(extractDocumentLinks(snapshot.markdown).map(({ kind, target, fragment }) => [kind, target, fragment]));
         if (targets !== savedLinkTargets.current) {
@@ -256,9 +258,20 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       persist();
       void writer.flush({ keepalive: true });
     };
+    // A tab left open while the document was saved elsewhere (another tab, another device) shows the
+    // newer revision when it comes back, so the next keystroke does not start from an old one. Only
+    // while nothing here is unsaved: the refresh is adopted by the effect below, never over input.
+    const catchUp = () => {
+      if (live && !writer.dirty && !writer.error) router.refresh();
+    };
+    const saves = typeof BroadcastChannel === "function" ? new BroadcastChannel("kh:document-saved") : null;
+    savesRef.current = saves;
+    if (saves) saves.onmessage = ({ data }: MessageEvent<{ documentId?: string; revisionId?: string }>) => {
+      if (data?.documentId === detail.inspectorData.documentId && data.revisionId !== writer.revisionId) catchUp();
+    };
     const visibility = () => {
       if (document.visibilityState === "hidden") sendNow();
-      else writer.retryNow();
+      else { writer.retryNow(); catchUp(); }
     };
     const online = () => writer.retryNow();
     const unload = (event: BeforeUnloadEvent) => {
@@ -283,6 +296,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       // Navigation inside the app: what is unsaved goes with it, as the page would on a reload.
       writer.leave();
       remote?.dispose();
+      saves?.close();
       window.removeEventListener("pagehide", sendNow);
       window.removeEventListener("beforeunload", unload);
       window.removeEventListener("online", online);
