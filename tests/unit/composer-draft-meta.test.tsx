@@ -54,6 +54,14 @@ describe("the composer's meta line", () => {
     expect(root.querySelector(".sr-only")).toBeNull();
   });
 
+  // A team workspace keeps no draft, so the line is only its facts: no orphaned dot, no empty region.
+  it("draws neither separator nor status when the workspace keeps no draft", () => {
+    const html = renderToStaticMarkup(<ComposerDraftMeta {...base} durableDraft={false} renameTarget="Team note" />);
+    expect(html).toContain("Saving will rename this document to “Team note”");
+    expect(html).not.toContain("·");
+    expect(html).not.toContain('role="status"');
+  });
+
   it("offers a retry only when the draft failed", () => {
     expect(renderToStaticMarkup(<ComposerDraftMeta {...base} draftStatus="error" />)).toContain("Retry draft save");
     expect(renderToStaticMarkup(<ComposerDraftMeta {...base} />)).not.toContain("Retry draft save");
