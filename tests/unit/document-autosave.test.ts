@@ -278,6 +278,9 @@ describe("leaving", () => {
     expect(queue.canSendOnLeave()).toBe(false);
     queue.change({ ...original, markdown: "長".repeat(1000) });
     expect(queue.canSendOnLeave()).toBe(true);
+    // Counted as the request carries it: JSON writes each line break as two bytes.
+    queue.change({ ...original, markdown: "\n".repeat(KEEPALIVE_BYTES * 0.6) });
+    expect(queue.canSendOnLeave()).toBe(false);
   });
   it("sends a document too large for that request as a normal one", async () => {
     const { queue, write } = setup();

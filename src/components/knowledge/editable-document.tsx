@@ -99,6 +99,8 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   const staleDraftBase = useRef<{ revisionId: string | null } | null>(null);
   const pending = useRef(false);
   const composing = useRef(false);
+  /** A conflict met during composition is merged once it ends: replacing the document under an IME loses the candidate. */
+  const settleRef = useRef<() => void>(undefined);
   const alive = useRef(false);
   const discardingRef = useRef(false);
   const sourceRef = useRef(false);
@@ -185,7 +187,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
         if (!live) return;
         acknowledgedRevisionNo.current = revision.revisionNo;
         setSavedRevision(revision.revisionId);
-        setSavedTitle(resolve(snapshot).title);
+        setSavedTitle(resolve(snapshot).title || "Untitled");
         const createdAt = new Date();
         setSavedAt(createdAt);
         setLocalRevisions(previous => {
@@ -208,17 +210,18 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     // A conflict whose two sides changed different lines is merged and goes on saving, as Notion's
     // does; changes to the same lines still stop for the writer to decide (inline editing spec).
     const settleConflict = async () => {
+      if (composing.current || !writer.error || governanceFailure(writer.error).code !== "REVISION_CONFLICT") return;
       const expected = writer.revisionId;
       let theirs: { title: string; markdown: string; revisionId: string };
       try {
         theirs = await governanceRequest(`/api/documents/${detail.inspectorData.documentId}/peek?brief`);
       } catch { return; }
-      if (!live || !writer.error || writer.revisionId !== expected || theirs.revisionId === expected) return;
+      if (!live || composing.current || !writer.error || writer.revisionId !== expected || theirs.revisionId === expected) return;
       flushRef.current();
       const base = writer.saved, mine = writer.current;
       const markdown = mergeText(base.markdown, mine.markdown, theirs.markdown);
-      // The title field holds what was typed; a revision title equal to the base's resolved one is no change.
-      const theirsTitle = resolve(mine).source === "H1" || theirs.title === resolve(base).title ? base.title : theirs.title;
+      // The title field holds what was typed; a revision title equal to the base's resolved one (an empty one saved as "Untitled") is no change.
+      const theirsTitle = resolve(mine).source === "H1" || theirs.title === (resolve(base).title || "Untitled") ? base.title : theirs.title;
       const title = mine.title === base.title ? theirsTitle : theirsTitle === base.title || theirsTitle === mine.title ? mine.title : null;
       if (markdown === null || title === null) return;
       if (!writer.rebase({ title: theirsTitle, markdown: theirs.markdown }, theirs.revisionId, { title, markdown })) return;
@@ -229,6 +232,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       setContent(writer.current);
       keepRecovery();
     };
+    settleRef.current = () => void settleConflict();
     writer.pause(true);
     queue.current = writer;
     const remote = personal ? new PersistentDraft(`/api/workspaces/${detail.inspectorData.workspaceId}/personal`, `draft:${detail.inspectorData.documentId}`, () => {}, { autoSync: false, delay: 15_000 }) : null;
@@ -509,7 +513,8 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     <div ref={pressArea} onPointerDownCapture={() => { dismissEditHint(); if (!ready) standInPressed.current = true; }} onFocusCapture={dismissEditHint} onCompositionStart={() => { composing.current = true; writer?.pause(true); }} onCompositionEnd={() => {
       composing.current = false;
       flushEditor();
-      writer?.pause(!editable || !!recovery || !resolve(queue.current!.current).title);
+      writer?.pause(!editable || !!recovery);
+      settleRef.current?.();
     }} onBlur={() => flushEditor()} onKeyDownCapture={event => {
       if ((event.metaKey || event.ctrlKey) && event.key === "/" && !isListKey(event) && !event.nativeEvent.isComposing && !failed) {
         event.preventDefault(); flushEditor();
@@ -562,7 +567,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       }}
       className="mt-2 block w-full resize-none overflow-hidden break-words border-0 bg-transparent p-0 text-page-title font-semibold tracking-tight text-kh-text outline-none"
       onCompositionStart={() => { composing.current = true; writer?.pause(true); }}
-      onCompositionEnd={() => { composing.current = false; writer?.pause(!editable || !!recovery || !resolve(queue.current!.current).title); }} /> : undefined}>
+      onCompositionEnd={() => { composing.current = false; writer?.pause(!editable || !!recovery); settleRef.current?.(); }} /> : undefined}>
     <div className="kh-reading-column py-6">
       {personal && <ReadRevisionMarker workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId} revisionId={savedRevision} />}
       {personal ? <OwnerReviewPanel documentId={detail.inspectorData.documentId} revisionId={savedRevision} markdown={content.markdown} prepareComment={prepareComment} commentAvailable={editable && ready && !recovery && !source && !failed} contentPending={dirty || !!recovery || source || failed || !ready}>{article}</OwnerReviewPanel> : article}

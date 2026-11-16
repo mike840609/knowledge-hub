@@ -423,8 +423,12 @@ test("inline: a page without a title saves as Untitled", async ({ page }) => {
   const { url } = await note(page);
   const editor = await surface(page, url);
   await page.getByRole("textbox", { name: "Title", exact: true }).fill("");
+  // Ending an IME composition on an untitled page does not pause saving.
+  await editor.dispatchEvent("compositionstart");
   await editor.fill("Body without a title.");
+  await editor.dispatchEvent("compositionend");
   await saved(page);
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" }).last()).toContainText("Untitled");
   await page.reload();
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Body without a title.", { timeout: 15000 });
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Untitled");

@@ -5,13 +5,14 @@ export type AutosaveStatus = "saved" | "pending" | "saving" | "error";
 const equal = (a: DocumentContent, b: DocumentContent) => a.title === b.title && a.markdown === b.markdown;
 /**
  * What a request that outlives the page (`fetch` with `keepalive`) may carry: browsers allow 64 KiB in
- * flight, and the request's JSON wraps the content in a few fields.
+ * flight. Measured on the content as JSON, which escapes every line break; the request's other fields
+ * add a few hundred bytes at most.
  */
 export const KEEPALIVE_BYTES = 60_000;
 const RETRY_FIRST = 2000;
 const RETRY_LONGEST = 30_000;
 export type WriteOptions = { keepalive: true };
-const fitsKeepalive = (content: DocumentContent) => new TextEncoder().encode(content.title + content.markdown).length <= KEEPALIVE_BYTES;
+const fitsKeepalive = (content: DocumentContent) => new TextEncoder().encode(JSON.stringify(content)).length <= KEEPALIVE_BYTES;
 
 /** One writer per mounted document. Only acknowledged snapshots advance the revision/baseline. */
 export class DocumentAutosave {
