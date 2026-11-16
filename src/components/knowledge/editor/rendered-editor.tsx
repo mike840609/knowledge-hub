@@ -159,7 +159,9 @@ export function RenderedEditor(props: RenderedEditorProps) {
             // button still handles its press and must not toggle twice.
             preview.addEventListener("mousedown", event => {
               if (!view.editable || event.button !== 0) return;
-              if (event.target instanceof Element && event.target.closest("button")) return;
+              // A rendered block can hold its own controls: the source disclosure of a diagram, a
+              // link, the copy button. A press on one is for it, not a request to edit the code.
+              if (event.target instanceof Element && event.target.closest("button, a, summary, input, select, textarea, label, [role='button']")) return;
               event.preventDefault();
               setEditing(true);
             });

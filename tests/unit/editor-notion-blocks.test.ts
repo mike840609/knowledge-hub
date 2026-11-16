@@ -275,3 +275,26 @@ describe("callout type menu (20)", () => {
     expect(editor.getMarkdown()).toContain("NOTE");
   });
 });
+
+// The 2026-11-17 code press must not swallow a control the rendered block itself draws (the source
+// disclosure of a diagram, a link). Those are what the reader/editor code block already offers.
+it("leaves a control inside the rendered code block alone", async () => {
+  const markdown = "```mermaid\nflowchart LR\nA --> B\n```\n";
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  mounted.push(root);
+  let ready!: (editor: MarkdownEditor) => void;
+  const built = new Promise<MarkdownEditor>(resolve => { ready = resolve; });
+  act(() => root.render(createElement(RenderedEditor, {
+    workspaceId: "00000000-0000-4000-8000-000000000001", markdown, editable: true,
+    renderCode: code => createElement("details", null, createElement("summary", null, "Source"), createElement("pre", null, code)),
+    renderLanguage: (language, onChange) => createElement(CodeLanguageField, { language, onChange }),
+    onReady: editor => ready(editor), onFail() {}, onUserEdit() {}, onMarkdown() {},
+  })));
+  await built;
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  const summary = container.querySelector("summary")!;
+  act(() => { summary.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true })); });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  expect(container.querySelector("select")).toBeNull();
+});
