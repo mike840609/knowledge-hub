@@ -385,3 +385,13 @@ it("keeps a wikilink's written form when a paragraph becomes code", async () => 
   menuItem("Code").click();
   expect(editor.getMarkdown()).toContain("[[Target]]");
 });
+
+it("joins the lines of a paragraph with a space when it becomes a toggle", async () => {
+  const { editor, view } = await openWith("First line  \nsecond line", false);
+  caretAfter(view, "second line");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  menuItem("Toggle").click();
+  expect(editor.getMarkdown()).toContain("<summary>First line second line</summary>");
+});

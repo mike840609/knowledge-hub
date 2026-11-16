@@ -196,7 +196,9 @@ function leafFrom(node: ProseNode, target: LeafKind, schema: EditorView["state"]
  * The summary is plain text by design (details_summary `content: "text*"`): a wikilink keeps its
  * written form rather than vanishing, and other marks become text. */
 function toggleFrom(node: ProseNode, schema: EditorView["state"]["schema"]): ProseNode {
-  const words = node.textBetween(0, node.content.size, "", (leaf) => leaf.type.name === "wiki_link" ? String(leaf.attrs.raw ?? "") : leaf.type.name === "hardbreak" ? "\n" : String(leaf.attrs.alt ?? ""));
+  // A summary is one line: a break between the paragraph's lines becomes a space, not a newline
+  // the round trip would glue away.
+  const words = node.textBetween(0, node.content.size, "", (leaf) => leaf.type.name === "wiki_link" ? String(leaf.attrs.raw ?? "") : leaf.type.name === "hardbreak" ? " " : String(leaf.attrs.alt ?? ""));
   const title = schema.nodes.details_summary.create(null, words ? schema.text(words) : undefined);
   return schema.nodes.details.create({ open: true }, [title, schema.nodes.details_body.create(null, schema.nodes.paragraph.create())]);
 }

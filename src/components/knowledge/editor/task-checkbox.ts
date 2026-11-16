@@ -79,6 +79,7 @@ function control(view: EditorView, pos: number, checked: boolean): HTMLElement {
     const inert = document.createElement("span");
     inert.className = "kh-task-toggle";
     inert.setAttribute("aria-hidden", "true");
+    inert.style.pointerEvents = "none";
     return inert;
   }
   const button = document.createElement("button");

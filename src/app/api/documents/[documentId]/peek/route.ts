@@ -58,7 +58,7 @@ export async function GET(request: Request, context: { params: Promise<{ documen
       sourceStatus: explorer?.source.status ?? "ARCHIVED",
       readOnly: sourceManaged,
       // One editing surface: the document page is the editor for a writer (Notion has one page,
-      // not a reading page and a separate form). `/edit` stays only as a direct address.
+      // not a reading page and a separate form). `/edit` redirects here.
       editHref: canEdit ? `/w/${view.workspaceId}/knowledge/${view.sourceId}/${view.documentId}` : null,
       syncHref:
         explorer?.source.sourceType === "FOLDER_SYNC" && explorer.source.status === "ACTIVE"
