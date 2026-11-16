@@ -9,6 +9,7 @@ import { governanceRequest } from "@/components/workspaces/governance-error";
 import { blockGutter } from "./block-gutter";
 import { tableActions } from "./table-actions";
 import { slashCommands } from "./slash-commands";
+import { taskCheckbox } from "./task-checkbox";
 import type { LinkTargetsView } from "@/modules/knowledge/application/knowledge-link-service";
 import { createMarkdownEditor, type MarkdownEditor } from "./editor-core";
 import { selectionToolbar, storedLinkTarget } from "./selection-toolbar";
@@ -154,6 +155,14 @@ export function RenderedEditor(props: RenderedEditorProps) {
                 view.focus();
               }
             };
+            // A press on the rendered block is a press into it, as Notion's is; the corner's own
+            // button still handles its press and must not toggle twice.
+            preview.addEventListener("mousedown", event => {
+              if (!view.editable || event.button !== 0) return;
+              if (event.target instanceof Element && event.target.closest("button")) return;
+              event.preventDefault();
+              setEditing(true);
+            });
             // Rewrites the fence's language: the attribute is what Markdown writes after the backticks, and "" writes none.
             const setLanguage = (language: string) => {
               const pos = getPos();
@@ -214,7 +223,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
       onUserEdit: () => latest.current.onUserEdit(),
       onMarkdown: (markdown) => latest.current.onMarkdown(markdown),
       allowImage: (src) => isAllowedMarkdownImageSrc(src, { origin: window.location.origin }),
-      extraPlugins: [editorReviewPathsPlugin, ...toolbar.plugins, ...suggest.plugins, ...slash.plugins, ...(latest.current.links ? [links] : []), ...(latest.current.renderCode ? [codes] : []), blockGutter(), tableActions()],
+      extraPlugins: [editorReviewPathsPlugin, ...toolbar.plugins, ...suggest.plugins, ...slash.plugins, ...(latest.current.links ? [links] : []), ...(latest.current.renderCode ? [codes] : []), blockGutter(), tableActions(), taskCheckbox()],
       configure: (ctx) => {
         toolbar.configure(ctx);
         suggest.configure(ctx);

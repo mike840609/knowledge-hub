@@ -172,6 +172,17 @@ describe("code language field (19)", () => {
     return { container, built };
   }
   const flush = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  it("a press on the rendered code edits it, as Notion's does", async () => {
+    const markdown = "```js\nconst a = 1;\n```\n";
+    const { container, built } = mount(markdown);
+    await built;
+    await flush();
+    expect(container.querySelector("select")).toBeNull();
+    const preview = container.querySelector<HTMLElement>("[data-fake-preview]")!;
+    act(() => { preview.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true })); });
+    await flush();
+    expect(container.querySelector("select")).not.toBeNull();
+  });
   it("shows only while the block is being edited, writes the fence's language, and writes none for Plain text", async () => {
     const markdown = "```js\nconst a = 1;\n```\n\nSee [[Target]]\n";
     const { container, built } = mount(markdown);

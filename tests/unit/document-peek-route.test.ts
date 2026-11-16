@@ -123,7 +123,7 @@ it("returns full markdown plus server-derived ownership and scope without cachin
     status: "ACTIVE",
     sourceStatus: "ACTIVE",
     readOnly: false,
-    editHref: "/w/w1/knowledge/s1/d1/edit",
+    editHref: "/w/w1/knowledge/s1/d1",
     syncHref: null,
     canShare: true,
   });
@@ -435,7 +435,7 @@ it("refuses share in a TEAM workspace even when the document is editable", async
     access: { actions: { canWrite: true, canSearch: true } },
   });
   const body = await (await request()).json();
-  expect(body.editHref).toBe("/w/w1/knowledge/s1/d1/edit");
+  expect(body.editHref).toBe("/w/w1/knowledge/s1/d1");
   expect(body.canShare).toBe(false);
 });
 

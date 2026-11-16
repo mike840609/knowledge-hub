@@ -166,7 +166,7 @@ it('matches aliases by prefix only, and label or words anywhere, aliases first',
   expect(matchingCommands('co').map(command => command.id)).toEqual(['code', 'toggle']);
   expect(matchingCommands('CA').map(command => command.id)).toEqual(['callout']);
   expect(matchingCommands('odo').map(command => command.id)).toEqual([]);
-  expect(matchingCommands('').length).toBe(13);
+  expect(matchingCommands('').length).toBe(14);
 });
 
 it('puts an exact alias, then a label prefix, before an alias prefix', () => {
@@ -181,7 +181,7 @@ it('draws a 16px Lucide icon, hidden from assistive technology, at the left of e
   const { view } = await open();
   view.dispatch(view.state.tr.insertText('/'));
   const rows = [...menu().querySelectorAll<HTMLElement>('[role="option"]')];
-  expect(rows).toHaveLength(13);
+  expect(rows).toHaveLength(14);
   for (const row of rows) {
     const icon = row.firstElementChild!;
     expect(icon.tagName.toLowerCase()).toBe('svg');
@@ -288,4 +288,21 @@ it('a list + opened keeps what follows its "/" when dismissed, and a typed "/" i
   expect(typed.view.state.doc.textContent).toBe('/');
   // Without the "/" list installed, + writes nothing.
   expect(openBlockList(typed.view)).toBe(false);
+});
+
+// Launcher audit: the `/` list was one flat run of thirteen rows, and an internal page link had no
+// entry at all (it was only reachable by knowing to type `[[`).
+it("groups the list by kind", async () => {
+  const { view } = await open();
+  view.dispatch(view.state.tr.insertText("/"));
+  expect([...menu().querySelectorAll("[data-slash-group]")].map((group) => group.textContent))
+    .toEqual(["Basic blocks", "Lists", "Blocks", "Links"]);
+});
+
+it("offers a page link that hands off to the [[ list", async () => {
+  const { view } = await open();
+  view.dispatch(view.state.tr.insertText("/link"));
+  key(view.dom, "Enter");
+  expect(view.state.doc.firstChild?.textContent).toBe("[[");
+  expect(view.state.selection.from).toBe(3);
 });

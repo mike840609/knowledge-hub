@@ -879,15 +879,17 @@ pointer shows the controls; in the text it does nothing, so selecting prose is
 as it was.
 
 The controls are two `size-6` icon buttons in muted text with the shared focus
-ring: one adds a paragraph below and opens the `/` list on it, one is dragged to
-move the block and clicked for the block menu. The menu offers **Turn into** (Text, Heading 1–3, Bulleted
-list, Numbered list, To-do list, Quote, Code), **Duplicate**, **Delete**, then a
-rule and **Move up** / **Move down**. Turn into is a second page of the same
-menu, not a nested popover: a conversion that would drop content — a several-item
-list into one heading, a quote with several paragraphs into one code block — is
-disabled rather than performed lossily. Duplicate inserts the copy immediately
-below; Delete removes the block and leaves one empty paragraph when it was the
-document's only one. `Alt+F10` in the editor moves focus to the controls, and
+ring: one adds a block below (a new sibling item on a list) and, at the top
+level, opens the `/` list on it; one is dragged to move the block and clicked
+for the block menu. The menu offers **Turn into** (Text, Heading 1–3, Bulleted
+list, Numbered list, To-do list, Quote, Code, Toggle, Callout), **Duplicate**,
+**Delete**, then a rule and **Move up** / **Move down**. Turn into is a second
+page of the same menu, not a nested popover: a conversion that would drop
+content — a several-item list into one heading, a quote with several paragraphs
+into one code block — is disabled rather than performed lossily; converting one
+list item splits the list around it (2026-11-17, below). Duplicate inserts the
+copy immediately below; Delete removes the block and leaves one empty paragraph
+when it was the document's only one. `Alt+F10` in the editor moves focus to the controls, and
 the editor says so (`aria-keyshortcuts`); Escape closes the menu, or returns
 from Turn into to the block menu, and finally goes back to the text. While a
 block is dragged it is tinted `kh-bg-selected` and a 2px `--kh-primary` line
@@ -901,7 +903,9 @@ open, and the keys are the editor's. An empty paragraph the caret is in reads
 `Type "/" for commands` in muted text; an empty document keeps its own
 sentence instead.
 
-Each row leads with a 16px Lucide glyph (`size-4`, `text-kh-text-muted`, also
+Rows are grouped under **Basic blocks**, **Lists**, **Blocks** and **Links**
+(2026-11-17, below), each heading `caption` muted text and not an option. Each
+row leads with a 16px Lucide glyph (`size-4`, `text-kh-text-muted`, also
 on the row in force, `aria-hidden`) beside its label and its `caption` hint:
 Type, Heading 1–3, List, List ordered, List todo, Quote, Code, Minus, Table,
 List collapse, and for Callout the reader's note glyph, Info. What follows `/`
@@ -923,7 +927,9 @@ back.
 decisions 6-8; `editor/notion-keys.ts`). Escape in the text, with no menu open,
 selects the current top-level block as a node selection, drawn `kh-bg-selected`
 at the `sm` radius with no outline (`.kh-editor > .ProseMirror-selectednode`);
-Escape again returns to the text. The block menu, the `[[` and `/` lists and the
+Escape again returns to the text. The pointer's controls, the block menu,
+`Mod-d` and `Mod-Shift-ArrowUp/Down` resolve the nearest list item instead, so a
+list item is its own block for those actions (2026-11-17, below). The block menu, the `[[` and `/` lists and the
 toolbar's link field take Escape first. A selected block is the current block
 for `Mod-Shift-ArrowUp/Down` (move) and `Mod-d` (duplicate), which run the same
 commands as the menu's Move and Duplicate. No colour, radius or elevation token
@@ -1854,7 +1860,7 @@ is changed from the title, a button that opens a menu of the five kinds (§8,
 "Callouts"). This supersedes the marker-visible portion of the editor
 reader-hints contract. Their bodies remain editable.
 
-A code block being edited (its raw code open under `Edit code`) shows a
+A code block is entered by pressing it (as the rendered block, 2026-11-17, below) or its `Edit code` button; it shows a
 `Language` `<select>` beside `Done editing code`: Plain text first, then the
 languages the reader's highlighter registers (`code-highlight.ts`), plus the
 fence's own language when it is none of them so opening the field never loses
@@ -1875,3 +1881,39 @@ vertical margin, so a one-line cell has the reader's height. No token is added.
 ### Pasted HTML
 
 The rendered editor reads clipboard HTML through `editor/paste-html.ts` (a `transformPastedHTML` step; the Markdown reader is untouched and nothing is passed through as markup). `<s>` and `<strike>` paste as strikethrough; a `<li>` led by a checkbox `<input>` (bare, or inside a `<p>` or `<label>`) pastes as a to-do carrying its checked state; a `<table>` with no `<thead>` and no `<th>` uses its first row as the header row. `tests/unit/editor-paste-html.test.ts` pastes each and re-opens the saved Markdown.
+
+### Editor Notion gaps (2026-11-17)
+
+The second edit-mode audit (`2026-11-17-editor-notion-gaps-design.md`) closed
+seven gaps left after the 22-decision pass of 2026-11-15:
+
+- A to-do's box is a real control in the editor. The drawn box stays
+  (`li[data-item-type="task"]::before`), and an invisible, focusable button
+  widget sits over it (`editor/task-checkbox.ts`, `.kh-task-toggle`): click,
+  Space or Enter flips the item's `checked` in one undo step, and the Markdown
+  stays `- [ ]` / `- [x]`.
+- The pointer's gutter, the block menu, drag, `+`, `Mod-d` and
+  `Mod-Shift-ArrowUp/Down` act on the nearest list item, not the whole list.
+  A conversion of one item splits its list around it; three menu items cannot
+  drop content (`canTurnInto`). Escape still selects the top-level block, as
+  the 2026-11-15 decision 7 says, and the list keys still act on that selection.
+- The table actions carry a **Column alignment** select (default, left, centre,
+  right). It writes GFM's delimiter row; the reader already renders it. A
+  header-row toggle is not offered: GFM requires a header row, so there is no
+  Markdown state for "no header".
+- Pressing a rendered code block opens its raw code, as Notion's does; the
+  corner button stays for keyboard users and says "Done editing code".
+- Turn into adds **Toggle** and **Callout**. A callout's marker is dropped when
+  it is turned into text, rather than left as prose.
+- The `/` list is grouped (Basic blocks, Lists, Blocks, Links) and adds
+  **Page link**, which hands off to the `[[` list rather than inventing a second
+  way to write a wikilink.
+- The peek panel's **Edit** and a conflict's recovery link open the document
+  page, the one editing surface; `/edit` remains only as a direct address.
+
+Out of scope, recorded: comments inside a team document's editor (the review
+API is document-scoped but its editor wiring is personal-workspace-only; making
+it general is an authorization change), copy-link-to-block and move-to-page (no
+block IDs or block tree), multi-block selection (deferred by the 2026-11-15
+spec), row/column drag reorder, and the earlier deferred list (mentions, page
+width, images, columns, embeds, real-time collaboration).

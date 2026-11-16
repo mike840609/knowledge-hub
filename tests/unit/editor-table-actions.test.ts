@@ -62,3 +62,21 @@ it("does not mutate a read-only table and cleans up controls", async () => {
   editors.pop();
   expect(document.querySelector(".kh-table-actions")).toBeNull();
 });
+
+// Launcher audit: the table controls could add and delete rows and columns but not align a column,
+// although GFM stores alignment in the delimiter row and the reader already renders it.
+it("aligns the column the caret is in and writes it to the Markdown", async () => {
+  const { root, editor, view } = await open();
+  const align = document.querySelector<HTMLSelectElement>('select[aria-label="Column alignment"]')!;
+  expect(align).not.toBeNull();
+  align.value = "center";
+  align.dispatchEvent(new Event("change", { bubbles: true }));
+  const headers: string[] = [];
+  view.state.doc.descendants((node) => { if (node.type.name === "table_header") headers.push(String(node.attrs.alignment)); });
+  expect(headers[0]).toBe("center");
+  expect(editor.getMarkdown()).toMatch(/\|\s*:?-+:?\s*\|\s*-+\s*\|/);
+  expect(root.querySelector("th")!.style.textAlign).toBe("center");
+  align.value = "";
+  align.dispatchEvent(new Event("change", { bubbles: true }));
+  expect(editor.getMarkdown()).not.toMatch(/\|\s*:-+:/);
+});

@@ -2,7 +2,7 @@ import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 import { openBlockList } from "./slash-commands";
-import { blockKind, canTurnInto, deleteBlock, duplicateBlock, insertBlockBelow, moveBlock, topLevelBlocks, turnBlockInto, type BlockKind } from "./block-actions";
+import { blockKind, canTurnInto, deleteBlock, duplicateBlock, insertBlockBelow, moveBlock, siblingBlocks, topLevelBlocks, turnBlockInto, type BlockKind } from "./block-actions";
 
 function icon(kind: "plus" | "grip"): SVGSVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -66,8 +66,10 @@ export function blockGutter() {
         ["task", "To-do list"],
         ["quote", "Quote"],
         ["code", "Code"],
+        ["toggle", "Toggle"],
+        ["callout", "Callout"],
       ];
-      const blocksNow = () => topLevelBlocks(view.state.doc);
+      const blocksNow = () => active === null ? topLevelBlocks(view.state.doc) : siblingBlocks(view.state.doc, active);
       const activeIndex = () => blocksNow().findIndex((block) => block.pos === active);
       const activeNode = () => (active === null ? null : view.state.doc.nodeAt(active));
       function menuButton(label: string, run: () => void): HTMLButtonElement {
@@ -148,6 +150,11 @@ export function blockGutter() {
       }
       function selectedBlock() {
         const { $from } = view.state.selection;
+        // The nearest list item under the caret is the block a writer is pointing at; otherwise
+        // the top-level block, as before.
+        for (let depth = $from.depth; depth >= 1; depth--) {
+          if ($from.node(depth).type.name === "list_item") return $from.before(depth);
+        }
         return $from.depth > 0 ? $from.before(1) : $from.pos;
       }
       function position() {
@@ -179,6 +186,20 @@ export function blockGutter() {
           if (delta < distance) { closest = block.pos; distance = delta; }
           if (delta === 0) break;
         }
+        // A pointer over a list item is over that item, not over the whole list. Layout answers
+        // this where there is layout; jsdom (and a detached editor) has none, so the top-level
+        // block above stays the answer there.
+        try {
+          const rect = dom.getBoundingClientRect();
+          const gutterWidth = Number.parseFloat(getComputedStyle(dom).paddingLeft) || 56;
+          const at = view.posAtCoords({ left: rect.left + gutterWidth + 4, top: y });
+          if (at) {
+            const $at = view.state.doc.resolve(at.pos);
+            for (let depth = $at.depth; depth >= 1; depth--) {
+              if ($at.node(depth).type.name === "list_item") return $at.before(depth);
+            }
+          }
+        } catch { /* no layout to ask */ }
         return closest;
       }
       focusControls = () => {
@@ -220,7 +241,7 @@ export function blockGutter() {
       add.addEventListener("click", () => { if (active !== null && insertBlockBelow(view, active)) openBlockList(view); });
       function moveBy(direction: number) {
         if (active === null) return;
-        const blocks = topLevelBlocks(view.state.doc);
+        const blocks = siblingBlocks(view.state.doc, active);
         const index = blocks.findIndex(block => block.pos === active);
         if (index < 0 || index + direction < 0 || index + direction >= blocks.length) return;
         const before = direction < 0 ? blocks[index - 1].pos : blocks[index + 1].pos + blocks[index + 1].node.nodeSize;
@@ -271,11 +292,13 @@ export function blockGutter() {
         const rect = dom.getBoundingClientRect();
         if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) { dropAt = null; line.hidden = true; return; }
         event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-        const blocks = topLevelBlocks(view.state.doc);
-        let target = view.state.doc.content.size;
-        let y = blockElement(blocks[blocks.length - 1].pos)!.getBoundingClientRect().bottom;
+        const blocks = siblingBlocks(view.state.doc, dragging.from);
+        const last = blocks[blocks.length - 1];
+        let target = last ? last.pos + last.node.nodeSize : view.state.doc.content.size;
+        let y = last ? (blockElement(last.pos)?.getBoundingClientRect().bottom ?? 0) : 0;
         for (const block of blocks) {
-          const box = blockElement(block.pos)!.getBoundingClientRect();
+          const box = blockElement(block.pos)?.getBoundingClientRect();
+          if (!box) continue;
           if (event.clientY < (box.top + box.bottom) / 2) { target = block.pos; y = box.top; break; }
         }
         dropAt = target;

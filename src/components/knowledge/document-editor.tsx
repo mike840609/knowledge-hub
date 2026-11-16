@@ -54,7 +54,7 @@ export function DocumentEditor({
       submitLabel="Save"
       busyLabel="Saving…"
       cancelHref={documentHref}
-      conflictHref={`${documentHref}/edit`}
+      conflictHref={documentHref}
       onSubmit={async ({ title, markdown, expectedRevisionId }) => {
         await governanceRequest(`/api/documents/${documentId}`, "PATCH", { title, markdown, expectedCurrentRevisionId: expectedRevisionId });
         return documentHref;
