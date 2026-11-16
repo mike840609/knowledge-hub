@@ -949,12 +949,13 @@ Escape), or when the link scrolls out of view. No token was added.
 
 **Emoji completion** (2026-11-18, `editor/emoji-suggest.ts`). Typing `:` after
 the start of a word (including after a Han character) and two or more letters
-opens `.kh-emoji-menu`, the `[[` list's surface, with the bundled catalog's best matches: exact shortcode or
+or digits opens `.kh-emoji-menu`, the `[[` list's surface, with the bundled catalog's best matches: exact shortcode or
 keyword, or a name/shortcode prefix (catalog order breaks that tie), then a
 keyword prefix, then a substring. The shortcode is the name's slug
 (`grinning_face`); keywords are English and Traditional Chinese. Enter, Tab or
 a click inserts the glyph, arrows move, Escape closes without changing the
-text. The editor is a `combobox` while it is open. A fully typed `:code:`
+text. The editor is a `combobox` while it is open; another list or the link card
+owning it makes the emoji list stand down. A fully typed `:code:`
 converts on the space after it. It never opens in a code block or inline code,
 or after a word character (`http://`, `12:30`). One undo step; the glyph is
 plain Markdown text.

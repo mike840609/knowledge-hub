@@ -410,9 +410,9 @@ export function emojiShortcode(emoji: Emoji): string {
 }
 
 /**
- * What `:query` should offer, best first: an exact shortcode or keyword, or a name/shortcode prefix
- * (catalog order breaks that tie, so `:grin` offers `grinning face` before `beaming face`), then a
- * keyword prefix, then a name or keyword substring.
+ * What `:query` should offer, best first: an exact shortcode, keyword or alias, or a name/shortcode
+ * prefix (catalog order breaks that tie, so `:grin` offers `grinning face` before `beaming face`),
+ * then a keyword prefix, then a name or keyword substring.
  */
 export function emojiMatches(query: string, limit = 8): Emoji[] {
   const needle = query.trim().toLowerCase();

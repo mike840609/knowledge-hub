@@ -556,6 +556,9 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             const href = String(cardLink?.mark.attrs.href ?? "");
             if (!href || !navigator.clipboard) return;
             const copied = href;
+            // A repeated "Link copied" is not a new mutation; clear first so the next one announces.
+            copyStatus.textContent = "";
+            clearTimeout(copyTimer);
             void navigator.clipboard.writeText(href).then(() => {
               if (String(cardLink?.mark.attrs.href ?? "") !== copied) return;
               const button = cardButtons.get("Copy link")!;
@@ -649,9 +652,10 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           // The same action as the toolbar's Clear formatting. Shift is required: Cmd/Ctrl-\ is the
           // app's navigation toggle, and the editor must not take it (keyboard-shortcuts spec §10).
           function clearOnModShiftBackslash(event: KeyboardEvent) {
-            // Shift+Backslash is "|" on a US keyboard; match the physical key as well as both labels.
+            // Shift+Backslash is "|" on a US keyboard; match the physical key. `key` is the fallback
+            // only where the environment reports no code, so a JIS Shift+¥ is not this shortcut.
             if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.altKey) return;
-            if (event.code !== "Backslash" && event.key !== "\\" && event.key !== "|") return;
+            if (event.code ? event.code !== "Backslash" : event.key !== "\\" && event.key !== "|") return;
             if (event.isComposing || event.keyCode === 229) return;
             if (!clearFormatting(editorView)) return;
             event.preventDefault();

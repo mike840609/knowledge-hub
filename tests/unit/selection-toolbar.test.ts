@@ -713,6 +713,7 @@ it("copies the link address from its card", async () => {
   expect(writeText).toHaveBeenCalledWith("https://example.com");
   expect(copy.getAttribute("aria-label")).toBe("Copied");
   expect(card.querySelector("[data-copy-status]")?.textContent).toBe("Link copied");
+  expect(card.querySelector("[data-copy-status]")?.getAttribute("aria-live")).toBe("polite");
   expect(editor.getMarkdown()).toBe("[example](https://example.com) after\n");
 });
 

@@ -102,7 +102,11 @@ export function emojiSuggest(): { plugins: MilkdownPlugin[]; configure: (ctx: Ct
         const trigger = state?.trigger ?? null;
         const dismissed = trigger !== null && state?.dismissed === trigger.from;
         shown = trigger && !dismissed ? emojiMatches(trigger.query) : [];
-        if (!view.editable || !view.hasFocus() || !trigger || dismissed || shown.length === 0 || view.composing) { close(); return; }
+        // The `[[` list or the `/` list may own the editor's combobox on this line; two owners
+        // would leave the ARIA pointing at whichever closed last.
+        const owner = dom.getAttribute("aria-controls");
+        const otherMenu = dom.getAttribute("aria-expanded") === "true" && owner && owner !== popup.id;
+        if (otherMenu || !view.editable || !view.hasFocus() || !trigger || dismissed || shown.length === 0 || view.composing) { close(); return; }
         const active = Math.min(state!.index, shown.length - 1);
         popup.replaceChildren();
         shown.forEach((entry, index) => {

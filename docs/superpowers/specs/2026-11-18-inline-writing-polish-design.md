@@ -10,7 +10,8 @@ emoji is text and clearing marks only removes them.
 
 1. **`:shortcode` offers emoji.** Typing `:` after the start of a word (a
    space, an opening bracket, the start of a line, or a Han character — a zh-TW
-   writer does not put a space before the colon) and at least two letters
+   writer does not put a space before the colon) and at least two letters or
+   digits
    opens a list of the bundled emoji (`lib/emoji-catalog.ts`), best match first:
    an exact shortcode or keyword, or a name/shortcode prefix (catalog order
    breaks that tie), then a keyword prefix, then a substring. The name's
