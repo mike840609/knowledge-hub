@@ -162,3 +162,85 @@ it("announces how many blocks are chosen", async () => {
   const live = view.dom.parentElement!.querySelector('[aria-live="polite"]');
   expect(live?.textContent).toBe("3 blocks selected");
 });
+
+it("a shifted letter, an Option character and typed text are ignored, and shortcuts go on", async () => {
+  const { editor, view } = await open();
+  choose(view, 1);
+  shift(view, "ArrowDown");
+  const before = md(editor);
+  expect(press(view, "A", { shiftKey: true }).defaultPrevented).toBe(true);
+  expect(press(view, "ø", { altKey: true }).defaultPrevented).toBe(true);
+  expect(press(view, "?", { shiftKey: true }).defaultPrevented).toBe(true);
+  // The backstop: text that reaches ProseMirror by another path is refused too.
+  const { from, to } = view.state.selection;
+  expect(view.someProp("handleTextInput", (handler) => handler(view, from, to, "A", () => view.state.tr.insertText("A", from, to)))).toBe(true);
+  expect(md(editor)).toBe(before);
+  // Copy and cut are shortcuts, not typing: they reach the clipboard handlers.
+  for (const letter of ["c", "x"]) expect(press(view, letter, { ctrlKey: true }).defaultPrevented).toBe(false);
+});
+
+it("an input method's first key ends the range, and nothing is lost", async () => {
+  const { editor, view } = await open();
+  choose(view, 1);
+  shift(view, "ArrowDown");
+  const before = md(editor);
+  const event = new KeyboardEvent("keydown", { key: "Process", bubbles: true, cancelable: true });
+  Object.defineProperty(event, "keyCode", { value: 229 });
+  view.dom.dispatchEvent(event);
+  expect(inRange(view)).toEqual([]);
+  expect(view.state.selection).toBeInstanceOf(TextSelection);
+  expect(md(editor)).toBe(before);
+});
+
+/** A clipboard that records what is written to it. */
+function clipboard() {
+  const data = new Map<string, string>();
+  return { data, clipboardData: { clearData: () => data.clear(), setData: (type: string, value: string) => data.set(type, value), getData: (type: string) => data.get(type) ?? "" } };
+}
+function clipEvent(view: EditorView, type: "copy" | "cut") {
+  const { data, clipboardData } = clipboard();
+  const event = new Event(type, { bubbles: true, cancelable: true }) as ClipboardEvent;
+  Object.defineProperty(event, "clipboardData", { value: clipboardData });
+  view.dom.dispatchEvent(event);
+  return { data, event };
+}
+
+it("copy takes every block of the range, and cut takes them out as well", async () => {
+  const { editor, view } = await open();
+  choose(view, 1);
+  shift(view, "ArrowDown");
+  const copied = clipEvent(view, "copy");
+  expect(copied.event.defaultPrevented).toBe(true);
+  expect(copied.data.get("text/plain")).toContain("one");
+  expect(copied.data.get("text/plain")).toContain("two");
+  expect(md(editor)).toBe(DOC);
+  const cut = clipEvent(view, "cut");
+  expect(cut.data.get("text/plain")).toContain("two");
+  expect(md(editor)).toBe("# Title\n\n- a\n- b\n\nfour\n");
+});
+
+it("duplicating a range that holds a heading keeps the copies chosen, and moving past a same-titled heading keeps the range", async () => {
+  const { editor, view } = await open("# Title\n\none\n\ntwo\n");
+  choose(view, 0);
+  shift(view, "ArrowDown");
+  press(view, "d", { ctrlKey: true });
+  expect(md(editor)).toBe("# Title\n\none\n\n# Title\n\none\n\ntwo\n");
+  expect(inRange(view)).toEqual(["Title", "one"]);
+  expect(view.state.selection).toBeInstanceOf(NodeSelection);
+  const moved = await open("# A\n\none\n\n# A\n\ntwo\n");
+  choose(moved.view, 0);
+  shift(moved.view, "ArrowDown");
+  press(moved.view, "ArrowDown", { ctrlKey: true, shiftKey: true });
+  expect(inRange(moved.view)).toEqual(["A", "one"]);
+});
+
+it("a range widened upward stays pointed upward after Mod-d", async () => {
+  const { view } = await open();
+  choose(view, 2);
+  shift(view, "ArrowUp");
+  expect(inRange(view)).toEqual(["one", "two"]);
+  press(view, "d", { ctrlKey: true });
+  expect(inRange(view)).toEqual(["one", "two"]);
+  shift(view, "ArrowUp");
+  expect(inRange(view).length).toBe(3);
+});

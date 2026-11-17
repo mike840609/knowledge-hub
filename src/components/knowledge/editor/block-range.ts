@@ -31,9 +31,37 @@ const chosenBlock = (state: EditorState): number | null =>
 const BY_DIGIT: Record<string, BlockKind> = { "0": "paragraph", "1": "h1", "2": "h2", "3": "h3", "4": "task", "5": "bullet", "6": "ordered", "7": "toggle", "8": "code" };
 const SHIFT_DIGIT: Record<string, BlockKind> = { "7": "ordered", "8": "bullet", "9": "task" };
 
-function setRange(view: EditorView, tr: Transaction, range: Range | null) {
-  view.dispatch(closeHistory(tr.setMeta(key, range)).scrollIntoView());
+function setRange(view: EditorView, tr: Transaction, range: Range | null, scroll = true) {
+  const done = closeHistory(tr.setMeta(key, range));
+  view.dispatch(scroll ? done.scrollIntoView() : done);
   view.dispatch(closeHistory(view.state.tr));
+}
+
+/** The blocks of the range taken out; one empty paragraph stays if that was everything. */
+function removeRange(view: EditorView, from: number, to: number) {
+  const { state } = view;
+  const whole = from === 0 && to === state.doc.content.size;
+  const tr = whole ? state.tr.replaceWith(from, to, state.schema.nodes.paragraph.create()) : state.tr.delete(from, to);
+  tr.setSelection(Selection.near(tr.doc.resolve(Math.min(from + (whole ? 1 : 0), tr.doc.content.size)), -1));
+  setRange(view, tr, null);
+}
+
+/** Copy and cut of the whole range: the selection ProseMirror holds is the anchor block alone, which would take one of several. */
+function clip(view: EditorView, event: ClipboardEvent, cut: boolean): boolean {
+  const range = key.getState(view.state);
+  if (!view.editable || !range || !event.clipboardData) return false;
+  const blocks = blocksIn(view.state.doc, range);
+  if (blocks.length < 2) return false;
+  const from = blocks[0].pos;
+  const last = blocks[blocks.length - 1];
+  const to = last.pos + last.node.nodeSize;
+  const { dom, text } = view.serializeForClipboard(view.state.doc.slice(from, to));
+  event.preventDefault();
+  event.clipboardData.clearData();
+  event.clipboardData.setData("text/html", dom.innerHTML);
+  event.clipboardData.setData("text/plain", text);
+  if (cut) removeRange(view, from, to);
+  return true;
 }
 
 export const blockRange = $prose(
@@ -44,9 +72,17 @@ export const blockRange = $prose(
         init: () => null,
         apply(transaction, previous, _old, state) {
           if (transaction.getMeta(key) !== undefined) return transaction.getMeta(key) as Range | null;
-          if (previous === null || transaction.docChanged || chosenBlock(state) !== previous.anchor) return null;
-          return previous;
+          if (previous === null) return null;
+          // A change that only sets attributes (the heading ids the editor keeps in step after a copy of a heading)
+          // moves nothing: the range stands, and `appendTransaction` gives the chosen block back its selection.
+          if (transaction.docChanged) return transaction.doc.content.size === transaction.before.content.size ? previous : null;
+          return chosenBlock(state) === previous.anchor ? previous : null;
         },
+      },
+      appendTransaction(transactions, _old, state) {
+        const range = key.getState(state);
+        if (!range || chosenBlock(state) === range.anchor || !transactions.some((transaction) => transaction.docChanged) || !state.doc.nodeAt(range.anchor)) return null;
+        return state.tr.setSelection(NodeSelection.create(state.doc, range.anchor)).setMeta(key, range).setMeta("addToHistory", false);
       },
       props: {
         decorations(state) {
@@ -54,12 +90,30 @@ export const blockRange = $prose(
           if (!range) return null;
           return DecorationSet.create(state.doc, blocksIn(state.doc, range).map((block) => Decoration.node(block.pos, block.pos + block.node.nodeSize, { class: "kh-block-in-range" })));
         },
+        // Backstop for text that arrives by a path the keys do not see: it never replaces one block of several.
+        handleTextInput(view) {
+          const range = key.getState(view.state);
+          return Boolean(range && blocksIn(view.state.doc, range).length > 1);
+        },
+        handleDOMEvents: {
+          copy: (view, event) => clip(view, event as ClipboardEvent, false),
+          cut: (view, event) => clip(view, event as ClipboardEvent, true),
+        },
         handleKeyDown(view, event) {
-          if (!view.editable || composing(event)) return false;
+          if (!view.editable) return false;
           const { state } = view;
           const anchor = chosenBlock(state);
           if (anchor === null) return false;
           const range = key.getState(state);
+          // An input method cannot be told to ignore its text: the range ends first, and what is composed goes into the
+          // anchor block's text, the way a character typed with one block chosen does.
+          if (composing(event)) {
+            if (range && blocksIn(state.doc, range).length > 1) {
+              const tr = state.tr.setSelection(Selection.near(state.doc.resolve(anchor + 1), 1));
+              setRange(view, tr, null, false);
+            }
+            return false;
+          }
           const plain = !event.metaKey && !event.ctrlKey && !event.altKey;
           const moveKey = event.key === "ArrowDown" || event.key === "ArrowUp";
           // Widen, or narrow: Shift-Arrow moves the far end of the range by one block.
@@ -70,7 +124,7 @@ export const blockRange = $prose(
             if (at < 0 || next < 0 || next >= blocks.length) { event.preventDefault(); return true; }
             event.preventDefault();
             const head = blocks[next].pos;
-            setRange(view, state.tr, head === anchor ? null : { anchor, head });
+            setRange(view, state.tr, head === anchor ? null : { anchor, head }, false);
             (view.nodeDOM(head) as HTMLElement | null)?.scrollIntoView?.({ block: "nearest" });
             return true;
           }
@@ -80,22 +134,18 @@ export const blockRange = $prose(
           const from = blocks[0].pos;
           const last = blocks[blocks.length - 1];
           const to = last.pos + last.node.nodeSize;
-          // A character or Enter would replace one block of several; the range is left alone instead.
-          if (plain && !event.shiftKey && (event.key.length === 1 || event.key === "Enter")) { event.preventDefault(); return true; }
           if (plain && !event.shiftKey && (event.key === "Backspace" || event.key === "Delete")) {
             event.preventDefault();
-            const whole = from === 0 && to === state.doc.content.size;
-            const tr = whole ? state.tr.replaceWith(from, to, state.schema.nodes.paragraph.create()) : state.tr.delete(from, to);
-            tr.setSelection(Selection.near(tr.doc.resolve(Math.min(from + (whole ? 1 : 0), tr.doc.content.size)), -1));
-            setRange(view, tr, null);
+            removeRange(view, from, to);
             return true;
           }
           if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key === "d") {
             event.preventDefault();
             const tr = state.tr.insert(to, blocks.map((block) => block.node));
-            const copies = tr.doc.nodeAt(to + (last.pos - from)) ? to + (last.pos - from) : to;
-            tr.setSelection(NodeSelection.create(tr.doc, to));
-            setRange(view, tr, { anchor: to, head: copies });
+            // The copies keep the range's direction: the copy of the anchor block is the anchor.
+            const copied = { anchor: to + (anchor - from), head: to + (range.head - from) };
+            tr.setSelection(NodeSelection.create(tr.doc, copied.anchor));
+            setRange(view, tr, copied);
             return true;
           }
           if ((event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey && moveKey) {
@@ -134,6 +184,10 @@ export const blockRange = $prose(
             for (const block of [...blocks].reverse()) turnBlockInto(view, block.pos, into);
             return true;
           }
+          // A character, with Shift or Option or AltGr as much as without, or Enter, would replace one block of several;
+          // the range is left alone. Shortcuts (Ctrl or Cmd, not AltGr) go on: copy, cut, paste, undo, select all.
+          const shortcut = event.metaKey || (event.ctrlKey && !event.altKey);
+          if (!shortcut && (event.key.length === 1 || event.key === "Enter")) { event.preventDefault(); return true; }
           return false;
         },
       },

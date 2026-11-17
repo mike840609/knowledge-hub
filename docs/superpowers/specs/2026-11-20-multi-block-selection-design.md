@@ -16,19 +16,28 @@ stored changes: every operation writes Markdown through the rendered editor.
    drawn with the same fill as a chosen block (`kh-bg-selected`, no new token).
    Any change to the document, or a selection that is no longer that node,
    ends the range, so it can never point at blocks that moved.
-2. **Delete, duplicate, move and turn act on the whole range, in one step.**
+2. **Delete, duplicate, move, copy, cut and turn act on the whole range.** Each is one undo step
+   except turning into a heading, quote, code block or callout (see "Out of scope").
    - Backspace and Delete remove every block; if that is the whole document one
      empty paragraph is left (documents are never empty, and nothing is
      hard-deleted: this is the editor, and a revision keeps what was).
-   - `Mod-d` inserts copies after the range and chooses them.
+   - `Mod-d` inserts copies after the range and chooses them, keeping the range's
+     direction (the copy of the anchor block is the anchor). A copied heading makes
+     the editor renumber heading ids, an attribute-only change: the range stands.
+   - Copy puts every block of the range on the clipboard (HTML and text), and cut
+     does that and removes them: ProseMirror's own selection is the anchor block
+     alone, which would have taken one of several.
    - `Mod-Shift-ArrowUp/Down` moves the range past the block above or below it,
      and the range moves with it.
    - `Mod-Alt-0…8` and `Mod-Shift-7/8/9`, the single-block turn keys, turn every
      block. Paragraphs and headings turned into a list become one list, an item
      each. The same kind on every block turns them back to paragraphs, as it does
      for one.
-3. **Nothing replaces one block of several.** A character or Enter with a range
-   is ignored. Escape ends the range and returns to the text (decision 7 of the
+3. **Nothing replaces one block of several.** A character, with Shift or Option
+   or AltGr as much as without, and Enter, with a range is ignored (Ctrl or Cmd
+   shortcuts go on), and text that reaches the editor another way is refused. An
+   input method cannot be told to ignore its text: its first key ends the range, and
+   the composed text goes into the anchor block's text, as with one block chosen. Escape ends the range and returns to the text (decision 7 of the
    2026-11-15 spec, unchanged). Tab still goes on to the page.
 4. **The range is announced.** A polite live region says "3 blocks selected".
 
@@ -49,6 +58,9 @@ level, as it does for one block), the existing single-block rules apply.
   menu rather than the keys.
 - A range turned into a heading, quote, code block or callout is turned block by
   block (`turnBlockInto`), so each block is its own undo step.
+- A range of a paragraph and an existing list turned into a list gives a new
+  one-item list beside the old one, two lists (`-` and `*` in Markdown): the
+  single-block rule, repeated.
 
 ## Verification
 
