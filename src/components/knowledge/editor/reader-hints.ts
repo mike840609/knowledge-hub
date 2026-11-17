@@ -7,7 +7,7 @@ import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { Plugin, PluginKey, TextSelection, type EditorState } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
-import { dispatchBlockAction } from "./block-actions";
+import { dispatchBlockAction, headingText } from "./block-actions";
 import { $prose } from "@milkdown/kit/utils";
 import { CALLOUT_ATTRIBUTE, CALLOUT_KINDS, calloutKind } from "@/shared/markdown/remark-callouts";
 import { INLINE_HTML_TAG } from "@/shared/markdown/remark-known-html";
@@ -106,7 +106,7 @@ function hints(doc: ProseNode): DecorationSet {
   const found: Decoration[] = [];
   const slugger = new HeadingSlugger();
   doc.descendants((node, pos) => {
-    if (node.type.name === "heading") found.push(Decoration.node(pos, pos + node.nodeSize, { id: slugger.slug(node.textContent) }));
+    if (node.type.name === "heading") found.push(Decoration.node(pos, pos + node.nodeSize, { id: slugger.slug(headingText(node)) }));
     if (node.type.name === "blockquote") {
       const kind = calloutOf(node);
       if (kind) {

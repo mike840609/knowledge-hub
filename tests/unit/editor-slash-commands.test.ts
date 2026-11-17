@@ -166,7 +166,7 @@ it('matches aliases by prefix only, and label or words anywhere, aliases first',
   expect(matchingCommands('co').map(command => command.id)).toEqual(['code', 'toggle']);
   expect(matchingCommands('CA').map(command => command.id)).toEqual(['callout']);
   expect(matchingCommands('odo').map(command => command.id)).toEqual([]);
-  expect(matchingCommands('').length).toBe(14);
+  expect(matchingCommands('').length).toBe(16);
 });
 
 it('puts an exact alias, then a label prefix, before an alias prefix', () => {
@@ -181,7 +181,7 @@ it('draws a 16px Lucide icon, hidden from assistive technology, at the left of e
   const { view } = await open();
   view.dispatch(view.state.tr.insertText('/'));
   const rows = [...menu().querySelectorAll<HTMLElement>('[role="option"]')];
-  expect(rows).toHaveLength(14);
+  expect(rows).toHaveLength(16);
   for (const row of rows) {
     const icon = row.firstElementChild!;
     expect(icon.tagName.toLowerCase()).toBe('svg');

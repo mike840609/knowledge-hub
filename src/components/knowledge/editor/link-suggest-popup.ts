@@ -27,6 +27,8 @@ export function messageText(message: SuggestMessage): string {
 export type SuggestView = {
   suggestions: readonly Suggestion[];
   message: SuggestMessage | null;
+  /** The title a last row offers to create a page with, after the suggestions; its index is `suggestions.length`. */
+  create?: string | null;
   active: number;
 };
 
@@ -95,7 +97,7 @@ export function createSuggestPopup(): SuggestPopup {
     optionId,
     render(view, onPick) {
       list.replaceChildren();
-      list.hidden = view.suggestions.length === 0;
+      list.hidden = view.suggestions.length === 0 && !view.create;
       // The source earns its column only when it distinguishes rows: one source for every result, or
       // every title unique, makes it repetition. Duplicate titles keep it as the tie-breaker.
       const sources = new Set(view.suggestions.map((suggestion) => suggestion.target.sourceName));
@@ -124,11 +126,27 @@ export function createSuggestPopup(): SuggestPopup {
         });
         list.appendChild(row);
       });
-      const text = view.message ? messageText(view.message) : "";
+      if (view.create) {
+        const index = view.suggestions.length;
+        const row = document.createElement("li");
+        row.id = optionId(index);
+        row.setAttribute("role", "option");
+        row.setAttribute("aria-selected", String(index === view.active));
+        row.className = `${ROW} ${index === view.active ? ROW_ACTIVE : ROW_IDLE}`;
+        const title = document.createElement("span");
+        title.className = `min-w-0 flex-1 truncate text-body ${index === view.active ? "text-kh-selected-text" : "text-kh-text"}`;
+        title.textContent = `Create page "${view.create}"`;
+        row.append(title);
+        row.addEventListener("mousedown", (event) => {
+          if (event.button === 0) onPick(index);
+        });
+        list.appendChild(row);
+      }
+      const text = view.message && !view.create ? messageText(view.message) : "";
       message.textContent = text;
       message.hidden = text === "";
       const count = view.suggestions.length;
-      const said = view.message ? text : `${count} ${count === 1 ? "suggestion" : "suggestions"}.`;
+      const said = view.message && !view.create ? text : `${count} ${count === 1 ? "suggestion" : "suggestions"}${view.create ? `, or create page "${view.create}"` : ""}.`;
       if (said !== announced) {
         announced = said;
         announce.textContent = said;

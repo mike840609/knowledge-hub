@@ -59,7 +59,9 @@ to the wikilink rule (CLAUDE.md).
 - Notion's "paste as bookmark / embed" menu: the Hub has no embeds (deferred by
   the 2026-10-27 audit).
 - Trailing spaces at the edges of a Markdown paste are trimmed by the parser.
-- An address inside a pasted sentence, or typed and then followed by Enter or the
+- (Amended 2026-11-20: an address inside pasted text is now linked, in both paste
+  paths; `2026-11-20-links-and-paste-design.md`, decision 4. Typed then Enter is
+  still not linked.) An address inside a pasted sentence, or typed and then followed by Enter or the
   end of the line, is not linked. It is still written `https\://…`, the defect
   the audit named. Decisions 2 and 3 cover the two commonest paths: a pasted
   address alone, and an address followed by a space. Linking addresses inside

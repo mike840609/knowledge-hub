@@ -12,6 +12,8 @@ import { Fragment, type Mark, type Node as ProseNode } from "@milkdown/kit/prose
 import { ReplaceStep } from "@milkdown/kit/prose/transform";
 import { $inputRule, $prose, $useKeymap } from "@milkdown/kit/utils";
 import { blockKind, canTurnInto, duplicateBlock, moveBlock, siblingBlocks, turnBlockInto, type BlockKind } from "./block-actions";
+import { blockRange } from "./block-range";
+import { flipNearestDetails } from "./details-toggle";
 import { findWikiLinkTrigger } from "./link-suggestions";
 
 /**
@@ -379,6 +381,16 @@ export const tickTodo = (state: EditorState, dispatch?: (tr: Transaction) => voi
   return false;
 };
 
+/**
+ * `Mod-Enter` with the caret in a toggle's title: open or close it, as Notion's does. Only the title: in the
+ * body the key stays the page's (save), and a to-do ticks first (`tickTodo`).
+ */
+export function flipToggleAtTitle(view: EditorView): boolean {
+  const { selection } = view.state;
+  if (!view.editable || !(selection instanceof TextSelection) || selection.$from.parent.type.name !== "details_summary") return false;
+  return flipNearestDetails(view, selection.from, true);
+}
+
 // Milkdown merges these into the editor's one keymap, ahead of ProseMirror's base keymap (priority 50).
 const notionKeymap = $useKeymap("khNotionKeys", {
   // Notion's `Mod-Alt` digits (keys spec, decision 5): 0–3 stay Milkdown's (text, headings); 4–8 are Notion's.
@@ -442,6 +454,8 @@ const tabStaysInText = $prose(
             const role = selection.$from.node(depth).type;
             if (role.name === "list_item" || role.spec.tableRole || role.spec.code) return false;
           }
+          // Shift-Tab in the document's first line goes back to the title, the way Tab came from it.
+          if (event.shiftKey && selection.$from.depth === 1 && selection.$from.parent === view.state.doc.firstChild) exitTop(view);
           return true;
         },
       },
@@ -460,6 +474,8 @@ const topLeadsToTitle = $prose(
         handleKeyDown(view, event) {
           if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || composing(event) || !view.editable) return false;
           const { selection, doc } = view.state;
+          // A divider or image first in the document is selected, not typed into: ArrowUp from it leads up too.
+          if (event.key === "ArrowUp" && selection instanceof NodeSelection && selection.from === 0) return exitTop(view);
           if (!(selection instanceof TextSelection) || !selection.empty) return false;
           const { $from } = selection;
           if (event.key === "ArrowUp") {
@@ -521,4 +537,4 @@ const escapeSelection = $prose(
     }),
 );
 
-export const notionKeys: MilkdownPlugin[] = [todoInputRule, markEnd, ...typography, notionKeymap, escapeSelection, tabStaysInText, topLeadsToTitle].flat();
+export const notionKeys: MilkdownPlugin[] = [todoInputRule, markEnd, ...typography, notionKeymap, blockRange, escapeSelection, tabStaysInText, topLeadsToTitle].flat();

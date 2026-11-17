@@ -24,6 +24,7 @@ read it").
   deferred by the 2026-10-27 audit.
 - Operations on several selected blocks at once (delete, move, turn into a
   range): deferred. This spec adds block selection for one block only.
+  (Added 2026-11-20 for the keyboard: `2026-11-20-multi-block-selection-design.md`.)
 - A "Turn into" menu on the selection toolbar: the block menu has it.
 - Callout icon or colour choice: a GitHub alert has a type, nothing else.
 - Page icon upload: no binary storage.
@@ -59,7 +60,8 @@ read it").
    field, and the command palette does not open. With no selection it is the
    palette, as now.
    (Amended 2026-11-19: `Mod-Alt-4`…`8` added, `Mod-Enter` ticks a to-do, and Tab in plain text is
-   claimed; `2026-11-19-editor-keys-caret-design.md`.)
+   claimed; `2026-11-19-editor-keys-caret-design.md`. And 2026-11-20: `/diagram` and `/date` join the `/`
+   list; `2026-11-20-small-keys-design.md`.)
 
 ### Title
 
