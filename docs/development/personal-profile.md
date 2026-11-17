@@ -4,7 +4,7 @@
 
 `Insights` appears in Personal workspace navigation at `/w/{workspaceId}/profile`.
 Home is the reading and retrieval surface: it lists drafts, recent documents, discussions
-and favorites, with Search and New note in reach. It does not repeat the statistics.
+and favorites, with Search and Create document in reach. It does not repeat the statistics.
 Detailed statistics stay on Insights, which opens with a title and period selector
 instead of a repeated identity header. Team workspaces and other users' Personal
 workspaces cannot access these statistics or their detail pages.
