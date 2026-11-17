@@ -168,7 +168,7 @@ Always resolve `current_revision`. After each owner save creates a revision, the
 - No caching: §6.4 `Cache-Control: no-store` forces re-read on refresh.
 - No live push (§2).
 - **Cost:** every future addition becomes visible to link holders. The dialog explicitly explains this (§4).
-- **No history exposure:** show only current title/Markdown, not revision list, metadata, `createdBy`, source name, or tree location.
+- **No history exposure:** show only current title/Markdown, not revision list, `createdBy`, source name, or tree location. The current revision's metadata (frontmatter) is served since 2026-11-17, for the shared download (`2026-11-17-shared-download-markdown-design.md`).
 
 ### 5.4 Revocation
 

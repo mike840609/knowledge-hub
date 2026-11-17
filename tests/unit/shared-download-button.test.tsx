@@ -16,6 +16,6 @@ it("downloads the exported Markdown once on click", async () => {
   const button = host.querySelector("button")!;
   expect(button.textContent).toBe("Download Markdown");
   await act(async () => button.click());
-  expect(downloadMarkdown).toHaveBeenCalledTimes(1);
+  await vi.waitFor(() => expect(downloadMarkdown).toHaveBeenCalledTimes(1));
   expect(downloadMarkdown).toHaveBeenCalledWith("Runbook", exportMarkdown({ title: "Runbook", markdown: "body", metadata }));
 });
