@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { editorViewCtx } from "@milkdown/kit/core";
+import { redo, undo } from "@milkdown/kit/prose/history";
 import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { afterEach, expect, it } from "vitest";
@@ -243,4 +244,69 @@ it("a range widened upward stays pointed upward after Mod-d", async () => {
   expect(inRange(view)).toEqual(["one", "two"]);
   shift(view, "ArrowUp");
   expect(inRange(view).length).toBe(3);
+});
+
+it("undoing or redoing a range move leaves no stale range, and nothing is deleted from another block", async () => {
+  const { editor, view } = await open("# H\n\none\n\ntwo\n\nlonger block here\n\nfour\n");
+  const original = md(editor);
+  choose(view, 1);
+  shift(view, "ArrowDown");
+  press(view, "ArrowDown", { ctrlKey: true, shiftKey: true });
+  const moved = md(editor);
+  expect(moved).not.toBe(original);
+  // The history commands dispatch straight through the view: a stale range would throw here.
+  expect(() => undo(view.state, view.dispatch)).not.toThrow();
+  expect(md(editor)).toBe(original);
+  expect(inRange(view)).toEqual([]);
+  expect(() => redo(view.state, view.dispatch)).not.toThrow();
+  expect(md(editor)).toBe(moved);
+  expect(inRange(view)).toEqual([]);
+  // Whatever is selected now, Backspace never takes part of another block.
+  press(view, "Backspace");
+  expect(md(editor)).not.toContain("longer b\n");
+});
+
+it("Backspace and Delete with a modifier take the whole range, never the anchor block alone", async () => {
+  for (const init of [{ shiftKey: true }, { ctrlKey: true }, { altKey: true }]) {
+    const { editor, view } = await open();
+    choose(view, 1);
+    shift(view, "ArrowDown");
+    press(view, "Backspace", init);
+    expect(md(editor)).toBe("# Title\n\n- a\n- b\n\nfour\n");
+  }
+  const { editor, view } = await open();
+  choose(view, 1);
+  shift(view, "ArrowDown");
+  press(view, "h", { ctrlKey: true });
+  expect(md(editor)).toBe("# Title\n\n- a\n- b\n\nfour\n");
+});
+
+it("paste with a range is refused, and a single chosen block is pasted over as before", async () => {
+  const { editor, view } = await open();
+  choose(view, 1);
+  shift(view, "ArrowDown");
+  const event = new Event("paste", { bubbles: true, cancelable: true }) as ClipboardEvent;
+  Object.defineProperty(event, "clipboardData", { value: { getData: (type: string) => (type === "text/plain" ? "PASTED" : ""), files: [], types: ["text/plain"] } });
+  view.dom.dispatchEvent(event);
+  expect(event.defaultPrevented).toBe(true);
+  expect(md(editor)).toBe(DOC);
+});
+
+it("AltGr and a dead key are text, not turn keys or a way to replace a block", async () => {
+  const { editor, view } = await open();
+  choose(view, 1);
+  shift(view, "ArrowDown");
+  // German AltGr+7 is `{`: Windows reports Ctrl+Alt, and the physical key is Digit7.
+  const brace = press(view, "{", { ctrlKey: true, altKey: true, code: "Digit7" });
+  expect(brace.defaultPrevented).toBe(true);
+  expect(md(editor)).toBe(DOC);
+  // On a US keyboard Ctrl+Alt+5 is the turn key, and still works.
+  press(view, "5", { ctrlKey: true, altKey: true, code: "Digit5" });
+  expect(md(editor)).toContain("- one\n- two");
+  const second = await open();
+  choose(second.view, 1);
+  shift(second.view, "ArrowDown");
+  press(second.view, "Dead");
+  expect(inRange(second.view)).toEqual([]);
+  expect(md(second.editor)).toBe(DOC);
 });

@@ -14,11 +14,14 @@ stored changes: every operation writes Markdown through the rendered editor.
    keys stop at the document's ends. ProseMirror's selection stays the one
    chosen node; the rest of the range is the plugin's state (`block-range.ts`),
    drawn with the same fill as a chosen block (`kh-bg-selected`, no new token).
-   Any change to the document, or a selection that is no longer that node,
-   ends the range, so it can never point at blocks that moved.
+   Any change to the document that is more than attributes (the editor
+   renumbers heading ids after a copy of a heading), or a selection that is no longer
+   that node, ends the range, so it can never point at blocks that moved: a move
+   undone, or an edit that keeps the document's size, is not an attribute change.
 2. **Delete, duplicate, move, copy, cut and turn act on the whole range.** Each is one undo step
    except turning into a heading, quote, code block or callout (see "Out of scope").
-   - Backspace and Delete remove every block; if that is the whole document one
+   - Backspace and Delete, with or without Shift, Ctrl, Alt or Cmd (and Ctrl-H, a
+     Mac's Backspace), remove every block; if that is the whole document one
      empty paragraph is left (documents are never empty, and nothing is
      hard-deleted: this is the editor, and a revision keeps what was).
    - `Mod-d` inserts copies after the range and chooses them, keeping the range's
@@ -30,11 +33,11 @@ stored changes: every operation writes Markdown through the rendered editor.
    - `Mod-Shift-ArrowUp/Down` moves the range past the block above or below it,
      and the range moves with it.
    - `Mod-Alt-0…8` and `Mod-Shift-7/8/9`, the single-block turn keys, turn every
-     block. Paragraphs and headings turned into a list become one list, an item
+     block (where Ctrl+Alt is AltGr, as on Windows, only the character decides, so AltGr+7 is `{`, not a turn key). Paragraphs and headings turned into a list become one list, an item
      each. The same kind on every block turns them back to paragraphs, as it does
      for one.
 3. **Nothing replaces one block of several.** A character, with Shift or Option
-   or AltGr as much as without, and Enter, with a range is ignored (Ctrl or Cmd
+   or AltGr as much as without, a dead key, a paste, and Enter, with a range is ignored (Ctrl or Cmd
    shortcuts go on), and text that reaches the editor another way is refused. An
    input method cannot be told to ignore its text: its first key ends the range, and
    the composed text goes into the anchor block's text, as with one block chosen. Escape ends the range and returns to the text (decision 7 of the

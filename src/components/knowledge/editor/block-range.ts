@@ -15,13 +15,28 @@ import { blockKind, topLevelBlocks, turnBlockInto, type BlockKind, type EditorBl
  */
 type Range = { anchor: number; head: number };
 const key = new PluginKey<Range | null>("khBlockRange");
-const composing = (event: KeyboardEvent) => event.isComposing || event.keyCode === 229;
+// A dead key (an accent waiting for its letter) starts a composition on some platforms before any keyCode says so.
+const composing = (event: KeyboardEvent) => event.isComposing || event.keyCode === 229 || event.key === "Dead" || event.key === "Process";
 
 const blocksIn = (doc: ProseNode, range: Range): EditorBlock[] => {
   const low = Math.min(range.anchor, range.head);
   const high = Math.max(range.anchor, range.head);
   return topLevelBlocks(doc).filter((block) => block.pos >= low && block.pos <= high);
 };
+
+/**
+ * The same top-level blocks in the same places, differing at most in attributes. A move undone, or any edit that happens to
+ * keep the document's size, is not that: the range's positions would point into other blocks.
+ */
+function sameBlocks(before: ProseNode, after: ProseNode): boolean {
+  if (before.childCount !== after.childCount) return false;
+  for (let index = 0; index < before.childCount; index++) {
+    const a = before.child(index);
+    const b = after.child(index);
+    if (a.type !== b.type || !a.content.eq(b.content)) return false;
+  }
+  return true;
+}
 
 /** The anchor block, when it is chosen as a node (a block taken with Escape). */
 const chosenBlock = (state: EditorState): number | null =>
@@ -75,13 +90,13 @@ export const blockRange = $prose(
           if (previous === null) return null;
           // A change that only sets attributes (the heading ids the editor keeps in step after a copy of a heading)
           // moves nothing: the range stands, and `appendTransaction` gives the chosen block back its selection.
-          if (transaction.docChanged) return transaction.doc.content.size === transaction.before.content.size ? previous : null;
+          if (transaction.docChanged) return sameBlocks(transaction.before, transaction.doc) ? previous : null;
           return chosenBlock(state) === previous.anchor ? previous : null;
         },
       },
       appendTransaction(transactions, _old, state) {
         const range = key.getState(state);
-        if (!range || chosenBlock(state) === range.anchor || !transactions.some((transaction) => transaction.docChanged) || !state.doc.nodeAt(range.anchor)) return null;
+        if (!range || chosenBlock(state) === range.anchor || !transactions.some((transaction) => transaction.docChanged) || state.doc.resolve(range.anchor).depth !== 0 || !state.doc.nodeAt(range.anchor)) return null;
         return state.tr.setSelection(NodeSelection.create(state.doc, range.anchor)).setMeta(key, range).setMeta("addToHistory", false);
       },
       props: {
@@ -94,6 +109,13 @@ export const blockRange = $prose(
         handleTextInput(view) {
           const range = key.getState(view.state);
           return Boolean(range && blocksIn(view.state.doc, range).length > 1);
+        },
+        // Paste would replace the anchor block alone, as typing would: with a range it is refused.
+        handlePaste(view, event) {
+          const range = key.getState(view.state);
+          if (!view.editable || !range || blocksIn(view.state.doc, range).length < 2) return false;
+          event.preventDefault();
+          return true;
         },
         handleDOMEvents: {
           copy: (view, event) => clip(view, event as ClipboardEvent, false),
@@ -134,7 +156,9 @@ export const blockRange = $prose(
           const from = blocks[0].pos;
           const last = blocks[blocks.length - 1];
           const to = last.pos + last.node.nodeSize;
-          if (plain && !event.shiftKey && (event.key === "Backspace" || event.key === "Delete")) {
+          // Backspace and Delete with Shift, Ctrl, Alt or Cmd (a word, a line) take the range, as the plain keys do: none of them
+          // may take the anchor block alone. Ctrl-H is Backspace on a Mac.
+          if (event.key === "Backspace" || event.key === "Delete" || (event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === "h")) {
             event.preventDefault();
             removeRange(view, from, to);
             return true;
@@ -164,7 +188,10 @@ export const blockRange = $prose(
             setRange(view, tr, { anchor: anchor + shift, head: range.head + shift });
             return true;
           }
-          const digit = /^Digit(\d)$/.exec(event.code ?? "")?.[1] ?? (/^\d$/.test(event.key) ? event.key : null);
+          // Ctrl+Alt is also AltGr on Windows: there only the character decides (AltGr+7 is `{` on a German keyboard, not a
+          // turn key). Elsewhere the physical key does, so Shift and Option, which change `key`, still find their digit.
+          const altGr = event.ctrlKey && event.altKey && !event.metaKey;
+          const digit = (altGr ? null : /^Digit(\d)$/.exec(event.code ?? "")?.[1]) ?? (/^\d$/.test(event.key) ? event.key : null);
           const wanted = digit === null ? undefined : (event.metaKey || event.ctrlKey) && event.altKey && !event.shiftKey ? BY_DIGIT[digit] : (event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey ? SHIFT_DIGIT[digit] : undefined;
           if (wanted) {
             event.preventDefault();
