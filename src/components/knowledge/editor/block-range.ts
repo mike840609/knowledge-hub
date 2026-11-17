@@ -1,5 +1,5 @@
 import { closeHistory } from "@milkdown/kit/prose/history";
-import type { Node as ProseNode } from "@milkdown/kit/prose/model";
+import { Mark, type Node as ProseNode } from "@milkdown/kit/prose/model";
 import { NodeSelection, Plugin, PluginKey, Selection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
@@ -16,6 +16,7 @@ import { blockKind, topLevelBlocks, turnBlockInto, type BlockKind, type EditorBl
 type Range = { anchor: number; head: number };
 const key = new PluginKey<Range | null>("khBlockRange");
 // A dead key (an accent waiting for its letter) starts a composition on some platforms before any keyCode says so.
+const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 const composing = (event: KeyboardEvent) => event.isComposing || event.keyCode === 229 || event.key === "Dead" || event.key === "Process";
 
 const blocksIn = (doc: ProseNode, range: Range): EditorBlock[] => {
@@ -25,16 +26,23 @@ const blocksIn = (doc: ProseNode, range: Range): EditorBlock[] => {
 };
 
 /**
+ * The same shape all the way down: types, text and marks, and the number of children, differing at most in attributes.
+ * (A heading nested in a quote or a list is renumbered by the editor's heading-id plugin as much as a top-level one.)
+ */
+function sameShape(a: ProseNode, b: ProseNode): boolean {
+  if (a === b) return true;
+  if (a.type !== b.type || a.childCount !== b.childCount || a.text !== b.text || !Mark.sameSet(a.marks, b.marks)) return false;
+  for (let index = 0; index < a.childCount; index++) if (!sameShape(a.child(index), b.child(index))) return false;
+  return true;
+}
+
+/**
  * The same top-level blocks in the same places, differing at most in attributes. A move undone, or any edit that happens to
  * keep the document's size, is not that: the range's positions would point into other blocks.
  */
 function sameBlocks(before: ProseNode, after: ProseNode): boolean {
   if (before.childCount !== after.childCount) return false;
-  for (let index = 0; index < before.childCount; index++) {
-    const a = before.child(index);
-    const b = after.child(index);
-    if (a.type !== b.type || !a.content.eq(b.content)) return false;
-  }
+  for (let index = 0; index < before.childCount; index++) if (!sameShape(before.child(index), after.child(index))) return false;
   return true;
 }
 
@@ -157,8 +165,8 @@ export const blockRange = $prose(
           const last = blocks[blocks.length - 1];
           const to = last.pos + last.node.nodeSize;
           // Backspace and Delete with Shift, Ctrl, Alt or Cmd (a word, a line) take the range, as the plain keys do: none of them
-          // may take the anchor block alone. Ctrl-H is Backspace on a Mac.
-          if (event.key === "Backspace" || event.key === "Delete" || (event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === "h")) {
+          // may take the anchor block alone. Ctrl-H is Backspace on a Mac (elsewhere it is the browser's history).
+          if (event.key === "Backspace" || event.key === "Delete" || (isMac() && event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === "h")) {
             event.preventDefault();
             removeRange(view, from, to);
             return true;

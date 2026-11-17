@@ -20,8 +20,7 @@ stored changes: every operation writes Markdown through the rendered editor.
    undone, or an edit that keeps the document's size, is not an attribute change.
 2. **Delete, duplicate, move, copy, cut and turn act on the whole range.** Each is one undo step
    except turning into a heading, quote, code block or callout (see "Out of scope").
-   - Backspace and Delete, with or without Shift, Ctrl, Alt or Cmd (and Ctrl-H, a
-     Mac's Backspace), remove every block; if that is the whole document one
+   - Backspace and Delete, with or without Shift, Ctrl, Alt or Cmd (and Ctrl-H on a Mac, where it is Backspace), remove every block; if that is the whole document one
      empty paragraph is left (documents are never empty, and nothing is
      hard-deleted: this is the editor, and a revision keeps what was).
    - `Mod-d` inserts copies after the range and chooses them, keeping the range's
@@ -37,9 +36,9 @@ stored changes: every operation writes Markdown through the rendered editor.
      each. The same kind on every block turns them back to paragraphs, as it does
      for one.
 3. **Nothing replaces one block of several.** A character, with Shift or Option
-   or AltGr as much as without, a dead key, a paste, and Enter, with a range is ignored (Ctrl or Cmd
+   or AltGr as much as without, a paste, and Enter, with a range is ignored (Ctrl or Cmd
    shortcuts go on), and text that reaches the editor another way is refused. An
-   input method cannot be told to ignore its text: its first key ends the range, and
+   input method cannot be told to ignore its text, and neither can a dead key (an accent waiting for its letter): the first key of either ends the range, and
    the composed text goes into the anchor block's text, as with one block chosen. Escape ends the range and returns to the text (decision 7 of the
    2026-11-15 spec, unchanged). Tab still goes on to the page.
 4. **The range is announced.** A polite live region says "3 blocks selected".

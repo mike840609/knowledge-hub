@@ -277,8 +277,29 @@ it("Backspace and Delete with a modifier take the whole range, never the anchor 
   const { editor, view } = await open();
   choose(view, 1);
   shift(view, "ArrowDown");
+  // Ctrl-H is a Mac's Backspace; elsewhere it is the browser's history and is left alone.
   press(view, "h", { ctrlKey: true });
-  expect(md(editor)).toBe("# Title\n\n- a\n- b\n\nfour\n");
+  expect(md(editor)).toBe(DOC);
+  const platform = Object.getOwnPropertyDescriptor(Navigator.prototype, "platform");
+  Object.defineProperty(navigator, "platform", { value: "MacIntel", configurable: true });
+  try {
+    press(view, "h", { ctrlKey: true });
+    expect(md(editor)).toBe("# Title\n\n- a\n- b\n\nfour\n");
+  } finally {
+    delete (navigator as unknown as Record<string, unknown>).platform;
+    if (platform) Object.defineProperty(Navigator.prototype, "platform", platform);
+  }
+});
+
+it("a heading nested in a quote or a list keeps the range when Mod-d renumbers it", async () => {
+  for (const markdown of ["> # Q\n\none\n\nfour\n", "- # L\n\none\n\nfour\n"]) {
+    const { view } = await open(markdown);
+    choose(view, 0);
+    shift(view, "ArrowDown");
+    press(view, "d", { ctrlKey: true });
+    expect(inRange(view).length).toBe(2);
+    expect(view.state.selection).toBeInstanceOf(NodeSelection);
+  }
 });
 
 it("paste with a range is refused, and a single chosen block is pasted over as before", async () => {
