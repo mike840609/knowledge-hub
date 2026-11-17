@@ -17,6 +17,9 @@ export const designContractRule = {
       // See docs/superpowers/specs/2026-10-16-inline-editing.md.
       "/components/knowledge/editable-document.tsx", "/components/knowledge/document-composer.tsx", "/components/search/quick-search.tsx",
       "/components/knowledge/tree-filter.tsx", "/components/knowledge/move-dialog.tsx",
+      // The new note's title while it is being made, drawn as the document's title it becomes
+      // (2026-11-19 creation-flow spec, decision 3).
+      "/components/knowledge/new-note-starter.tsx",
     ];
     return {
       Literal(node) { check(node, node.value); },

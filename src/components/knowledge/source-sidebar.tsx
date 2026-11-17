@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { bufferTyping } from "./typing-ahead";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, ChevronsLeft, Plus, ListFilter, Star, Share2 } from "lucide-react";
@@ -169,7 +170,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   const hasNotes = visibleCollections.some(({ source: candidate }) => candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE");
   const canCreate = access.actions.canWrite && confirmed;
   const newNoteHref = `/w/${workspaceId}/knowledge/new`;
-  const addNote = <Tooltip label="Create document"><Link href={newNoteHref} aria-label="Create document" className={buttonClasses({ variant: "ghost", icon: true })}><Plus size={15} aria-hidden="true" /></Link></Tooltip>;
+  const addNote = <Tooltip label="Create document"><Link href={newNoteHref} onClick={() => bufferTyping()} aria-label="Create document" className={buttonClasses({ variant: "ghost", icon: true })}><Plus size={15} aria-hidden="true" /></Link></Tooltip>;
   // What can be made here, from the registry like everything else: the button exists when the action does.
   const actionContext = { workspaceId, workspaceType: access.workspace.type, isPersonalOwner: access.isPersonalOwner, can: access.actions, confirmed };
   const createActions = actionsFor("create", actionContext);
@@ -319,7 +320,8 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                   {candidate.status === "ARCHIVED" ? <Status kind="archived" className="ml-auto text-caption font-normal text-kh-text-muted">Archived</Status> : null}
                 </button>
                 <RowActionsTrigger actions={sourceActions} onRun={runAction} label={candidate.name} className="kh-row-action" />
-                {isNotes && canCreate ? <div className="kh-row-action flex items-center">{addFolder}{addNote}</div> : null}
+                {/* `+` stays in sight, as Notion's new-page button does; the folder button shows on hover. */}
+                {isNotes && canCreate ? <div className="flex items-center"><span className="kh-row-action flex items-center">{addFolder}</span>{addNote}</div> : null}
               </RowContextMenu>
               <div id={`collection-${candidate.id}`} hidden={!open} className="mt-1 pl-2">
                 {open && ensureTree && treeStates?.[candidate.id]?.status !== "loaded" ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">

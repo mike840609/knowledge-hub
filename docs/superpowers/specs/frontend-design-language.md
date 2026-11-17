@@ -1058,6 +1058,18 @@ the same weight (`.kh-select`), drawn as two gradient strokes in
 not an SVG: `img-src 'self' blob:` refuses `data:` images, which is the Markdown
 image policy doing its job, not something to loosen for a glyph.
 
+### Creating a document (2026-11-19)
+
+The Notes source heading's `+` (Create document) is always drawn. The folder
+button beside it shows on hover, as `.kh-row-action`. A Hub folder row adds a
+hover `+`, the 24px icon control its menu button uses. It runs New document
+here. While a new note is being made, the starter page draws a title field in
+the page-title style. That field and the editor's own title field are the
+`design/contract` field exceptions for new notes. An empty document's hint is
+"Write, or press / for commands". Home's button reads Create document, the
+label the sidebar, the palette and `C` share
+(`2026-11-19-creation-flow-design.md`).
+
 ### A source heading's slot
 
 A writable Knowledge tree row is dragged whole. The dragged row and a receiving folder use `kh-bg-selected`; a 2px `--kh-primary` line marks a position at the target's indent, below the visible subtree when placing after a folder. A collapsed folder opens after 500 ms over its middle. Sources the Hub cannot write to offer no drag. This uses existing tokens.

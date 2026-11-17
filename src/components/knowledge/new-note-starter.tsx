@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { bufferTyping, setTyped, takeTyped } from "./typing-ahead";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { refreshOnArrival } from "@/components/shell/refresh-on-arrival";
@@ -13,11 +14,15 @@ type Created = { documentId: string; sourceId: string };
 let recent: { href: string; at: number; created: Promise<Created> } | null = null;
 let arriving: string | null = null;
 
-/** Whether the editor opening `documentId` is arriving from a note just made here; asks once. */
-export function takeNewNote(documentId: string) {
-  if (arriving !== documentId) return false;
+/**
+ * When the editor opening `documentId` is arriving from a note just made here: the title typed while
+ * it was made ("" for none), and whether Enter was pressed after it. `null` otherwise. Asks once.
+ */
+export function takeNewNote(documentId: string): { title: string; entered: boolean } | null {
+  if (arriving !== documentId) return null;
   arriving = null;
-  return true;
+  const { text, entered } = takeTyped();
+  return { title: text.trim(), entered };
 }
 
 /**
@@ -35,10 +40,18 @@ export function NewNoteStarter({ workspaceId, folderId, seedTitle, composeHref }
   const router = useRouter();
   const started = useRef(false);
   const [failure, setFailure] = useState<GovernanceFailure | null>(null);
+  const [title, setTitle] = useState("");
+  const titleNow = useRef("");
+  const enteredHere = useRef(false);
+  titleNow.current = title;
   useEffect(() => {
     // Once per visit: a ref survives React's development double mount.
     if (started.current) return;
     started.current = true;
+    // Keys typed before this page was drawn: the start of the title, the field taking over from here.
+    const early = takeTyped();
+    if (early.text) setTitle(early.text);
+    if (early.entered) enteredHere.current = true;
     const address = window.location.href;
     if (!recent || recent.href !== address || Date.now() - recent.at > 5000) {
       recent = { href: address, at: Date.now(), created: governanceRequest<Created>(`/api/workspaces/${workspaceId}/documents`, "POST", {
@@ -48,6 +61,9 @@ export function NewNoteStarter({ workspaceId, folderId, seedTitle, composeHref }
     recent.created.then(created => {
       const href = `/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}`;
       arriving = created.documentId;
+      // And between leaving this page and the editor's title taking focus.
+      bufferTyping(titleNow.current);
+      if (enteredHere.current) setTyped(titleNow.current, true);
       refreshOnArrival(href);
       router.replace(href);
     }, error => setFailure(governanceFailure(error)));
@@ -57,7 +73,15 @@ export function NewNoteStarter({ workspaceId, folderId, seedTitle, composeHref }
       {failure ? <>
         <GovernanceError error={failure} />
         <p className="mt-3 text-body"><Link className="underline" href={composeHref}>Write it in the new-document form instead</Link></p>
-      </> : <p role="status" className="text-body text-kh-text-muted">Creating a new note…</p>}
+      </> : <>
+        {/* Typing starts as soon as the button is pressed: what is typed here, before the note exists, is
+            carried to its title (creation-flow spec, decision 3). */}
+        <textarea autoFocus aria-label="Title" placeholder={seedTitle ?? "Untitled"} value={title} rows={1} maxLength={512}
+          onChange={(event) => { setTitle(event.target.value); setTyped(event.target.value); }}
+          onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); enteredHere.current = true; } }}
+          className="mt-14 block w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-page-title font-semibold tracking-tight text-kh-text outline-none placeholder:text-kh-text-muted" />
+        <p role="status" className="mt-2 text-caption text-kh-text-muted">Creating a new note…</p>
+      </>}
     </div>
   );
 }
