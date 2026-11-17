@@ -142,7 +142,7 @@ test.describe("typing rules and keys in the rendered editor", () => {
     await page.keyboard.press("Home");
     await settle();
     await page.keyboard.press("Alt+F10");
-    await expect(page.getByRole("button", { name: "Add paragraph below" })).toBeFocused();
+    await expect(page.getByRole("button", { name: "Add block below" })).toBeFocused();
     await page.getByRole("button", { name: "Move block" }).click();
     const menu = page.getByRole("menu", { name: "Block actions" });
     await expect(menu).toBeVisible();

@@ -3,7 +3,7 @@ import type { Ctx, MilkdownPlugin } from "@milkdown/kit/ctx";
 import { Plugin, PluginKey, type EditorState } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
-import { Code, Heading1, Heading2, Heading3, Info, List, ListCollapse, ListOrdered, ListTodo, Minus, Quote, Table, Type, type LucideIcon } from "lucide-react";
+import { Code, Heading1, Heading2, Heading3, Info, Link2, List, ListCollapse, ListOrdered, ListTodo, Minus, Quote, Table, Type, type LucideIcon } from "lucide-react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { dispatchBlockAction } from "./block-actions";
@@ -11,20 +11,21 @@ import { insertDetailsSkeleton } from "./details-toggle";
 
 // `aliases` match by prefix (what a Notion hand types: /h2, /todo, /ul); label and `words` match anywhere.
 const commands = [
-  { id: "text", label: "Text", hint: "Plain paragraph", words: "paragraph 文字 段落", aliases: ["p"], Icon: Type },
-  { id: "h1", label: "Heading 1", hint: "Large heading", words: "title 標題", aliases: ["h1"], Icon: Heading1 },
-  { id: "h2", label: "Heading 2", hint: "Section heading", words: "title 標題", aliases: ["h2"], Icon: Heading2 },
-  { id: "h3", label: "Heading 3", hint: "Small heading", words: "title 標題", aliases: ["h3"], Icon: Heading3 },
-  { id: "bullet", label: "Bulleted list", hint: "Unordered items", words: "list 清單", aliases: ["ul", "bullet"], Icon: List },
-  { id: "ordered", label: "Numbered list", hint: "Ordered steps", words: "list 清單", aliases: ["ol", "number"], Icon: ListOrdered },
-  { id: "task", label: "To-do list", hint: "Tasks with checkboxes", words: "task checklist 待辦", aliases: ["todo", "checkbox"], Icon: ListTodo },
-  { id: "quote", label: "Quote", hint: "A block quotation", words: "blockquote 引用", aliases: ["quote"], Icon: Quote },
-  { id: "code", label: "Code", hint: "A fenced code block", words: "程式碼", aliases: ["code"], Icon: Code },
-  { id: "divider", label: "Divider", hint: "A horizontal rule", words: "hr line 分隔線", aliases: ["hr", "line"], Icon: Minus },
-  { id: "table", label: "Table", hint: "A simple 2×2 table", words: "table 表格", aliases: ["table"], Icon: Table },
-  { id: "toggle", label: "Toggle", hint: "A collapsible section", words: "toggle fold collapsible 折疊", aliases: ["toggle"], Icon: ListCollapse },
+  { id: "text", label: "Text", hint: "Plain paragraph", words: "paragraph 文字 段落", aliases: ["p"], group: "Basic blocks", Icon: Type },
+  { id: "h1", label: "Heading 1", hint: "Large heading", words: "title 標題", aliases: ["h1"], group: "Basic blocks", Icon: Heading1 },
+  { id: "h2", label: "Heading 2", hint: "Section heading", words: "title 標題", aliases: ["h2"], group: "Basic blocks", Icon: Heading2 },
+  { id: "h3", label: "Heading 3", hint: "Small heading", words: "title 標題", aliases: ["h3"], group: "Basic blocks", Icon: Heading3 },
+  { id: "bullet", label: "Bulleted list", hint: "Unordered items", words: "list 清單", aliases: ["ul", "bullet"], group: "Lists", Icon: List },
+  { id: "ordered", label: "Numbered list", hint: "Ordered steps", words: "list 清單", aliases: ["ol", "number"], group: "Lists", Icon: ListOrdered },
+  { id: "task", label: "To-do list", hint: "Tasks with checkboxes", words: "task checklist 待辦", aliases: ["todo", "checkbox"], group: "Lists", Icon: ListTodo },
+  { id: "quote", label: "Quote", hint: "A block quotation", words: "blockquote 引用", aliases: ["quote"], group: "Blocks", Icon: Quote },
+  { id: "code", label: "Code", hint: "A fenced code block", words: "程式碼", aliases: ["code"], group: "Blocks", Icon: Code },
+  { id: "divider", label: "Divider", hint: "A horizontal rule", words: "hr line 分隔線", aliases: ["hr", "line"], group: "Blocks", Icon: Minus },
+  { id: "table", label: "Table", hint: "A simple 2×2 table", words: "table 表格", aliases: ["table"], group: "Blocks", Icon: Table },
+  { id: "toggle", label: "Toggle", hint: "A collapsible section", words: "toggle fold collapsible 折疊", aliases: ["toggle"], group: "Blocks", Icon: ListCollapse },
   // The reader's callout glyph for a note (markdown-callout.tsx).
-  { id: "callout", label: "Callout", hint: "A highlighted note", words: "callout note 提示 標註", aliases: ["callout"], Icon: Info },
+  { id: "callout", label: "Callout", hint: "A highlighted note", words: "callout note 提示 標註", aliases: ["callout"], group: "Blocks", Icon: Info },
+  { id: "link", label: "Page link", hint: "Another page in this workspace", words: "link to page document wiki 連結 頁面", aliases: ["page"], group: "Links", Icon: Link2 },
 ] as const;
 type Command = typeof commands[number];
 type Trigger = { pos: number; query: string };
@@ -70,6 +71,8 @@ function loneSlash(state: EditorState, pos: number): [number, number] | null {
  */
 export function matchingCommands(query: string): readonly Command[] {
   const q = query.toLowerCase().trim();
+  // Rows are shown under one heading each, in this order; the rank inside a group is preserved.
+  const order = ["Basic blocks", "Lists", "Blocks", "Links"] as const;
   const groups = [
     (command: Command) => command.aliases.some(alias => alias === q),
     (command: Command) => command.label.toLowerCase().startsWith(q),
@@ -79,7 +82,17 @@ export function matchingCommands(query: string): readonly Command[] {
   ];
   const found: Command[] = [];
   for (const test of groups) for (const command of commands) if (!found.includes(command) && test(command)) found.push(command);
-  return found;
+  // Each heading appears once, and a group keeps the best rank of its rows: a label prefix in one
+  // group still outranks a word match in another, while the rows of one heading stay together.
+  const rankOf = (command: Command) => groups.findIndex(test => test(command));
+  const orderIndex = (command: Command) => order.indexOf(command.group as typeof order[number]);
+  const groupRank = new Map<string, number>();
+  for (const command of found) groupRank.set(command.group, Math.min(groupRank.get(command.group) ?? Infinity, rankOf(command)));
+  return [...found].sort((a, b) =>
+    (groupRank.get(a.group)! - groupRank.get(b.group)!) ||
+    (orderIndex(a) - orderIndex(b)) ||
+    (rankOf(a) - rankOf(b)) ||
+    (found.indexOf(a) - found.indexOf(b)));
 }
 
 /** Each row's 16px Lucide glyph, drawn once from lucide-react as reader-hints.ts draws a callout's, then cloned. */
@@ -102,6 +115,14 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
     const trigger = key.getState(view.state)?.trigger;
     if (!view.editable || !trigger) return;
     const { nodes } = view.state.schema;
+    const current = view.state.doc.nodeAt(trigger.pos)!;
+    if (command.id === "link") {
+      // Hand off to the `[[` list that already knows how to write a wikilink: the next thing typed
+      // is that link's target, and dismissing it leaves the text as typed.
+      const paragraph = nodes.paragraph.create(null, view.state.schema.text("[["));
+      dispatchBlockAction(view, view.state.tr.replaceWith(trigger.pos, trigger.pos + current.nodeSize, paragraph), trigger.pos + 3);
+      return;
+    }
     const paragraph = nodes.paragraph.create();
     let node = paragraph;
     if (command.id.startsWith("h")) node = nodes.heading.create({ level: Number(command.id.slice(1)) });
@@ -120,7 +141,6 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
         nodes.table_row.create(null, [cell(), cell()]),
       ]);
     }
-    const current = view.state.doc.nodeAt(trigger.pos)!;
     if (command.id === "toggle") {
       insertDetailsSkeleton(view, trigger.pos, trigger.pos + current.nodeSize, "", "summary");
       return;
@@ -205,7 +225,19 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
         shown = matchingCommands(state.trigger.query);
         const active = Math.min(state.index, shown.length - 1);
         popup.replaceChildren();
+        const rows: HTMLElement[] = [];
+        let group = "";
         shown.forEach((command, index) => {
+          if (command.group !== group) {
+            group = command.group;
+            const heading = document.createElement("div");
+            heading.className = "px-2 pb-1 pt-2 text-caption text-kh-text-muted";
+            heading.setAttribute("data-slash-group", group);
+            heading.setAttribute("role", "presentation");
+            heading.setAttribute("aria-hidden", "true");
+            heading.textContent = group;
+            popup.appendChild(heading);
+          }
           const row = document.createElement("div");
           row.id = `${popup.id}-${index}`;
           row.setAttribute("role", "option");
@@ -218,6 +250,7 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
           row.append(glyph(command.Icon), text);
           row.addEventListener("mousedown", event => { if (event.button === 0) { event.preventDefault(); choose(view, command); } });
           popup.appendChild(row);
+          rows.push(row);
         });
         if (!shown.length) {
           const message = document.createElement("div"); message.className = "px-3 py-2 text-body-sm text-kh-text-muted"; message.textContent = "No matching commands"; popup.appendChild(message);
@@ -228,7 +261,7 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
         dom.setAttribute("role", "combobox"); dom.setAttribute("aria-haspopup", "listbox"); dom.setAttribute("aria-autocomplete", "list"); dom.setAttribute("aria-expanded", "true"); dom.setAttribute("aria-controls", popup.id);
         if (active >= 0) dom.setAttribute("aria-activedescendant", `${popup.id}-${active}`); else dom.removeAttribute("aria-activedescendant");
         position();
-        popup.children[active]?.scrollIntoView?.({ block: "nearest" });
+        rows[active]?.scrollIntoView?.({ block: "nearest" });
       }
       const keepCaret = (event: MouseEvent) => { if (event.button === 0) event.preventDefault(); };
       popup.addEventListener("mousedown", keepCaret);

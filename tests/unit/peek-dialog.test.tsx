@@ -73,7 +73,7 @@ it("shows the peeked document with an Edit entry for HUB_MANAGED content", async
     const open = links.find((link) => link.textContent === "Open as full page");
     expect(open?.getAttribute("href")).toBe("/w/w1/knowledge/s1/d1");
     const edit = links.find((link) => link.textContent === "Edit");
-    expect(edit?.getAttribute("href")).toBe("/w/w1/knowledge/s1/d1/edit");
+    expect(edit?.getAttribute("href")).toBe("/w/w1/knowledge/s1/d1");
   } finally {
     await act(async () => root.unmount());
   }

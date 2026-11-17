@@ -11,7 +11,7 @@ import { customInputRulesKey } from "@milkdown/kit/prose";
 import { Fragment, type Mark, type Node as ProseNode } from "@milkdown/kit/prose/model";
 import { ReplaceStep } from "@milkdown/kit/prose/transform";
 import { $inputRule, $prose, $useKeymap } from "@milkdown/kit/utils";
-import { blockKind, canTurnInto, duplicateBlock, moveBlock, topLevelBlocks, turnBlockInto, type BlockKind } from "./block-actions";
+import { blockKind, canTurnInto, duplicateBlock, moveBlock, siblingBlocks, turnBlockInto, type BlockKind } from "./block-actions";
 import { findWikiLinkTrigger } from "./link-suggestions";
 
 /**
@@ -148,6 +148,17 @@ const topBlockPos = (state: EditorState): number | null => {
   return selection.$from.depth >= 1 ? selection.$from.before(1) : null;
 };
 
+/** The block a writer's own action (duplicate, move) is about: a list item is its own block. */
+const actionBlockPos = (state: EditorState): number | null => {
+  const { selection } = state;
+  if (selection instanceof NodeSelection && selection.$from.depth === 0) return selection.from;
+  const { $from } = selection;
+  for (let depth = $from.depth; depth >= 1; depth--) {
+    if ($from.node(depth).type.name === "list_item") return $from.before(depth);
+  }
+  return $from.depth >= 1 ? $from.before(1) : null;
+};
+
 function listKindAt(state: EditorState): BlockKind | null {
   const { $from } = state.selection;
   for (let depth = $from.depth; depth >= 1; depth--) {
@@ -255,9 +266,9 @@ function wrapParagraph(state: EditorState, target: "ordered" | "bullet" | "task"
 
 function moveCurrentBlock(direction: -1 | 1) {
   return (state: EditorState, dispatch?: unknown, view?: EditorView) => {
-    const pos = topBlockPos(state);
+    const pos = actionBlockPos(state);
     if (pos === null || !view?.editable) return false;
-    const blocks = topLevelBlocks(state.doc);
+    const blocks = siblingBlocks(state.doc, pos);
     const index = blocks.findIndex((block) => block.pos === pos);
     const neighbour = blocks[index + direction];
     if (!neighbour) return true; // At the edge: nothing to do, and the browser has nothing for this key either.
@@ -268,7 +279,7 @@ function moveCurrentBlock(direction: -1 | 1) {
 }
 
 const duplicateCurrentBlock = (state: EditorState, dispatch?: unknown, view?: EditorView) => {
-  const pos = topBlockPos(state);
+  const pos = actionBlockPos(state);
   if (pos === null || !view?.editable) return false;
   return dispatch ? duplicateBlock(view, pos) : true;
 };

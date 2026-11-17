@@ -62,3 +62,45 @@ it("does not mutate a read-only table and cleans up controls", async () => {
   editors.pop();
   expect(document.querySelector(".kh-table-actions")).toBeNull();
 });
+
+// Launcher audit: the table controls could add and delete rows and columns but not align a column,
+// although GFM stores alignment in the delimiter row and the reader already renders it.
+it("aligns the column the caret is in and writes it to the Markdown", async () => {
+  const { root, editor, view } = await open();
+  const align = document.querySelector<HTMLSelectElement>('select[aria-label="Column alignment"]')!;
+  expect(align).not.toBeNull();
+  align.value = "center";
+  align.dispatchEvent(new Event("change", { bubbles: true }));
+  const headers: string[] = [];
+  view.state.doc.descendants((node) => { if (node.type.name === "table_header") headers.push(String(node.attrs.alignment)); });
+  expect(headers[0]).toBe("center");
+  expect(editor.getMarkdown()).toMatch(/\|\s*:?-+:?\s*\|\s*-+\s*\|/);
+  expect(root.querySelector("th")!.style.textAlign).toBe("center");
+  align.value = "";
+  align.dispatchEvent(new Event("change", { bubbles: true }));
+  expect(editor.getMarkdown()).not.toMatch(/\|\s*:-+:/);
+});
+
+it("aligns only the caret's column, and undoes as one step", async () => {
+  const { editor, view } = await open();
+  const align = document.querySelector<HTMLSelectElement>('select[aria-label="Column alignment"]')!;
+  // open() puts the caret in "one", the first column.
+  align.value = "center";
+  align.dispatchEvent(new Event("change", { bubbles: true }));
+  const headerAlignment = () => {
+    const values: Array<string | null> = [];
+    view.state.doc.descendants((node) => { if (node.type.name === "table_header") values.push(node.attrs.alignment ?? null); });
+    return values;
+  };
+  expect(headerAlignment()).toEqual(["center", null]);
+  // The second column, then undo: only the second alignment goes.
+  let two = 0;
+  view.state.doc.descendants((node, pos) => { if (node.isText && node.text === "two") two = pos; });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, two)));
+  align.value = "right";
+  align.dispatchEvent(new Event("change", { bubbles: true }));
+  expect(headerAlignment()).toEqual(["center", "right"]);
+  undo(view.state, view.dispatch);
+  expect(headerAlignment()).toEqual(["center", null]);
+  expect(editor.getMarkdown()).toMatch(/\|\s*:-+:?\s*\|\s*-+\s*\|/);
+});

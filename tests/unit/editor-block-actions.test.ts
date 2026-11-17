@@ -198,3 +198,19 @@ it.each(LINK_MARKDOWN_FIXTURES)("keeps the links of a document when a block is a
   undo(view.state, view.dispatch);
   expect(links(editor.getMarkdown())).toEqual(wanted);
 });
+
+// Review finding (2026-11-17): the callout conversion dropped every child whose text merely
+// started with a marker, so a real callout lost its body and a marker-looking quote lost prose.
+it.each([
+  ["> [!NOTE]\n>\n> body", ["body"], true],
+  ["> [!NOTE]\n> body", ["body"], true],
+  // The marker is not alone on its line, so the reader draws a plain quote and its text stays.
+  ["> [!NOTE] and more\n>\n> body", ["[!NOTE] and more", "body"], false],
+  ["> [!NOTE]\n>\n> body\n>\n> [!WARNING] keep me", ["body", "keep me"], true],
+])("turns a callout into text without losing prose: %j", async (markdown, expected, markerGone) => {
+  const { editor, view } = await open(markdown);
+  expect(turnBlockInto(view, 0, "paragraph")).toBe(true);
+  const output = editor.getMarkdown();
+  for (const words of expected) expect(output).toContain(words);
+  if (markerGone) expect(output).not.toContain("[!NOTE]");
+});

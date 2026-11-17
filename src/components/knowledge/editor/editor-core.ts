@@ -15,6 +15,7 @@ import { handleCalloutBackspace } from "./reader-hints";
 import { configureCellBreakStringify, remarkCellBreaks } from "./table-cell-breaks";
 import { notionKeys } from "./notion-keys";
 import { pasteHtml } from "./paste-html";
+import { TASK_EDITABLE_CHANGED } from "./task-checkbox";
 import { configureWikiLinkStringify, wikiLinkPlugins } from "./wiki-link";
 
 /** The editor could not make a document of this Markdown; the caller should fall back to the source. */
@@ -340,7 +341,12 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
     },
     setEditable: (next) => {
       editable = next;
-      editor.action((ctx) => ctx.get(editorViewCtx).setProps({ editable: () => editable }));
+      editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        view.setProps({ editable: () => editable });
+        // Decorations that depend on editability (a to-do's control) are rebuilt from a new state.
+        view.dispatch(view.state.tr.setMeta(TASK_EDITABLE_CHANGED, next));
+      });
     },
     focus: () => editor.action((ctx) => ctx.get(editorViewCtx).focus()),
     focusStart: () =>
