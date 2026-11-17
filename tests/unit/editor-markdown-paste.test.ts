@@ -84,6 +84,7 @@ describe("Markdown text pastes as Markdown (1)", () => {
   it.each([
     ["plain lines", "line one\nline two", "line one\n\nline two\n"],
     ["a sentence with a dash in it", "a - b", "a - b\n"],
+    // An address inside a pasted sentence is not linked: out of scope, recorded (spec, "Out of scope").
     ["a sentence with an address", "see https://example.com", "see https\\://example.com\n"],
   ])("leaves %s to the text paste", async (_name, text, expected) => {
     const { editor, view } = await open("\n");
@@ -137,6 +138,25 @@ describe("typed links (3, 4)", () => {
     const fresh = await open("\n");
     type(fresh.view, "go to https://example.com/x then");
     expect(await roundTrip(fresh.editor)).toBe("go to <https://example.com/x> then\n");
+  });
+
+  it("keeps a ) that closes a ( inside the address, and leaves out one that closes the sentence's", async () => {
+    const { editor, view } = await open("\n");
+    type(view, "https://en.wikipedia.org/wiki/Foo_(bar) x");
+    expect(await roundTrip(editor)).toBe("<https://en.wikipedia.org/wiki/Foo_(bar)> x\n");
+    const fresh = await open("\n");
+    type(fresh.view, "(see https://example.com/a) x");
+    expect(await roundTrip(fresh.editor)).toBe("(see <https://example.com/a>) x\n");
+  });
+
+  it("does nothing to a space typed over a selection but replace the selection", async () => {
+    const { editor, view } = await open("\n");
+    type(view, "go https://example.com/path");
+    const end = view.state.selection.from;
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, end - 4, end)));
+    type(view, " ");
+    expect(editor.getMarkdown()).toBe("go https://example.com/ \n");
+    expect(view.state.doc.rangeHasMark(0, view.state.doc.content.size, view.state.schema.marks.link)).toBe(false);
   });
 
   it("does not link an address typed in inline code or a code block", async () => {

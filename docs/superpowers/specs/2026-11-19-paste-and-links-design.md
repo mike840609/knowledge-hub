@@ -41,7 +41,8 @@ to the wikilink rule (CLAUDE.md).
    is unchanged".
 3. **A typed address becomes a link when a space follows it.** Punctuation
    right after it (`.,;:!?'")]}`) stays outside the link, as GFM's autolink
-   literal does. Nothing happens in code, and nothing happens to an address
+   literal does, except a `)` that closes a `(` inside the address
+   (`…/Foo_(bar)`). Nothing happens in code, and nothing happens to an address
    that is already linked.
 4. **A typed `[text](url)` becomes the linked text** when its closing
    parenthesis is typed. `![alt](src)` and `[[wikilinks]]` keep their own rules.
@@ -53,6 +54,14 @@ to the wikilink rule (CLAUDE.md).
 - Notion's "paste as bookmark / embed" menu: the Hub has no embeds (deferred by
   the 2026-10-27 audit).
 - Trailing spaces at the edges of a Markdown paste are trimmed by the parser.
+- An address inside a pasted sentence, or typed and then followed by Enter or the
+  end of the line, is not linked. It is still written `https\://…`, the defect
+  the audit named. Decisions 2 and 3 cover the two commonest paths: a pasted
+  address alone, and an address followed by a space. Linking addresses inside
+  pasted text needs a decision about mixed text and Markdown, which is left for
+  later. `editor-markdown-paste.test.ts` records the current output.
+- Typing a space over a selection replaces the selection and links nothing.
+  The text before the caret is not what was matched (review, 2026-11-17).
 
 ## Verification
 

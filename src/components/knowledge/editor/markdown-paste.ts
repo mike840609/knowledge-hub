@@ -61,13 +61,17 @@ const autolinkRule = $inputRule(
   () =>
     new InputRule(new RegExp(String.raw`(?:^|[\s(])(${URL_TAIL})([.,;:!?'")\]}]*)\s$`), (state, match, _start, typedAt) => {
       const link = state.schema.marks.link;
+      // A space typed over a selection replaces it: the text before the caret is not what was matched.
+      if (!link || !state.selection.empty || codeAt(state) || !state.selection.$from.parent.type.allowsMarkType(link)) return null;
+      // A `)` closing a `(` inside the address is part of it, as GFM keeps it (`…/Foo_(bar)`).
+      let [, url, tail] = match;
+      while (tail.startsWith(")") && url.split("(").length > url.split(")").length) { url += ")"; tail = tail.slice(1); }
       // The match ends with the space being typed, which is not in the document yet.
-      const end = typedAt - match[2].length;
-      const from = end - match[1].length;
-      if (!link || codeAt(state) || !state.selection.$from.parent.type.allowsMarkType(link)) return null;
+      const end = typedAt - tail.length;
+      const from = end - url.length;
       if (state.doc.rangeHasMark(from, end, link)) return null;
-      try { new URL(match[1]); } catch { return null; }
-      const tr = state.tr.addMark(from, end, link.create({ href: match[1] })).insertText(match[0].slice(-1), typedAt);
+      try { new URL(url); } catch { return null; }
+      const tr = state.tr.addMark(from, end, link.create({ href: url })).insertText(match[0].slice(-1), typedAt);
       return tr.removeMark(end, typedAt + 1, link).setStoredMarks(state.selection.$from.marks().filter((mark) => mark.type !== link));
     }),
 );
