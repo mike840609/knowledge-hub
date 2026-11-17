@@ -22,7 +22,9 @@ radius or elevation token is added.
    the `[[Name]]` node at once, as a pick does, and makes the page in the
    background: `POST /api/workspaces/:id/documents` with the title and an empty
    body, the Workspace's default Hub source at its top, the place a new note goes.
-   The link resolves from the moment the page exists; no write waits on the
+   The editor remembers the titles it has made or is making, so while the list
+   catches up the same name is not offered a second time (a failed attempt forgets
+   it again). The link resolves from the moment the page exists; no write waits on the
    request. If it fails (a read-only member, a lost connection), the link stays,
    as typed text would, and a toast says "Couldn't create the page". Only the
    authorization the endpoint already checks decides who may create: the list
@@ -41,11 +43,16 @@ radius or elevation token is added.
    plain text linked after parsing. Code, a link already made, an inline node
    and an address that is not one (`http://` alone, `httpx://`) are left as they
    are; trailing punctuation stays out of the link and a `)` closing a `(` inside
-   the address stays in. An address alone keeps the link toolbar's paste, and a
+   the address stays in. Plain text takes the marks in force at the caret, and goes through the editor's
+   own paste hooks, so a `[[wikilink]]` pasted beside an address stays the node it
+   is. An address alone keeps the link toolbar's paste, and a
    table cell, which holds one line, keeps the text paste. Before, such an address
    was written `https\://…`, the defect the 2026-11-19 audit named.
 
 ## Out of scope, recorded
+
+- Undoing a pick that made a page takes the link back, not the page: the page is
+  already made, as it is when any other editor action reaches a server.
 
 - A page made from `[[` goes to the top of the default source, not next to the
   document being written: a folder is a Source path, and the list knows only

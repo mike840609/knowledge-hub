@@ -114,12 +114,14 @@ export function rankSuggestions(targets: readonly LinkTargetView[], query: strin
 /**
  * The title the `[[` list offers to create a page with, or null. Only when the list is whole (a cut list may hold the
  * very page the query names, and a second one with the same title would be a duplicate), the query can be written as a
- * link, and no document already answers to it, as the list matches titles and as the resolver does.
+ * link, and no document, nor a page made a moment ago that the list does not hold yet, already answers to it, as the list matches titles and as the resolver does.
  */
-export function createOffer(targets: readonly LinkTargetView[], truncated: boolean, query: string): string | null {
+export function createOffer(targets: readonly LinkTargetView[], truncated: boolean, query: string, made: ReadonlySet<string> = new Set()): string | null {
   const title = query.trim();
   if (truncated || title === "" || !isWritableAsWikiLink(title)) return null;
   const wanted = matchKey(title);
   const resolves = normalizeLinkKey(title);
+  // A page this editor just made may not be in the list yet: it is not offered a second time.
+  if (made.has(resolves)) return null;
   return targets.some((target) => { const keys = keysOf(target); return keys.match === wanted || keys.resolves === resolves; }) ? null : title;
 }

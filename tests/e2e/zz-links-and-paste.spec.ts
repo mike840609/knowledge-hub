@@ -51,6 +51,14 @@ test.describe("links and paste", () => {
     }, ROUND_TRIP).toBe(true);
   });
 
+  test("a wikilink pasted with an address stays a link in the saved Markdown", async ({ page }) => {
+    const id = await openNew(page, await mySpace(page), unique("Both"));
+    await page.evaluate((value) => navigator.clipboard.writeText(value), "see [[Seed]] at https://example.com/page now");
+    await page.keyboard.press("ControlOrMeta+v");
+    const markdown = await exportedWith(page, id, "<https://example.com/page>");
+    expect(markdown).toContain("see [[Seed]] at <https://example.com/page> now");
+  });
+
   test("an address in a pasted sentence becomes a link", async ({ page }) => {
     const id = await openNew(page, await mySpace(page), unique("Paste"));
     await page.evaluate((value) => navigator.clipboard.writeText(value), "details at https://example.com/page, thanks");
@@ -67,5 +75,9 @@ test.describe("links and paste", () => {
     await field.fill(next);
     await expect(page).toHaveTitle(new RegExp(`^${next} · `));
     await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText(next);
+    // Leaving the page by a link in the app takes the name with it.
+    await page.getByRole("link", { name: "Graph", exact: true }).first().click();
+    await expect(page).toHaveURL(/\/graph/, ROUND_TRIP);
+    await expect(page).not.toHaveTitle(new RegExp(next));
   });
 });

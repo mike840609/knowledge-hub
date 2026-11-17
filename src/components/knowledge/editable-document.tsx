@@ -460,8 +460,10 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   // The browser tab names the page as it is being written, as Notion's does; the app's name when it goes.
   useEffect(() => {
     const app = document.title;
-    document.title = `${displayTitle} · ${app}`;
-    return () => { document.title = app; };
+    const named = `${displayTitle} · ${app}`;
+    document.title = named;
+    // Only if the tab is still ours: a page the reader has gone to may have named it already.
+    return () => { if (document.title === named) document.title = app; };
   }, [displayTitle]);
   /** Enter, or ArrowDown on the last line, in the title: on to the start of the content (never a line break in the title). */
   function leaveTitle() {

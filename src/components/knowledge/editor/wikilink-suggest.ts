@@ -6,6 +6,7 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 import type { LinkTargetView } from "@/modules/knowledge/application/knowledge-link-service";
 import { createSuggestPopup, type SuggestMessage } from "./link-suggest-popup";
+import { normalizeLinkKey } from "@/modules/knowledge/domain/link-resolution";
 import { createOffer, findWikiLinkTrigger, rankSuggestions, type Suggestion } from "./link-suggestions";
 import { keepsAsText } from "./wiki-link";
 
@@ -147,11 +148,16 @@ export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: Mil
   }
 
   /** The last row: the link goes in as the picked ones do, and the page is made behind it. */
+  /** Titles of pages this editor has made or is making, so the list does not offer a second page while it is catching up. */
+  const made = new Set<string>();
+
   function chooseCreate(view: EditorView, title: string) {
+    const known = normalizeLinkKey(title);
+    made.add(known);
     choose(view, { target: { documentId: "", title } as LinkTargetView, link: `[[${title}]]`, sameTitle: 0 });
     // The list is stale until the page exists; the next fetch holds it.
     loadedAt = 0;
-    void options.createPage?.(title).then(() => { loadedAt = 0; }, () => options.onCreateFailed?.(title));
+    void options.createPage?.(title).then(() => { loadedAt = 0; }, () => { made.delete(known); options.onCreateFailed?.(title); });
   }
 
   const plugin = $prose(
@@ -207,7 +213,7 @@ export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: Mil
             }
             ensureTargets();
             const { suggestions, message } = suggestionsFor(state.trigger.query);
-            const create = targets !== null && options.createPage ? createOffer(targets, truncated, state.trigger.query) : null;
+            const create = targets !== null && options.createPage ? createOffer(targets, truncated, state.trigger.query, made) : null;
             const count = suggestions.length + (create ? 1 : 0);
             // Enter must not make a page nobody asked for: the create row is not the chosen one until an arrow key moved there.
             const chosen = count === 0 ? 0 : Math.min(state.index, count - 1);

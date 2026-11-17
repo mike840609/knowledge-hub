@@ -90,7 +90,7 @@ describe("Markdown text pastes as Markdown (1)", () => {
     expect(editor.getMarkdown()).toBe(expected);
   });
 
-  // The 2026-11-20 spec, decision 6: an address inside pasted text is linked, in either path.
+  // The 2026-11-20 spec, decision 4: an address inside pasted text is linked, in either path.
   it.each([
     ["a sentence", "see https://example.com now", "see <https://example.com> now\n"],
     ["lines", "one https://a.example\ntwo https://b.example/x.", "one <https://a.example>\n\ntwo <https://b.example/x>.\n"],
@@ -100,6 +100,18 @@ describe("Markdown text pastes as Markdown (1)", () => {
     const { editor, view } = await open("\n");
     expect(paste(view, { "text/plain": text }).defaultPrevented).toBe(true);
     expect(await roundTrip(editor)).toBe(expected);
+  });
+
+  it("keeps a pasted [[wikilink]] a link when the text also holds an address, and the marks at the caret", async () => {
+    const { editor, view } = await open("\n");
+    paste(view, { "text/plain": "see [[Foo]] at https://example.com now" });
+    const markdown = await roundTrip(editor);
+    expect(markdown).toBe("see [[Foo]] at <https://example.com> now\n");
+    expect(extractDocumentLinks(markdown).map((link) => [link.kind, link.target])).toEqual([["WIKI", "Foo"]]);
+    const bold = await open("**ab**\n");
+    bold.view.dispatch(bold.view.state.tr.setSelection(TextSelection.create(bold.view.state.doc, 2)));
+    paste(bold.view, { "text/plain": "x https://e.com y" });
+    expect(bold.editor.getMarkdown()).toBe("**ax <https://e.com> yb**\n");
   });
 
   it("leaves an address inside code, and an address that is not one, as text", async () => {
@@ -240,7 +252,7 @@ describe("typed links (3, 4)", () => {
   });
 });
 
-describe("a typed [text](url) keeps its formatting (2026-11-20, decision 4)", () => {
+describe("a typed [text](url) keeps its formatting (2026-11-20, decision 3)", () => {
   it("makes a bold link of [**bold**](url) and keeps a mark around it", async () => {
     const { editor, view } = await open("\n");
     type(view, "[**bold** and *it*](https://example.com)");

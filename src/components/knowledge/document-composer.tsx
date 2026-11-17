@@ -13,6 +13,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Tooltip } from "@/components/ui/tooltip";
+import { useToast } from "@/components/ui/toast";
 import { useHydrated } from "@/components/shell/use-hydrated";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { refreshOnArrival } from "@/components/shell/refresh-on-arrival";
@@ -176,6 +177,7 @@ export function DocumentComposer({
   blocked?: boolean;
   footer?: (state: { busy: boolean }) => ReactNode;
 }) {
+  const showToast = useToast();
   const router = useRouter();
   const pathname = usePathname();
   const paneRef = useRef<HTMLDivElement>(null);
@@ -766,6 +768,7 @@ export function DocumentComposer({
                 onReady={handleEditorReady}
                 onFail={handleEditorFail}
                 onUserEdit={handleUserEdit}
+                onNotice={(message) => showToast({ message, tone: "danger" })}
                 onMarkdown={handleEditorMarkdown}
               />
             </div>

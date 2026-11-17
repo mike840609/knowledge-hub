@@ -910,4 +910,32 @@ describe("creating a page from a name nothing answers to", () => {
     await flush();
     expect(titles().filter((title) => title?.startsWith("Create page"))).toEqual([]);
   });
+
+  it("does not offer the same page a second time while the first is still being made", async () => {
+    const createPage = vi.fn(() => new Promise<void>(() => {}));
+    const { editor } = await open({ createPage });
+    focusAtEnd(editor);
+    typeText(editor, "[[Roadmap");
+    await flush();
+    press(editor, "ArrowDown");
+    press(editor, "Enter");
+    typeText(editor, " and [[Roadmap");
+    await flush();
+    expect(titles()).toEqual([]);
+    expect(createPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers it again if the first attempt failed", async () => {
+    const createPage = vi.fn(async () => { throw new Error("no"); });
+    const { editor } = await open({ createPage });
+    focusAtEnd(editor);
+    typeText(editor, "[[Roadmap");
+    await flush();
+    press(editor, "ArrowDown");
+    press(editor, "Enter");
+    await flush();
+    typeText(editor, " and [[Roadmap");
+    await flush();
+    expect(titles()).toEqual(['Create page "Roadmap"']);
+  });
 });

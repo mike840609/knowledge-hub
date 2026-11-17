@@ -24,7 +24,7 @@ function codeAt(state: EditorState): boolean {
 /** A web address in running text, as GFM's autolink literal finds one: after a space, a `(` or the start, before trailing punctuation. */
 const ADDRESS = /(^|[\s(])(https?:\/\/[^\s<>]*[^\s<>.,;:!?'")\]}])/g;
 
-/** `text` cut at the web addresses in it (decision 6): each address its own piece, `href` set, a `)` that closes a `(` inside it kept. */
+/** `text` cut at the web addresses in it (2026-11-20 decision 4): each address its own piece, `href` set, a `)` that closes a `(` inside it kept. */
 export function splitAddresses(text: string): { text: string; href?: string }[] {
   const pieces: { text: string; href?: string }[] = [];
   let last = 0;
@@ -73,13 +73,19 @@ const markdownPaste = $prose(
           const inCell = state.selection.$from.node(-1)?.type.spec.tableRole !== undefined;
           if (codeAt(state) || inCell) return false;
           // Plain text with an address in it: one paragraph per line as ProseMirror pastes it, the addresses linked
-          // (decision 6). An address alone is the link toolbar's paste, and keeps that path.
+          // (2026-11-20 decision 4). An address alone is the link toolbar's paste, and keeps that path.
           if (!MARKDOWN_SIGN.test(text)) {
             if (!/https?:\/\//.test(text) || /^\s*https?:\/\/\S+\s*$/.test(text) || !state.schema.marks.link) return false;
             const lines = text.split(/(?:\r\n?|\n)+/).filter((line) => line !== "");
-            const paragraphs = lines.map((line) => state.schema.nodes.paragraph.create(null, linkAddresses(Fragment.from(state.schema.text(line)), state.schema)));
+            // As ProseMirror's own text paste does, the text takes the marks in force at the caret.
+            const marks = state.storedMarks ?? state.selection.$from.marks();
+            const paragraphs = lines.map((line) => state.schema.nodes.paragraph.create(null, linkAddresses(Fragment.from(state.schema.text(line, marks)), state.schema)));
+            let slice = new Slice(Fragment.fromArray(paragraphs), 1, 1);
+            // Dispatching here skips the editor's own paste hooks, so they are run by hand: the one that makes a
+            // pasted `[[x]]` a wikilink node (`wiki-link.ts`) is what keeps its edge when the text also holds an address.
+            view.someProp("transformPasted", (transform) => { slice = transform(slice, view, false); return undefined; });
             event.preventDefault();
-            view.dispatch(state.tr.replaceSelection(new Slice(Fragment.fromArray(paragraphs), 1, 1)).setMeta("uiEvent", "paste").scrollIntoView());
+            view.dispatch(state.tr.replaceSelection(slice).setMeta("uiEvent", "paste").scrollIntoView());
             return true;
           }
           const parsed = ctx.get(parserCtx)(text);
@@ -127,7 +133,7 @@ const autolinkRule = $inputRule(
 );
 
 /**
- * `[text](url)` typed: the text, linked (decision 4). `![alt](src)` stays as typed: an image is not made here.
+ * `[text](url)` typed: the text, linked (2026-11-19 decision 4; the text keeps its formatting, 2026-11-20 decision 3). `![alt](src)` stays as typed: an image is not made here.
  * The text keeps the formatting it was typed with: `[**bold**](url)` is a bold link, not a plain one.
  */
 const markdownLinkRule = $inputRule(
