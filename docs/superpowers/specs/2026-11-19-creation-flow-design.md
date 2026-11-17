@@ -24,7 +24,8 @@ decides each and amends the design-language contract. Nothing stored changes.
      the sidebar `+`, Home's button and its `C` key, and the action runner,
      which covers the palette, row menus and the folder `+`. A field that
      still has focus as it starts, such as the palette's search while the
-     palette closes, loses it, and a closing dialog hands focus back to no
+     palette closes, loses it (the starter's own title keeps it, so an IME
+     goes on composing there), and a closing dialog hands focus back to no
      field. Keys typed into another field or a contenteditable are that
      field's. Untaken after ten seconds, it stops and forgets what it kept.
    - **The starter page.** While the note is being made, the starter shows a
@@ -35,8 +36,12 @@ decides each and amends the design-language contract. Nothing stored changes.
      to the body, as Enter in the title does, once the editor is ready. The
      starter's title field is read-only from then on. Keys typed after it,
      before the editor is ready, are not kept.
-   - **Not kept, recorded.** An IME composes only into a focused field, so
-     composed text typed before the field exists is not kept.
+   - **A plain click only.** A modified click (a new tab or window) starts
+     nothing, so the tab left behind keeps its keys.
+   - **Not kept, recorded.** An IME composes only into a focused field. In
+     the gaps with no field (before the starter draws, and between it and the
+     editor's title) nothing composes, and an IME layout's raw keys may be
+     kept as Latin letters.
 4. **A saved title names the document in the tree at once.** A save that
    changes the title fires `kh:document-renamed` on `window`, and the tree
    shows the new label over its server items until the next server tree

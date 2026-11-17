@@ -18,12 +18,17 @@ export function isBuffering(): boolean {
   return stopListening !== null;
 }
 
+/** A click that opens in this tab; a modified one opens elsewhere and leaves this tab's keys alone. */
+export function plainClick(event: { button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }): boolean {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+}
+
 export function isNewNoteHref(href: string): boolean {
   return /\/knowledge\/new(?:$|\?(?!.*\bcompose\b))/.test(href);
 }
 
 /** Starts keeping keys, beginning with `initial`. After ten seconds untaken, it stops and forgets them. */
-export function bufferTyping(initial = ""): void {
+export function bufferTyping(initial = "", keepFocus = false): void {
   stopListening?.();
   clearTimeout(expiry);
   typed = initial;
@@ -40,8 +45,9 @@ export function bufferTyping(initial = ""): void {
     event.preventDefault();
   };
   window.addEventListener("keydown", onKeyDown, true);
-  // A field still focused here (the palette's search while it closes) would take the keys instead.
-  if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  // A field still focused here (the palette's search while it closes) would take the keys instead. The
+  // starter's own title keeps focus: it feeds `setTyped` itself, and an IME composes only into a focused field.
+  if (!keepFocus && typeof document !== "undefined" && document.activeElement instanceof HTMLElement) document.activeElement.blur();
   // Untaken by then, the note was left: a later starter must not pick these keys up.
   expiry = setTimeout(() => { stopListening?.(); typed = null; entered = false; }, 10_000);
   stopListening = () => {

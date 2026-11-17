@@ -65,7 +65,7 @@ export function NewNoteStarter({ workspaceId, folderId, seedTitle, composeHref }
       const href = `/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}`;
       arriving = created.documentId;
       // And between leaving this page and the editor's title taking focus.
-      bufferTyping(titleNow.current);
+      bufferTyping(titleNow.current, true);
       if (enteredHere.current) setTyped(titleNow.current, true);
       refreshOnArrival(href);
       router.replace(href);

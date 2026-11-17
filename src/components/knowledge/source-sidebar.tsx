@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { bufferTyping } from "./typing-ahead";
+import { bufferTyping, plainClick } from "./typing-ahead";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, ChevronsLeft, Plus, ListFilter, Star, Share2 } from "lucide-react";
@@ -170,7 +170,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   const hasNotes = visibleCollections.some(({ source: candidate }) => candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE");
   const canCreate = access.actions.canWrite && confirmed;
   const newNoteHref = `/w/${workspaceId}/knowledge/new`;
-  const addNote = <Tooltip label="Create document"><Link href={newNoteHref} onClick={() => bufferTyping()} aria-label="Create document" className={buttonClasses({ variant: "ghost", icon: true })}><Plus size={15} aria-hidden="true" /></Link></Tooltip>;
+  const addNote = <Tooltip label="Create document"><Link href={newNoteHref} onClick={(event) => { if (!plainClick(event)) return; bufferTyping(); }} aria-label="Create document" className={buttonClasses({ variant: "ghost", icon: true })}><Plus size={15} aria-hidden="true" /></Link></Tooltip>;
   // What can be made here, from the registry like everything else: the button exists when the action does.
   const actionContext = { workspaceId, workspaceType: access.workspace.type, isPersonalOwner: access.isPersonalOwner, can: access.actions, confirmed };
   const createActions = actionsFor("create", actionContext);

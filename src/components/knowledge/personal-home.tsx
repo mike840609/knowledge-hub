@@ -1,7 +1,7 @@
 "use client";
 
 import { GuidanceVisibilityContext } from "./guidance-visibility";
-import { bufferTyping } from "./typing-ahead";
+import { bufferTyping, plainClick } from "./typing-ahead";
 import { ReopenGuidanceMenuItem } from "./reopen-guidance-menu-item";
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -251,7 +251,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
           <Kbd size="md" className="hidden shrink-0 sm:inline-flex">⌘K</Kbd>
         </button>
         <Tooltip label="Create document" shortcut="C">
-          <Link className={buttonClasses({ variant: "secondary" })} href={newNoteHref} onClick={() => bufferTyping()} aria-keyshortcuts="C"><Plus size={16} aria-hidden="true" />Create document</Link>
+          <Link className={buttonClasses({ variant: "secondary" })} href={newNoteHref} onClick={(event) => { if (!plainClick(event)) return; bufferTyping(); }} aria-keyshortcuts="C"><Plus size={16} aria-hidden="true" />Create document</Link>
         </Tooltip>
       </div>
       {slots?.guidance}

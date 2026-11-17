@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { bufferTyping, isBuffering, isNewNoteHref, setTyped, takeTyped } from "@/components/knowledge/typing-ahead";
+import { bufferTyping, isBuffering, isNewNoteHref, plainClick, setTyped, takeTyped } from "@/components/knowledge/typing-ahead";
 
 // 2026-11-19 creation-flow spec, decision 3: keys typed while a new note is being made.
 const press = (key: string, init: KeyboardEventInit = {}, target: EventTarget = document.body) => {
@@ -66,6 +66,26 @@ describe("typing ahead of a new note", () => {
     expect(takeTyped()).toEqual({ text: "From the field", entered: true });
     press("z");
     expect(takeTyped()).toEqual({ text: "", entered: false });
+  });
+
+  it("takes focus from a field as it starts (the closing palette), but leaves the starter's own title focused", () => {
+    const field = document.body.appendChild(document.createElement("input"));
+    field.focus();
+    bufferTyping();
+    expect(document.activeElement).not.toBe(field);
+    takeTyped();
+    field.focus();
+    bufferTyping("Pl", true);
+    expect(document.activeElement).toBe(field);
+  });
+
+  it("starts only for a plain click: a modified one opens another tab", () => {
+    const click = { button: 0, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false };
+    expect(plainClick(click)).toBe(true);
+    expect(plainClick({ ...click, metaKey: true })).toBe(false);
+    expect(plainClick({ ...click, ctrlKey: true })).toBe(false);
+    expect(plainClick({ ...click, shiftKey: true })).toBe(false);
+    expect(plainClick({ ...click, button: 1 })).toBe(false);
   });
 
   it("knows the new-note address, but not the compose form", () => {
