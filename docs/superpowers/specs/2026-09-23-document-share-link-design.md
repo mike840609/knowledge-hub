@@ -195,7 +195,7 @@ GET /s/:token (server component, outside /w/ layout)
        ├─ Increment view count (§7.2), separate transaction; log failure only (A5)
        │    (2026-10-29: not for `/s/:token/open`, which judges the link with
        │    `recordView: false` and passes through; the page itself was the read)
-       └─ Return { title, markdown, revisionId, sharedByName, updatedAt, expiresAt }
+       └─ Return { title, markdown, metadata, revisionId, sharedByName, updatedAt, expiresAt }  (metadata since 2026-11-17, §5.3)
   → Any error → uniform page (§6.3), HTTP 404
 ```
 
