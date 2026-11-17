@@ -9,6 +9,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { dispatchBlockAction } from "./block-actions";
 import { insertDetailsSkeleton } from "./details-toggle";
+import { keepsAsText } from "./wiki-link";
 
 // `aliases` match by prefix (what a Notion hand types: /h2, /todo, /ul); label and `words` match anywhere.
 const commands = [
@@ -59,6 +60,8 @@ function detect(state: EditorState): Trigger | null {
 function detectInline(state: EditorState): Trigger | null {
   const { $from, empty } = state.selection;
   if (!empty || $from.depth !== 1 || $from.parent.type.name !== "paragraph") return null;
+  // Inline code and link text are where a "/" is a path or an address, not a command; other marks are not in its way.
+  if ((state.storedMarks ?? $from.marks()).some(keepsAsText)) return null;
   // Marks do not matter to a "/" (after **bold** is as good a place as after plain words), and an inline node
   // (a wikilink, a line break) reads as one character, which is not a word character either.
   const match = /(?:^|[\s\ufffc])\/([^\s/:\ufffc]{0,40})$/.exec($from.parent.textBetween(0, $from.parentOffset, undefined, "\ufffc"));

@@ -3,7 +3,7 @@ import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/
 import { $prose } from "@milkdown/kit/utils";
 import { HeadingSlugger } from "@/shared/markdown/heading-slug";
 import { openBlockList } from "./slash-commands";
-import { blockKind, canTurnInto, deleteBlock, duplicateBlock, insertBlockBelow, moveBlock, siblingBlocks, topLevelBlocks, turnBlockInto, type BlockKind } from "./block-actions";
+import { blockKind, canTurnInto, headingText, deleteBlock, duplicateBlock, insertBlockBelow, moveBlock, siblingBlocks, topLevelBlocks, turnBlockInto, type BlockKind } from "./block-actions";
 
 function icon(kind: "plus" | "grip"): SVGSVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -29,7 +29,7 @@ export function headingSlugAt(view: EditorView, pos: number): string | null {
   let found: string | null = null;
   view.state.doc.descendants((node, at) => {
     if (node.type.name === "heading") {
-      const slug = slugger.slug(node.textContent.trim());
+      const slug = slugger.slug(headingText(node));
       if (at === pos) found = slug;
       return false;
     }
@@ -127,9 +127,13 @@ export function blockGutter() {
         const heading = activeNode()?.type.name === "heading" ? menuButton("Copy link to heading", () => {
           const slug = active === null ? null : headingSlugAt(view, active);
           closeMenu();
-          if (slug === null || !navigator.clipboard) return;
+          if (slug === null) return;
+          // The same words twice are not announced twice: clear first, so a second copy is said again.
+          live.textContent = "";
+          const failed = () => { live.textContent = "Couldn't copy the link"; };
+          if (!navigator.clipboard) { failed(); return; }
           const href = `${window.location.origin}${window.location.pathname}#${encodeURIComponent(slug)}`;
-          void navigator.clipboard.writeText(href).then(() => { live.textContent = "Link copied"; }, () => { /* a refused clipboard changes nothing */ });
+          void navigator.clipboard.writeText(href).then(() => { live.textContent = "Link copied"; }, failed);
         }) : null;
         menu.append(turn, duplicate, remove, ...(heading ? [heading] : []), separator(), up, down);
         return turn;

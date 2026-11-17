@@ -4,6 +4,7 @@ import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { afterEach, expect, it, vi } from "vitest";
 import { headingSlugAt } from "@/components/knowledge/editor/block-gutter";
+import { extractOutline } from "@/shared/markdown/outline";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { EXIT_TOP } from "@/components/knowledge/editor/notion-keys";
 import { slashCommands } from "@/components/knowledge/editor/slash-commands";
@@ -179,4 +180,64 @@ it("headingSlugAt hands out the slugs the reader does, repeats included", async 
   view.state.doc.descendants((node, pos) => { if (node.type.name === "heading") positions.push(pos); return true; });
   expect(positions.map(pos => headingSlugAt(view, pos))).toEqual(["setup", "setup-1", "請假-流程"]);
   expect(headingSlugAt(view, 1)).toBeNull();
+});
+
+it("headingSlugAt agrees with the reader for headings holding a wikilink, an image or a line break", async () => {
+  const markdown = "# Setup\n\n## See [[Page]]\n\n## Img ![alt text](x.png) end\n\n## Setup\n\n## Two\\\nlines\n";
+  const { view } = await open(markdown);
+  const positions: number[] = [];
+  view.state.doc.descendants((node, pos) => { if (node.type.name === "heading") positions.push(pos); return true; });
+  const reader = extractOutline(markdown).map(entry => entry.slug);
+  expect(positions.map(pos => headingSlugAt(view, pos))).toEqual(reader);
+  expect(reader).toContain("see-page");
+  expect(reader).toContain("setup-1");
+});
+
+it("a / inside inline code or link text opens nothing, and one after them still does", async () => {
+  const { view } = await open("`ls`");
+  const end = view.state.doc.firstChild!.content.size + 1;
+  caretAt(view, end - 1);
+  type(view, " /t");
+  expect(menuOpen()).toBe(false);
+  const linked = await open("[the guide](https://example.com)");
+  caretAt(linked.view, linked.view.state.doc.firstChild!.content.size);
+  type(linked.view, " /t");
+  expect(menuOpen()).toBe(false);
+  // After the code, in plain text, the list opens as it did.
+  const after = await open("`ls`");
+  caretAt(after.view, after.view.state.doc.firstChild!.content.size + 1);
+  after.view.dispatch(after.view.state.tr.setStoredMarks([]));
+  type(after.view, " /t");
+  expect(menuOpen()).toBe(true);
+});
+
+it("choosing from a / after a wikilink keeps the link in the saved Markdown, with and without a space", async () => {
+  const { editor, view } = await open("see [[Page]]");
+  caretAt(view, view.state.doc.firstChild!.content.size + 1);
+  type(view, "/quo");
+  press(view, "Enter");
+  expect(md(editor)).toContain("see [[Page]]");
+  const { editor: spaced, view: second } = await open("see [[Page]] ");
+  caretAt(second, second.state.doc.firstChild!.content.size + 1);
+  type(second, "/quo");
+  press(second, "Enter");
+  expect(md(spaced)).toContain("see [[Page]]");
+});
+
+it("Mod-Enter closing a toggle from its title keeps the caret where it was", async () => {
+  const { view } = await open("<details open>\n<summary>Title here</summary>\n\nBody\n\n</details>");
+  caretAt(view, 8);
+  press(view, "Enter", { ctrlKey: true });
+  expect(view.state.doc.firstChild!.attrs.open).toBeFalsy();
+  expect(view.state.selection.from).toBe(8);
+});
+
+it("Shift-Tab does not leave the editor from a list, a table or code in the first block", async () => {
+  for (const markdown of ["- one", "| a | b |\n| - | - |\n| x | y |", "```\ncode\n```"]) {
+    const { view } = await open(markdown);
+    const exit = watchExit(view);
+    view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(3))));
+    press(view, "Tab", { shiftKey: true });
+    expect(exit).not.toHaveBeenCalled();
+  }
 });

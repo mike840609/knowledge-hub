@@ -48,12 +48,13 @@ export function insertDetailsSkeleton(view: EditorView, from: number, to: number
   return true;
 }
 /** Rewrites the nearest opener at pos, or false when the caret is not in a toggle. */
-export function flipNearestDetails(view: EditorView, pos: number): boolean {
+export function flipNearestDetails(view: EditorView, pos: number, keepCaret = false): boolean {
   if (!view.editable) return false;
   const found = nearestDetailsOpener(view.state, pos);
   if (!found) return false;
   const tr = view.state.tr.setNodeMarkup(found.position, undefined, { open: !found.open });
-  dispatchBlockAction(view, tr, found.open ? found.position + 2 : view.state.selection.from);
+  // Closing hides the body, so a caret in it goes to the title; a caret already in the title stays where it is.
+  dispatchBlockAction(view, tr, found.open && !keepCaret ? found.position + 2 : view.state.selection.from);
   return true;
 }
 /** Dissolves the toggle at detailsPos, keeping every word: a non-empty summary becomes a

@@ -387,7 +387,7 @@ export const tickTodo = (state: EditorState, dispatch?: (tr: Transaction) => voi
 export function flipToggleAtTitle(view: EditorView): boolean {
   const { selection } = view.state;
   if (!view.editable || !(selection instanceof TextSelection) || selection.$from.parent.type.name !== "details_summary") return false;
-  return flipNearestDetails(view, selection.from);
+  return flipNearestDetails(view, selection.from, true);
 }
 
 // Milkdown merges these into the editor's one keymap, ahead of ProseMirror's base keymap (priority 50).

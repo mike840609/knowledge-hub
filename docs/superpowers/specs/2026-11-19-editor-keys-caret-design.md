@@ -76,4 +76,4 @@ Two unit tests stated the old Tab rule:
 being true once the rule was scoped to `data-tab-stays`; outside it they hold
 unchanged.
 
-(Amended 2026-11-20: Mod-Enter also opens a toggle from its title, Shift-Tab and a leading divider reach the title, and a `/` mid-line opens after marked text; `2026-11-20-small-keys-design.md`.)
+(Amended 2026-11-20: a press below the text is no longer an edit (decision 1), Shift-Tab and a leading divider reach the title (decisions 2, 3), Mod-Enter also opens a toggle from its title (decision 4), and a `/` mid-line opens after marked text other than inline code and link text (decision 7); `2026-11-20-small-keys-design.md`.)
