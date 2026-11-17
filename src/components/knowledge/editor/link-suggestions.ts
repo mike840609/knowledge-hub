@@ -110,3 +110,16 @@ export function rankSuggestions(targets: readonly LinkTargetView[], query: strin
   }
   return suggestions;
 }
+
+/**
+ * The title the `[[` list offers to create a page with, or null. Only when the list is whole (a cut list may hold the
+ * very page the query names, and a second one with the same title would be a duplicate), the query can be written as a
+ * link, and no document already answers to it, as the list matches titles and as the resolver does.
+ */
+export function createOffer(targets: readonly LinkTargetView[], truncated: boolean, query: string): string | null {
+  const title = query.trim();
+  if (truncated || title === "" || !isWritableAsWikiLink(title)) return null;
+  const wanted = matchKey(title);
+  const resolves = normalizeLinkKey(title);
+  return targets.some((target) => { const keys = keysOf(target); return keys.match === wanted || keys.resolves === resolves; }) ? null : title;
+}

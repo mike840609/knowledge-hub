@@ -1,6 +1,6 @@
 import { parserCtx } from "@milkdown/kit/core";
 import { InputRule } from "@milkdown/kit/prose/inputrules";
-import { Slice, type Mark } from "@milkdown/kit/prose/model";
+import { Fragment, Slice, type Mark, type Node as ProseNode, type Schema } from "@milkdown/kit/prose/model";
 import { Plugin, PluginKey, type EditorState } from "@milkdown/kit/prose/state";
 import { $inputRule, $prose } from "@milkdown/kit/utils";
 
@@ -20,6 +20,43 @@ function codeAt(state: EditorState): boolean {
   return $from.parent.type.spec.code === true || marks.some((mark) => mark.type.spec.code === true || mark.type.name === "inlineCode");
 }
 
+
+/** A web address in running text, as GFM's autolink literal finds one: after a space, a `(` or the start, before trailing punctuation. */
+const ADDRESS = /(^|[\s(])(https?:\/\/[^\s<>]*[^\s<>.,;:!?'")\]}])/g;
+
+/** `text` cut at the web addresses in it (decision 6): each address its own piece, `href` set, a `)` that closes a `(` inside it kept. */
+export function splitAddresses(text: string): { text: string; href?: string }[] {
+  const pieces: { text: string; href?: string }[] = [];
+  let last = 0;
+  for (const match of text.matchAll(ADDRESS)) {
+    let url = match[2];
+    const start = match.index + match[1].length;
+    // `https://x.com/Foo_(bar)` keeps its `)`; the one in `(see https://x.com)` does not.
+    let end = start + url.length;
+    while (text[end] === ")" && url.split("(").length > url.split(")").length) { url += ")"; end += 1; }
+    try { new URL(url); } catch { continue; }
+    if (start > last) pieces.push({ text: text.slice(last, start) });
+    pieces.push({ text: url, href: url });
+    last = end;
+  }
+  if (last < text.length) pieces.push({ text: text.slice(last) });
+  return pieces;
+}
+
+/** The fragment with every address in plain text linked; code, a link already made, and a wikilink are left as they are. */
+function linkAddresses(fragment: Fragment, schema: Schema): Fragment {
+  const link = schema.marks.link;
+  const nodes: ProseNode[] = [];
+  fragment.forEach((node) => {
+    if (node.isText) {
+      if (!link || node.marks.some((mark) => mark.type === link || mark.type.spec.code === true || mark.type.name === "inlineCode")) { nodes.push(node); return; }
+      for (const piece of splitAddresses(node.text!)) nodes.push(schema.text(piece.text, piece.href ? [...node.marks, link.create({ href: piece.href })] : node.marks));
+    } else if (node.type.spec.code === true || node.isLeaf) nodes.push(node);
+    else nodes.push(node.copy(linkAddresses(node.content, schema)));
+  });
+  return Fragment.fromArray(nodes);
+}
+
 const markdownPaste = $prose(
   (ctx) =>
     new Plugin({
@@ -34,9 +71,21 @@ const markdownPaste = $prose(
           const { state } = view;
           // A table cell holds one line of text; a pasted block has nowhere to go in it.
           const inCell = state.selection.$from.node(-1)?.type.spec.tableRole !== undefined;
-          if (!MARKDOWN_SIGN.test(text) || codeAt(state) || inCell) return false;
-          const doc = ctx.get(parserCtx)(text);
-          if (!doc || typeof doc === "string" || doc.content.size === 0) return false;
+          if (codeAt(state) || inCell) return false;
+          // Plain text with an address in it: one paragraph per line as ProseMirror pastes it, the addresses linked
+          // (decision 6). An address alone is the link toolbar's paste, and keeps that path.
+          if (!MARKDOWN_SIGN.test(text)) {
+            if (!/https?:\/\//.test(text) || /^\s*https?:\/\/\S+\s*$/.test(text) || !state.schema.marks.link) return false;
+            const lines = text.split(/(?:\r\n?|\n)+/).filter((line) => line !== "");
+            const paragraphs = lines.map((line) => state.schema.nodes.paragraph.create(null, linkAddresses(Fragment.from(state.schema.text(line)), state.schema)));
+            event.preventDefault();
+            view.dispatch(state.tr.replaceSelection(new Slice(Fragment.fromArray(paragraphs), 1, 1)).setMeta("uiEvent", "paste").scrollIntoView());
+            return true;
+          }
+          const parsed = ctx.get(parserCtx)(text);
+          if (!parsed || typeof parsed === "string" || parsed.content.size === 0) return false;
+          // The parser leaves an address in a sentence as text, which is written back `https\://…`: link it.
+          const doc = parsed.copy(linkAddresses(parsed.content, state.schema));
           event.preventDefault();
           // A paragraph at either end runs into the line it lands in; any other block (a heading, a list)
           // stays the block it is, splitting that line, and takes the place of an empty one.
@@ -77,14 +126,20 @@ const autolinkRule = $inputRule(
     }),
 );
 
-/** `[text](url)` typed: the text, linked (decision 4). `![alt](src)` stays as typed: an image is not made here. */
+/**
+ * `[text](url)` typed: the text, linked (decision 4). `![alt](src)` stays as typed: an image is not made here.
+ * The text keeps the formatting it was typed with: `[**bold**](url)` is a bold link, not a plain one.
+ */
 const markdownLinkRule = $inputRule(
   () =>
     new InputRule(/(?<![!\\[])\[([^\][\n\ufffc]+)\]\(([^()\s\ufffc]+)\)$/, (state, match, start, end) => {
       const link = state.schema.marks.link;
       if (!link || codeAt(state) || !state.selection.$from.parent.type.allowsMarkType(link)) return null;
       const marks = state.doc.resolve(start).marks().filter((mark) => mark.type !== link);
-      return state.tr.replaceWith(start, end, state.schema.text(match[1], [...marks, link.create({ href: match[2] })])).setStoredMarks(marks);
+      // The document holds `[text](url` (the `)` is being typed): take out `](url` and the `[`, link what is left.
+      const textEnd = start + 1 + match[1].length;
+      const tr = state.tr.delete(textEnd, end).delete(start, start + 1);
+      return tr.addMark(start, start + match[1].length, link.create({ href: match[2] })).setStoredMarks(marks);
     }),
 );
 

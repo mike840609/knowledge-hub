@@ -53,6 +53,8 @@ export type RenderedEditorProps = {
   onFail: () => void;
   onUserEdit: () => void;
   onMarkdown: (markdown: string) => void;
+  /** Where a failure of something the editor does beside editing is said (a page `[[` offered to create). Without it, nothing is. */
+  onNotice?: (message: string) => void;
 };
 
 /**
@@ -113,6 +115,9 @@ export function RenderedEditor(props: RenderedEditorProps) {
       // Read through the ref at the moment of use, like every other prop here.
       loadTargets: () => governanceRequest<LinkTargetsView>(`/api/workspaces/${latest.current.workspaceId}/link-targets`),
       excludeDocumentId: () => latest.current.documentId,
+      // A page made from `[[`: the Workspace's default Hub source, at its top (the same place a new note goes).
+      createPage: async (title) => { await governanceRequest(`/api/workspaces/${latest.current.workspaceId}/documents`, "POST", { title, markdown: "" }); },
+      onCreateFailed: (title) => latest.current.onNotice?.(`Couldn't create the page "${title}". The link is kept.`),
     });
     const slash = slashCommands();
     const emoji = emojiSuggest();
