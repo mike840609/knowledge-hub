@@ -45,7 +45,7 @@ const view = (documentId: string, title: string, path: { id: string; name: strin
     { id: "n-hr", parentId: null, kind: "FOLDER", name: "HR", documentId: null, pageIcon: null },
     { id: "n-policy", parentId: "n-hr", kind: "DOCUMENT", name: "Policy", documentId: "0192f3a4-0000-7000-8000-000000000003", pageIcon: null },
   ],
-  document: { documentId, revisionId: `rev-${documentId}`, title, markdown: title, pageIcon: null, sharedByName: "Mike", updatedAt: new Date(), expiresAt: new Date(), path, links: [] },
+  document: { documentId, revisionId: `rev-${documentId}`, title, markdown: title, metadata: {}, pageIcon: null, sharedByName: "Mike", updatedAt: new Date(), expiresAt: new Date(), path, links: [] },
 });
 
 let root: Root;

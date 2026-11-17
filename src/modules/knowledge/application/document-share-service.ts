@@ -56,6 +56,7 @@ export type SharedDocumentView = {
   revisionId: string;
   title: string;
   markdown: string;
+  metadata: Record<string, unknown>;
   pageIcon: string | null;
   sharedByName: string;
   updatedAt: Date;
@@ -498,7 +499,7 @@ export class DocumentShareService {
       const creator = await requireCreator(repositories, link);
       return {
         linkId: link.id,
-        view: { kind: "DOCUMENT", revisionId: revision.id, title: revision.title, markdown: revision.markdown, pageIcon: document.pageIcon ?? null, sharedByName: creator.name, updatedAt: revision.createdAt, expiresAt: link.expiresAt, audience: link.audience },
+        view: { kind: "DOCUMENT", revisionId: revision.id, title: revision.title, markdown: revision.markdown, metadata: revision.metadata, pageIcon: document.pageIcon ?? null, sharedByName: creator.name, updatedAt: revision.createdAt, expiresAt: link.expiresAt, audience: link.audience },
       };
     });
     if (view.audience === "NAMED") view.linkId = linkId;
@@ -667,6 +668,7 @@ async function readSharedFolder(
       revisionId: revision.id,
       title: revision.title,
       markdown: revision.markdown,
+      metadata: revision.metadata,
       pageIcon: document.pageIcon ?? null,
       sharedByName: creator.name,
       updatedAt: revision.createdAt,
@@ -718,6 +720,7 @@ async function readSharedSource(
       revisionId: revision.id,
       title: revision.title,
       markdown: revision.markdown,
+      metadata: revision.metadata,
       pageIcon: document.pageIcon ?? null,
       sharedByName: creator.name,
       updatedAt: revision.createdAt,

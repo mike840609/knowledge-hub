@@ -23,7 +23,7 @@ import { SharedFolderPage } from "@/app/s/[token]/shared-folder-page";
 
 const inFolder = "0192f3a4-5b6c-7d8e-9f01-23456789abcd";
 const props = (workspaceId = "mine", d?: string) => ({ params: Promise.resolve({ workspaceId, token: "tok" }), searchParams: Promise.resolve(d === undefined ? {} : { d }) });
-const documentView = { kind: "DOCUMENT", revisionId: "rev", title: "Named title", markdown: "Body", pageIcon: null, sharedByName: "Owner", updatedAt: new Date(0), expiresAt: null, audience: "NAMED", linkId: "link-1" };
+const documentView = { kind: "DOCUMENT", revisionId: "rev", title: "Named title", markdown: "Body", metadata: {}, pageIcon: null, sharedByName: "Owner", updatedAt: new Date(0), expiresAt: null, audience: "NAMED", linkId: "link-1" };
 const folderView = { kind: "FOLDER", rootName: "Folder", tree: [], sharedByName: "Owner", expiresAt: null, audience: "NAMED", linkId: "link-2",
   document: { ...documentView, documentId: inFolder, path: [], links: [] } };
 

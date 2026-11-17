@@ -173,6 +173,7 @@ describe("DocumentShareService.readShared on a folder link (folder share spec §
     expect(JSON.stringify(view.tree)).not.toContain("body");
     expect(JSON.stringify(view.tree)).not.toContain("markdown");
     expect(view.document).toMatchObject({ documentId: f.welcome.documentId, title: "Welcome", markdown: "Welcome body", revisionId: f.welcome.revisionId, path: [] });
+    expect(view.document?.metadata).toEqual({});
   });
 
   it("keeps a document reachable through more than 256 folder hops", async () => {

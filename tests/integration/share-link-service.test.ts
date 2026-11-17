@@ -212,6 +212,25 @@ describe("DocumentShareService.readShared (share-link spec §5.2, §5.3, §6.1)"
     });
   });
 
+  it("serves the current revision's metadata, for the shared download (shared download spec)", async () => {
+    const { caller, documentId } = await mySpaceDocument();
+    const shares = service();
+    const link = await shares.create(caller, { documentId });
+    await expect(shares.readShared(tokenOf(link.path))).resolves.toMatchObject({ metadata: {} });
+  });
+
+  it("serves a revision's non-empty metadata unchanged", async () => {
+    const { caller, documentId, revisionId } = await mySpaceDocument();
+    const shares = service();
+    const token = tokenOf((await shares.create(caller, { documentId })).path);
+    const metadata = { tags: ["ops"], owner: "team-a" };
+    await new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool)).createRevision(caller, {
+      documentId, expectedCurrentRevisionId: revisionId, title: "Shared Runbook v2", markdown: "second body", metadata,
+    });
+    const view = await shares.readShared(token);
+    expect(view).toMatchObject({ metadata });
+  });
+
   it("carries the document's page icon to the shared page", async () => {
     const { caller, documentId, owner } = await mySpaceDocument();
     await new MariaDbUnitOfWork(pool).run((repositories) => repositories.documents.updatePageIcon(documentId, "📌", owner.id));
