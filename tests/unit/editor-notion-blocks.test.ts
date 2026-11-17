@@ -143,10 +143,11 @@ describe("code block keys (19)", () => {
     press(view, "Tab", { shiftKey: true });
     expect(editor.getMarkdown()).toContain("```\none\n two\nthree\n```");
   });
-  it("does not bind Tab outside a code block", async () => {
+  // Keys spec (2026-11-19), decision 2: Tab in plain text stays in the editor and writes nothing.
+  it("writes nothing on Tab outside a code block", async () => {
     const { view } = await open("plain\n");
     caretAfter(view, "plain");
-    expect(press(view, "Tab").defaultPrevented).toBe(false);
+    press(view, "Tab");
     expect(view.state.doc.textContent).toBe("plain");
   });
   it("ignores Tab while the field it goes to is not editable", async () => {

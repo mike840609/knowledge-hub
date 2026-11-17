@@ -464,6 +464,35 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     titleInput.current?.focus();
     if (titleInput.current?.value === "Untitled") titleInput.current.select();
   }, [editable]);
+  // ArrowUp on the content's first line, or Backspace in its empty first paragraph, leads to the title,
+  // at its end (keys spec, decision 3). The editor fires `kh:editor-exit-top` (notion-keys' EXIT_TOP; the
+  // editor is loaded lazily, so the name is spelled here rather than imported) and goes on only if claimed.
+  useEffect(() => {
+    const area = pressArea.current;
+    if (!area) return;
+    const claim = (event: Event) => {
+      const input = titleInput.current;
+      if (!input || input.disabled) return;
+      event.preventDefault();
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    };
+    area.addEventListener("kh:editor-exit-top", claim);
+    return () => area.removeEventListener("kh:editor-exit-top", claim);
+  }, []);
+  function caretInTodo() {
+    const at = window.getSelection()?.anchorNode;
+    const element = at instanceof Element ? at : at?.parentElement;
+    return element?.closest("li")?.getAttribute("data-item-type") === "task" && !!element.closest(".ProseMirror");
+  }
+  /** A press below the text puts the caret at its end, in a new empty paragraph (keys spec, decision 1). */
+  function pressBelow(event: React.MouseEvent<HTMLDivElement>) {
+    if (event.button !== 0 || event.target !== event.currentTarget || !editable || source || failed || !ready) return;
+    const content = pressArea.current?.querySelector(".ProseMirror");
+    if (!content || event.clientY <= content.getBoundingClientRect().bottom) return;
+    event.preventDefault();
+    editor.current?.focusEnd();
+  }
   function focusTitle() {
     flushEditor();
     if (resolve(queue.current!.current).source !== "H1") {
@@ -523,7 +552,10 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
         return;
       }
       if ((event.metaKey || event.ctrlKey) && (event.key === "s" || event.key === "Enter") && !event.nativeEvent.isComposing) {
-        event.preventDefault(); flushEditor(); void writer?.flush();
+        // In a to-do, Mod-Enter is also the editor's (it ticks the item, keys spec decision 4): a key
+        // already prevented never reaches ProseMirror's keymap, so only the save happens here.
+        if (!(event.key === "Enter" && caretInTodo())) event.preventDefault();
+        flushEditor(); void writer?.flush();
       }
     }}>
       {!ready && !source && !failed && !recovery ? standIn : null}
@@ -568,7 +600,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       className="mt-2 block w-full resize-none overflow-hidden break-words border-0 bg-transparent p-0 text-page-title font-semibold tracking-tight text-kh-text outline-none"
       onCompositionStart={() => { composing.current = true; writer?.pause(true); }}
       onCompositionEnd={() => { composing.current = false; writer?.pause(!editable || !!recovery); settleRef.current?.(); }} /> : undefined}>
-    <div className="kh-reading-column py-6">
+    <div className="kh-reading-column py-6" data-press-below={editable ? "" : undefined} onMouseDown={pressBelow}>
       {personal && <ReadRevisionMarker workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId} revisionId={savedRevision} />}
       {personal ? <OwnerReviewPanel documentId={detail.inspectorData.documentId} revisionId={savedRevision} markdown={content.markdown} prepareComment={prepareComment} commentAvailable={editable && ready && !recovery && !source && !failed} contentPending={dirty || !!recovery || source || failed || !ready}>{article}</OwnerReviewPanel> : article}
       {backlinks}

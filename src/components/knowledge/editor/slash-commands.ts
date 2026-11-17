@@ -1,5 +1,6 @@
 import { editorViewOptionsCtx } from "@milkdown/kit/core";
 import type { Ctx, MilkdownPlugin } from "@milkdown/kit/ctx";
+import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { Plugin, PluginKey, type EditorState } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
@@ -28,7 +29,8 @@ const commands = [
   { id: "link", label: "Page link", hint: "Another page in this workspace", words: "link to page document wiki 連結 頁面", aliases: ["page"], group: "Links", Icon: Link2 },
 ] as const;
 type Command = typeof commands[number];
-type Trigger = { pos: number; query: string };
+/** `pos`: the paragraph's position; `from`: its "/"; `inline`: the "/" follows text on the line (keys spec, decision 7). */
+type Trigger = { pos: number; from: number; query: string; inline: boolean };
 /**
  * `added`: the paragraph whose "/" `+` wrote (spec decision 15, deviation), held while its list is open there.
  * Dismissing that list with the "/" alone on the line takes the "/" back; anything typed after it stays.
@@ -44,7 +46,23 @@ function detect(state: EditorState): Trigger | null {
   if ($from.parent.childCount !== 1 || !$from.parent.firstChild?.isText || $from.parent.firstChild.marks.length) return null;
   const match = /^\/([^/\n]{0,40})$/.exec($from.parent.textContent);
   // A colon query belongs to the emoji list; both menus must not claim the same line.
-  return match && !match[1].includes(":") ? { pos: $from.before(1), query: match[1].toLowerCase().trim() } : null;
+  return match && !match[1].includes(":") ? { pos: $from.before(1), from: $from.start(), query: match[1].toLowerCase().trim(), inline: false } : null;
+}
+/**
+ * A "/" after a space later in a line opens the list too, as Notion's does; the chosen block goes below
+ * the line, and "/query" is taken out of it. A query nothing matches lets go, so a path typed as text
+ * (" /usr") does not keep a list open.
+ */
+function detectInline(state: EditorState): Trigger | null {
+  const { $from, empty } = state.selection;
+  if (!empty || $from.depth !== 1 || $from.parent.type.name !== "paragraph") return null;
+  const before = $from.nodeBefore;
+  if (!before?.isText || before.marks.length) return null;
+  const match = /(?:^|\s)\/([^\s/:]{0,40})$/.exec(before.text!);
+  if (!match) return null;
+  const from = $from.pos - match[1].length - 1;
+  if (from === $from.start() || !matchingCommands(match[1]).length) return null;
+  return { pos: $from.before(1), from, query: match[1].toLowerCase(), inline: true };
 }
 /**
  * What `+` does after inserting an empty paragraph, as Notion's does: writes a visible "/" there, so the list opens
@@ -116,6 +134,20 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
     if (!view.editable || !trigger) return;
     const { nodes } = view.state.schema;
     const current = view.state.doc.nodeAt(trigger.pos)!;
+    if (trigger.inline) {
+      const caretAt = view.state.selection.from;
+      if (command.id === "link") {
+        dispatchBlockAction(view, view.state.tr.insertText("[[", trigger.from, caretAt), trigger.from + 2);
+        return;
+      }
+      const tr = view.state.tr.delete(trigger.from, caretAt);
+      const below = trigger.pos + current.nodeSize - (caretAt - trigger.from);
+      if (command.id === "toggle") { insertDetailsSkeleton(view, below, below, "", "summary", tr); return; }
+      const [node, caret] = blockFor(view, command);
+      tr.insert(below, node);
+      dispatchBlockAction(view, tr, below + caret);
+      return;
+    }
     if (command.id === "link") {
       // Hand off to the `[[` list that already knows how to write a wikilink: the next thing typed
       // is that link's target, and dismissing it leaves the text as typed.
@@ -123,6 +155,17 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
       dispatchBlockAction(view, view.state.tr.replaceWith(trigger.pos, trigger.pos + current.nodeSize, paragraph), trigger.pos + 3);
       return;
     }
+    if (command.id === "toggle") {
+      insertDetailsSkeleton(view, trigger.pos, trigger.pos + current.nodeSize, "", "summary");
+      return;
+    }
+    const [node, caret] = blockFor(view, command);
+    dispatchBlockAction(view, view.state.tr.replaceWith(trigger.pos, trigger.pos + current.nodeSize, node), trigger.pos + caret);
+  }
+
+  /** The block a command makes, with the caret's offset from the block's start. */
+  function blockFor(view: EditorView, command: Command): [ProseNode | ProseNode[], number] {
+    const { nodes } = view.state.schema;
     const paragraph = nodes.paragraph.create();
     let node = paragraph;
     if (command.id.startsWith("h")) node = nodes.heading.create({ level: Number(command.id.slice(1)) });
@@ -141,20 +184,14 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
         nodes.table_row.create(null, [cell(), cell()]),
       ]);
     }
-    if (command.id === "toggle") {
-      insertDetailsSkeleton(view, trigger.pos, trigger.pos + current.nodeSize, "", "summary");
-      return;
-    }
-    let caret = trigger.pos + 1;
+    let caret = 1;
     if (command.id === "callout") {
       // The marker must stand alone on the quote's first line (remark-callouts), so the body is its own paragraph.
       const marker = nodes.paragraph.create(null, view.state.schema.text("[!NOTE]"));
       node = nodes.blockquote.create(null, [marker, paragraph]);
-      caret = trigger.pos + 1 + marker.nodeSize + 1;
+      caret = 1 + marker.nodeSize + 1;
     }
-    const replacement = command.id === "divider" ? [nodes.hr.create(), paragraph] : node;
-    const transaction = view.state.tr.replaceWith(trigger.pos, trigger.pos + current.nodeSize, replacement);
-    dispatchBlockAction(view, transaction, command.id === "divider" ? trigger.pos + 2 : caret);
+    return command.id === "divider" ? [[nodes.hr.create(), paragraph], 2] : [node, caret];
   }
 
   const plugin = $prose(() => new Plugin<State>({
@@ -163,12 +200,12 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
       init: () => ({ trigger: null, dismissed: null, index: 0, added: null }),
       apply(transaction, previous, _old, state) {
         const meta = transaction.getMeta(key) as { dismiss?: boolean; release?: boolean; index?: number } | undefined;
-        const trigger = detect(state);
+        const trigger = detect(state) ?? detectInline(state);
         let added = previous.added === null ? null : transaction.mapping.map(previous.added);
         if (transaction.getMeta(OPEN)) added = trigger?.pos ?? null;
         // Held only while that line's list is open: a dismissal, leaving the editor, or the caret leaving lets it go.
         if (meta?.dismiss || meta?.release || trigger?.pos !== added) added = null;
-        const dismissed = meta?.dismiss && trigger ? trigger.pos : !trigger ? null : previous.dismissed === null ? null : transaction.mapping.map(previous.dismissed);
+        const dismissed = meta?.dismiss && trigger ? trigger.from : !trigger ? null : previous.dismissed === null ? null : transaction.mapping.map(previous.dismissed);
         return { trigger, dismissed, added, index: meta?.index ?? (trigger?.query === previous.trigger?.query ? previous.index : 0) };
       },
     },
@@ -213,7 +250,7 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
       function position() {
         const trigger = key.getState(view.state)?.trigger;
         if (!visible || !trigger) return;
-        const rect = view.coordsAtPos(trigger.pos + 1);
+        const rect = view.coordsAtPos(trigger.from);
         const height = popup.offsetHeight;
         const below = window.innerHeight - rect.bottom - 8;
         popup.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - popup.offsetWidth - 8))}px`;
@@ -221,7 +258,7 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
       }
       function sync() {
         const state = key.getState(view.state);
-        if (!view.editable || !view.hasFocus() || !state?.trigger || state.dismissed === state.trigger.pos || view.composing) { close(); return; }
+        if (!view.editable || !view.hasFocus() || !state?.trigger || state.dismissed === state.trigger.from || view.composing) { close(); return; }
         shown = matchingCommands(state.trigger.query);
         const active = Math.min(state.index, shown.length - 1);
         popup.replaceChildren();
