@@ -175,6 +175,26 @@ describe("typed links (3, 4)", () => {
     expect(linked).toBe("the guide");
   });
 
+  it("never swallows a wikilink typed inside the brackets or after an address", async () => {
+    // An input rule reads an inline node as U+FFFC; taken into a link, the node was lost.
+    const bracketed = await open("[see [[Page]] here\n");
+    caretAtEnd(bracketed.view);
+    type(bracketed.view, "](https://x.com)");
+    const first = bracketed.editor.getMarkdown();
+    expect(first).not.toContain("\ufffc");
+    expect(extractDocumentLinks(first).map(link => link.target)).toEqual(["Page"]);
+
+    const after = await open("[[Page]]\n");
+    caretAt(after.view, 1);
+    type(after.view, "see https://x.com/");
+    caretAtEnd(after.view);
+    type(after.view, "abc z");
+    // The address stops at the wikilink, so no link is made across it (its href was "https://x.com/\ufffcabc").
+    const second = after.editor.getMarkdown();
+    expect(second).not.toContain("\ufffc");
+    expect(second).toBe("see https\\://x.com/[[Page]]abc z\n");
+  });
+
   it("leaves ![alt](src) and [[wikilinks]] to their own rules", async () => {
     const { editor, view } = await open("\n");
     type(view, "![alt](x.png) and [[Page]]");

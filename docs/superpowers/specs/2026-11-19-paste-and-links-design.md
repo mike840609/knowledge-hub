@@ -46,6 +46,9 @@ to the wikilink rule (CLAUDE.md).
    that is already linked.
 4. **A typed `[text](url)` becomes the linked text** when its closing
    parenthesis is typed. `![alt](src)` and `[[wikilinks]]` keep their own rules.
+   Neither rule reaches across an inline node: a wikilink or line break inside
+   the brackets, or right after an address, leaves the text as typed rather
+   than being replaced by text (which lost the wikilink and its edge).
 
 ## Out of scope, recorded
 

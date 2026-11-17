@@ -54,7 +54,8 @@ const markdownPaste = $prose(
 );
 
 /** A typed or pasted web address ends before trailing punctuation, as GFM's autolink literal does. */
-const URL_TAIL = String.raw`https?:\/\/[^\s<>]*[^\s<>.,;:!?'")\]}]`;
+// \ufffc is how an input rule sees an inline node (a wikilink, a line break): never part of a link.
+const URL_TAIL = String.raw`https?:\/\/[^\s<>\ufffc]*[^\s<>.,;:!?'")\]}\ufffc]`;
 
 /** `https://…` then a space: the address becomes a link (decision 3), punctuation after it left out. */
 const autolinkRule = $inputRule(
@@ -79,7 +80,7 @@ const autolinkRule = $inputRule(
 /** `[text](url)` typed: the text, linked (decision 4). `![alt](src)` stays as typed: an image is not made here. */
 const markdownLinkRule = $inputRule(
   () =>
-    new InputRule(/(?<![!\\[])\[([^\][\n]+)\]\(([^()\s]+)\)$/, (state, match, start, end) => {
+    new InputRule(/(?<![!\\[])\[([^\][\n\ufffc]+)\]\(([^()\s\ufffc]+)\)$/, (state, match, start, end) => {
       const link = state.schema.marks.link;
       if (!link || codeAt(state) || !state.selection.$from.parent.type.allowsMarkType(link)) return null;
       const marks = state.doc.resolve(start).marks().filter((mark) => mark.type !== link);
