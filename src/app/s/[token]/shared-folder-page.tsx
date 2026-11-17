@@ -1,6 +1,7 @@
 import { ExternalLink } from "lucide-react";
 import type { SharedTreeView } from "@/modules/knowledge/application/document-share-service";
 import { SaveShareButton } from "@/components/knowledge/save-share-button";
+import { SharedDownloadButton } from "@/components/knowledge/shared-download-button";
 import { SharedReviewPanel } from "@/components/knowledge/shared-review-panel";
 import { sharedFolderLinks } from "@/components/knowledge/shared-folder-links";
 import { SharedFolderTree, SharedFolderTreeButton, SharedFolderTreeScope } from "@/components/knowledge/shared-folder-tree";
@@ -52,13 +53,15 @@ export function SharedFolderPage({ token, shared, platformEntry, signInHref, pag
       </nav>
     </>
   );
-  const actions = platformEntry === null ? null : (
+  const enter = platformEntry === null ? null : (
     <>
       <SaveShareButton token={token} />
       <span aria-hidden="true" className="mx-1 h-4 w-px bg-kh-border max-sm:hidden" />
       <a href={platformEntry} className={buttonClasses({ variant: "ghost" })}><ExternalLink className="size-4" aria-hidden="true" /><span className="max-sm:sr-only">Open<span className="sr-only"> in Knowledge Hub</span></span></a>
     </>
   );
+  // Download is the reader's own copy of what the link opened, so it shows in the Hub's reader too.
+  const actions = document ? <><SharedDownloadButton title={document.title} markdown={document.markdown} metadata={document.metadata} />{enter}</> : enter;
   if (!document) {
     return (
       <Root className={rootClass}>
@@ -67,7 +70,7 @@ export function SharedFolderPage({ token, shared, platformEntry, signInHref, pag
           <div className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-kh-border bg-kh-bg px-4">
             {lead}
             {/* -me-3 takes back the last button's padding, so its label ends on the bar's edge. */}
-            <div className="-me-3 ml-auto flex shrink-0 items-center gap-1">{actions}</div>
+            <div className="-me-3 ml-auto flex shrink-0 items-center gap-1">{enter}</div>
           </div>
           {tree}
         </SharedFolderTreeScope>
