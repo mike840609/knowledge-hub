@@ -411,7 +411,7 @@ function exitTop(view: EditorView): boolean {
  * Tab in text that nothing indents (a paragraph, a heading, a quote) stays in the editor, as Notion's does:
  * it used to move focus to the next control on the page, taking the writer's next keys with it. A list, a
  * table and code keep their own Tab; a block chosen with Escape lets Tab go on, which is how a keyboard
- * user leaves the editor.
+ * user leaves the editor. Only inside an element marked `data-tab-stays` (the document page).
  */
 const tabStaysInText = $prose(
   () =>
@@ -420,8 +420,11 @@ const tabStaysInText = $prose(
       props: {
         handleKeyDown(view, event) {
           if (event.key !== "Tab" || event.metaKey || event.ctrlKey || event.altKey || composing(event) || !view.editable) return false;
+          // Only where the page asks for it (the document page); a form such as the composer keeps Tab to its next control.
+          if (!view.dom.closest("[data-tab-stays]")) return false;
           const { selection } = view.state;
-          if (!(selection instanceof TextSelection)) return false;
+          // Selected text keeps Tab for the formatting toolbar, which a keyboard user reaches that way.
+          if (!(selection instanceof TextSelection) || !selection.empty) return false;
           for (let depth = selection.$from.depth; depth >= 0; depth--) {
             const role = selection.$from.node(depth).type;
             if (role.name === "list_item" || role.spec.tableRole || role.spec.code) return false;

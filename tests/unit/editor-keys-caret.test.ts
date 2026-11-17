@@ -16,6 +16,7 @@ afterEach(async () => { for (const editor of opened.splice(0)) await editor.dest
 
 async function open(markdown = "") {
   const root = document.body.appendChild(document.createElement("div"));
+  root.setAttribute("data-tab-stays", "");
   const slash = slashCommands();
   const editor = await createMarkdownEditor({
     root, markdown, className: "kh-editor", ariaLabel: "Content", editable: true, onUserEdit: () => {}, onMarkdown: () => {}, allowImage: () => false,
@@ -78,6 +79,10 @@ it("Tab in a paragraph stays in the editor and writes nothing; in a list it stil
   expect(press(view, "Tab").defaultPrevented).toBe(true);
   expect(press(view, "Tab", { shiftKey: true }).defaultPrevented).toBe(true);
   expect(md(editor)).toBe("one\n\n- a\n- b");
+  // Selected text keeps Tab for the formatting toolbar.
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1, 3)));
+  expect(press(view, "Tab").defaultPrevented).toBe(false);
+  caretAt(view, 2);
   // Escape chooses the block; Tab then goes on to the page, which is how a keyboard user leaves.
   press(view, "Escape");
   expect(press(view, "Tab").defaultPrevented).toBe(false);
@@ -147,4 +152,11 @@ it("a mid-line / Page link writes [[ in place", async () => {
   press(view, "Enter");
   expect(view.state.doc.firstChild!.textContent).toBe("see [[");
   expect(md(editor)).toBe("see \\[\\[");
+});
+
+it("Tab is the page's to claim: outside data-tab-stays it goes on to the next control", async () => {
+  const { view } = await open("one");
+  view.dom.closest("[data-tab-stays]")!.removeAttribute("data-tab-stays");
+  caretAt(view, 2);
+  expect(press(view, "Tab").defaultPrevented).toBe(false);
 });

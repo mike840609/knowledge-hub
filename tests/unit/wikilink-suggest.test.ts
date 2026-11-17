@@ -567,8 +567,7 @@ describe("keys that are not the list's", () => {
     focusAtEnd(editor);
     typeText(editor, "plain");
     expect(press(editor, "ArrowDown").defaultPrevented).toBe(false);
-    press(editor, "Tab"); // the editor's own (keys spec, decision 2): nothing is chosen or written
-    expect(editor.getMarkdown().trim()).toMatch(/plain$/);
+    expect(press(editor, "Tab").defaultPrevented).toBe(false);
   });
 });
 

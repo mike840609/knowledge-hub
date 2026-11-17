@@ -539,7 +539,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     }}>Download my changes</Button>}
     {(error || recovery) && resolved.title ? <p className="mb-3 text-caption text-kh-text-muted">Keep the .kh-recovery.md filename ending when uploading this draft to restore it accurately.</p> : null}
     {failed && <p role="status" className="mb-3 text-body-sm">Rendered editing is unavailable. You can continue in Markdown.</p>}
-    <div ref={pressArea} onPointerDownCapture={() => { dismissEditHint(); if (!ready) standInPressed.current = true; }} onFocusCapture={dismissEditHint} onCompositionStart={() => { composing.current = true; writer?.pause(true); }} onCompositionEnd={() => {
+    <div ref={pressArea} data-tab-stays="" onPointerDownCapture={() => { dismissEditHint(); if (!ready) standInPressed.current = true; }} onFocusCapture={dismissEditHint} onCompositionStart={() => { composing.current = true; writer?.pause(true); }} onCompositionEnd={() => {
       composing.current = false;
       flushEditor();
       writer?.pause(!editable || !!recovery);

@@ -17,10 +17,14 @@ wikilink rule (CLAUDE.md).
    empty paragraph unless the document already ends in one, so a press below a
    list, table, code block or toggle starts a new line, not more of that block.
    Before, the press focused the document region, and typing went nowhere.
-2. **Tab stays in the text.** Tab and Shift-Tab with a text caret outside a
-   list, a table and code are claimed and write nothing; before, they moved
-   focus to the next control on the page and the writer's next keys followed
-   it. Lists, tables and code keep their own Tab. A block chosen with Escape
+2. **Tab stays in the text on the document page.** On the document page
+   (inside `data-tab-stays`), Tab and Shift-Tab with a bare caret outside a
+   list, a table and code are claimed and write nothing. Before, they moved
+   focus to the next control on the page, and the writer's next keys followed
+   it. Lists, tables and code keep their own Tab. Two cases keep the old Tab,
+   because a keyboard user depends on it there. With text selected, Tab moves
+   into the formatting toolbar. In a form such as the new-document composer,
+   Tab moves from the editor to the form's next control (Upload .md). A block chosen with Escape
    (decision 7 of the 2026-11-15 spec) is not a text caret, so Tab goes on to
    the page from there. Escape then Tab is the documented way out, and the
    editor is no keyboard trap (WCAG 2.1.2). This replaces "Tab is bound nowhere
@@ -62,5 +66,7 @@ wikilink rule (CLAUDE.md).
 `tests/unit/editor-keys-caret.test.ts` drives each decision through the
 rendered editor. `tests/e2e/zz-editor-keys-caret.spec.ts` drives decisions 1,
 2, 3, 4, 5 and 7 in a browser and reads the saved Markdown back through export.
-Two unit tests that stated the old Tab rule now state decision 2:
-`editor-notion-blocks.test.ts` and `wikilink-suggest.test.ts`.
+Two unit tests stated the old Tab rule:
+`editor-notion-blocks.test.ts` and `wikilink-suggest.test.ts`. That stopped
+being true once the rule was scoped to `data-tab-stays`; outside it they hold
+unchanged.
