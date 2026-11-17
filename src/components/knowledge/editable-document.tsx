@@ -7,10 +7,10 @@ import { OwnerReviewPanel } from "./owner-review-panel";
 import { AutosaveIndicator } from "./autosave-indicator";
 import { ReadRevisionMarker } from "./read-revision-marker";
 import { Button } from "@/components/ui/button";
-import { FileCode2, Pencil } from "lucide-react";
+import { FileCode2, Maximize2, Minimize2, Pencil } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
-import { readStored, writeStored } from "@/components/shell/use-persisted-state";
+import { isBoolean, readStored, usePersistedJson, writeStored } from "@/components/shell/use-persisted-state";
 import { governanceFailure, governanceRequest, GovernanceError, transientSaveFailure } from "@/components/workspaces/governance-error";
 import { DocumentAutosave, type DocumentContent, type SavedRevision } from "@/lib/document-autosave";
 import { mergeText } from "@/lib/merge-text";
@@ -23,6 +23,7 @@ import { carryTitle, resolveAuthoredTitle } from "@/lib/authored-title";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { downloadMarkdown } from "@/lib/download-markdown";
 import { buildRecoveryMarkdown } from "@/lib/recovery-markdown";
+import { countWords } from "@/shared/markdown/word-count";
 import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
 import type { RenderedLinks } from "./rendered-links";
 import type { MarkdownEditor } from "./editor/editor-core";
@@ -455,6 +456,14 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     refreshMetadata();
   }
   const displayTitle = dirty || recovery ? resolved.title || "Untitled" : savedTitle;
+  // Full width is the reader's own arrangement of the page, kept in this browser, not a property of the document.
+  const [fullWidth, setFullWidth] = usePersistedJson("kh.document-full-width", false, isBoolean);
+  useEffect(() => {
+    const pane = pressArea.current?.closest(".kh-document-pane");
+    pane?.toggleAttribute("data-full-width", fullWidth);
+    return () => pane?.removeAttribute("data-full-width");
+  }, [fullWidth]);
+  const words = countWords(content.markdown);
   /** Enter, or ArrowDown on the last line, in the title: on to the start of the content (never a line break in the title). */
   function leaveTitle() {
     if (source || failed) {
@@ -616,8 +625,9 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     inspectorData={{ ...detail.inspectorData, revisions, selectedRevisionNo: revisions.find(item => item.id === savedRevision)?.revisionNo ?? detail.inspectorData.selectedRevisionNo }}
     breadcrumb={[...detail.breadcrumb.slice(0, -1), { label: displayTitle }]} outline={outline}
     contentOwnsTitle={markdownOpensWithHeading(content.markdown)}
+    wordCount={words}
     editHint={showEditHint ? "Click anywhere in the text to edit." : undefined}
-    editorActions={<><AutosaveIndicator state={status} attention={attention} /><Button type="button" variant="ghost" aria-label="Rename document" title="Rename document" disabled={!editable || !!recovery || (!ready && !source && !failed)} onClick={focusTitle}><Pencil className="h-4 w-4" aria-hidden="true" /></Button>{markdownToggle}</>}
+    editorActions={<><AutosaveIndicator state={status} attention={attention} /><Button type="button" variant="ghost" aria-label="Rename document" title="Rename document" disabled={!editable || !!recovery || (!ready && !source && !failed)} onClick={focusTitle}><Pencil className="h-4 w-4" aria-hidden="true" /></Button><Button type="button" variant="ghost" aria-label="Full width" title="Full width" aria-pressed={fullWidth} data-pressed={fullWidth} className="hidden data-[pressed=true]:bg-kh-bg-hover data-[pressed=true]:text-kh-text sm:inline-flex" onClick={() => setFullWidth(value => !value)}>{fullWidth ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}</Button>{markdownToggle}</>}
     titleControl={resolved.source !== "H1" ? <textarea ref={titleInput} name="title" aria-label="Title" value={content.title} disabled={!editable} maxLength={512} rows={1}
       onChange={event => change({ ...queue.current!.current, title: event.target.value })}
       onKeyDown={event => {
