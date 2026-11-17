@@ -56,7 +56,7 @@ Your content stays in plain Markdown — no particular note-taking app, wiki gen
   <tr>
     <td width="50%" valign="top">
       <img src="docs/images/personal-home.jpg" alt="Home with recent documents, discussions, favorites, search, and a new-note action">
-      <p><b>Personal home</b> — drafts, recent documents, discussions and favorites, with Search and New note in reach.</p>
+      <p><b>Personal home</b> — drafts, recent documents, discussions and favorites, with Search and Create document in reach.</p>
     </td>
     <td width="50%" valign="top">
       <img src="docs/images/search.jpg" alt="Search results for leave with source and path shown for each match">
@@ -152,7 +152,7 @@ If pnpm is unavailable, run `rm -rf node_modules .next && npm ci` instead of `pn
 
 ### Your first workflow
 
-1. Choose **New note** to write a note, or **Import folder** to bring in a Markdown folder. The import page links to the folder format guide and offers **Try with a sample wiki**, which imports a ready-made folder (English or Traditional Chinese, from `public/sample-wiki/`) through the normal Preview → Apply flow.
+1. Choose **Create document** to write a note, or **Import folder** to bring in a Markdown folder. The import page links to the folder format guide and offers **Try with a sample wiki**, which imports a ready-made folder (English or Traditional Chinese, from `public/sample-wiki/`) through the normal Preview → Apply flow.
 2. For imports, review additions, updates, archives, and diagnostics in Preview before applying.
 3. Use `[[Document title]]` in editable notes to link documents, then open **Graph** to explore relationships.
 4. Save a note before creating a read-only share link or downloading its Markdown.

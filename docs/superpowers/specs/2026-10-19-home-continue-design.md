@@ -35,7 +35,8 @@ is waiting for them.
 
 1. **PageHeader** — title "Home" and the actions menu.
    Below it, one row (from PR #216, at the user's request): a search bar and
-   "New note" (secondary, `lg`). The search bar is a button named "Search
+   "Create document" (secondary, `lg`; it read "New note" until the
+   2026-11-19 creation-flow spec, decision 5). The search bar is a button named "Search
    articles and notes" that opens the same ⌘K palette as the rail
    (`requestQuickSearch`), never a second search field, so there is still one
    place to search; it shows `⌘K` from `sm` up.
@@ -125,7 +126,7 @@ and never reaches a document page, even after a client-side navigation.
 
 It does not fire in a field, editor, menu or dialog, during input-method
 composition, on a held key, with ⌘/Ctrl/Alt/Shift (`isSingleKeyShortcut`),
-or with focus on the search bar, where a key means search. The New note link
+or with focus on the search bar, where a key means search. The Create document link
 carries `aria-keyshortcuts="C"` and a tooltip naming the key.
 
 WCAG 2.1.4 (character key shortcuts) asks that such a key can be turned off
