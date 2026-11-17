@@ -49,13 +49,15 @@ type Options = {
   excludeDocumentId?: string;
   now?: () => number;
   editable?: boolean;
+  createPage?: (title: string) => Promise<void>;
+  onCreateFailed?: (title: string) => void;
 };
 
 async function open(options: Options = {}) {
   const root = document.createElement("div");
   document.body.appendChild(root);
   const loadTargets = vi.fn(options.loadTargets ?? (async () => ({ targets: options.targets ?? CATALOG, truncated: options.truncated ?? false })));
-  const suggest = wikiLinkSuggest({ loadTargets, excludeDocumentId: () => options.excludeDocumentId, now: options.now });
+  const suggest = wikiLinkSuggest({ loadTargets, excludeDocumentId: () => options.excludeDocumentId, now: options.now, createPage: options.createPage, onCreateFailed: options.onCreateFailed });
   const onMarkdown = vi.fn();
   const editor = await createMarkdownEditor({
     root,
@@ -567,7 +569,6 @@ describe("keys that are not the list's", () => {
     focusAtEnd(editor);
     typeText(editor, "plain");
     expect(press(editor, "ArrowDown").defaultPrevented).toBe(false);
-    expect(press(editor, "Tab").defaultPrevented).toBe(false);
   });
 });
 
@@ -827,5 +828,127 @@ describe("leaving nothing behind", () => {
     expect(titles()).toEqual(["Only in the second"]);
     expect(document.querySelectorAll(".kh-wikilink-suggest")).toHaveLength(2);
     expect(domOf(first.editor).hasAttribute("aria-expanded")).toBe(false);
+  });
+});
+
+// The 2026-11-20 spec, decision 1: a name no document answers to offers a last row, "Create page".
+describe("creating a page from a name nothing answers to", () => {
+  it("offers it last, writes the link at once, and makes the page behind it", async () => {
+    const createPage = vi.fn(async () => {});
+    const { editor } = await open({ createPage });
+    focusAtEnd(editor);
+    typeText(editor, "[[Roadmap");
+    await flush();
+    expect(titles()).toEqual(['Create page "Roadmap"']);
+    expect(announced()).toBe('0 suggestions, or create page "Roadmap".');
+    expect(message().hidden).toBe(true);
+    // Not chosen until an arrow key moves there: Enter alone must not make a page nobody asked for.
+    expect(activeTitle()).toBeUndefined();
+    expect(domOf(editor).hasAttribute("aria-activedescendant")).toBe(false);
+    press(editor, "ArrowDown");
+    expect(activeTitle()).toBe('Create page "Roadmap"');
+    expect(press(editor, "Enter").defaultPrevented).toBe(true);
+    expect(createPage).toHaveBeenCalledWith("Roadmap");
+    expect(savedLinks(editor)).toEqual([["WIKI", "Roadmap", null]]);
+    expect(isShown()).toBe(false);
+  });
+
+  it("leaves Enter to the editor while the create row is not chosen, and a new query un-chooses it", async () => {
+    const createPage = vi.fn(async () => {});
+    const { editor } = await open({ createPage });
+    focusAtEnd(editor);
+    typeText(editor, "[[Roadmap");
+    await flush();
+    // The editor takes the Enter (a new line); the page is not made.
+    press(editor, "Enter");
+    expect(viewOf(editor).state.doc.childCount).toBe(2);
+    expect(createPage).not.toHaveBeenCalled();
+    press(editor, "ArrowDown");
+    typeText(editor, "s");
+    expect(activeTitle()).toBeUndefined();
+  });
+
+  it("is reached by the arrow keys after the suggestions, and by a press", async () => {
+    const createPage = vi.fn(async () => {});
+    const { editor } = await open({ createPage });
+    focusAtEnd(editor);
+    typeText(editor, "[[kub");
+    await flush();
+    expect(titles()).toEqual(["Kube-proxy", "Kubernetes", 'Create page "kub"']);
+    press(editor, "ArrowUp");
+    expect(activeTitle()).toBe('Create page "kub"');
+    press(editor, "ArrowDown");
+    expect(activeTitle()).toBe("Kube-proxy");
+    options()[2].dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0 }));
+    expect(createPage).toHaveBeenCalledWith("kub");
+    expect(savedLinks(editor)).toEqual([["WIKI", "kub", null]]);
+  });
+
+  it("keeps the link, and says so, when the page could not be made", async () => {
+    const onCreateFailed = vi.fn();
+    const { editor } = await open({ createPage: async () => { throw new Error("no"); }, onCreateFailed });
+    focusAtEnd(editor);
+    typeText(editor, "[[Roadmap");
+    await flush();
+    press(editor, "ArrowDown");
+    press(editor, "Enter");
+    await flush();
+    expect(onCreateFailed).toHaveBeenCalledWith("Roadmap");
+    expect(savedLinks(editor)).toEqual([["WIKI", "Roadmap", null]]);
+  });
+
+  it.each([
+    ["a title that exists", "kubernetes", {}],
+    ["a title that exists in another case or width", "ＫＵＢＥＲＮＥＴＥＳ", {}],
+    ["a list that was cut", "Roadmap", { truncated: true }],
+    ["no way to create one", "Roadmap", { createPage: undefined }],
+    ["an empty name", "", {}],
+  ])("offers no row for %s", async (_name, query, extra) => {
+    const { editor } = await open({ createPage: async () => {}, ...extra });
+    focusAtEnd(editor);
+    typeText(editor, `[[${query}`);
+    await flush();
+    expect(titles().filter((title) => title?.startsWith("Create page"))).toEqual([]);
+  });
+
+  it("does not offer the same page a second time while the first is still being made", async () => {
+    const createPage = vi.fn(() => new Promise<void>(() => {}));
+    const { editor } = await open({ createPage });
+    focusAtEnd(editor);
+    typeText(editor, "[[Roadmap");
+    await flush();
+    press(editor, "ArrowDown");
+    press(editor, "Enter");
+    typeText(editor, " and [[Roadmap");
+    await flush();
+    expect(titles()).toEqual([]);
+    expect(createPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats a full-width spelling of a page being made as the same page", async () => {
+    const createPage = vi.fn(() => new Promise<void>(() => {}));
+    const { editor } = await open({ createPage });
+    focusAtEnd(editor);
+    typeText(editor, "[[Ｋube2");
+    await flush();
+    press(editor, "ArrowDown");
+    press(editor, "Enter");
+    typeText(editor, " and [[Kube2");
+    await flush();
+    expect(titles()).toEqual([]);
+  });
+
+  it("offers it again if the first attempt failed", async () => {
+    const createPage = vi.fn(async () => { throw new Error("no"); });
+    const { editor } = await open({ createPage });
+    focusAtEnd(editor);
+    typeText(editor, "[[Roadmap");
+    await flush();
+    press(editor, "ArrowDown");
+    press(editor, "Enter");
+    await flush();
+    typeText(editor, " and [[Roadmap");
+    await flush();
+    expect(titles()).toEqual(['Create page "Roadmap"']);
   });
 });

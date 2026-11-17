@@ -23,7 +23,8 @@ function unique(label: string) {
 const composer = (page: Page) => page.locator("main");
 const surfaceOf = (page: Page) => composer(page).getByRole("textbox", { name: "Content" });
 const listboxOf = (page: Page) => page.getByRole("listbox", { name: "Documents to link to" });
-const optionsOf = (page: Page) => listboxOf(page).getByRole("option");
+// The "Create page" row (2026-11-20 links spec) is not a document; these specs count the documents.
+const optionsOf = (page: Page) => listboxOf(page).getByRole("option").filter({ hasNotText: /^Create page/ });
 
 async function mySpace(page: Page): Promise<string> {
   await page.goto("/");
@@ -122,9 +123,12 @@ test.describe("the `[[` list", () => {
     await expect(optionsOf(page).nth(0)).toHaveAttribute("aria-selected", "true");
     await page.keyboard.press("ArrowDown");
     await expect(optionsOf(page).nth(1)).toHaveAttribute("aria-selected", "true");
+    // After the documents comes the "Create page" row; the next press wraps to the first.
+    await page.keyboard.press("ArrowDown");
+    await expect(listboxOf(page).getByRole("option", { name: /^Create page/ })).toHaveAttribute("aria-selected", "true");
     await page.keyboard.press("ArrowDown");
     await expect(optionsOf(page).nth(0)).toHaveAttribute("aria-selected", "true");
-    await page.keyboard.press("ArrowUp");
+    await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Tab");
     await expect(surface.locator("span.kh-wikilink")).toHaveText(`${stamp} Alpha`);
 

@@ -84,12 +84,50 @@ describe("Markdown text pastes as Markdown (1)", () => {
   it.each([
     ["plain lines", "line one\nline two", "line one\n\nline two\n"],
     ["a sentence with a dash in it", "a - b", "a - b\n"],
-    // An address inside a pasted sentence is not linked: out of scope, recorded (spec, "Out of scope").
-    ["a sentence with an address", "see https://example.com", "see https\\://example.com\n"],
   ])("leaves %s to the text paste", async (_name, text, expected) => {
     const { editor, view } = await open("\n");
     paste(view, { "text/plain": text });
     expect(editor.getMarkdown()).toBe(expected);
+  });
+
+  // The 2026-11-20 spec, decision 4: an address inside pasted text is linked, in either path.
+  it.each([
+    ["a sentence", "see https://example.com now", "see <https://example.com> now\n"],
+    ["lines", "one https://a.example\ntwo https://b.example/x.", "one <https://a.example>\n\ntwo <https://b.example/x>.\n"],
+    ["parentheses", "(see https://example.com/a_(b)) and https://c.example)", "(see <https://example.com/a_(b)>) and <https://c.example>)\n"],
+    ["Markdown", "**bold** at https://example.com/path.", "**bold** at <https://example.com/path>.\n"],
+  ])("links the addresses in pasted %s", async (_name, text, expected) => {
+    const { editor, view } = await open("\n");
+    expect(paste(view, { "text/plain": text }).defaultPrevented).toBe(true);
+    expect(await roundTrip(editor)).toBe(expected);
+  });
+
+  it("keeps a pasted [[wikilink]] a link when the text also holds an address, and the marks at the caret", async () => {
+    const { editor, view } = await open("\n");
+    paste(view, { "text/plain": "see [[Foo]] at https://example.com now" });
+    const markdown = await roundTrip(editor);
+    expect(markdown).toBe("see [[Foo]] at <https://example.com> now\n");
+    expect(extractDocumentLinks(markdown).map((link) => [link.kind, link.target])).toEqual([["WIKI", "Foo"]]);
+    const bold = await open("**ab**\n");
+    bold.view.dispatch(bold.view.state.tr.setSelection(TextSelection.create(bold.view.state.doc, 2)));
+    paste(bold.view, { "text/plain": "x https://e.com y" });
+    expect(bold.editor.getMarkdown()).toBe("**ax <https://e.com> yb**\n");
+  });
+
+  it("leaves an address inside code, and an address that is not one, as text", async () => {
+    const { editor, view } = await open("\n");
+    paste(view, { "text/plain": "run `curl https://example.com` and see http:// or httpx://example.com" });
+    expect(editor.getMarkdown()).toBe("run `curl https://example.com` and see http\\:// or httpx://example.com\n");
+  });
+
+  it("pastes a lone address as the link paste does, and a sentence in a table cell as text", async () => {
+    const { editor, view } = await open("\n");
+    paste(view, { "text/plain": "https://example.com" });
+    expect(editor.getMarkdown()).toBe("<https://example.com>\n");
+    const cell = await open("| a | b |\n| - | - |\n| x | y |\n");
+    cell.view.dispatch(cell.view.state.tr.setSelection(TextSelection.create(cell.view.state.doc, 5)));
+    paste(cell.view, { "text/plain": "see https://example.com" });
+    expect(cell.editor.getMarkdown()).not.toContain("<https://example.com>");
   });
 
   it("puts a pasted heading on its own line, not into the one it lands in", async () => {
@@ -211,5 +249,19 @@ describe("typed links (3, 4)", () => {
     const markdown = editor.getMarkdown();
     expect(markdown).not.toContain("[alt](x.png)](");
     expect(extractDocumentLinks(markdown).map(link => link.target)).toEqual(["Page"]);
+  });
+});
+
+describe("a typed [text](url) keeps its formatting (2026-11-20, decision 3)", () => {
+  it("makes a bold link of [**bold**](url) and keeps a mark around it", async () => {
+    const { editor, view } = await open("\n");
+    type(view, "[**bold** and *it*](https://example.com)");
+    // The link is one mark over both pieces; the writer puts it around each differently-marked run.
+    expect(await roundTrip(editor)).toBe("**[bold](https://example.com)** [and *it*](https://example.com)\n");
+    const { editor: second, view: line } = await open("\n");
+    type(line, "see ");
+    line.dispatch(line.state.tr.addStoredMark(line.state.schema.marks.strong.create()));
+    type(line, "[words](https://example.com)");
+    expect(second.getMarkdown()).toBe("see **[words](https://example.com)**\n");
   });
 });

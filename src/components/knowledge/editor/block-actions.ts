@@ -4,6 +4,15 @@ import { closeHistory } from "@milkdown/kit/prose/history";
 import { Selection, type Transaction } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { calloutKind } from "@/shared/markdown/remark-callouts";
+import { htmlAsText } from "@/shared/markdown/remark-known-html";
+
+/**
+ * A heading's words as the reader counts them for its anchor: a wikilink in its written form (`[[Page]]`), an image as its
+ * alt text, an inline `<br>` as a space (`htmlAsText`, as the reader reads it). `textContent` drops both, so a heading holding one would be given another id here than the reader gives it.
+ */
+export function headingText(node: ProseNode): string {
+  return node.textBetween(0, node.content.size, "", (leaf) => leaf.type.name === "wiki_link" ? String(leaf.attrs.raw ?? "") : leaf.type.name === "html" ? htmlAsText(String(leaf.attrs.value ?? "")) : String(leaf.attrs.alt ?? "")).trim();
+}
 
 export type EditorBlock = { pos: number; node: ProseNode };
 export function topLevelBlocks(doc: ProseNode): EditorBlock[] {

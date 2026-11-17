@@ -1,8 +1,9 @@
 import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
+import { HeadingSlugger } from "@/shared/markdown/heading-slug";
 import { openBlockList } from "./slash-commands";
-import { blockKind, canTurnInto, deleteBlock, duplicateBlock, insertBlockBelow, moveBlock, siblingBlocks, topLevelBlocks, turnBlockInto, type BlockKind } from "./block-actions";
+import { blockKind, canTurnInto, headingText, deleteBlock, duplicateBlock, insertBlockBelow, moveBlock, siblingBlocks, topLevelBlocks, turnBlockInto, type BlockKind } from "./block-actions";
 
 function icon(kind: "plus" | "grip"): SVGSVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -19,6 +20,24 @@ function icon(kind: "plus" | "grip"): SVGSVGElement {
 }
 
 /** A single floating gutter for this editor; controls are never children of the editable document. */
+/**
+ * The `id` the reader gives the heading at `pos`: slugs are handed out in reading order across the whole document
+ * (`HeadingSlugger`, the one place they are assigned), so a repeated title gets the same `-1` here as there.
+ */
+export function headingSlugAt(view: EditorView, pos: number): string | null {
+  const slugger = new HeadingSlugger();
+  let found: string | null = null;
+  view.state.doc.descendants((node, at) => {
+    if (node.type.name === "heading") {
+      const slug = slugger.slug(headingText(node));
+      if (at === pos) found = slug;
+      return false;
+    }
+    return found === null;
+  });
+  return found;
+}
+
 export function blockGutter() {
   const dragKey = new PluginKey<number | null>("khDraggedBlock");
   let focusControls: (() => boolean) | undefined;
@@ -105,7 +124,18 @@ export function blockGutter() {
         const index = activeIndex();
         up.disabled = index <= 0;
         down.disabled = index < 0 || index === blocks.length - 1;
-        menu.append(turn, duplicate, remove, separator(), up, down);
+        const heading = activeNode()?.type.name === "heading" ? menuButton("Copy link to heading", () => {
+          const slug = active === null ? null : headingSlugAt(view, active);
+          closeMenu();
+          if (slug === null) return;
+          // The same words twice are not announced twice: clear first, so a second copy is said again.
+          live.textContent = "";
+          const failed = () => { live.textContent = "Couldn't copy the link"; };
+          if (!navigator.clipboard) { failed(); return; }
+          const href = `${window.location.origin}${window.location.pathname}#${encodeURIComponent(slug)}`;
+          void navigator.clipboard.writeText(href).then(() => { live.textContent = "Link copied"; }, failed);
+        }) : null;
+        menu.append(turn, duplicate, remove, ...(heading ? [heading] : []), separator(), up, down);
         return turn;
       }
       function renderTurn(): void {
