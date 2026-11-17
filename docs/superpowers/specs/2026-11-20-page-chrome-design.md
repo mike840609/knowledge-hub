@@ -11,7 +11,9 @@ Notion's. Two of them are decided here. Nothing stored in a document changes.
    fence markers and list numbers are not words, a `[[wikilink]]` counts its
    target, Latin words and numbers count by run, and each Han, kana or hangul
    character counts as one (`src/shared/markdown/word-count.ts`). A page with no
-   words says nothing.
+   words says nothing. It waits for the first-use edit hint to go ("Click anywhere
+   in the text to edit"), which shares the line: both together wrap a phone-width
+   header, and focusing the editor must not move the layout (`zz-editor-blocks`).
 2. **Full width is the reader's own arrangement.** A header button (`Full
    width`, a pressed toggle, from the `sm` breakpoint up) lets the reading
    column fill the pane. It is kept in this browser (`kh.document-full-width`,

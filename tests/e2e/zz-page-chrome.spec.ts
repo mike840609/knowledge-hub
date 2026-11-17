@@ -26,8 +26,9 @@ test.describe("page chrome", () => {
   test("the header counts the words, and the count follows the typing", async ({ page }) => {
     const surface = await openNote(page, "one two three\n");
     const count = page.locator("header").getByText(/\d+ words?/);
-    await expect(count).toHaveText("3 words", ROUND_TRIP);
+    // The first-use hint holds the line until the editor is focused.
     await surface.getByText("one two three", { exact: true }).click();
+    await expect(count).toHaveText("3 words", ROUND_TRIP);
     await page.keyboard.press("End");
     await page.keyboard.type(" four 請假");
     await expect(count).toHaveText("6 words", ROUND_TRIP);

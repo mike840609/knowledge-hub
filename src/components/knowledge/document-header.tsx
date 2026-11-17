@@ -48,7 +48,7 @@ export function DocumentHeader({
   editorActions?: ReactNode;
   /** A first-visit cue that the text itself is the editor; kept in the metadata row, not the article. */
   editHint?: ReactNode;
-  /** Words on the page, shown beside when it was updated; omitted where it is not counted. */
+  /** Words on the page, shown beside when it was updated, once the edit hint has gone (both on one line would wrap a phone-width header, and the layout must not move when the hint goes); omitted where it is not counted. */
   wordCount?: number;
   readOnlyReason?: ReactNode;
   /** Whether this page is in the reader's favorites; absent where favoriting is not offered. */
@@ -206,7 +206,7 @@ export function DocumentHeader({
             ) : null}
             {status === "ARCHIVED" ? <Badge variant="warning">Archived</Badge> : null}
             <time dateTime={new Date(updatedAt).toISOString()} title={formatDateTime(updatedAt, zone)}>Updated {relative}</time>
-            {wordCount ? <>
+            {wordCount && !editHint ? <>
               <span aria-hidden="true" className="text-kh-text-faint">·</span>
               <span className="sr-only">, </span>
               <span className="tabular-nums">{wordCount.toLocaleString("en-US")} {wordCount === 1 ? "word" : "words"}</span>
