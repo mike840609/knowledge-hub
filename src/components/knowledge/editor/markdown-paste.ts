@@ -60,7 +60,7 @@ const URL_TAIL = String.raw`https?:\/\/[^\s<>\ufffc]*[^\s<>.,;:!?'")\]}\ufffc]`;
 /** `https://…` then a space: the address becomes a link (decision 3), punctuation after it left out. */
 const autolinkRule = $inputRule(
   () =>
-    new InputRule(new RegExp(String.raw`(?:^|[\s(])(${URL_TAIL})([.,;:!?'")\]}]*)\s$`), (state, match, _start, typedAt) => {
+    new InputRule(new RegExp(String.raw`(?:^|[\s(\ufffc])(${URL_TAIL})([.,;:!?'")\]}]*)\s$`), (state, match, _start, typedAt) => {
       const link = state.schema.marks.link;
       // A space typed over a selection replaces it: the text before the caret is not what was matched.
       if (!link || !state.selection.empty || codeAt(state) || !state.selection.$from.parent.type.allowsMarkType(link)) return null;

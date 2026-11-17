@@ -195,6 +195,16 @@ describe("typed links (3, 4)", () => {
     expect(second).toBe("see https\\://x.com/[[Page]]abc z\n");
   });
 
+  it("links an address typed straight after a line break", async () => {
+    const { editor, view } = await open("a  \nb\n");
+    caretAtEnd(view);
+    view.dispatch(view.state.tr.replaceSelectionWith(view.state.schema.nodes.hardbreak.create()));
+    type(view, "https://x.com/abc z");
+    const markdown = editor.getMarkdown();
+    expect(markdown).toContain("<https://x.com/abc>");
+    expect(markdown).not.toContain("\ufffc");
+  });
+
   it("leaves ![alt](src) and [[wikilinks]] to their own rules", async () => {
     const { editor, view } = await open("\n");
     type(view, "![alt](x.png) and [[Page]]");

@@ -48,7 +48,9 @@ to the wikilink rule (CLAUDE.md).
    parenthesis is typed. `![alt](src)` and `[[wikilinks]]` keep their own rules.
    Neither rule reaches across an inline node: a wikilink or line break inside
    the brackets, or right after an address, leaves the text as typed rather
-   than being replaced by text (which lost the wikilink and its edge).
+   than being replaced by text (which lost the wikilink and its edge). An
+   address typed right after one (a line break, a wikilink) still links: the
+   node counts as a space before it.
 
 ## Out of scope, recorded
 
