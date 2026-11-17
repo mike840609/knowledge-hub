@@ -155,6 +155,7 @@ describe("the selection toolbar's DOM contract", () => {
       "Bulleted list",
       "Numbered list",
       "Toggle section",
+      "Clear formatting",
     ]);
     for (const b of buttons) expect(b.getAttribute("type")).toBe("button");
     expect(toolbarElement().getAttribute("role")).toBe("toolbar");
@@ -175,6 +176,7 @@ describe("the selection toolbar's DOM contract", () => {
       "Bulleted list",
       "Numbered list",
       "Toggle section",
+      "Clear formatting",
       "Comment on selection",
     ]);
   });
@@ -658,4 +660,115 @@ describe("the React wrapper", () => {
       expect(open).not.toHaveBeenCalled();
     });
   });
+});
+
+// Launcher audit (2026-11-18): Notion's clear-formatting habit (Cmd+\) had no equivalent; the
+// selection toolbar could add marks but never take them all away.
+it("clears every inline mark from a selection, and from the next character at a caret", async () => {
+  const editor = await open("**bold** and *italic*");
+  mountToolbar(editor);
+  select(editor, 1, 5);
+  await throttleWindow();
+  button("Clear formatting").click();
+  expect(editor.getMarkdown()).toBe("bold and *italic*\n");
+  // Select the italic word and use the keyboard habit.
+  select(editor, 10, 16);
+  await throttleWindow();
+  // Cmd/Ctrl-\ alone stays the app's navigation toggle; the editor must not take it.
+  const rail = key(editorDom(editor), { key: "\\", metaKey: true });
+  expect(rail.defaultPrevented).toBe(false);
+  const event = key(editorDom(editor), { key: "|", code: "Backslash", metaKey: true, shiftKey: true });
+  expect(event.defaultPrevented).toBe(true);
+  expect(editor.getMarkdown()).toBe("bold and italic\n");
+});
+
+it("drops the mark the caret would type with when nothing is selected", async () => {
+  const editor = await open("**bold** and plain");
+  mountToolbar(editor);
+  select(editor, 3, 3);
+  await throttleWindow();
+  button("Clear formatting").click();
+  editor.action(ctx => {
+    const view = ctx.get(editorViewCtx);
+    view.dispatch(view.state.tr.insertText("x"));
+  });
+  expect(editor.getMarkdown()).toBe("**bo**x**ld** and plain\n");
+});
+
+// Launcher audit (2026-11-18): Notion's link card copies the address; ours only opened, edited or
+// removed it.
+it("copies the link address from its card", async () => {
+  const writeText = vi.fn(async () => {});
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  const editor = await open("[example](https://example.com) after\n");
+  mountToolbar(editor);
+  select(editor, 4, 4);
+  await wait(320);
+  const card = document.querySelector<HTMLElement>(".kh-link-card")!;
+  expect(card.dataset.show).toBe("true");
+  const copy = card.querySelector<HTMLButtonElement>('button[aria-label="Copy link"]')!;
+  expect(copy.type).toBe("button");
+  copy.click();
+  await wait(20);
+  expect(writeText).toHaveBeenCalledWith("https://example.com");
+  expect(copy.getAttribute("aria-label")).toBe("Copied");
+  expect(card.querySelector("[data-copy-status]")?.textContent).toBe("Link copied");
+  expect(card.querySelector("[data-copy-status]")?.getAttribute("aria-live")).toBe("polite");
+  expect(editor.getMarkdown()).toBe("[example](https://example.com) after\n");
+});
+
+
+it("copies a relative document link exactly as written", async () => {
+  const writeText = vi.fn(async () => {});
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  const editor = await open("[doc](notes/other.md) after\n");
+  mountToolbar(editor);
+  select(editor, 3, 3);
+  await wait(320);
+  document.querySelector<HTMLButtonElement>('.kh-link-card button[aria-label="Copy link"]')!.click();
+  expect(writeText).toHaveBeenCalledWith("notes/other.md");
+});
+
+it("leaves the card alone when the clipboard refuses", async () => {
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn(async () => { throw new Error("denied"); }) } });
+  const editor = await open("[site](https://example.com) after\n");
+  mountToolbar(editor);
+  select(editor, 3, 3);
+  await wait(320);
+  const card = document.querySelector<HTMLElement>(".kh-link-card")!;
+  card.querySelector<HTMLButtonElement>('button[aria-label="Copy link"]')!.click();
+  await wait(20);
+  expect(card.querySelector<HTMLButtonElement>('button[aria-label="Copy link"]')?.textContent).toBe("Copy");
+  expect(card.querySelector("[data-copy-status]")?.textContent).toBe("");
+});
+
+it("keeps the block type when clearing a heading's marks, and can be undone", async () => {
+  const { undo } = await import("@milkdown/kit/prose/history");
+  const editor = await open("## Heading **bold**");
+  mountToolbar(editor);
+  select(editor, 9, 13);
+  await throttleWindow();
+  button("Clear formatting").click();
+  expect(editor.getMarkdown()).toBe("## Heading bold\n");
+  editor.action(ctx => { const view = ctx.get(editorViewCtx); undo(view.state, view.dispatch); });
+  expect(editor.getMarkdown()).toBe("## Heading **bold**\n");
+});
+
+// Review (2026-11-17): a link is content, not formatting; its card's Remove is how it goes.
+it("keeps a link and its address when clearing formatting over it", async () => {
+  const editor = await open("[linked](https://example.com) text\n");
+  mountToolbar(editor);
+  select(editor, 1, 7);
+  await throttleWindow();
+  button("Clear formatting").click();
+  expect(editor.getMarkdown()).toBe("[linked](https://example.com) text\n");
+});
+
+it("clears formatting but keeps links, so select-all and clear never drops a URL", async () => {
+  const editor = await open("a **[site](https://example.com)** *b*");
+  mountToolbar(editor);
+  select(editor, 1, 9); // all of "a site b"
+  await throttleWindow();
+  button("Clear formatting").click();
+  expect(editor.getMarkdown()).toBe("a [site](https://example.com) b\n");
 });

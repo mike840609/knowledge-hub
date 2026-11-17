@@ -15,6 +15,7 @@ import {
 } from "@milkdown/kit/preset/commonmark";
 import { toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
 import { posToDOMRect } from "@milkdown/kit/prose";
+import { closeHistory } from "@milkdown/kit/prose/history";
 import { NodeSelection, Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import { $prose } from "@milkdown/kit/utils";
 import type { Mark } from "@milkdown/kit/prose/model";
@@ -223,7 +224,24 @@ const items: Item[] = [
       convertBlockToDetails(view);
     },
   },
+  // Notion's clear-formatting habit: one press takes every inline mark off the selection, or the
+  // mark the caret would type with. Cmd/Ctrl-\ runs the same action (the editor's shortcut).
+  { label: "Clear formatting", text: "Tx", className: "text-caption", active: () => false, run: (_ctx, view) => { clearFormatting(view); } },
 ];
+
+function clearFormatting(view: EditorView): boolean {
+  if (!view.editable) return false;
+  const { from, to, empty } = view.state.selection;
+  const transaction = view.state.tr;
+  // Formatting goes, the address stays: a link is content, and select-all then clear must not
+  // silently drop every URL in the document.
+  const kept = (mark: Mark) => mark.type.name === "link";
+  if (empty) transaction.setStoredMarks((view.state.storedMarks ?? view.state.selection.$from.marks()).filter(kept));
+  else for (const type of Object.values(view.state.schema.marks)) if (type.name !== "link") transaction.removeMark(from, to, type);
+  view.dispatch(empty ? transaction : closeHistory(transaction));
+  view.focus();
+  return true;
+}
 
 const PASTED_URL = /^https?:\/\/\S+$/i;
 
@@ -459,8 +477,12 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           const cardAddress = document.createElement("span");
           cardAddress.className = "kh-link-card-address truncate px-2 text-caption text-kh-text-muted";
           card.appendChild(cardAddress);
+          const copyStatus = document.createElement("span");
+          copyStatus.className = "sr-only";
+          copyStatus.setAttribute("aria-live", "polite");
+          copyStatus.setAttribute("data-copy-status", "");
           const cardButtons = new Map<string, HTMLButtonElement>();
-          for (const [label, text] of [["Open link", "Open"], ["Edit link", "Edit"], ["Remove link", "Remove"]] as const) {
+          for (const [label, text] of [["Copy link", "Copy"], ["Open link", "Open"], ["Edit link", "Edit"], ["Remove link", "Remove"]] as const) {
             const cardButton = document.createElement("button");
             cardButton.type = "button";
             cardButton.textContent = text;
@@ -469,6 +491,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             card.appendChild(cardButton);
             cardButtons.set(label, cardButton);
           }
+          card.appendChild(copyStatus);
           // Pressing the card must not take the caret (and the link with it) out of the editor.
           card.addEventListener("mousedown", (event) => event.preventDefault());
           let cardLink: Extract<SelectedLink, { kind: "one" }> | null = null;
@@ -486,11 +509,16 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             cardLink = null;
             if (card.dataset.show !== "false") card.dataset.show = "false";
           }
+          let copyTimer: ReturnType<typeof setTimeout> | undefined;
           function showCard(link: Extract<SelectedLink, { kind: "one" }>) {
             const href = String(link.mark.attrs.href ?? "");
             cardLink = link;
             cardAddress.textContent = href;
             cardAddress.title = href;
+            clearTimeout(copyTimer);
+            copyStatus.textContent = "";
+            cardButtons.get("Copy link")!.textContent = "Copy";
+            cardButtons.get("Copy link")!.setAttribute("aria-label", "Copy link");
             cardButtons.get("Open link")!.disabled = !storedLinkTarget(href, links?.());
             if (!card.isConnected) (editorView.dom.parentElement ?? document.body).appendChild(card);
             card.dataset.show = "true";
@@ -526,6 +554,29 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             pointerDown = true;
             clearTimeout(pointerTimer);
             pointerTimer = setTimeout(() => { pointerDown = false; }, 600);
+          });
+          cardButtons.get("Copy link")!.addEventListener("click", () => {
+            const href = String(cardLink?.mark.attrs.href ?? "");
+            if (!href || !navigator.clipboard) return;
+            const copied = href;
+            // A repeated "Link copied" is not a new mutation; clear first so the next one announces.
+            copyStatus.textContent = "";
+            clearTimeout(copyTimer);
+            void navigator.clipboard.writeText(href).then(() => {
+              if (String(cardLink?.mark.attrs.href ?? "") !== copied) return;
+              const button = cardButtons.get("Copy link")!;
+              // The visible word and the accessible name change together (Label in Name), and the
+              // status announces the copy to a screen reader.
+              button.textContent = "Copied";
+              button.setAttribute("aria-label", "Copied");
+              copyStatus.textContent = "Link copied";
+              clearTimeout(copyTimer);
+              copyTimer = setTimeout(() => {
+                button.textContent = "Copy";
+                button.setAttribute("aria-label", "Copy link");
+                copyStatus.textContent = "";
+              }, 1500);
+            }, () => { /* a refused clipboard leaves the card as it was */ });
           });
           cardButtons.get("Open link")!.addEventListener("click", () => {
             const target = storedLinkTarget(String(cardLink?.mark.attrs.href ?? ""), links?.());
@@ -601,6 +652,18 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             openLink();
           }
           editorView.dom.addEventListener("keydown", openLinkOnModK);
+          // The same action as the toolbar's Clear formatting. Shift is required: Cmd/Ctrl-\ is the
+          // app's navigation toggle, and the editor must not take it (keyboard-shortcuts spec §10).
+          function clearOnModShiftBackslash(event: KeyboardEvent) {
+            // Shift+Backslash is "|" on a US keyboard; match the physical key. `key` is the fallback
+            // only where the environment reports no code, so a JIS Shift+¥ is not this shortcut.
+            if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.altKey) return;
+            if (event.code ? event.code !== "Backslash" : event.key !== "\\" && event.key !== "|") return;
+            if (event.isComposing || event.keyCode === 229) return;
+            if (!clearFormatting(editorView)) return;
+            event.preventDefault();
+          }
+          editorView.dom.addEventListener("keydown", clearOnModShiftBackslash);
 
           // Above the first line is the document's header ("Updated …"), not free space: flip below a
           // selection with no room above it inside the editor, as well as inside the panes that clip it
@@ -674,9 +737,11 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
               editorView.dom.removeEventListener("focus", showOnFocus);
               editorView.dom.removeEventListener("keydown", closeCardOnEscape, true);
               editorView.dom.removeEventListener("keydown", openLinkOnModK);
+              editorView.dom.removeEventListener("keydown", clearOnModShiftBackslash);
               editorView.dom.removeEventListener("blur", hideCardOnBlur);
               window.removeEventListener("scroll", onScroll, true);
               clearTimeout(pointerTimer);
+              clearTimeout(copyTimer);
               card.remove();
               provider.destroy();
               element.remove();

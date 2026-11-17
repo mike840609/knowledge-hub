@@ -67,7 +67,8 @@ test("the page icon picker searches in English and Chinese and is driven by keys
   // Roving tabindex: one tab stop in the grid, so one Tab from a cell reaches "Remove icon".
   await main.getByRole("button", { name: "Change page icon", exact: true }).click();
   await expect(page.locator('button[data-emoji][tabindex="0"]')).toHaveCount(1);
-  await expect(page.locator('button[data-emoji][tabindex="-1"]')).toHaveCount(350);
+  // One roving tab stop; every other cell follows the catalog, which may grow.
+  expect(await page.locator('button[data-emoji][tabindex="-1"]').count()).toBe(await page.locator("button[data-emoji]").count() - 1);
   await page.keyboard.press("ArrowDown");
   await expect(page.getByRole("button", { name: "Use 📄", exact: true })).toBeFocused();
   await page.keyboard.press("ArrowRight");

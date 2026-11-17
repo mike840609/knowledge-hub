@@ -43,7 +43,8 @@ function detect(state: EditorState): Trigger | null {
   if (!empty || $from.depth !== 1 || $from.parent.type.name !== "paragraph" || $from.parentOffset !== $from.parent.content.size) return null;
   if ($from.parent.childCount !== 1 || !$from.parent.firstChild?.isText || $from.parent.firstChild.marks.length) return null;
   const match = /^\/([^/\n]{0,40})$/.exec($from.parent.textContent);
-  return match ? { pos: $from.before(1), query: match[1].toLowerCase().trim() } : null;
+  // A colon query belongs to the emoji list; both menus must not claim the same line.
+  return match && !match[1].includes(":") ? { pos: $from.before(1), query: match[1].toLowerCase().trim() } : null;
 }
 /**
  * What `+` does after inserting an empty paragraph, as Notion's does: writes a visible "/" there, so the list opens

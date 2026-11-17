@@ -937,19 +937,36 @@ was added.
 
 **The selection toolbar and the link card** (editor Notion-parity spec,
 decisions 9-13; `editor/selection-toolbar.ts`). The toolbar holds Bold, Italic,
-Strikethrough, Inline code, Link, Heading 1-3, the two lists and Toggle, each a
-`ghost` `sm` button that reads `aria-pressed` when active. `Mod-k` over a text
+Strikethrough, Inline code, Link, Heading 1-3, the two lists, Toggle and Clear
+formatting, each a `ghost` `sm` button that reads `aria-pressed` when active.
+Clear formatting takes every inline mark but a link off the selection (or, at a caret, the
+mark the next character would carry); a link goes by its card's Remove; `Mod-Shift-\` runs the same action
+(`Mod-\` alone stays the navigation toggle). It leaves the block type alone. `Mod-k` over a text
 selection opens its link field and is handled by the editor, so the command
 palette (which yields to a handled event) stays closed; with no selection it is
 the palette. A caret that enters a link, by key or by a plain click, shows
-`.kh-link-card` under it: the address in `caption` muted text, then Open
+`.kh-link-card` under it: the address in `caption` muted text, then Copy, Open
 (`target=_blank`, `noopener noreferrer`), Edit (the toolbar's own link field,
-not a second editor) and Remove. It is the toolbar's surface (`lg` radius, a
+not a second editor) and Remove. Copy writes the shown address to the
+clipboard and says Copied for a moment; a refused clipboard changes nothing. It is the toolbar's surface (`lg` radius, a
 border, `popover` elevation, `kh-bg-raised`), one at a time, and goes when the
 caret leaves the link, on Escape (which it takes ahead of the block-selecting
 Escape), or when the link scrolls out of view. No token was added.
 
-Layers: the controls sit at 30, under the app's popovers; the two menus and
+**Emoji completion** (2026-11-18, `editor/emoji-suggest.ts`). Typing `:` after
+the start of a word (including after a Han character) and two or more letters
+or digits, as the writer's own edit (a caret placed after text already written opens nothing), opens `.kh-emoji-menu`, the `[[` list's surface, with the bundled catalog's best matches: exact shortcode or
+keyword, or a name/shortcode prefix (catalog order breaks that tie), then a
+keyword prefix, then a substring. The shortcode is the name's slug
+(`grinning_face`); keywords are English and Traditional Chinese. Enter, Tab or
+a click inserts the glyph, arrows move, Escape closes without changing the
+text. The editor is a `combobox` while it is open; another list or the link card
+owning it makes the emoji list stand down. A fully typed `:code:`
+converts on the space after it. It never opens in a code block or inline code,
+or after a word character (`http://`, `12:30`). One undo step; the glyph is
+plain Markdown text.
+
+Layers: the controls sit at 30, under the app's popovers; the three menus and
 the drop line at 50. None of it is printed.
 
 Both rewrite the document through the rendered editor and are held to the
@@ -1923,3 +1940,14 @@ it general is an authorization change), copy-link-to-block and move-to-page (no
 block IDs or block tree), multi-block selection (deferred by the 2026-11-15
 spec), row/column drag reorder, and the earlier deferred list (mentions, page
 width, images, columns, embeds, real-time collaboration).
+
+### Inline writing polish (2026-11-18)
+
+The third edit-mode pass (`2026-11-18-inline-writing-polish-design.md`) added
+three Notion inline habits that the earlier passes did not cover and did not
+defer: `:shortcode` emoji completion, Clear formatting in the selection toolbar
+(and `Mod-Shift-\`; `Mod-\` remains navigation), and Copy on the link card. They add one popup surface
+(`.kh-emoji-menu`, the `[[` list's radius, border, elevation and selected row),
+one toolbar button (`Tx`), and one link-card action (`Copy` → `Copied`). No
+colour, radius or elevation token was added; an emoji is text and clearing
+marks only removes them.

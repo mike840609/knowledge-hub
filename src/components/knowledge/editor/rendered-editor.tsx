@@ -9,6 +9,7 @@ import { governanceRequest } from "@/components/workspaces/governance-error";
 import { blockGutter } from "./block-gutter";
 import { tableActions } from "./table-actions";
 import { slashCommands } from "./slash-commands";
+import { emojiSuggest } from "./emoji-suggest";
 import { taskCheckbox } from "./task-checkbox";
 import type { LinkTargetsView } from "@/modules/knowledge/application/knowledge-link-service";
 import { createMarkdownEditor, type MarkdownEditor } from "./editor-core";
@@ -114,6 +115,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
       excludeDocumentId: () => latest.current.documentId,
     });
     const slash = slashCommands();
+    const emoji = emojiSuggest();
     const links = $prose(() => new Plugin({ props: { nodeViews: {
       wiki_link(node) {
         const dom = document.createElement("span");
@@ -225,11 +227,12 @@ export function RenderedEditor(props: RenderedEditorProps) {
       onUserEdit: () => latest.current.onUserEdit(),
       onMarkdown: (markdown) => latest.current.onMarkdown(markdown),
       allowImage: (src) => isAllowedMarkdownImageSrc(src, { origin: window.location.origin }),
-      extraPlugins: [editorReviewPathsPlugin, ...toolbar.plugins, ...suggest.plugins, ...slash.plugins, ...(latest.current.links ? [links] : []), ...(latest.current.renderCode ? [codes] : []), blockGutter(), tableActions(), taskCheckbox()],
+      extraPlugins: [editorReviewPathsPlugin, ...toolbar.plugins, ...suggest.plugins, ...slash.plugins, ...emoji.plugins, ...(latest.current.links ? [links] : []), ...(latest.current.renderCode ? [codes] : []), blockGutter(), tableActions(), taskCheckbox()],
       configure: (ctx) => {
         toolbar.configure(ctx);
         suggest.configure(ctx);
         slash.configure(ctx);
+        emoji.configure(ctx);
       },
     }).then(
       (editor) => {

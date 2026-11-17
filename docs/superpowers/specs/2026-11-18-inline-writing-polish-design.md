@@ -1,0 +1,63 @@
+# Inline writing polish: emoji, clear formatting, copy link
+
+A third pass over the rendered editor, after the 2026-11-15 parity work and the
+2026-11-17 block work, found three Notion inline-writing habits still missing
+and not among the items those passes deliberately deferred. This spec decides
+each and amends `frontend-design-language.md`. It changes no stored format: an
+emoji is text and clearing marks only removes them.
+
+## Decisions
+
+1. **`:shortcode` offers emoji.** Typing `:` after the start of a word (a
+   space, an opening bracket, the start of a line, or a Han character — a zh-TW
+   writer does not put a space before the colon) and at least two letters or
+   digits
+   opens a list of the bundled emoji (`lib/emoji-catalog.ts`), best match first:
+   an exact shortcode or keyword, or a name/shortcode prefix (catalog order
+   breaks that tie), then a keyword prefix, then a substring. The name's
+   slug is the shortcode (`grinning face` → `grinning_face`); keywords are
+   English and Traditional Chinese. Common codes from other apps (`:tada:`,
+   `:thumbsup:`, `:+1:`, `:100:`, `:heart:`, `:poop:`, `:joy:`) resolve as
+   aliases. Enter, Tab or a click inserts the glyph;
+   ArrowUp/Down move; Escape closes without changing the text. A fully typed
+   `:shortcode:` converts on the space after it. The list never opens in code
+   (a code block or inline code), or after a word character (`http://`,
+   `12:30`), and opens only for the writer's own edit there: a caret placed by
+   click or arrow at the end of text already written (`備註:ok`) opens nothing,
+   so Enter and the arrows stay the editor's (review, 2026-11-17). One undo step.
+2. **Clear formatting.** The selection toolbar adds **Clear formatting** (the
+   `Tx` glyph), and `Mod-Shift-\` runs the same action (`Mod-\` alone stays the
+   app's navigation toggle and the editor must not take it): every inline mark except a
+   link comes off the selection; at a caret it drops the mark the next character would
+   carry. A link is content, not formatting — clearing a select-all must not drop every
+   URL — and goes by its card's Remove (review, 2026-11-17).
+   It does not change the block type (a heading stays a heading), which is
+   Notion's `Cmd+\` behaviour.
+3. **Copy link.** The link card's first action is **Copy**, which copies the
+   address it shows to the clipboard (the written `href`, not a resolved
+   absolute URL) and says **Copied** for a moment. A refused clipboard leaves
+   the card as it was.
+
+## Out of scope, recorded
+
+- Underline, text colour and highlight: Markdown has no marks for them.
+- Clear formatting that also turns a heading/list/quote back into a paragraph:
+  `Mod-Shift-\` is inline-only; the block menu's Turn into → Text does the block.
+- @ mentions, page width, images, columns, embeds, real-time collaboration and
+  the rest of the earlier deferred list.
+- Team-document comments (still an authorization change; the previous pass
+  recorded it).
+
+## Verification
+
+- `tests/unit/emoji-shortcodes.test.ts` (the index and its ranking),
+  `tests/unit/editor-emoji-suggest.test.ts` (open, arrows, Enter, Escape, the
+  space conversion, the CJK and longest-slug conversions, the listbox ARIA,
+  Shift-Tab, and no trigger in code or after a word character),
+  `tests/unit/selection-toolbar.test.ts` (Clear formatting by button and the
+  real `|` key, the caret/heading/link cases, undo, Copy including a relative
+  href and a refused clipboard).
+- `tests/e2e/zz-inline-writing-polish.spec.ts`: an emoji chosen from the list,
+  Clear formatting by the toolbar and by `Mod-Shift-\`, and the copied
+  announcement survive save/export.
+- `npm run typecheck`, `npm run lint`, `npm run test:unit`.
