@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ComponentType, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ComponentType, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/toast";
 import { DocumentDetailClient } from "./document-inspector";
@@ -24,6 +24,7 @@ import { carryTitle, resolveAuthoredTitle } from "@/lib/authored-title";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { downloadMarkdown } from "@/lib/download-markdown";
 import { buildRecoveryMarkdown } from "@/lib/recovery-markdown";
+import { countWords } from "@/shared/markdown/word-count";
 import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
 import type { RenderedLinks } from "./rendered-links";
 import type { MarkdownEditor } from "./editor/editor-core";
@@ -465,6 +466,8 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     // Only if the tab is still ours: a page the reader has gone to may have named it already.
     return () => { if (document.title === named) document.title = app; };
   }, [displayTitle]);
+  // Counted when the Markdown changes, not on every render.
+  const words = useMemo(() => countWords(content.markdown), [content.markdown]);
   /** Enter, or ArrowDown on the last line, in the title: on to the start of the content (never a line break in the title). */
   function leaveTitle() {
     if (source || failed) {
@@ -629,6 +632,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     inspectorData={{ ...detail.inspectorData, revisions, selectedRevisionNo: revisions.find(item => item.id === savedRevision)?.revisionNo ?? detail.inspectorData.selectedRevisionNo }}
     breadcrumb={[...detail.breadcrumb.slice(0, -1), { label: displayTitle }]} outline={outline}
     contentOwnsTitle={markdownOpensWithHeading(content.markdown)}
+    wordCount={words}
     editHint={showEditHint ? "Click anywhere in the text to edit." : undefined}
     editorActions={<><AutosaveIndicator state={status} attention={attention} /><Button type="button" variant="ghost" aria-label="Rename document" title="Rename document" disabled={!editable || !!recovery || (!ready && !source && !failed)} onClick={focusTitle}><Pencil className="h-4 w-4" aria-hidden="true" /></Button>{markdownToggle}</>}
     titleControl={resolved.source !== "H1" ? <textarea ref={titleInput} name="title" aria-label="Title" value={content.title} disabled={!editable} maxLength={512} rows={1}

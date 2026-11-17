@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState, type Ref, type ReactNode } from "react";
-import { LockKeyhole, MessageSquare, MoreHorizontal, PanelRight, Star } from "lucide-react";
+import { LockKeyhole, Maximize2, Minimize2, MessageSquare, MoreHorizontal, PanelRight, Star } from "lucide-react";
+import { toggleFullWidth, useFullWidth } from "./use-full-width";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { ActionMenuItems } from "@/components/actions/action-menu";
 import type { Action } from "@/components/actions/action-registry";
@@ -33,6 +34,8 @@ export function DocumentHeader({
   titleControl,
   editorActions,
   editHint,
+  wordCount,
+  showFullWidth = true,
   readOnlyReason,
   favorite,
   onToggleFavorite,
@@ -47,6 +50,10 @@ export function DocumentHeader({
   editorActions?: ReactNode;
   /** A first-visit cue that the text itself is the editor; kept in the metadata row, not the article. */
   editHint?: ReactNode;
+  /** Words on the page, shown beside when it was updated, once the edit hint has gone (both on one line would wrap a phone-width header, and the layout must not move when the hint goes); omitted where it is not counted. */
+  wordCount?: number;
+  /** The Full width button; a header drawn beside another document page (the side peek) leaves it to that page. */
+  showFullWidth?: boolean;
   readOnlyReason?: ReactNode;
   /** Whether this page is in the reader's favorites; absent where favoriting is not offered. */
   favorite?: boolean;
@@ -76,6 +83,7 @@ export function DocumentHeader({
   pinned?: boolean;
 }) {
 
+  const fullWidth = useFullWidth();
   const [now, setNow] = useState<number | null>(null);
   // Before mount there is no "now" and no zone; both arrive in the same tick,
   // so the first render is the one the server also produced.
@@ -104,6 +112,18 @@ export function DocumentHeader({
             narrow topbar's copy of this button. */}
         <div className="flex shrink-0 items-center gap-2">
           {editorActions}
+          {showFullWidth ? <Tooltip label="Full width">
+            <button
+              type="button"
+              onClick={toggleFullWidth}
+              aria-label="Full width"
+              aria-pressed={fullWidth}
+              data-pressed={fullWidth}
+              className={buttonClasses({ variant: "ghost", icon: true, className: "hidden data-[pressed=true]:bg-kh-bg-hover data-[pressed=true]:text-kh-text sm:inline-flex" })}
+            >
+              {fullWidth ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}
+            </button>
+          </Tooltip> : null}
           {onShareClick ? (
             <Tooltip label="Share link…">
               <button
@@ -203,6 +223,11 @@ export function DocumentHeader({
             ) : null}
             {status === "ARCHIVED" ? <Badge variant="warning">Archived</Badge> : null}
             <time dateTime={new Date(updatedAt).toISOString()} title={formatDateTime(updatedAt, zone)}>Updated {relative}</time>
+            {wordCount && !editHint ? <>
+              <span aria-hidden="true" className="text-kh-text-faint">·</span>
+              <span className="sr-only">, </span>
+              <span className="tabular-nums">{wordCount.toLocaleString("en-US")} {wordCount === 1 ? "word" : "words"}</span>
+            </> : null}
             {editHint ? <>
               {/* The meta line is a row of separate facts; without a separator "10 days ago"
                   and the hint after it read as one sentence. `gap` is not text, so copy/paste

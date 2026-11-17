@@ -337,6 +337,7 @@ export function PeekPane({
         >
           {peek ? (
             <DocumentHeader
+              showFullWidth={false}
               breadcrumb={peek.breadcrumb}
               title={peek.title}
               status={peek.status}
