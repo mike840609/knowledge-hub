@@ -13,7 +13,7 @@ import { liftAtDocumentStart, liftFirstListItem, liftListItemOverNested } from "
 import { flipNearestDetails, handleDetailsDeleteKey } from "./details-toggle";
 import { handleCalloutBackspace } from "./reader-hints";
 import { configureCellBreakStringify, remarkCellBreaks } from "./table-cell-breaks";
-import { notionKeys, tickTodo } from "./notion-keys";
+import { flipToggleAtTitle, notionKeys, tickTodo } from "./notion-keys";
 import { pasteHtml } from "./paste-html";
 import { markdownPastePlugins } from "./markdown-paste";
 import { TASK_EDITABLE_CHANGED } from "./task-checkbox";
@@ -261,7 +261,7 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
         handleKeyDown: (view, event) => {
           if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
             // Only on the document page: in a form (the composer) Mod-Enter saves, and must not change a to-do as it does.
-            if (!event.shiftKey && !event.altKey && !event.isComposing && view.dom.closest("[data-tab-stays]")) tickTodo(view.state, view.dispatch, view);
+            if (!event.shiftKey && !event.altKey && !event.isComposing && view.dom.closest("[data-tab-stays]")) { if (!tickTodo(view.state, view.dispatch, view)) flipToggleAtTitle(view); }
             return true;
           }
           // Backspace/Delete cannot cross a toggle's defining boundary: without this the caret
@@ -369,7 +369,8 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
         const { doc, schema } = view.state;
         const last = doc.lastChild;
         const tr = view.state.tr;
-        if (view.editable && !(last?.type.name === "paragraph" && last.content.size === 0)) tr.insert(doc.content.size, schema.nodes.paragraph.create());
+        // Not an edit: the empty line is room to type in, and a press that writes nothing must not save a revision or start the autosave.
+        if (view.editable && !(last?.type.name === "paragraph" && last.content.size === 0)) tr.insert(doc.content.size, schema.nodes.paragraph.create()).setMeta("addToHistory", false);
         view.dispatch(tr.setSelection(Selection.atEnd(tr.doc)).scrollIntoView());
         view.focus();
       }),

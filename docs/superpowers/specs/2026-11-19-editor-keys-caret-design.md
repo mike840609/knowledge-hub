@@ -75,3 +75,5 @@ Two unit tests stated the old Tab rule:
 `editor-notion-blocks.test.ts` and `wikilink-suggest.test.ts`. That stopped
 being true once the rule was scoped to `data-tab-stays`; outside it they hold
 unchanged.
+
+(Amended 2026-11-20: Mod-Enter also opens a toggle from its title, Shift-Tab and a leading divider reach the title, and a `/` mid-line opens after marked text; `2026-11-20-small-keys-design.md`.)

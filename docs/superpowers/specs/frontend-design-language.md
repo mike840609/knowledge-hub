@@ -1988,5 +1988,11 @@ changes where the caret goes and adds keys, but no surface:
 - A `/` after a space mid-line opens the `/` list, at that `/`, and the chosen
   block goes below the line.
 
+The fourth (`2026-11-20-small-keys-design.md`) adds no surface either: `Mod-Enter`
+opens and closes a toggle from its title, Shift-Tab in the first line and
+ArrowUp from a divider that opens the document go to the title, a mid-line `/`
+opens the list after marked text, `/diagram` and `/date` join it, and a
+heading's block menu gains "Copy link to heading".
+
 The room below the text is a plain `padding-bottom` in `globals.css`. No
 colour, radius, elevation or type token was added.

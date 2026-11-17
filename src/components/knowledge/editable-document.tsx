@@ -511,10 +511,12 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     area.addEventListener("kh:editor-exit-top", claim);
     return () => area.removeEventListener("kh:editor-exit-top", claim);
   }, []);
+  /** A caret in an item that is a to-do, or in a toggle's title: where Mod-Enter belongs to the editor too. */
   function caretInTodo() {
     const at = window.getSelection()?.anchorNode;
     const element = at instanceof Element ? at : at?.parentElement;
-    return element?.closest("li")?.getAttribute("data-item-type") === "task" && !!element.closest(".ProseMirror");
+    if (!element?.closest(".ProseMirror")) return false;
+    return element.closest("li")?.getAttribute("data-item-type") === "task" || !!element.closest("summary");
   }
   /** A press below the text puts the caret at its end, in a new empty paragraph (keys spec, decision 1). */
   function pressBelow(event: React.MouseEvent<HTMLDivElement>) {
@@ -583,8 +585,9 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
         return;
       }
       if ((event.metaKey || event.ctrlKey) && (event.key === "s" || event.key === "Enter") && !event.nativeEvent.isComposing) {
-        // In a to-do, Mod-Enter is also the editor's (it ticks the item, keys spec decision 4): a key
-        // already prevented never reaches ProseMirror's keymap, so only the save happens here.
+        // In a to-do, and in a toggle's title, Mod-Enter is also the editor's (it ticks the item, or opens and closes
+        // the toggle: keys spec decision 4, small-keys spec decision 1): a key already prevented never reaches
+        // ProseMirror's keymap, so only the save happens here.
         if (!(event.key === "Enter" && caretInTodo())) event.preventDefault();
         flushEditor(); void writer?.flush();
       }
