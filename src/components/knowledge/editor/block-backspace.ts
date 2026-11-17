@@ -53,3 +53,20 @@ export function liftListItemOverNested(view: EditorView): boolean {
   dispatchBlockAction(view, tr.insert(listPos, $cursor.parent), listPos + 1);
   return true;
 }
+
+/** Backspace at the start of a top-level list's first item makes it a paragraph before the list, as
+ * Notion does; Milkdown's own Backspace would join it into whatever block stands above the list
+ * (keys spec, decision 6). An item holding nested items is `liftListItemOverNested`'s. */
+export function liftFirstListItem(view: EditorView): boolean {
+  if (!view.editable) return false;
+  const $cursor = caretAtTextblockStart(view);
+  if (!$cursor || $cursor.depth !== 3) return false;
+  const item = $cursor.node(-1);
+  if (item.type.name !== "list_item" || item.childCount !== 1 || $cursor.index(-2) !== 0) return false;
+  const listPos = $cursor.before(-2);
+  const tr = $cursor.node(-2).childCount === 1
+    ? view.state.tr.replaceWith(listPos, $cursor.after(-2), $cursor.parent)
+    : view.state.tr.delete($cursor.before(-1), $cursor.after(-1)).insert(listPos, $cursor.parent);
+  dispatchBlockAction(view, tr, listPos + 1);
+  return true;
+}
