@@ -22,7 +22,8 @@ export function takeNewNote(documentId: string): { title: string; entered: boole
   if (arriving !== documentId) return null;
   arriving = null;
   const { text, entered } = takeTyped();
-  return { title: text.trim(), entered };
+  // Not trimmed: a space typed last is the start of the next word (the save trims the title it stores).
+  return { title: text, entered };
 }
 
 /**
@@ -43,6 +44,8 @@ export function NewNoteStarter({ workspaceId, folderId, seedTitle, composeHref }
   const [title, setTitle] = useState("");
   const titleNow = useRef("");
   const enteredHere = useRef(false);
+  // After Enter the title is done: what is typed while the note is still being made is not kept (decision 3).
+  const [done, setDone] = useState(false);
   titleNow.current = title;
   useEffect(() => {
     // Once per visit: a ref survives React's development double mount.
@@ -51,7 +54,7 @@ export function NewNoteStarter({ workspaceId, folderId, seedTitle, composeHref }
     // Keys typed before this page was drawn: the start of the title, the field taking over from here.
     const early = takeTyped();
     if (early.text) setTitle(early.text);
-    if (early.entered) enteredHere.current = true;
+    if (early.entered) { enteredHere.current = true; setDone(true); }
     const address = window.location.href;
     if (!recent || recent.href !== address || Date.now() - recent.at > 5000) {
       recent = { href: address, at: Date.now(), created: governanceRequest<Created>(`/api/workspaces/${workspaceId}/documents`, "POST", {
@@ -78,7 +81,15 @@ export function NewNoteStarter({ workspaceId, folderId, seedTitle, composeHref }
             carried to its title (creation-flow spec, decision 3). */}
         <textarea autoFocus aria-label="Title" placeholder={seedTitle ?? "Untitled"} value={title} rows={1} maxLength={512}
           onChange={(event) => { setTitle(event.target.value); setTyped(event.target.value); }}
-          onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); enteredHere.current = true; } }}
+          readOnly={done}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+            event.preventDefault();
+            enteredHere.current = true;
+            setDone(true);
+            // Already made and on its way: the buffer holds the title now, and Enter ends it there too.
+            setTyped(event.currentTarget.value, true);
+          }}
           className="mt-14 block w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-page-title font-semibold tracking-tight text-kh-text outline-none placeholder:text-kh-text-muted" />
         <p role="status" className="mt-2 text-caption text-kh-text-muted">Creating a new note…</p>
       </>}

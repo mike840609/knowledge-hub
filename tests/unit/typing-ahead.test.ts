@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
-import { bufferTyping, isNewNoteHref, setTyped, takeTyped } from "@/components/knowledge/typing-ahead";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { bufferTyping, isBuffering, isNewNoteHref, setTyped, takeTyped } from "@/components/knowledge/typing-ahead";
 
 // 2026-11-19 creation-flow spec, decision 3: keys typed while a new note is being made.
 const press = (key: string, init: KeyboardEventInit = {}, target: EventTarget = document.body) => {
@@ -11,6 +11,34 @@ const press = (key: string, init: KeyboardEventInit = {}, target: EventTarget = 
 afterEach(() => { takeTyped(); document.body.innerHTML = ""; });
 
 describe("typing ahead of a new note", () => {
+  it("stops keeping keys at Enter in the title field: what follows is not the title", () => {
+    bufferTyping("Plan");
+    setTyped("Plan", true);
+    for (const key of "body") press(key);
+    expect(isBuffering()).toBe(false);
+    expect(takeTyped()).toEqual({ text: "Plan", entered: true });
+  });
+
+  it("forgets what was kept when nothing takes it within ten seconds", () => {
+    vi.useFakeTimers();
+    try {
+      bufferTyping();
+      press("a"); press("b");
+      vi.advanceTimersByTime(10_001);
+      expect(isBuffering()).toBe(false);
+      expect(takeTyped()).toEqual({ text: "", entered: false });
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("leaves keys typed into any editable element alone", () => {
+    bufferTyping();
+    const editable = document.body.appendChild(document.createElement("div"));
+    editable.contentEditable = "plaintext-only";
+    Object.defineProperty(editable, "isContentEditable", { value: true });
+    expect(press("a", {}, editable).defaultPrevented).toBe(false);
+    expect(takeTyped().text).toBe("");
+  });
+
   it("keeps characters and Backspace typed where no field has focus", () => {
     bufferTyping();
     for (const key of " Plan x") press(key);

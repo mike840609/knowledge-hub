@@ -476,13 +476,24 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       // Set now, not on the next render, so the caret can go after it before another key lands.
       if (input) input.value = arrived.title;
     }
-    // Enter after the title: on to the body, as Enter in the title does.
-    if (arrived.entered) return leaveTitle();
+    // Enter after the title: on to the body, as Enter in the title does. The rendered editor mounts
+    // after this (its `onReady` is later still), so the caret goes there once it is ready.
+    if (arrived.entered) {
+      if (ready || source || failed) leaveTitle();
+      else bodyWhenReady.current = true;
+      return;
+    }
     if (!input) return;
     input.focus();
     if (arrived.title) input.setSelectionRange(arrived.title.length, arrived.title.length);
     else if (input.value === "Untitled") input.select();
   }, [editable]);
+  const bodyWhenReady = useRef(false);
+  useEffect(() => {
+    if ((!ready && !source && !failed) || !bodyWhenReady.current) return;
+    bodyWhenReady.current = false;
+    leaveTitle();
+  }, [ready, source, failed]);
   function focusTitle() {
     flushEditor();
     if (resolve(queue.current!.current).source !== "H1") {

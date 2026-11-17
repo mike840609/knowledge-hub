@@ -51,6 +51,46 @@ test.describe("creation flow", () => {
     await expect(field).toHaveValue(`${title}!`);
   });
 
+  test("Enter straight after the title, before the note opens, puts the caret in the body", async ({ page }) => {
+    const { create } = await knowledge(page);
+    const title = unique("Entered");
+    await create.click();
+    await page.keyboard.type(`${title} `);
+    await page.keyboard.press("Enter");
+    const content = page.locator("main").getByRole("textbox", { name: "Content" });
+    await expect(content).toBeFocused(ROUND_TRIP);
+    await page.keyboard.type("Body.");
+    await expect(content).toHaveText("Body.");
+    await expect(page.locator("main").getByRole("textbox", { name: "Title" })).toHaveValue(`${title} `);
+    await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
+    await expect(page.getByRole("treeitem", { name: title })).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("keeps a space typed last before the note opens, so the next word stays apart", async ({ page }) => {
+    const { create } = await knowledge(page);
+    await create.click();
+    await page.keyboard.type("Weekly ");
+    const field = page.locator("main").getByRole("textbox", { name: "Title" });
+    await expect(page.locator("main").getByRole("textbox", { name: "Content" })).toBeEditable(ROUND_TRIP);
+    await expect(field).toBeFocused();
+    await page.keyboard.type("plan");
+    await expect(field).toHaveValue("Weekly plan");
+  });
+
+  test("from the palette opened in a document, keys typed after Create document are the new title", async ({ page }) => {
+    await knowledge(page);
+    await page.locator("main").getByRole("textbox", { name: "Content" }).click();
+    await page.keyboard.press("ControlOrMeta+k");
+    const palette = page.getByRole("dialog", { name: "Search and actions" });
+    await expect(palette).toBeVisible();
+    await page.keyboard.type("Create document");
+    await expect(palette.getByRole("option", { name: /Create document/ }).first()).toBeVisible();
+    await page.keyboard.press("Enter");
+    const title = unique("From palette");
+    await page.keyboard.type(title);
+    await expect(page.locator("main").getByRole("textbox", { name: "Title" })).toHaveValue(title, ROUND_TRIP);
+  });
+
   test("names the new document in the tree as soon as its title is saved", async ({ page }) => {
     const { create } = await knowledge(page);
     await create.click();

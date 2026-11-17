@@ -11,19 +11,26 @@ let typed: string | null = null;
 /** Enter was pressed: the title is done and writing goes on in the body. */
 let entered = false;
 let stopListening: (() => void) | null = null;
+let expiry: ReturnType<typeof setTimeout> | undefined;
+
+/** Keys are being kept: a dialog closing now should not hand focus back to a field (they would land there). */
+export function isBuffering(): boolean {
+  return stopListening !== null;
+}
 
 export function isNewNoteHref(href: string): boolean {
   return /\/knowledge\/new(?:$|\?(?!.*\bcompose\b))/.test(href);
 }
 
-/** Starts keeping keys, beginning with `initial`. Stops by itself after ten seconds. */
+/** Starts keeping keys, beginning with `initial`. After ten seconds untaken, it stops and forgets them. */
 export function bufferTyping(initial = ""): void {
   stopListening?.();
+  clearTimeout(expiry);
   typed = initial;
   entered = false;
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
-    if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable='true']")) return;
+    if (event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.closest("input, textarea, select"))) return;
     if (event.key === "Enter") {
       entered = true;
       stopListening?.();
@@ -33,24 +40,29 @@ export function bufferTyping(initial = ""): void {
     event.preventDefault();
   };
   window.addEventListener("keydown", onKeyDown, true);
-  const timer = setTimeout(() => stopListening?.(), 10_000);
+  // A field still focused here (the palette's search while it closes) would take the keys instead.
+  if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  // Untaken by then, the note was left: a later starter must not pick these keys up.
+  expiry = setTimeout(() => { stopListening?.(); typed = null; entered = false; }, 10_000);
   stopListening = () => {
     window.removeEventListener("keydown", onKeyDown, true);
-    clearTimeout(timer);
     stopListening = null;
   };
 }
 
-/** The title field has the keys now: what it holds replaces what was kept, and Enter there counts too. */
+/** The title field has the keys now: what it holds replaces what was kept, and Enter there ends the title. */
 export function setTyped(value: string, enter = false): void {
   if (typed === null) return;
   typed = value;
-  entered ||= enter;
+  if (!enter) return;
+  entered = true;
+  stopListening?.();
 }
 
 /** Stops keeping keys and hands over what was typed ("" for nothing), and whether Enter ended it. */
 export function takeTyped(): { text: string; entered: boolean } {
   stopListening?.();
+  clearTimeout(expiry);
   const taken = { text: typed ?? "", entered };
   typed = null;
   entered = false;

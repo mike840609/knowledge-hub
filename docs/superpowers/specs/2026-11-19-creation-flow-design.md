@@ -22,15 +22,19 @@ decides each and amends the design-language contract. Nothing stored changes.
    - **The buffer.** `typing-ahead.ts` keeps plain characters and Backspace
      from the press until the title field takes focus. Every entry starts it:
      the sidebar `+`, Home's button and its `C` key, and the action runner,
-     which covers the palette, row menus and the folder `+`. It stops by
-     itself after ten seconds.
+     which covers the palette, row menus and the folder `+`. A field that
+     still has focus as it starts, such as the palette's search while the
+     palette closes, loses it, and a closing dialog hands focus back to no
+     field. Keys typed into another field or a contenteditable are that
+     field's. Untaken after ten seconds, it stops and forgets what it kept.
    - **The starter page.** While the note is being made, the starter shows a
      title field with what was typed so far.
    - **On arrival.** The editor takes the text as the title and puts the caret
      after it.
    - **Enter.** Pressed in that time, Enter ends the title and the caret goes
-     to the body, as Enter in the title does. Keys typed after it, before the
-     editor is ready, are not kept.
+     to the body, as Enter in the title does, once the editor is ready. The
+     starter's title field is read-only from then on. Keys typed after it,
+     before the editor is ready, are not kept.
    - **Not kept, recorded.** An IME composes only into a focused field, so
      composed text typed before the field exists is not kept.
 4. **A saved title names the document in the tree at once.** A save that
@@ -62,7 +66,9 @@ decides each and amends the design-language contract. Nothing stored changes.
   modifiers, fields, Enter, and the new-note address.
 - `tests/e2e/zz-creation-flow.spec.ts` covers:
   - the `+` drawn at rest;
-  - a title typed straight after the press;
+  - a title typed straight after the press, a trailing space kept, and one
+    typed after Create document in the palette;
+  - Enter during the hand-over landing the caret in the body;
   - the tree naming the document right after the save;
   - the folder `+`;
   - the empty-document hint.
