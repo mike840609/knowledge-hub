@@ -151,11 +151,18 @@ test.describe("typing rules and keys in the rendered editor", () => {
     await expect(selected).toHaveCount(0);
 
     // (b) The toolbar's link field: Escape closes the field and does not select the block.
-    await surface.locator("p").first().click();
-    await page.keyboard.press("Home");
-    await page.keyboard.press("Shift+Control+ArrowRight");
-    await settle();
+    // ProseMirror reads a click's caret on `selectionchange`: a key pressed before then selects from the
+    // old caret, or nothing, and no toolbar shows. Settle between steps, and select again if it did not.
     const toolbar = page.getByRole("toolbar", { name: "Formatting" }).or(page.locator('[aria-label="Formatting"]'));
+    for (let attempt = 0; attempt < 3 && !(await toolbar.isVisible()); attempt++) {
+      await surface.locator("p").first().click();
+      await settle();
+      await page.keyboard.press("Home");
+      await settle();
+      await page.keyboard.press("Shift+Control+ArrowRight");
+      await settle();
+    }
+    await expect(toolbar).toBeVisible();
     await toolbar.getByRole("button", { name: "Link", exact: true }).click();
     const field = page.getByLabel("Link address");
     await expect(field).toBeVisible();

@@ -5,9 +5,14 @@ import { showMarkdown } from "./composer-helpers";
 test("a paragraph becomes a toggle, flips open, and folds in the reader", async ({ page }) => {
   const url = await createNote(page, unique("Toggle"), "Fold me\n");
   const surface = await openEditor(page, url);
-  await surface.locator("p").click();
-  await surface.locator("p").selectText();
+  // The toolbar follows ProseMirror's selection, read on `selectionchange`; select again if it missed it.
   const toolbar = page.getByRole("toolbar", { name: "Formatting" });
+  for (let attempt = 0; attempt < 3 && !(await toolbar.isVisible()); attempt++) {
+    await surface.locator("p").click();
+    await page.waitForTimeout(150);
+    await surface.locator("p").selectText();
+    await page.waitForTimeout(300);
+  }
   await expect(toolbar).toBeVisible(ROUND_TRIP);
   await toolbar.getByRole("button", { name: "Toggle section" }).click();
   const source = await showMarkdown(composer(page));
