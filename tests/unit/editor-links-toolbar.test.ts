@@ -101,11 +101,11 @@ describe("a URL pasted over a selection (12)", () => {
     expect(paste(view, "https://example.com").defaultPrevented).toBe(true);
     expect(editor.getMarkdown()).toBe("[some text](https://example.com)\n\n```\ncode\n```\n");
   });
-  it("is unchanged with no selection", async () => {
+  it("with no selection pastes the address as a link to itself (paste-and-links spec, decision 2)", async () => {
     const { editor, view } = await open("some text\n");
-    select(view, 3);
+    select(view, 6);
     paste(view, "https://example.com");
-    expect(editor.getMarkdown()).not.toContain("](");
+    expect(editor.getMarkdown()).toBe("some <https://example.com>text\n");
   });
   it("keeps wikilinks through a link paste", async () => {
     for (const fixture of LINK_MARKDOWN_FIXTURES) {

@@ -74,7 +74,7 @@ read it").
     address with Open, Edit and Remove; Edit opens the toolbar's link field.
     `Mod`-click opens the link in a new tab. A wikilink keeps its own behaviour.
 12. Pasting a single URL over a non-empty selection links the selection instead
-    of replacing it. Pasting a URL with no selection is unchanged.
+    of replacing it. Pasting a URL with no selection is unchanged. **Amended 2026-11-19** (`2026-11-19-paste-and-links-design.md`, decision 2): with no selection it pastes as a link to itself.
 
 ### Selection toolbar
 

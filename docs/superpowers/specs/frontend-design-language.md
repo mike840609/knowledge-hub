@@ -1914,6 +1914,8 @@ vertical margin, so a one-line cell has the reader's height. No token is added.
 
 The rendered editor reads clipboard HTML through `editor/paste-html.ts` (a `transformPastedHTML` step; the Markdown reader is untouched and nothing is passed through as markup). `<s>` and `<strike>` paste as strikethrough; a `<li>` led by a checkbox `<input>` (bare, or inside a `<p>` or `<label>`) pastes as a to-do carrying its checked state; a `<table>` with no `<thead>` and no `<th>` uses its first row as the header row. `tests/unit/editor-paste-html.test.ts` pastes each and re-opens the saved Markdown.
 
+Plain text that reads as Markdown pastes as Markdown (`editor/markdown-paste.ts`, `2026-11-19-paste-and-links-design.md`). The signs are a block line (heading, list, quote, fence, table), an inline mark, or `[text](url)`. Such a paste goes through the editor's own parser, so a `[[wikilink]]` arrives as the node. Text without a sign pastes one paragraph per line. A pasted heading or list keeps its block, and a paragraph at either end runs into the line it lands in. A single address pasted at a caret is a link to itself. A typed address becomes a link on the space after it. A typed `[text](url)` becomes the linked text. None of this happens in code or a table cell.
+
 ### Editor Notion gaps (2026-11-17)
 
 The second edit-mode audit (`2026-11-17-editor-notion-gaps-design.md`) closed

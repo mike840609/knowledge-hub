@@ -102,9 +102,9 @@ function convertPasted(fragment: Fragment, link: NodeType, inCode: boolean): Fra
 }
 
 /**
- * Pasted text that holds `[[…]]` gets its links made into nodes. The editor has no Markdown paste
- * parser — text pastes as text — so without this a pasted `[[x]]` would be written back escaped like
- * any other. Copy and paste inside the editor already carries the node (`parseDOM`).
+ * Pasted text that holds `[[…]]` gets its links made into nodes. Text that reads as Markdown goes
+ * through the parser (`markdown-paste.ts`) and arrives with the node already; any other text pastes
+ * as text, and without this a pasted `[[x]]` in it would be written back escaped like any other. Copy and paste inside the editor already carries the node (`parseDOM`).
  */
 const wikiLinkPaste = $prose(
   (ctx) =>
