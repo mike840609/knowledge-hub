@@ -15,7 +15,10 @@ async function knowledge(page: Page) {
   // A document makes the Notes source exist, so its row (and `+`) is in the tree.
   const response = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title: unique("Seed"), markdown: "Seed.\n" } });
   expect(response.ok()).toBe(true);
-  await page.goto(`/w/${workspaceId}/knowledge`);
+  // The workspace landing page redirects late, possibly into another Source's tree (fixtures/organize.ts):
+  // open the seed itself, so the Notes tree is the one shown.
+  const seed = (await response.json()) as { sourceId: string; documentId: string };
+  await page.goto(`/w/${workspaceId}/knowledge/${seed.sourceId}/${seed.documentId}`);
   const create = page.getByRole("complementary", { name: "Knowledge explorer" }).getByRole("link", { name: "Create document" });
   await expect(create).toBeVisible(ROUND_TRIP);
   return { workspaceId, create };
@@ -79,7 +82,10 @@ test.describe("creation flow", () => {
   test("says how to start in an empty document", async ({ page }) => {
     const { create } = await knowledge(page);
     await create.click();
-    await expect(page.locator("main").getByRole("textbox", { name: "Content" })).toBeEditable(ROUND_TRIP);
+    const content = page.locator("main").getByRole("textbox", { name: "Content" });
+    // The seed's editor stays editable until the new note's page replaces it.
+    await expect(content).toHaveText("", ROUND_TRIP);
+    await expect(content).toBeEditable(ROUND_TRIP);
     const hint = await page.locator('main [aria-label="Content"] > p').first().evaluate((element) => getComputedStyle(element, "::before").content);
     expect(hint).toBe('"Write, or press / for commands"');
   });

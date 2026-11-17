@@ -26,6 +26,7 @@ import { buildRecoveryMarkdown } from "@/lib/recovery-markdown";
 import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
 import type { RenderedLinks } from "./rendered-links";
 import type { MarkdownEditor } from "./editor/editor-core";
+import { DOCUMENT_RENAMED, type DocumentRenamed } from "./knowledge-tree";
 import type { RenderedEditorProps } from "./editor/rendered-editor";
 import type { CaptureReviewAnchor, PreparedReviewComment } from "./inline-review-context";
 
@@ -189,8 +190,8 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
         acknowledgedRevisionNo.current = revision.revisionNo;
         setSavedRevision(revision.revisionId);
         const title = resolve(snapshot).title || "Untitled";
-        // A new title is named in the tree and the tab at once, not on the next 30-second refresh.
-        const renamed = title !== lastSavedTitle.current;
+        // A new title is named in the tree at once, not on the next 30-second refresh, and without a refetch.
+        if (title !== lastSavedTitle.current) window.dispatchEvent(new CustomEvent<DocumentRenamed>(DOCUMENT_RENAMED, { detail: { documentId: detail.inspectorData.documentId, title } }));
         lastSavedTitle.current = title;
         setSavedTitle(title);
         const createdAt = new Date();
@@ -204,7 +205,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
         savesRef.current?.postMessage({ documentId: detail.inspectorData.documentId, revisionId: revision.revisionId });
         metadataDirty.current = true;
         const targets = JSON.stringify(extractDocumentLinks(snapshot.markdown).map(({ kind, target, fragment }) => [kind, target, fragment]));
-        if (targets !== savedLinkTargets.current || renamed) {
+        if (targets !== savedLinkTargets.current) {
           savedLinkTargets.current = targets;
           refreshMetadata();
         } else {

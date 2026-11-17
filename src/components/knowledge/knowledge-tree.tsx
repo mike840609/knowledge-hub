@@ -242,8 +242,12 @@ function TreeNodeRow({
 
 const EMPTY_COLLAPSED: string[] = [];
 
+/** Fired on `window` by an open document whose saved title changed, so the tree names it without a refetch. */
+export const DOCUMENT_RENAMED = "kh:document-renamed";
+export type DocumentRenamed = { documentId: string; title: string };
+
 export function KnowledgeTree({
-  items,
+  items: given,
   includeArchived = false,
   workspaceId,
   sourceId,
@@ -271,6 +275,21 @@ export function KnowledgeTree({
     isStringArray,
   );
   const collapsedIds = useMemo<ReadonlySet<string>>(() => new Set(collapsedList), [collapsedList]);
+  // A title saved here is shown at once; the next server tree (a refresh, a navigation) replaces the overlay.
+  const [renamed, setRenamed] = useState<ReadonlyMap<string, string>>(new Map());
+  useEffect(() => setRenamed(new Map()), [given]);
+  useEffect(() => {
+    const rename = (event: Event) => {
+      const { documentId, title } = (event as CustomEvent<DocumentRenamed>).detail;
+      setRenamed(previous => new Map(previous).set(documentId, title));
+    };
+    window.addEventListener(DOCUMENT_RENAMED, rename);
+    return () => window.removeEventListener(DOCUMENT_RENAMED, rename);
+  }, []);
+  const items = useMemo(
+    () => renamed.size === 0 ? given : given.map(item => item.type === "document" && renamed.has(item.documentId) ? { ...item, label: renamed.get(item.documentId)! } : item),
+    [given, renamed],
+  );
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const roots = useMemo(() => {

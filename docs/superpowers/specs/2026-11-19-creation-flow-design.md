@@ -33,10 +33,14 @@ decides each and amends the design-language contract. Nothing stored changes.
      editor is ready, are not kept.
    - **Not kept, recorded.** An IME composes only into a focused field, so
      composed text typed before the field exists is not kept.
-4. **A saved title names the document everywhere at once.** A save that changes
-   the title refreshes the tree, the breadcrumb and the tab straight away.
-   Before, it waited for the 30-second metadata refresh, so the tree said
-   "Untitled" after the title had been typed and saved.
+4. **A saved title names the document in the tree at once.** A save that
+   changes the title fires `kh:document-renamed` on `window`, and the tree
+   shows the new label over its server items until the next server tree
+   replaces them. Before, it waited for the 30-second metadata refresh, so the
+   tree said "Untitled" after the title had been typed and saved. This makes
+   no refetch: an inline save stays free of page traffic
+   (`zz-inline-editing.spec.ts`). The breadcrumb and the tab follow on the
+   usual refresh.
 5. **One name, one hint.**
    - **The button.** Home's button reads **Create document**, the name the
      sidebar, the palette and the `C` key already use. It used to read
