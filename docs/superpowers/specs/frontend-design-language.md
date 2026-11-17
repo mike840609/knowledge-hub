@@ -859,7 +859,8 @@ own: the page's one `role="status"` is the toast layer's.
 The rendered editor has two more things drawn on `document.body`, `fixed`, for
 the reason the `[[` list is: a control beside the block the pointer is on
 (`editor/block-gutter.ts`) and a list of blocks under the caret after `/` on an
-empty line (`editor/slash-commands.ts`).
+empty line, or after a space mid-line when a block matches what follows the `/`
+(`editor/slash-commands.ts`).
 
 **The editor keeps a 56px gutter on its left** (`.kh-editor-blocks`,
 `padding-left: 3.5rem` with `margin-left: -3.5rem`). It hangs left of the text,
@@ -1899,7 +1900,9 @@ with the shared focus ring, and it is absent while the block is shown. In the
 code being edited, Tab inserts two spaces at the caret (or at the start of every
 selected line) and Shift-Tab removes up to two leading spaces from each line the
 caret or selection touches; Tab is bound nowhere else outside a table's last
-cell. Escape there ends the editing state and selects the code block (a second Escape returns to its text), which is how a keyboard user steps out; an open language field or callout menu takes it first (decisions 7, 19). In a table, Tab in the
+cell. (Amended 2026-11-19: on the document page, Tab at a bare caret in plain text is
+now claimed and writes nothing, and Escape then Tab leaves the editor. Selected
+text and the composer keep the old Tab. See "Editor keys and caret" below.) Escape there ends the editing state and selects the code block (a second Escape returns to its text), which is how a keyboard user steps out; an open language field or callout menu takes it first (decisions 7, 19). In a table, Tab in the
 last cell adds a row of the same width and moves to its first cell; Shift-Tab is
 unchanged (decision 18). No token was added.
 
@@ -1963,3 +1966,25 @@ defer: `:shortcode` emoji completion, Clear formatting in the selection toolbar
 one toolbar button (`Tx`), and one link-card action (`Copy` → `Copied`). No
 colour, radius or elevation token was added; an emoji is text and clearing
 marks only removes them.
+
+### Editor keys and caret (2026-11-19)
+
+The third Notion-parity group (`2026-11-19-editor-keys-caret-design.md`)
+changes where the caret goes and adds keys, but no surface:
+
+- An editable document keeps 30vh of room under its column, and a press there
+  writes at the end.
+- On the document page, Tab at a bare caret in plain text stays in the editor.
+  Escape then Tab leaves it. Selected text still tabs into the formatting
+  toolbar.
+- ArrowUp on the first line, or Backspace in an empty first line, returns to the
+  title.
+- `Mod-Enter` ticks a to-do.
+- `Mod-Alt-4`…`8` make a to-do, bulleted list, numbered list, toggle or code
+  block.
+- Backspace at a top-level list's first item makes it a paragraph.
+- A `/` after a space mid-line opens the `/` list, at that `/`, and the chosen
+  block goes below the line.
+
+The room below the text is a plain `padding-bottom` in `globals.css`. No
+colour, radius, elevation or type token was added.

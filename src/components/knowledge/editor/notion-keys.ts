@@ -351,8 +351,42 @@ const outdentCode = (state: EditorState, dispatch?: (tr: never) => void, view?: 
   return true;
 };
 
+/** `Mod-Alt-7` / `-8`: the current block as a toggle or a code block, as the block menu turns it (keys spec, decision 5). */
+function turnCurrentInto(target: BlockKind) {
+  return (state: EditorState, dispatch?: unknown, view?: EditorView) => {
+    // Claimed even where the block cannot turn (a quote, a callout): Milkdown's own Mod-Alt-7/8 make a list there.
+    if (!view?.editable) return false;
+    const pos = actionBlockPos(state);
+    if (pos !== null && dispatch) turnBlockInto(view, pos, target);
+    return true;
+  };
+}
+
+/**
+ * `Mod-Enter` in a to-do: tick it, or untick it (keys spec, decision 4). Elsewhere the key is the page's
+ * (save). Called from editor-core's direct `handleKeyDown`, which claims `Mod-Enter` before any keymap.
+ */
+export const tickTodo = (state: EditorState, dispatch?: (tr: Transaction) => void, view?: EditorView) => {
+  if (!view?.editable || !(state.selection instanceof TextSelection)) return false;
+  const { $from } = state.selection;
+  for (let depth = $from.depth; depth >= 1; depth--) {
+    const node = $from.node(depth);
+    if (node.type.name !== "list_item") continue;
+    if (node.attrs.checked == null) return false;
+    dispatch?.(state.tr.setNodeMarkup($from.before(depth), undefined, { ...node.attrs, checked: !node.attrs.checked }));
+    return true;
+  }
+  return false;
+};
+
 // Milkdown merges these into the editor's one keymap, ahead of ProseMirror's base keymap (priority 50).
 const notionKeymap = $useKeymap("khNotionKeys", {
+  // Notion's `Mod-Alt` digits (keys spec, decision 5): 0–3 stay Milkdown's (text, headings); 4–8 are Notion's.
+  TodoByDigit: { shortcuts: "Mod-Alt-4", priority: 70, command: () => toggleList("task") as never },
+  BulletByDigit: { shortcuts: "Mod-Alt-5", priority: 70, command: () => toggleList("bullet") as never },
+  NumberedByDigit: { shortcuts: "Mod-Alt-6", priority: 70, command: () => toggleList("ordered") as never },
+  ToggleByDigit: { shortcuts: "Mod-Alt-7", priority: 70, command: () => turnCurrentInto("toggle") as never },
+  CodeByDigit: { shortcuts: "Mod-Alt-8", priority: 70, command: () => turnCurrentInto("code") as never },
   HeadingBackspace: { shortcuts: "Backspace", priority: 70, command: () => headingToParagraph as never },
   Strikethrough: { shortcuts: "Mod-Shift-s", command: (ctx) => () => ctx.get(commandsCtx).call(toggleStrikethroughCommand.key) },
   NumberedList: { shortcuts: "Mod-Shift-7", command: () => toggleList("ordered") as never },
@@ -366,6 +400,82 @@ const notionKeymap = $useKeymap("khNotionKeys", {
   CodeShiftTab: { shortcuts: "Shift-Tab", priority: 70, command: () => outdentCode as never },
   SelectAllInSteps: { shortcuts: "Mod-a", priority: 70, command: () => selectAllInSteps as never },
 });
+
+// ---- Keys spec (2026-11-19): Tab stays, and the top of the document leads to the title -----------
+
+/** Fired on the editor's DOM when the caret leaves the top of the document; whoever owns a title field claims it. */
+export const EXIT_TOP = "kh:editor-exit-top";
+function exitTop(view: EditorView): boolean {
+  return !view.dom.dispatchEvent(new CustomEvent(EXIT_TOP, { bubbles: true, cancelable: true }));
+}
+
+/**
+ * Tab in text that nothing indents (a paragraph, a heading, a quote) stays in the editor, as Notion's does:
+ * it used to move focus to the next control on the page, taking the writer's next keys with it. A list, a
+ * table and code keep their own Tab; a block chosen with Escape lets Tab go on, which is how a keyboard
+ * user leaves the editor. Only inside an element marked `data-tab-stays` (the document page).
+ */
+export const LEAVE_EDITOR = "Press Escape, then Tab, to leave the editor.";
+
+const tabStaysInText = $prose(
+  () =>
+    new Plugin({
+      key: new PluginKey("khTabStaysInText"),
+      // Tab stays, so the way out is said (WCAG 2.1.2), after the gutter's own description.
+      view(view) {
+        // Once: a whole-document replace (`replaceMarkdown`) makes the plugin views again.
+        const said = view.dom.getAttribute("aria-description") ?? "";
+        if (view.dom.closest("[data-tab-stays]") && !said.includes(LEAVE_EDITOR)) {
+          view.dom.setAttribute("aria-description", `${said ? `${said} ` : ""}${LEAVE_EDITOR}`);
+        }
+        return {};
+      },
+      props: {
+        handleKeyDown(view, event) {
+          if (event.key !== "Tab" || event.metaKey || event.ctrlKey || event.altKey || composing(event) || !view.editable) return false;
+          // Only where the page asks for it (the document page); a form such as the composer keeps Tab to its next control.
+          if (!view.dom.closest("[data-tab-stays]")) return false;
+          const { selection } = view.state;
+          // Selected text keeps Tab for the formatting toolbar, which a keyboard user reaches that way.
+          if (!(selection instanceof TextSelection) || !selection.empty) return false;
+          for (let depth = selection.$from.depth; depth >= 0; depth--) {
+            const role = selection.$from.node(depth).type;
+            if (role.name === "list_item" || role.spec.tableRole || role.spec.code) return false;
+          }
+          return true;
+        },
+      },
+    }),
+);
+
+/**
+ * ArrowUp on the first line of the document, and Backspace in an empty first paragraph, go to the title
+ * (keys spec, decision 3); the empty paragraph goes with the Backspace when something follows it.
+ */
+const topLeadsToTitle = $prose(
+  () =>
+    new Plugin({
+      key: new PluginKey("khTopLeadsToTitle"),
+      props: {
+        handleKeyDown(view, event) {
+          if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || composing(event) || !view.editable) return false;
+          const { selection, doc } = view.state;
+          if (!(selection instanceof TextSelection) || !selection.empty) return false;
+          const { $from } = selection;
+          if (event.key === "ArrowUp") {
+            if ($from.start() !== Selection.atStart(doc).$from.start() || !view.endOfTextblock("up")) return false;
+            return exitTop(view);
+          }
+          if (event.key !== "Backspace") return false;
+          const first = doc.firstChild;
+          if ($from.depth !== 1 || $from.parent !== first || first.type.name !== "paragraph" || first.content.size > 0) return false;
+          if (!exitTop(view)) return false;
+          if (doc.childCount > 1) view.dispatch(view.state.tr.delete(0, first.nodeSize));
+          return true;
+        },
+      },
+    }),
+);
 
 // ---- Escape (7) ---------------------------------------------------------------------------------
 
@@ -411,4 +521,4 @@ const escapeSelection = $prose(
     }),
 );
 
-export const notionKeys: MilkdownPlugin[] = [todoInputRule, markEnd, ...typography, notionKeymap, escapeSelection].flat();
+export const notionKeys: MilkdownPlugin[] = [todoInputRule, markEnd, ...typography, notionKeymap, escapeSelection, tabStaysInText, topLeadsToTitle].flat();
