@@ -15,6 +15,7 @@ import { handleCalloutBackspace } from "./reader-hints";
 import { configureCellBreakStringify, remarkCellBreaks } from "./table-cell-breaks";
 import { notionKeys } from "./notion-keys";
 import { pasteHtml } from "./paste-html";
+import { markdownPastePlugins } from "./markdown-paste";
 import { TASK_EDITABLE_CHANGED } from "./task-checkbox";
 import { configureWikiLinkStringify, wikiLinkPlugins } from "./wiki-link";
 
@@ -310,6 +311,7 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
     .use(readerHints)
     .use(notionKeys)
     .use(pasteHtml)
+    .use(markdownPastePlugins)
     .use(history)
     .use(listener)
     .use(editWatcher)

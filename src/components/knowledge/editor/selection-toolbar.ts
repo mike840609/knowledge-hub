@@ -247,8 +247,8 @@ const PASTED_URL = /^https?:\/\/\S+$/i;
 
 /**
  * Pasting one web address over selected text links the text instead of replacing it (design
- * decision 12). Only a plain-text paste of a single http(s) URL, whitespace nowhere inside it, and
- * only over a non-empty text selection in text that may carry a link; everything else pastes as before.
+ * decision 12); at a caret it pastes as a link to itself. Only a plain-text paste of a single http(s)
+ * URL, whitespace nowhere inside it, in text that may carry a link; everything else pastes as before.
  */
 const pasteUrlOverSelection = $prose(
   () =>
@@ -259,8 +259,17 @@ const pasteUrlOverSelection = $prose(
           const text = event.clipboardData?.getData("text/plain").trim() ?? "";
           const { selection, schema } = view.state;
           const type = schema.marks.link;
-          if (!view.editable || !type || !PASTED_URL.test(text) || !(selection instanceof TextSelection) || selection.empty) return false;
+          if (!view.editable || !type || !PASTED_URL.test(text) || !(selection instanceof TextSelection)) return false;
           try { new URL(text); } catch { return false; }
+          if (selection.empty) {
+            // At a caret the address is pasted as a link to itself (2026-11-19 paste-and-links decision 2).
+            const marks = view.state.storedMarks ?? selection.$from.marks();
+            if (!selection.$from.parent.type.allowsMarkType(type) || marks.some((mark) => mark.type.spec.code === true || mark.type.name === "inlineCode")) return false;
+            event.preventDefault();
+            const kept = marks.filter((mark) => mark.type !== type);
+            view.dispatch(view.state.tr.replaceSelectionWith(schema.text(text, [...kept, type.create({ href: text })]), false).setStoredMarks(kept).scrollIntoView());
+            return true;
+          }
           // As the Link button asks; `addMark` leaves a code block in the selection as it was.
           if (!linkAllowed(view)) return false;
           event.preventDefault();
