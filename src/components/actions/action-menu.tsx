@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useCallback } from "react";
+import { bufferTyping, isNewNoteHref } from "@/components/knowledge/typing-ahead";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 import { buttonClasses } from "@/components/ui/button";
@@ -87,7 +88,10 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
           // The global import action must open the full page even from a Sources
           // descendant, where a client navigation would intercept it as a modal.
           if (action.id === "create.import") window.location.assign(effect.href);
-          else router.push(effect.href);
+          else {
+            if (isNewNoteHref(effect.href)) bufferTyping();
+            router.push(effect.href);
+          }
           return;
         case "open-new-tab":
           // `noopener` so the new tab cannot reach back into this one.

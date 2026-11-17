@@ -425,7 +425,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   }
   /* An empty document says what to do, as the old textarea's placeholder did. */
   .kh-editor > p:first-child:last-child:has(> br:only-child)::before {
-    content: "Write here. Start with # to name the document.";
+    content: "Write, or press / for commands";
     @apply pointer-events-none float-left h-0 text-kh-text-muted;
   }
   /* An empty paragraph the caret is in says which key opens the commands. Not in an empty
