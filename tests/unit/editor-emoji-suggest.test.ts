@@ -2,7 +2,7 @@
 import { editorViewCtx } from "@milkdown/kit/core";
 import { TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { emojiSuggest } from "@/components/knowledge/editor/emoji-suggest";
 import { emojiMatches } from "@/lib/emoji-catalog";
@@ -189,4 +189,58 @@ it("does not open on a caret placed after an existing colon word; Enter and arro
   // Typing there is a fresh trigger: the list answers the writer's own keys.
   type(view, " :ok");
   expect(menu().hidden).toBe(false);
+});
+
+// Review round 2 (2026-11-17): edits that are not the writer typing the `:word` must not open the
+// list either, or the next Enter rewrites text already written.
+describe("edits that only land the caret after an existing colon word", () => {
+  const endOfOk = (view: EditorView) => {
+    let at = 0;
+    view.state.doc.descendants((node, pos) => { if (node.isText && node.text?.includes(":ok")) at = pos + node.text.indexOf(":ok") + 3; });
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
+  };
+  it("Enter then Backspace (a join) does not open it", async () => {
+    const { editor, view } = await open("備註:ok\n\nsecond line");
+    endOfOk(view);
+    key(view, "Enter");
+    key(view, "Backspace");
+    expect(menu().hidden).toBe(true);
+    key(view, "Enter");
+    expect(editor.getMarkdown()).toContain("備註:ok");
+  });
+  it("Enter then undo does not open it", async () => {
+    const { editor, view } = await open("備註:ok\n\nsecond line");
+    endOfOk(view);
+    key(view, "Enter");
+    key(view, "z", { ctrlKey: true });
+    key(view, "z", { metaKey: true });
+    expect(view.state.doc.textContent).toBe("備註:oksecond line");
+    expect(menu().hidden).toBe(true);
+    expect(editor.getMarkdown()).toContain("備註:ok");
+  });
+  it("a forward delete joining the next line does not open it", async () => {
+    const { editor, view } = await open("備註:ok\n\nsecond line");
+    endOfOk(view);
+    key(view, "Delete");
+    expect(menu().hidden).toBe(true);
+    key(view, "Enter");
+    expect(editor.getMarkdown()).not.toContain("🟢");
+  });
+  it("undoing a chosen emoji brings the text back without reopening the list", async () => {
+    const { editor, view } = await open();
+    type(view, "狀態:ok");
+    expect(menu().hidden).toBe(false);
+    key(view, "Enter");
+    expect(editor.getMarkdown()).not.toContain(":ok");
+    key(view, "z", { ctrlKey: true });
+    key(view, "z", { metaKey: true });
+    expect(view.state.doc.textContent).toBe("狀態:ok");
+    expect(menu().hidden).toBe(true);
+  });
+  it("Backspace inside the query keeps the list answering", async () => {
+    const { view } = await open();
+    type(view, ":smi");
+    key(view, "Backspace");
+    expect(menu().hidden).toBe(false);
+  });
 });

@@ -1,8 +1,9 @@
 import { editorViewOptionsCtx } from "@milkdown/kit/core";
 import type { Ctx, MilkdownPlugin } from "@milkdown/kit/ctx";
 import { InputRule } from "@milkdown/kit/prose/inputrules";
-import { closeHistory } from "@milkdown/kit/prose/history";
+import { closeHistory, isHistoryTransaction } from "@milkdown/kit/prose/history";
 import { Plugin, PluginKey, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
+import { ReplaceStep } from "@milkdown/kit/prose/transform";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $inputRule, $prose } from "@milkdown/kit/utils";
 import { emojiForShortcode, emojiMatches, emojiShortcode, type Emoji } from "@/lib/emoji-catalog";
@@ -47,13 +48,13 @@ export function emojiSuggest(): { plugins: MilkdownPlugin[]; configure: (ctx: Ct
     key,
     state: {
       init: () => ({ trigger: null, dismissed: null, index: 0 }),
-      apply(transaction, previous, _before, after) {
+      apply(transaction, previous, before, after) {
         const detected = detect(after);
         const meta = transaction.getMeta(key) as { dismiss?: true; index?: number } | undefined;
         // The list answers typing, never a caret placed on text already there: `備註:ok` read
         // back must not take the Enter or the arrows that follow a click at its end.
         const continuing = previous.trigger !== null && detected !== null && transaction.mapping.map(previous.trigger.from) === detected.from;
-        const trigger = detected && (continuing || typedAt(transaction, detected)) ? detected : null;
+        const trigger = detected && (continuing || typedAt(transaction, before, detected)) ? detected : null;
         if (trigger === null) return { trigger: null, dismissed: null, index: 0 };
         const changed = !previous.trigger || previous.trigger.query !== trigger.query;
         return {
@@ -220,14 +221,26 @@ export function emojiSuggest(): { plugins: MilkdownPlugin[]; configure: (ctx: Ct
   };
 }
 
-/** Whether this transaction is the writer's own edit inside the trigger, not a paste or a drop. */
-function typedAt(transaction: Transaction, trigger: Trigger): boolean {
-  if (!transaction.docChanged) return false;
+/**
+ * Whether this transaction is the writer's own edit of the trigger's text: typing or deleting
+ * backwards within one textblock, up to the caret. Not an undo or redo (which would hand the
+ * next Enter a `:word` the writer had just taken back), not a paste or a drop, not a join of two
+ * blocks, and not a forward delete after the caret, each of which can leave a caret after a
+ * colon word the writer did not just type (review, 2026-11-17).
+ */
+function typedAt(transaction: Transaction, before: EditorState, trigger: Trigger): boolean {
+  if (!transaction.docChanged || isHistoryTransaction(transaction)) return false;
   const event = transaction.getMeta("uiEvent");
   if (event === "paste" || event === "drop") return false;
+  const caret = before.selection.head;
   let touched = false;
-  for (const map of transaction.mapping.maps) {
-    map.forEach((_oldStart, _oldEnd, newStart, newEnd) => { if (newEnd >= trigger.from && newStart <= trigger.to) touched = true; });
+  for (let index = 0; index < transaction.steps.length; index++) {
+    const step = transaction.steps[index];
+    if (!(step instanceof ReplaceStep) || step.slice.openStart !== 0 || step.slice.openEnd !== 0) return false;
+    const doc = transaction.docs[index];
+    if (step.to > caret || !doc.resolve(step.from).sameParent(doc.resolve(step.to))) return false;
+    const at = transaction.mapping.slice(index).map(step.from);
+    if (at >= trigger.from && at <= trigger.to) touched = true;
   }
   return touched;
 }
