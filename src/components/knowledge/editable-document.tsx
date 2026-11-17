@@ -466,6 +466,8 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   // Arriving from a new note (`/knowledge/new` created it): the title is where to start typing, with
   // "Untitled" selected so the first keystroke replaces it.
   // What was typed while the note was being made is the title, with the caret after it.
+  // Enter typed then: the caret goes to the body once the editor is ready (the effect below).
+  const bodyWhenReady = useRef(false);
   useEffect(() => {
     if (!editable) return;
     const arrived = takeNewNote(detail.inspectorData.documentId);
@@ -488,7 +490,6 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     if (arrived.title) input.setSelectionRange(arrived.title.length, arrived.title.length);
     else if (input.value === "Untitled") input.select();
   }, [editable]);
-  const bodyWhenReady = useRef(false);
   useEffect(() => {
     if ((!ready && !source && !failed) || !bodyWhenReady.current) return;
     bodyWhenReady.current = false;
