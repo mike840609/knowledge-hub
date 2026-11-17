@@ -174,3 +174,19 @@ it("does not open in inline code or in a code block", async () => {
   type(code.view, ":sm");
   expect(menu().hidden).toBe(true);
 });
+
+// Review (2026-11-17): a caret placed at the end of text already there (`備註:ok`) must not open
+// the list, or its Enter and arrows would rewrite what the writer did not just type.
+it("does not open on a caret placed after an existing colon word; Enter and arrows stay the editor's", async () => {
+  const { editor, view } = await open("備註:ok\n\nsecond line");
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 6)));
+  expect(menu().hidden).toBe(true);
+  expect(key(view, "ArrowDown").defaultPrevented).toBe(false);
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 6)));
+  key(view, "Enter");
+  expect(editor.getMarkdown()).not.toContain("🆗");
+  expect(editor.getMarkdown()).toContain("備註:ok");
+  // Typing there is a fresh trigger: the list answers the writer's own keys.
+  type(view, " :ok");
+  expect(menu().hidden).toBe(false);
+});

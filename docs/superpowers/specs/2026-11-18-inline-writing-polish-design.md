@@ -22,11 +22,15 @@ emoji is text and clearing marks only removes them.
    ArrowUp/Down move; Escape closes without changing the text. A fully typed
    `:shortcode:` converts on the space after it. The list never opens in code
    (a code block or inline code), or after a word character (`http://`,
-   `12:30`). One undo step.
+   `12:30`), and opens only for the writer's own edit there: a caret placed by
+   click or arrow at the end of text already written (`備註:ok`) opens nothing,
+   so Enter and the arrows stay the editor's (review, 2026-11-17). One undo step.
 2. **Clear formatting.** The selection toolbar adds **Clear formatting** (the
    `Tx` glyph), and `Mod-Shift-\` runs the same action (`Mod-\` alone stays the
-   app's navigation toggle and the editor must not take it): every inline mark comes off
-   the selection; at a caret it drops the mark the next character would carry.
+   app's navigation toggle and the editor must not take it): every inline mark except a
+   link comes off the selection; at a caret it drops the mark the next character would
+   carry. A link is content, not formatting — clearing a select-all must not drop every
+   URL — and goes by its card's Remove (review, 2026-11-17).
    It does not change the block type (a heading stays a heading), which is
    Notion's `Cmd+\` behaviour.
 3. **Copy link.** The link card's first action is **Copy**, which copies the

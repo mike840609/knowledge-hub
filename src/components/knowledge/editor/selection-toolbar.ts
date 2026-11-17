@@ -233,8 +233,11 @@ function clearFormatting(view: EditorView): boolean {
   if (!view.editable) return false;
   const { from, to, empty } = view.state.selection;
   const transaction = view.state.tr;
-  if (empty) transaction.setStoredMarks([]);
-  else transaction.removeMark(from, to);
+  // Formatting goes, the address stays: a link is content, and select-all then clear must not
+  // silently drop every URL in the document.
+  const kept = (mark: Mark) => mark.type.name === "link";
+  if (empty) transaction.setStoredMarks((view.state.storedMarks ?? view.state.selection.$from.marks()).filter(kept));
+  else for (const type of Object.values(view.state.schema.marks)) if (type.name !== "link") transaction.removeMark(from, to, type);
   view.dispatch(empty ? transaction : closeHistory(transaction));
   view.focus();
   return true;

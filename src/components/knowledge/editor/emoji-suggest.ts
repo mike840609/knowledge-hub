@@ -2,7 +2,7 @@ import { editorViewOptionsCtx } from "@milkdown/kit/core";
 import type { Ctx, MilkdownPlugin } from "@milkdown/kit/ctx";
 import { InputRule } from "@milkdown/kit/prose/inputrules";
 import { closeHistory } from "@milkdown/kit/prose/history";
-import { Plugin, PluginKey, type EditorState } from "@milkdown/kit/prose/state";
+import { Plugin, PluginKey, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $inputRule, $prose } from "@milkdown/kit/utils";
 import { emojiForShortcode, emojiMatches, emojiShortcode, type Emoji } from "@/lib/emoji-catalog";
@@ -48,8 +48,12 @@ export function emojiSuggest(): { plugins: MilkdownPlugin[]; configure: (ctx: Ct
     state: {
       init: () => ({ trigger: null, dismissed: null, index: 0 }),
       apply(transaction, previous, _before, after) {
-        const trigger = detect(after);
+        const detected = detect(after);
         const meta = transaction.getMeta(key) as { dismiss?: true; index?: number } | undefined;
+        // The list answers typing, never a caret placed on text already there: `備註:ok` read
+        // back must not take the Enter or the arrows that follow a click at its end.
+        const continuing = previous.trigger !== null && detected !== null && transaction.mapping.map(previous.trigger.from) === detected.from;
+        const trigger = detected && (continuing || typedAt(transaction, detected)) ? detected : null;
         if (trigger === null) return { trigger: null, dismissed: null, index: 0 };
         const changed = !previous.trigger || previous.trigger.query !== trigger.query;
         return {
@@ -214,6 +218,18 @@ export function emojiSuggest(): { plugins: MilkdownPlugin[]; configure: (ctx: Ct
       }));
     },
   };
+}
+
+/** Whether this transaction is the writer's own edit inside the trigger, not a paste or a drop. */
+function typedAt(transaction: Transaction, trigger: Trigger): boolean {
+  if (!transaction.docChanged) return false;
+  const event = transaction.getMeta("uiEvent");
+  if (event === "paste" || event === "drop") return false;
+  let touched = false;
+  for (const map of transaction.mapping.maps) {
+    map.forEach((_oldStart, _oldEnd, newStart, newEnd) => { if (newEnd >= trigger.from && newStart <= trigger.to) touched = true; });
+  }
+  return touched;
 }
 
 function detect(state: EditorState): Trigger | null {

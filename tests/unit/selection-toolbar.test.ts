@@ -754,11 +754,21 @@ it("keeps the block type when clearing a heading's marks, and can be undone", as
   expect(editor.getMarkdown()).toBe("## Heading **bold**\n");
 });
 
-it("removes a link mark without removing its text", async () => {
+// Review (2026-11-17): a link is content, not formatting; its card's Remove is how it goes.
+it("keeps a link and its address when clearing formatting over it", async () => {
   const editor = await open("[linked](https://example.com) text\n");
   mountToolbar(editor);
   select(editor, 1, 7);
   await throttleWindow();
   button("Clear formatting").click();
-  expect(editor.getMarkdown()).toBe("linked text\n");
+  expect(editor.getMarkdown()).toBe("[linked](https://example.com) text\n");
+});
+
+it("clears formatting but keeps links, so select-all and clear never drops a URL", async () => {
+  const editor = await open("a **[site](https://example.com)** *b*");
+  mountToolbar(editor);
+  select(editor, 1, 9); // all of "a site b"
+  await throttleWindow();
+  button("Clear formatting").click();
+  expect(editor.getMarkdown()).toBe("a [site](https://example.com) b\n");
 });

@@ -933,8 +933,8 @@ was added.
 decisions 9-13; `editor/selection-toolbar.ts`). The toolbar holds Bold, Italic,
 Strikethrough, Inline code, Link, Heading 1-3, the two lists, Toggle and Clear
 formatting, each a `ghost` `sm` button that reads `aria-pressed` when active.
-Clear formatting takes every inline mark off the selection (or, at a caret, the
-mark the next character would carry); `Mod-Shift-\` runs the same action
+Clear formatting takes every inline mark but a link off the selection (or, at a caret, the
+mark the next character would carry); a link goes by its card's Remove; `Mod-Shift-\` runs the same action
 (`Mod-\` alone stays the navigation toggle). It leaves the block type alone. `Mod-k` over a text
 selection opens its link field and is handled by the editor, so the command
 palette (which yields to a handled event) stays closed; with no selection it is
@@ -949,7 +949,7 @@ Escape), or when the link scrolls out of view. No token was added.
 
 **Emoji completion** (2026-11-18, `editor/emoji-suggest.ts`). Typing `:` after
 the start of a word (including after a Han character) and two or more letters
-or digits opens `.kh-emoji-menu`, the `[[` list's surface, with the bundled catalog's best matches: exact shortcode or
+or digits, as the writer's own edit (a caret placed after text already written opens nothing), opens `.kh-emoji-menu`, the `[[` list's surface, with the bundled catalog's best matches: exact shortcode or
 keyword, or a name/shortcode prefix (catalog order breaks that tie), then a
 keyword prefix, then a substring. The shortcode is the name's slug
 (`grinning_face`); keywords are English and Traditional Chinese. Enter, Tab or
