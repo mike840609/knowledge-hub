@@ -59,7 +59,8 @@ read it").
    field, and the command palette does not open. With no selection it is the
    palette, as now.
    (Amended 2026-11-19: `Mod-Alt-4`…`8` added, `Mod-Enter` ticks a to-do, and Tab in plain text is
-   claimed; `2026-11-19-editor-keys-caret-design.md`.)
+   claimed; `2026-11-19-editor-keys-caret-design.md`. And 2026-11-20: `/diagram` and `/date` join the `/`
+   list; `2026-11-20-small-keys-design.md`.)
 
 ### Title
 

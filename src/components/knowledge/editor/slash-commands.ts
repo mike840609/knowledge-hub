@@ -4,11 +4,12 @@ import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { Plugin, PluginKey, type EditorState } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
-import { Code, Heading1, Heading2, Heading3, Info, Link2, List, ListCollapse, ListOrdered, ListTodo, Minus, Quote, Table, Type, type LucideIcon } from "lucide-react";
+import { CalendarDays, Code, Heading1, Heading2, Heading3, Info, Link2, List, ListCollapse, ListOrdered, ListTodo, Minus, Network, Quote, Table, Type, type LucideIcon } from "lucide-react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { dispatchBlockAction } from "./block-actions";
 import { insertDetailsSkeleton } from "./details-toggle";
+import { keepsAsText } from "./wiki-link";
 
 // `aliases` match by prefix (what a Notion hand types: /h2, /todo, /ul); label and `words` match anywhere.
 const commands = [
@@ -26,6 +27,9 @@ const commands = [
   { id: "toggle", label: "Toggle", hint: "A collapsible section", words: "toggle fold collapsible 折疊", aliases: ["toggle"], group: "Blocks", Icon: ListCollapse },
   // The reader's callout glyph for a note (markdown-callout.tsx).
   { id: "callout", label: "Callout", hint: "A highlighted note", words: "callout note 提示 標註", aliases: ["callout"], group: "Blocks", Icon: Info },
+  // A fenced `mermaid` block: the reader and the code preview already draw it.
+  { id: "diagram", label: "Diagram", hint: "A Mermaid diagram", words: "mermaid flowchart chart 圖表 流程圖", aliases: ["mermaid"], group: "Blocks", Icon: Network },
+  { id: "date", label: "Today's date", hint: "Writes today's date", words: "today now 日期 今天", aliases: ["date", "today"], group: "Basic blocks", Icon: CalendarDays },
   { id: "link", label: "Page link", hint: "Another page in this workspace", words: "link to page document wiki 連結 頁面", aliases: ["page"], group: "Links", Icon: Link2 },
 ] as const;
 type Command = typeof commands[number];
@@ -56,9 +60,11 @@ function detect(state: EditorState): Trigger | null {
 function detectInline(state: EditorState): Trigger | null {
   const { $from, empty } = state.selection;
   if (!empty || $from.depth !== 1 || $from.parent.type.name !== "paragraph") return null;
-  const before = $from.nodeBefore;
-  if (!before?.isText || before.marks.length) return null;
-  const match = /(?:^|\s)\/([^\s/:]{0,40})$/.exec(before.text!);
+  // Inline code and link text are where a "/" is a path or an address, not a command; other marks are not in its way.
+  if ((state.storedMarks ?? $from.marks()).some(keepsAsText)) return null;
+  // Marks do not matter to a "/" (after **bold** is as good a place as after plain words), and an inline node
+  // (a wikilink, a line break) reads as one character, which is not a word character either.
+  const match = /(?:^|[\s\ufffc])\/([^\s/:\ufffc]{0,40})$/.exec($from.parent.textBetween(0, $from.parentOffset, undefined, "\ufffc"));
   if (!match) return null;
   const from = $from.pos - match[1].length - 1;
   if (from === $from.start() || !matchingCommands(match[1]).length) return null;
@@ -113,6 +119,12 @@ export function matchingCommands(query: string): readonly Command[] {
     (found.indexOf(a) - found.indexOf(b)));
 }
 
+/** Today in the writer's own time zone, as `YYYY-MM-DD`. */
+function todayIso(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
 /** Each row's 16px Lucide glyph, drawn once from lucide-react as reader-hints.ts draws a callout's, then cloned. */
 const glyphs = new Map<LucideIcon, SVGElement>();
 function glyph(Icon: LucideIcon): SVGElement {
@@ -134,6 +146,14 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
     if (!view.editable || !trigger) return;
     const { nodes } = view.state.schema;
     const current = view.state.doc.nodeAt(trigger.pos)!;
+    if (command.id === "date") {
+      // Text, not a block: today's date goes where the "/query" was (ISO, the way a Markdown note dates a line).
+      const date = todayIso();
+      const caretAt = view.state.selection.from;
+      if (trigger.inline) dispatchBlockAction(view, view.state.tr.insertText(date, trigger.from, caretAt), trigger.from + date.length);
+      else dispatchBlockAction(view, view.state.tr.replaceWith(trigger.pos, trigger.pos + current.nodeSize, nodes.paragraph.create(null, view.state.schema.text(date))), trigger.pos + 1 + date.length);
+      return;
+    }
     if (trigger.inline) {
       const caretAt = view.state.selection.from;
       if (command.id === "link") {
@@ -171,6 +191,12 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
     if (command.id.startsWith("h")) node = nodes.heading.create({ level: Number(command.id.slice(1)) });
     if (command.id === "quote") node = nodes.blockquote.create(null, paragraph);
     if (command.id === "code") node = nodes.code_block.create();
+    let caret = 1;
+    if (command.id === "diagram") {
+      const sample = "flowchart TD\n  A[Start] --> B[Done]";
+      node = nodes.code_block.create({ language: "mermaid" }, view.state.schema.text(sample));
+      caret = 1 + sample.length;
+    }
     if (command.id === "bullet" || command.id === "ordered" || command.id === "task") {
       const ordered = command.id === "ordered";
       const item = nodes.list_item.create({ listType: ordered ? "ordered" : "bullet", label: ordered ? "1." : "-", ...(command.id === "task" ? { checked: false } : {}) }, paragraph);
@@ -184,7 +210,6 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
         nodes.table_row.create(null, [cell(), cell()]),
       ]);
     }
-    let caret = 1;
     if (command.id === "callout") {
       // The marker must stand alone on the quote's first line (remark-callouts), so the body is its own paragraph.
       const marker = nodes.paragraph.create(null, view.state.schema.text("[!NOTE]"));
