@@ -423,8 +423,9 @@ const tabStaysInText = $prose(
       key: new PluginKey("khTabStaysInText"),
       // Tab stays, so the way out is said (WCAG 2.1.2), after the gutter's own description.
       view(view) {
-        if (view.dom.closest("[data-tab-stays]")) {
-          const said = view.dom.getAttribute("aria-description");
+        // Once: a whole-document replace (`replaceMarkdown`) makes the plugin views again.
+        const said = view.dom.getAttribute("aria-description") ?? "";
+        if (view.dom.closest("[data-tab-stays]") && !said.includes(LEAVE_EDITOR)) {
           view.dom.setAttribute("aria-description", `${said ? `${said} ` : ""}${LEAVE_EDITOR}`);
         }
         return {};

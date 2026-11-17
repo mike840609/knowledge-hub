@@ -87,8 +87,11 @@ it("Mod-Enter in a to-do outside the document page (the composer) leaves it to s
 });
 
 it("says how to leave the editor where Tab stays in it, and only there", async () => {
-  const { view } = await open("one");
-  expect(view.dom.getAttribute("aria-description")).toContain(LEAVE_EDITOR);
+  const { editor, view } = await open("one");
+  // Said once, even after whole-document replaces (leaving source view) make the plugin views again.
+  editor.replaceMarkdown("two");
+  editor.replaceMarkdown("three");
+  expect(view.dom.getAttribute("aria-description")!.split(LEAVE_EDITOR).length - 1).toBe(1);
   const elsewhere = document.body.appendChild(document.createElement("div"));
   const plain = await createMarkdownEditor({
     root: elsewhere, markdown: "one", className: "kh-editor", ariaLabel: "Content", editable: true, onUserEdit: () => {}, onMarkdown: () => {}, allowImage: () => false,
