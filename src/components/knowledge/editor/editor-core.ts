@@ -9,11 +9,11 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 import { $ctx, $prose, getMarkdown, replaceAll } from "@milkdown/kit/utils";
 import { detailsPlugins, detailsRemark } from "./details-node";
 import { readerHints } from "./reader-hints";
-import { liftAtDocumentStart, liftListItemOverNested } from "./block-backspace";
+import { liftAtDocumentStart, liftFirstListItem, liftListItemOverNested } from "./block-backspace";
 import { flipNearestDetails, handleDetailsDeleteKey } from "./details-toggle";
 import { handleCalloutBackspace } from "./reader-hints";
 import { configureCellBreakStringify, remarkCellBreaks } from "./table-cell-breaks";
-import { notionKeys } from "./notion-keys";
+import { notionKeys, tickTodo } from "./notion-keys";
 import { pasteHtml } from "./paste-html";
 import { TASK_EDITABLE_CHANGED } from "./task-checkbox";
 import { configureWikiLinkStringify, wikiLinkPlugins } from "./wiki-link";
@@ -203,6 +203,8 @@ export type MarkdownEditor = {
   focus: () => void;
   /** Focus with the caret at the very start of the document. */
   focusStart: () => void;
+  /** Caret at the end, in an empty paragraph added there unless the document already ends in one (keys spec, decision 1). */
+  focusEnd: () => void;
   /** Select the opening H1 so its existing content can be renamed in place. */
   selectOpeningHeading: () => void;
   action: <T>(fn: (ctx: Ctx) => T) => T;
@@ -256,7 +258,11 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
         // ArrowDown out of a trailing code block likewise leaves here: nowhere else handles it.
         // Shift+Enter in a table is taken here too, before Milkdown's command can split the table.
         handleKeyDown: (view, event) => {
-          if ((event.metaKey || event.ctrlKey) && event.key === "Enter") return true;
+          if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+            // Only on the document page: in a form (the composer) Mod-Enter saves, and must not change a to-do as it does.
+            if (!event.shiftKey && !event.altKey && !event.isComposing && view.dom.closest("[data-tab-stays]")) tickTodo(view.state, view.dispatch, view);
+            return true;
+          }
           // Backspace/Delete cannot cross a toggle's defining boundary: without this the caret
           // is stuck and the toggle undeletable. A direct prop runs before every plugin's keymap.
           if ((event.key === "Backspace" || event.key === "Delete") && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.isComposing && event.keyCode !== 229 && handleDetailsDeleteKey(view, event.key)) return true;
@@ -265,7 +271,7 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
           if (event.key === "Backspace" && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.isComposing && event.keyCode !== 229 && handleCalloutBackspace(view)) return true;
           // Milkdown's Backspace only joins textblocks: a list item holding nested items, and a quote
           // opening the document, would otherwise stay put or leave an empty bullet behind.
-          if (event.key === "Backspace" && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.isComposing && event.keyCode !== 229 && (liftListItemOverNested(view) || liftAtDocumentStart(view))) return true;
+          if (event.key === "Backspace" && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.isComposing && event.keyCode !== 229 && (liftListItemOverNested(view) || liftFirstListItem(view) || liftAtDocumentStart(view))) return true;
           if (event.key === "Enter" && event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.isComposing && event.keyCode !== 229 && flipNearestDetails(view, view.state.selection.$from.pos)) return true;
           if (event.key === "Enter" && event.shiftKey && !event.altKey && !event.isComposing && event.keyCode !== 229 && breakInTable(view)) return true;
           if (
@@ -353,6 +359,16 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
       editor.action((ctx) => {
         const view = ctx.get(editorViewCtx);
         view.dispatch(view.state.tr.setSelection(Selection.atStart(view.state.doc)));
+        view.focus();
+      }),
+    focusEnd: () =>
+      editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        const { doc, schema } = view.state;
+        const last = doc.lastChild;
+        const tr = view.state.tr;
+        if (view.editable && !(last?.type.name === "paragraph" && last.content.size === 0)) tr.insert(doc.content.size, schema.nodes.paragraph.create());
+        view.dispatch(tr.setSelection(Selection.atEnd(tr.doc)).scrollIntoView());
         view.focus();
       }),
     selectOpeningHeading: () => editor.action((ctx) => {

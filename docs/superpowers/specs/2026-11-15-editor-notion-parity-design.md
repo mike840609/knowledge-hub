@@ -58,6 +58,8 @@ read it").
 9. `Mod-k` with a non-empty text selection opens the selection toolbar's link
    field, and the command palette does not open. With no selection it is the
    palette, as now.
+   (Amended 2026-11-19: `Mod-Alt-4`…`8` added, `Mod-Enter` ticks a to-do, and Tab in plain text is
+   claimed; `2026-11-19-editor-keys-caret-design.md`.)
 
 ### Title
 
