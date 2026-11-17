@@ -222,8 +222,8 @@ export function emojiSuggest(): { plugins: MilkdownPlugin[]; configure: (ctx: Ct
 }
 
 /**
- * Whether this transaction is the writer's own edit of the trigger's text: typing or deleting
- * backwards within one textblock, up to the caret. Not an undo or redo (which would hand the
+ * Whether this transaction is the writer's own typing of the trigger's text: an insertion
+ * within one textblock, up to the caret. Not an undo or redo (which would hand the
  * next Enter a `:word` the writer had just taken back), not a paste or a drop, not a join of two
  * blocks, and not a forward delete after the caret, each of which can leave a caret after a
  * colon word the writer did not just type (review, 2026-11-17).
@@ -240,7 +240,10 @@ function typedAt(transaction: Transaction, before: EditorState, trigger: Trigger
     const doc = transaction.docs[index];
     if (step.to > caret || !doc.resolve(step.from).sameParent(doc.resolve(step.to))) return false;
     const at = transaction.mapping.slice(index).map(step.from);
-    if (at >= trigger.from && at <= trigger.to) touched = true;
+    // Only an insertion opens the list. A deletion that ends at the caret (a trailing `。`, a
+    // selection, a cut) would otherwise open it on a word already written; deleting within an open
+    // query keeps it going through `continuing` instead.
+    if (step.slice.size > 0 && at >= trigger.from && at <= trigger.to) touched = true;
   }
   return touched;
 }

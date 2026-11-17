@@ -244,3 +244,42 @@ describe("edits that only land the caret after an existing colon word", () => {
     expect(menu().hidden).toBe(false);
   });
 });
+
+// Review round 3 (2026-11-17): a deletion ending at the caret must not open the list either.
+describe("deletions that leave the caret after an existing colon word", () => {
+  const caretAfterOk = (view: EditorView) => {
+    let at = 0;
+    view.state.doc.descendants((node, pos) => { if (node.isText && node.text?.includes(":ok")) at = pos + node.text.indexOf(":ok") + 3; });
+    return at;
+  };
+  const selectRestOfLine = (view: EditorView) => {
+    const from = caretAfterOk(view);
+    const to = view.state.doc.resolve(from).end();
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, from, to)));
+  };
+  it.each(["Backspace", "Delete"])("%s over a selection after the word", async (name) => {
+    const { editor, view } = await open("備註:ok and more\n\nnext");
+    selectRestOfLine(view);
+    key(view, name);
+    expect(menu().hidden).toBe(true);
+    key(view, "Enter");
+    expect(editor.getMarkdown()).toContain("備註:ok");
+  });
+  it("a cut of the text after the word", async () => {
+    const { editor, view } = await open("備註:ok and more\n\nnext");
+    selectRestOfLine(view);
+    view.dispatch(view.state.tr.deleteSelection().setMeta("uiEvent", "cut"));
+    expect(menu().hidden).toBe(true);
+    key(view, "Enter");
+    expect(editor.getMarkdown()).toContain("備註:ok");
+  });
+  it("deleting a trailing character after the word", async () => {
+    const { editor, view } = await open("備註:ok。\n\nnext");
+    const at = caretAfterOk(view) + 1;
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
+    view.dispatch(view.state.tr.delete(at - 1, at));
+    expect(menu().hidden).toBe(true);
+    key(view, "Enter");
+    expect(editor.getMarkdown()).toContain("備註:ok");
+  });
+});
