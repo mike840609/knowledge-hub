@@ -4,7 +4,7 @@ import { TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { afterEach, expect, it } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
-import { EXIT_TOP } from "@/components/knowledge/editor/notion-keys";
+import { EXIT_TOP, LEAVE_EDITOR } from "@/components/knowledge/editor/notion-keys";
 import { slashCommands } from "@/components/knowledge/editor/slash-commands";
 
 // docs/superpowers/specs/2026-11-19-editor-keys-caret-design.md, through the rendered editor.
@@ -62,6 +62,39 @@ it("Mod-Alt-7 makes the line a toggle", async () => {
   caretAt(view, 2);
   press(view, "7", { ctrlKey: true, altKey: true });
   expect(view.state.doc.firstChild!.type.name).toBe("details");
+});
+
+it.each([
+  ["a quote", "> xx", 3],
+  ["a callout", "> [!NOTE]\n> xx", 3],
+])("Mod-Alt-7 in %s changes nothing, never falling through to Milkdown's numbered list", async (_name, markdown, at) => {
+  const { editor, view } = await open(markdown);
+  const before = md(editor);
+  caretAt(view, at);
+  expect(press(view, "7", { ctrlKey: true, altKey: true }).defaultPrevented).toBe(true);
+  expect(md(editor)).toBe(before);
+  // Mod-Alt-8 turns the whole quote into code, as the block menu does; never into a bulleted list.
+  press(view, "8", { ctrlKey: true, altKey: true });
+  expect(md(editor)).toMatch(/^```/);
+});
+
+it("Mod-Enter in a to-do outside the document page (the composer) leaves it to save, unticked", async () => {
+  const { editor, view } = await open("* [ ] task");
+  view.dom.closest("[data-tab-stays]")!.removeAttribute("data-tab-stays");
+  caretAt(view, 4);
+  press(view, "Enter", { ctrlKey: true });
+  expect(md(editor)).toBe("- [ ] task");
+});
+
+it("says how to leave the editor where Tab stays in it, and only there", async () => {
+  const { view } = await open("one");
+  expect(view.dom.getAttribute("aria-description")).toContain(LEAVE_EDITOR);
+  const elsewhere = document.body.appendChild(document.createElement("div"));
+  const plain = await createMarkdownEditor({
+    root: elsewhere, markdown: "one", className: "kh-editor", ariaLabel: "Content", editable: true, onUserEdit: () => {}, onMarkdown: () => {}, allowImage: () => false,
+  });
+  opened.push(plain);
+  expect(plain.action(ctx => ctx.get(editorViewCtx)).dom.getAttribute("aria-description") ?? "").not.toContain(LEAVE_EDITOR);
 });
 
 it("Mod-Enter ticks a to-do and unticks it", async () => {

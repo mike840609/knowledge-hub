@@ -354,9 +354,11 @@ const outdentCode = (state: EditorState, dispatch?: (tr: never) => void, view?: 
 /** `Mod-Alt-7` / `-8`: the current block as a toggle or a code block, as the block menu turns it (keys spec, decision 5). */
 function turnCurrentInto(target: BlockKind) {
   return (state: EditorState, dispatch?: unknown, view?: EditorView) => {
+    // Claimed even where the block cannot turn (a quote, a callout): Milkdown's own Mod-Alt-7/8 make a list there.
+    if (!view?.editable) return false;
     const pos = actionBlockPos(state);
-    if (pos === null || !view?.editable) return false;
-    return dispatch ? turnBlockInto(view, pos, target) : true;
+    if (pos !== null && dispatch) turnBlockInto(view, pos, target);
+    return true;
   };
 }
 
@@ -413,10 +415,20 @@ function exitTop(view: EditorView): boolean {
  * table and code keep their own Tab; a block chosen with Escape lets Tab go on, which is how a keyboard
  * user leaves the editor. Only inside an element marked `data-tab-stays` (the document page).
  */
+export const LEAVE_EDITOR = "Press Escape, then Tab, to leave the editor.";
+
 const tabStaysInText = $prose(
   () =>
     new Plugin({
       key: new PluginKey("khTabStaysInText"),
+      // Tab stays, so the way out is said (WCAG 2.1.2), after the gutter's own description.
+      view(view) {
+        if (view.dom.closest("[data-tab-stays]")) {
+          const said = view.dom.getAttribute("aria-description");
+          view.dom.setAttribute("aria-description", `${said ? `${said} ` : ""}${LEAVE_EDITOR}`);
+        }
+        return {};
+      },
       props: {
         handleKeyDown(view, event) {
           if (event.key !== "Tab" || event.metaKey || event.ctrlKey || event.altKey || composing(event) || !view.editable) return false;

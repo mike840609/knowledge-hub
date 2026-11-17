@@ -259,7 +259,8 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
         // Shift+Enter in a table is taken here too, before Milkdown's command can split the table.
         handleKeyDown: (view, event) => {
           if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-            if (!event.shiftKey && !event.altKey && !event.isComposing) tickTodo(view.state, view.dispatch, view);
+            // Only on the document page: in a form (the composer) Mod-Enter saves, and must not change a to-do as it does.
+            if (!event.shiftKey && !event.altKey && !event.isComposing && view.dom.closest("[data-tab-stays]")) tickTodo(view.state, view.dispatch, view);
             return true;
           }
           // Backspace/Delete cannot cross a toggle's defining boundary: without this the caret

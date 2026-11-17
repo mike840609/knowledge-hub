@@ -859,7 +859,8 @@ own: the page's one `role="status"` is the toast layer's.
 The rendered editor has two more things drawn on `document.body`, `fixed`, for
 the reason the `[[` list is: a control beside the block the pointer is on
 (`editor/block-gutter.ts`) and a list of blocks under the caret after `/` on an
-empty line (`editor/slash-commands.ts`).
+empty line, or after a space mid-line when a block matches what follows the `/`
+(`editor/slash-commands.ts`).
 
 **The editor keeps a 56px gutter on its left** (`.kh-editor-blocks`,
 `padding-left: 3.5rem` with `margin-left: -3.5rem`). It hangs left of the text,

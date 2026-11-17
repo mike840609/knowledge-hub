@@ -26,8 +26,9 @@ wikilink rule (CLAUDE.md).
    into the formatting toolbar. In a form such as the new-document composer,
    Tab moves from the editor to the form's next control (Upload .md). A block chosen with Escape
    (decision 7 of the 2026-11-15 spec) is not a text caret, so Tab goes on to
-   the page from there. Escape then Tab is the documented way out, and the
-   editor is no keyboard trap (WCAG 2.1.2). This replaces "Tab is bound nowhere
+   the page from there. Escape then Tab is the way out, and the editor says so:
+   on the document page its `aria-description` ends "Press Escape, then Tab, to
+   leave the editor." (`LEAVE_EDITOR`), so it is no keyboard trap (WCAG 2.1.2). This replaces "Tab is bound nowhere
    else outside a table's last cell" in the contract.
 3. **The top of the document leads to the title.** ArrowUp on the first line of
    the first textblock, and Backspace in an empty first paragraph, fire a
@@ -41,13 +42,17 @@ wikilink rule (CLAUDE.md).
    `Mod-Enter` still saves. In a to-do it saves too, because the page's capture
    handler flushes before the editor ticks, so the tick is the next autosave.
    The capture handler no longer calls `preventDefault` there, since a
-   prevented key never reaches ProseMirror.
+   prevented key never reaches ProseMirror. The tick is the document page's
+   only (`[data-tab-stays]`): in the composer `Mod-Enter` saves the form, and a
+   to-do under the caret is saved as it stands.
 5. **Notion's `Mod-Alt` digits.** `Mod-Alt-4` to-do, `-5` bulleted list, `-6`
    numbered list, `-7` toggle, `-8` code block, all at keymap priority 70 over
    Milkdown's. `0`–`3` stay Milkdown's (text, H1–H3). Heading 4–6 lose their
    key: the `/` list and the block menu offer no H4–H6 either. The lists
    toggle as `Mod-Shift-7`/`-8` do; toggle and code turn the block as the block
-   menu does.
+   menu does. Where the block cannot turn (a toggle in a quote or a callout),
+   the key does nothing: it never falls through to Milkdown's own `Mod-Alt-7`/`-8`
+   (numbered and bulleted list), which would rewrite a callout's marker as text.
 6. **Backspace at the start of a top-level list's first item** makes it a
    paragraph before the list, and the other items stay a list. Milkdown's own
    Backspace joined the item into the block above the list. An item with nested
