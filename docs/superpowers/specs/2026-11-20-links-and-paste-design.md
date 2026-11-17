@@ -11,8 +11,10 @@ radius or elevation token is added.
 ## Decisions
 
 1. **`[[` offers to create the page.** When a query nothing answers to is typed,
-   the list ends with a row, `Create page "Name"`, reached with the arrow keys
-   and chosen with Enter, Tab or a press. "Nothing answers to it" means: the
+   the list ends with a row, `Create page "Name"`. It is never the row Enter
+   takes by default: a writer who types `[[abc` and presses Enter gets a line
+   break, as before, and no page. The row is chosen by an arrow key (a new query
+   un-chooses it) and then taken with Enter or Tab, or by a press. "Nothing answers to it" means: the
    list is whole (a list cut at the most recent documents may hold the very page,
    and a second one would be a duplicate), the name can be written as a link
    (`isWritableAsWikiLink`), and no title in the list matches it as the list

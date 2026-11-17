@@ -39,6 +39,9 @@ test.describe("links and paste", () => {
     await page.keyboard.type(`see [[${name}`);
     const row = page.getByRole("option", { name: `Create page "${name}"` });
     await expect(row).toBeVisible(ROUND_TRIP);
+    // Enter alone is the editor's; the row is chosen with an arrow key.
+    await page.keyboard.press("ArrowDown");
+    await expect(row).toHaveAttribute("aria-selected", "true");
     await page.keyboard.press("Enter");
     const markdown = await exportedWith(page, id, `[[${name}]]`);
     expect(markdown).toContain(`see [[${name}]]`);

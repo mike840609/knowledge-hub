@@ -38,6 +38,8 @@ type SuggestState = {
   /** Where the `[[` was when Esc was pressed; while the trigger is still there, the list stays closed. */
   dismissed: number | null;
   index: number;
+  /** The writer moved the choice with an arrow key: only then is the "Create page" row ever the one Enter takes. */
+  armed: boolean;
 };
 type SuggestMeta = { dismiss?: true; index?: number };
 
@@ -157,7 +159,7 @@ export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: Mil
       new Plugin<SuggestState>({
         key,
         state: {
-          init: () => ({ trigger: null, dismissed: null, index: 0 }),
+          init: () => ({ trigger: null, dismissed: null, index: 0, armed: false }),
           apply: (transaction, previous, _before, after) => {
             const trigger = detect(after);
             const meta = transaction.getMeta(key) as SuggestMeta | undefined;
@@ -166,7 +168,9 @@ export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: Mil
             if (meta?.dismiss && trigger) dismissed = trigger.from;
             const sameQuery = trigger !== null && previous.trigger !== null && trigger.query === previous.trigger.query;
             const index = meta?.index ?? (sameQuery ? previous.index : 0);
-            return { trigger, dismissed, index };
+            // A new query puts the choice back on the first row, and the create row, if it is the only one, is not chosen yet.
+            const armed = meta?.index !== undefined ? true : sameQuery ? previous.armed : false;
+            return { trigger, dismissed, index, armed };
           },
         },
         view: (editorView) => {
@@ -205,7 +209,9 @@ export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: Mil
             const { suggestions, message } = suggestionsFor(state.trigger.query);
             const create = targets !== null && options.createPage ? createOffer(targets, truncated, state.trigger.query) : null;
             const count = suggestions.length + (create ? 1 : 0);
-            const active = count === 0 ? 0 : Math.min(state.index, count - 1);
+            // Enter must not make a page nobody asked for: the create row is not the chosen one until an arrow key moved there.
+            const chosen = count === 0 ? 0 : Math.min(state.index, count - 1);
+            const active = create && chosen === suggestions.length && !state.armed ? -1 : chosen;
             popup.render({ suggestions, message, create, active }, (index) => {
               const picked = suggestions[index];
               if (picked) choose(current, picked);
@@ -220,7 +226,7 @@ export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: Mil
               "aria-haspopup": "listbox",
               "aria-autocomplete": "list",
               "aria-expanded": String(open),
-              ...(open ? { "aria-controls": popup.listboxId, "aria-activedescendant": popup.optionId(active) } : {}),
+              ...(open ? { "aria-controls": popup.listboxId, ...(active >= 0 ? { "aria-activedescendant": popup.optionId(active) } : {}) } : {}),
             });
           }
 
@@ -294,7 +300,9 @@ export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: Mil
         if (count === 0 || event.shiftKey) return false;
         const index = Math.min(state.index, count - 1);
         if (index < shown.suggestions.length) choose(view, shown.suggestions[index]);
-        else if (shown.create) chooseCreate(view, shown.create);
+        else if (shown.create && state.armed) chooseCreate(view, shown.create);
+        // The create row, not chosen: the key is the editor's, as it is when nothing fits.
+        else return false;
         return true;
       }
       default:

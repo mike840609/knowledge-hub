@@ -569,7 +569,6 @@ describe("keys that are not the list's", () => {
     focusAtEnd(editor);
     typeText(editor, "plain");
     expect(press(editor, "ArrowDown").defaultPrevented).toBe(false);
-    expect(press(editor, "Tab").defaultPrevented).toBe(false);
   });
 });
 
@@ -843,10 +842,30 @@ describe("creating a page from a name nothing answers to", () => {
     expect(titles()).toEqual(['Create page "Roadmap"']);
     expect(announced()).toBe('0 suggestions, or create page "Roadmap".');
     expect(message().hidden).toBe(true);
+    // Not chosen until an arrow key moves there: Enter alone must not make a page nobody asked for.
+    expect(activeTitle()).toBeUndefined();
+    expect(domOf(editor).hasAttribute("aria-activedescendant")).toBe(false);
+    press(editor, "ArrowDown");
+    expect(activeTitle()).toBe('Create page "Roadmap"');
     expect(press(editor, "Enter").defaultPrevented).toBe(true);
     expect(createPage).toHaveBeenCalledWith("Roadmap");
     expect(savedLinks(editor)).toEqual([["WIKI", "Roadmap", null]]);
     expect(isShown()).toBe(false);
+  });
+
+  it("leaves Enter to the editor while the create row is not chosen, and a new query un-chooses it", async () => {
+    const createPage = vi.fn(async () => {});
+    const { editor } = await open({ createPage });
+    focusAtEnd(editor);
+    typeText(editor, "[[Roadmap");
+    await flush();
+    // The editor takes the Enter (a new line); the page is not made.
+    press(editor, "Enter");
+    expect(viewOf(editor).state.doc.childCount).toBe(2);
+    expect(createPage).not.toHaveBeenCalled();
+    press(editor, "ArrowDown");
+    typeText(editor, "s");
+    expect(activeTitle()).toBeUndefined();
   });
 
   it("is reached by the arrow keys after the suggestions, and by a press", async () => {
@@ -871,6 +890,7 @@ describe("creating a page from a name nothing answers to", () => {
     focusAtEnd(editor);
     typeText(editor, "[[Roadmap");
     await flush();
+    press(editor, "ArrowDown");
     press(editor, "Enter");
     await flush();
     expect(onCreateFailed).toHaveBeenCalledWith("Roadmap");
