@@ -83,7 +83,7 @@ const markdownPaste = $prose(
             let slice = new Slice(Fragment.fromArray(paragraphs), 1, 1);
             // Dispatching here skips the editor's own paste hooks, so they are run by hand: the one that makes a
             // pasted `[[x]]` a wikilink node (`wiki-link.ts`) is what keeps its edge when the text also holds an address.
-            view.someProp("transformPasted", (transform) => { slice = transform(slice, view, false); return undefined; });
+            view.someProp("transformPasted", (transform) => { slice = transform(slice, view, true); return undefined; });
             event.preventDefault();
             view.dispatch(state.tr.replaceSelection(slice).setMeta("uiEvent", "paste").scrollIntoView());
             return true;

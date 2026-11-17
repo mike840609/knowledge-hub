@@ -925,6 +925,19 @@ describe("creating a page from a name nothing answers to", () => {
     expect(createPage).toHaveBeenCalledTimes(1);
   });
 
+  it("treats a full-width spelling of a page being made as the same page", async () => {
+    const createPage = vi.fn(() => new Promise<void>(() => {}));
+    const { editor } = await open({ createPage });
+    focusAtEnd(editor);
+    typeText(editor, "[[Ｋube2");
+    await flush();
+    press(editor, "ArrowDown");
+    press(editor, "Enter");
+    typeText(editor, " and [[Kube2");
+    await flush();
+    expect(titles()).toEqual([]);
+  });
+
   it("offers it again if the first attempt failed", async () => {
     const createPage = vi.fn(async () => { throw new Error("no"); });
     const { editor } = await open({ createPage });

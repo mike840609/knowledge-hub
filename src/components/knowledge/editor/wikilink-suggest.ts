@@ -147,17 +147,18 @@ export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: Mil
     view.focus();
   }
 
-  /** The last row: the link goes in as the picked ones do, and the page is made behind it. */
   /** Titles of pages this editor has made or is making, so the list does not offer a second page while it is catching up. */
   const made = new Set<string>();
 
+  /** The last row: the link goes in as the picked ones do, and the page is made behind it. */
   function chooseCreate(view: EditorView, title: string) {
-    const known = normalizeLinkKey(title);
-    made.add(known);
+    // Both ways a title is compared: as the resolver does, and as the list does (full-width letters folded).
+    const keys = [normalizeLinkKey(title), normalizeLinkKey(title.normalize("NFKC"))];
+    for (const known of keys) made.add(known);
     choose(view, { target: { documentId: "", title } as LinkTargetView, link: `[[${title}]]`, sameTitle: 0 });
     // The list is stale until the page exists; the next fetch holds it.
     loadedAt = 0;
-    void options.createPage?.(title).then(() => { loadedAt = 0; }, () => { made.delete(known); options.onCreateFailed?.(title); });
+    void options.createPage?.(title).then(() => { loadedAt = 0; }, () => { for (const known of keys) made.delete(known); options.onCreateFailed?.(title); });
   }
 
   const plugin = $prose(

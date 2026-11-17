@@ -122,6 +122,6 @@ export function createOffer(targets: readonly LinkTargetView[], truncated: boole
   const wanted = matchKey(title);
   const resolves = normalizeLinkKey(title);
   // A page this editor just made may not be in the list yet: it is not offered a second time.
-  if (made.has(resolves)) return null;
+  if (made.has(resolves) || made.has(wanted)) return null;
   return targets.some((target) => { const keys = keysOf(target); return keys.match === wanted || keys.resolves === resolves; }) ? null : title;
 }
