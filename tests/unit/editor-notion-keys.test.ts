@@ -511,3 +511,10 @@ it("Mod-Shift-8 on an Escape-chosen list keeps its links", async () => {
   expect(editor.getMarkdown()).not.toBe(markdown);
   expect(links(editor.getMarkdown())).toEqual(links(markdown));
 });
+
+it("Mod-d duplicates the list item under the caret", async () => {
+  const { view } = await open("- one\n- two\n- three");
+  caretAt(view, findText(view, "two") + 1);
+  mod(view, "d");
+  expect(view.state.doc.textBetween(0, view.state.doc.content.size, "|")).toBe("one|two|two|three");
+});

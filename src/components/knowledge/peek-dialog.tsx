@@ -129,7 +129,7 @@ export function PeekDialog({
               </Link>
               {peek.ownership === "HUB_MANAGED" ? (
                 <Link
-                  href={`${canonicalHref.split("?")[0]}/edit`}
+                  href={canonicalHref.split("?")[0]}
                   onClick={(event) => { if (leavesPeek(event)) onOpenChange(false); }}
                   className={buttonClasses({ variant: "primary", size: "md" })}
                 >

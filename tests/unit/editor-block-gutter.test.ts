@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { editorViewCtx } from "@milkdown/kit/core";
+import { TextSelection } from "@milkdown/kit/prose/state";
 import { afterEach, expect, it } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { blockGutter } from "@/components/knowledge/editor/block-gutter";
@@ -14,8 +15,11 @@ Range.prototype.getBoundingClientRect = () => rect(0, 0);
 const opened: MarkdownEditor[] = [];
 afterEach(async () => { for (const editor of opened.splice(0)) await editor.destroy(); document.body.innerHTML = ""; });
 async function open(reveal = true) {
+  return openWith('First\n\nSecond\n\nThird', reveal);
+}
+async function openWith(markdown: string, reveal = true) {
   const root = document.body.appendChild(document.createElement('div'));
-  const editor = await createMarkdownEditor({ root, markdown: 'First\n\nSecond\n\nThird', className: 'kh-editor', ariaLabel: 'Content', editable: true, onUserEdit: () => {}, onMarkdown: () => {}, allowImage: () => false, extraPlugins: [blockGutter()] });
+  const editor = await createMarkdownEditor({ root, markdown, className: 'kh-editor', ariaLabel: 'Content', editable: true, onUserEdit: () => {}, onMarkdown: () => {}, allowImage: () => false, extraPlugins: [blockGutter()] });
   opened.push(editor);
   const view = editor.action(ctx => ctx.get(editorViewCtx));
   view.dom.getBoundingClientRect = () => rect(40, 300);
@@ -24,6 +28,14 @@ async function open(reveal = true) {
   if (reveal) view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', altKey: true, bubbles: true, cancelable: true }));
   return { editor, view };
 }
+const caretAfter = (view: import("@milkdown/kit/prose/view").EditorView, text: string) => {
+  let found = -1;
+  view.state.doc.descendants((node, pos) => {
+    if (node.isText && node.text!.includes(text)) found = pos + node.text!.indexOf(text) + text.length;
+  });
+  expect(found).toBeGreaterThanOrEqual(0);
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, found)));
+};
 const button = (name: string) => document.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`)!;
 function drag(type: string, target: Element, y = 220, x = 150) {
   const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y });
@@ -34,7 +46,7 @@ function drag(type: string, target: Element, y = 220, x = 150) {
 it('offers + for the focused block, inserts below, and does not put controls into Markdown', async () => {
   const { editor, view } = await open();
   expect(document.querySelector<HTMLElement>('.kh-block-gutter')!.hidden).toBe(false);
-  button('Add paragraph below').click();
+  button('Add block below').click();
   expect(view.state.doc.child(1).textContent).toBe('');
   expect(view.state.selection.$from.index(0)).toBe(1);
   expect(editor.getMarkdown()).not.toMatch(/Add paragraph|Move block/);
@@ -106,7 +118,7 @@ it('hides controls when made read-only and removes all overlays on destruction',
   editor.setEditable(false);
   expect(document.querySelector<HTMLElement>('.kh-block-gutter')!.hidden).toBe(true);
   const original = editor.getMarkdown();
-  button('Add paragraph below').click();
+  button('Add block below').click();
   expect(editor.getMarkdown()).toBe(original);
   await editor.destroy(); opened.splice(opened.indexOf(editor), 1);
   expect(document.querySelector('.kh-block-gutter')).toBeNull();
@@ -117,7 +129,7 @@ it('hides controls when made read-only and removes all overlays on destruction',
 it('reaches block actions directly by keyboard and returns to the editor with Escape', async () => {
   const { view } = await open();
   view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', altKey: true, bubbles: true, cancelable: true }));
-  expect(document.activeElement).toBe(button('Add paragraph below'));
+  expect(document.activeElement).toBe(button('Add block below'));
   button('Move block').focus();
   button('Move block').click();
   const turn = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) => item.textContent === 'Turn into')!;
@@ -177,7 +189,7 @@ async function openWithList() {
   [...view.dom.children].forEach((child, index) => { child.getBoundingClientRect = () => rect(40 + index * 60, 80 + index * 60); });
   view.focus();
   view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', altKey: true, bubbles: true, cancelable: true }));
-  button('Add paragraph below').click();
+  button('Add block below').click();
   const list = document.querySelector<HTMLElement>('.kh-slash-menu')!;
   const press = (name: string) => view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }));
   return { editor, view, list, press };
@@ -218,4 +230,184 @@ it('+ then "h2" and Enter makes a Heading 2', async () => {
   expect(view.state.doc.child(1).attrs.level).toBe(2);
   view.dispatch(view.state.tr.insertText('Picked'));
   expect(editor.getMarkdown()).toBe('First\n\n## Picked\n\nSecond\n');
+});
+
+// Launcher audit: every block action went through `topLevelBlocks`, so on a list item the
+// Duplicate/Delete/Turn into/Move actions and Cmd+D all acted on the whole list. Notion gives each
+// item its own handle. These actions now resolve the nearest list item under the caret.
+const menuItem = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(item => item.textContent === label)!;
+const reveal = (view: import("@milkdown/kit/prose/view").EditorView) => view.dom.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", altKey: true, bubbles: true, cancelable: true }));
+
+it("duplicates the list item under the caret, not the list around it", async () => {
+  const { editor, view } = await openWith("- First\n- Second\n- Third\n", false);
+  caretAfter(view, "Second");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Duplicate").click();
+  const lines = editor.getMarkdown().trim().split("\n").filter(Boolean);
+  expect(lines).toEqual(["- First", "- Second", "- Second", "- Third"]);
+});
+
+it("deletes the list item under the caret and keeps the rest of the list", async () => {
+  const { editor, view } = await openWith("- First\n- Second\n- Third\n", false);
+  caretAfter(view, "Second");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Delete").click();
+  expect(editor.getMarkdown().trim()).toBe("- First\n- Third");
+});
+
+it("moves the list item up among its siblings", async () => {
+  const { editor, view } = await openWith("- First\n- Second\n- Third\n", false);
+  caretAfter(view, "Third");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Move up").click();
+  expect(editor.getMarkdown().trim()).toBe("- First\n- Third\n- Second");
+});
+
+it("turns one list item into a heading, splitting the list around it", async () => {
+  const { editor, view } = await openWith("- First\n- Second\n- Third\n", false);
+  caretAfter(view, "Second");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  menuItem("Heading 2").click();
+  const markdown = editor.getMarkdown();
+  expect(markdown).toMatch(/## Second/);
+  expect(markdown).toMatch(/- First/);
+  expect(markdown).toMatch(/- Third/);
+  expect(markdown).not.toMatch(/## First|## Third/);
+});
+
+it("inserts a new sibling item below a list item", async () => {
+  const { editor, view } = await openWith("- First\n- Second\n", false);
+  caretAfter(view, "First");
+  reveal(view);
+  button("Add block below").click();
+  const list = view.state.doc.firstChild!;
+  expect(list.childCount).toBe(3);
+  expect(list.child(1).textContent).toBe("");
+  expect(editor.getMarkdown()).toMatch(/- First/);
+  expect(editor.getMarkdown()).toMatch(/- Second/);
+});
+
+// Launcher audit: the block menu's Turn into offered no Toggle and no Callout, so a paragraph had
+// to be re-created from `/` to change its type.
+it("turns a paragraph into a toggle, keeping its text as the summary", async () => {
+  const { editor, view } = await openWith("Body text", false);
+  caretAfter(view, "Body text");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  menuItem("Toggle").click();
+  expect(editor.getMarkdown()).toMatch(/<summary>Body text<\/summary>/);
+});
+
+it("turns a paragraph into a callout", async () => {
+  const { editor, view } = await openWith("Body text", false);
+  caretAfter(view, "Body text");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  menuItem("Callout").click();
+  // The editor writes the marker escaped (as `> \[!NOTE]`); the reader recognises both.
+  expect(editor.getMarkdown()).toContain("[!NOTE]");
+  expect(editor.getMarkdown()).toMatch(/Body text/);
+});
+
+it("keeps an item's nested list when the item becomes another list kind", async () => {
+  const { editor, view } = await openWith("- a\n  - b\n- c\n", false);
+  caretAfter(view, "a");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  menuItem("Numbered list").click();
+  const markdown = editor.getMarkdown();
+  expect(markdown).toMatch(/1\. a/);
+  expect(markdown).toMatch(/^\s+- b/m);
+  expect(markdown).toMatch(/^- c/m);
+});
+
+// The toggle summary is plain text (details_summary accepts text only). A wikilink there would
+// keep its words and lose its edge (review, 2026-11-17), so Toggle is offered only for plain text;
+// the callout body keeps its inline marks.
+it("offers Toggle only for plain words, never a wikilink it would unlink", async () => {
+  const markdown = "See [[Target]] and **bold**";
+  const first = await openWith(markdown, false);
+  caretAfter(first.view, "bold");
+  reveal(first.view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  expect(menuItem("Toggle").disabled).toBe(true);
+  menuItem("Toggle").click();
+  expect(first.editor.getMarkdown()).toBe(`${markdown}\n`);
+});
+
+it("keeps a paragraph's marks and wikilinks when it becomes a callout", async () => {
+  const markdown = "See [[Target]] and **bold**";
+  const second = await openWith(markdown, false);
+  caretAfter(second.view, "bold");
+  reveal(second.view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  menuItem("Callout").click();
+  expect(second.editor.getMarkdown()).toContain("[[Target]]");
+  expect(second.editor.getMarkdown()).toContain("**bold**");
+});
+
+it("acts on a nested list item, not on its parent item", async () => {
+  const { editor, view } = await openWith("- a\n  - b\n  - c\n", false);
+  caretAfter(view, "c");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Delete").click();
+  const markdown = editor.getMarkdown();
+  expect(markdown).toMatch(/^\s+- b/m);
+  expect(markdown).not.toMatch(/^\s+- c/m);
+  expect(markdown).toMatch(/^- a/m);
+});
+
+it("splits an ordered list around the item and keeps the numbers after it", async () => {
+  const { editor, view } = await openWith("1. a\n2. b\n3. c\n", false);
+  caretAfter(view, "b");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  menuItem("Heading 2").click();
+  const markdown = editor.getMarkdown();
+  expect(markdown).toMatch(/1\. a/);
+  expect(markdown).toMatch(/## b/);
+  expect(markdown).toMatch(/3\. c/);
+});
+
+it("keeps a wikilink's written form when a paragraph becomes code", async () => {
+  const markdown = "See [[Target]] now";
+  const { editor, view } = await openWith(markdown, false);
+  caretAfter(view, "now");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  menuItem("Code").click();
+  expect(editor.getMarkdown()).toContain("[[Target]]");
+});
+
+it("joins the lines of a paragraph with a space when it becomes a toggle", async () => {
+  const { editor, view } = await openWith("First line  \nsecond line", false);
+  caretAfter(view, "second line");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  menuItem("Toggle").click();
+  expect(editor.getMarkdown()).toContain("<summary>First line second line</summary>");
+});
+
+// Review (2026-11-17): deleting a list's only item left an empty paragraph, saved as `<br />`.
+it("removes the whole list when its only item is deleted among other blocks", async () => {
+  const { editor, view } = await openWith("Before\n\n- only\n\nAfter\n", false);
+  caretAfter(view, "only");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Delete").click();
+  expect(editor.getMarkdown().trim()).toBe("Before\n\nAfter");
 });
