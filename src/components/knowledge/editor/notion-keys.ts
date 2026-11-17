@@ -12,6 +12,7 @@ import { Fragment, type Mark, type Node as ProseNode } from "@milkdown/kit/prose
 import { ReplaceStep } from "@milkdown/kit/prose/transform";
 import { $inputRule, $prose, $useKeymap } from "@milkdown/kit/utils";
 import { blockKind, canTurnInto, duplicateBlock, moveBlock, siblingBlocks, turnBlockInto, type BlockKind } from "./block-actions";
+import { blockRange } from "./block-range";
 import { flipNearestDetails } from "./details-toggle";
 import { findWikiLinkTrigger } from "./link-suggestions";
 
@@ -536,4 +537,4 @@ const escapeSelection = $prose(
     }),
 );
 
-export const notionKeys: MilkdownPlugin[] = [todoInputRule, markEnd, ...typography, notionKeymap, escapeSelection, tabStaysInText, topLeadsToTitle].flat();
+export const notionKeys: MilkdownPlugin[] = [todoInputRule, markEnd, ...typography, notionKeymap, blockRange, escapeSelection, tabStaysInText, topLeadsToTitle].flat();
