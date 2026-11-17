@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, FileText, Share2, Star } from "lucide-react";
+import { ChevronRight, FileText, Plus, Share2, Star } from "lucide-react";
 import {
   buildKnowledgeTree,
   filterKnowledgeTree,
@@ -161,6 +161,7 @@ function TreeNodeRow({
 
   const collapsed = collapsedIds.has(item.id);
   const actions = item.type === "folder" ? folderActions(item) : [];
+  const newHere = actions.find((action) => action.id === "folder.new-document");
   return (
     <li
       role="treeitem"
@@ -203,6 +204,8 @@ function TreeNodeRow({
             second control slot would have re-truncated every folder name. */}
         <div className="kh-row-action absolute right-1 top-1/2 flex -translate-y-1/2 items-center rounded-md bg-inherit">
           <RowActionsTrigger actions={actions} onRun={onRunAction} label={item.label} />
+          {/* A document is made in a folder from its row, as a Notion page is from its `+`. */}
+          {newHere ? <Tooltip label="New document here"><button type="button" tabIndex={-1} aria-label={`New document in ${item.label}`} onClick={() => onRunAction(newHere)} className="inline-flex kh-control kh-icon-control h-6 w-6 shrink-0 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover kh-focus-ring"><Plus size={14} aria-hidden="true" /></button></Tooltip> : null}
         </div>
       </RowContextMenu>
       {!collapsed && node.children.length > 0 ? (
@@ -239,8 +242,12 @@ function TreeNodeRow({
 
 const EMPTY_COLLAPSED: string[] = [];
 
+/** Fired on `window` by an open document whose saved title changed, so the tree names it without a refetch. */
+export const DOCUMENT_RENAMED = "kh:document-renamed";
+export type DocumentRenamed = { documentId: string; title: string };
+
 export function KnowledgeTree({
-  items,
+  items: given,
   includeArchived = false,
   workspaceId,
   sourceId,
@@ -268,6 +275,21 @@ export function KnowledgeTree({
     isStringArray,
   );
   const collapsedIds = useMemo<ReadonlySet<string>>(() => new Set(collapsedList), [collapsedList]);
+  // A title saved here is shown at once; the next server tree (a refresh, a navigation) replaces the overlay.
+  const [renamed, setRenamed] = useState<ReadonlyMap<string, string>>(new Map());
+  useEffect(() => setRenamed(new Map()), [given]);
+  useEffect(() => {
+    const rename = (event: Event) => {
+      const { documentId, title } = (event as CustomEvent<DocumentRenamed>).detail;
+      setRenamed(previous => new Map(previous).set(documentId, title));
+    };
+    window.addEventListener(DOCUMENT_RENAMED, rename);
+    return () => window.removeEventListener(DOCUMENT_RENAMED, rename);
+  }, []);
+  const items = useMemo(
+    () => renamed.size === 0 ? given : given.map(item => item.type === "document" && renamed.has(item.documentId) ? { ...item, label: renamed.get(item.documentId)! } : item),
+    [given, renamed],
+  );
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const roots = useMemo(() => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { GuidanceVisibilityContext } from "./guidance-visibility";
+import { bufferTyping, plainClick } from "./typing-ahead";
 import { ReopenGuidanceMenuItem } from "./reopen-guidance-menu-item";
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -130,6 +131,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
     const onKeyDown = (event: KeyboardEvent) => {
       if (!isNewNoteKey(event)) return;
       event.preventDefault();
+      bufferTyping();
       router.push(newNoteHref);
     };
     window.addEventListener("keydown", onKeyDown);
@@ -248,8 +250,8 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
           <span className="flex-1 truncate text-left">Search articles and notes</span>{" "}
           <Kbd size="md" className="hidden shrink-0 sm:inline-flex">⌘K</Kbd>
         </button>
-        <Tooltip label="New note" shortcut="C">
-          <Link className={buttonClasses({ variant: "secondary" })} href={newNoteHref} aria-keyshortcuts="C"><Plus size={16} aria-hidden="true" />New note</Link>
+        <Tooltip label="Create document" shortcut="C">
+          <Link className={buttonClasses({ variant: "secondary" })} href={newNoteHref} onClick={(event) => { if (!plainClick(event)) return; bufferTyping(); }} aria-keyshortcuts="C"><Plus size={16} aria-hidden="true" />Create document</Link>
         </Tooltip>
       </div>
       {slots?.guidance}

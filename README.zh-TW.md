@@ -56,7 +56,7 @@ Knowledge Hub 是開源、可自行部署的知識工作空間。你可以直接
   <tr>
     <td width="50%" valign="top">
       <img src="docs/images/personal-home.jpg" alt="包含最近文件、討論、收藏、搜尋與新增筆記的 Home">
-      <p><b>個人首頁</b>：集中草稿、最近文件、討論與收藏，Search 與 New note 就在手邊。</p>
+      <p><b>個人首頁</b>：集中草稿、最近文件、討論與收藏，Search 與 Create document 就在手邊。</p>
     </td>
     <td width="50%" valign="top">
       <img src="docs/images/search.jpg" alt="搜尋 leave 的結果，每筆顯示來源與原始路徑">
@@ -152,7 +152,7 @@ pnpm run dev
 
 ### 第一次使用
 
-1. 選擇 **New note** 建立筆記，或 **Import folder** 匯入 Markdown 資料夾。匯入頁面附有資料夾格式指南，也提供 **Try with a sample wiki**：可匯入一份現成的資料夾（英文或繁體中文，位於 `public/sample-wiki/`），並走一般的 Preview → Apply 流程。
+1. 選擇 **Create document** 建立筆記，或 **Import folder** 匯入 Markdown 資料夾。匯入頁面附有資料夾格式指南，也提供 **Try with a sample wiki**：可匯入一份現成的資料夾（英文或繁體中文，位於 `public/sample-wiki/`），並走一般的 Preview → Apply 流程。
 2. 匯入時檢查 Preview 的新增、更新、封存與診斷，再套用變更。
 3. 在可編輯的筆記中使用 `[[文件標題]]` 連結其他文件，再到 **Graph** 查看關係。
 4. 儲存筆記後才能建立唯讀分享連結或下載 Markdown。

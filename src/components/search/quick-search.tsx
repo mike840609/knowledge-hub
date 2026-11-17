@@ -27,6 +27,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Tooltip } from "@/components/ui/tooltip";
 import { matchesShortcut, shortcutLabel } from "@/lib/shortcut-keys";
+import { isBuffering } from "@/components/knowledge/typing-ahead";
 import { OPEN_SEARCH_EVENT } from "./search-nav-item";
 import { dialogBackdropClasses, dialogSurfaceClasses } from "@/components/ui/dialog";
 
@@ -328,7 +329,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
       }}>
         <Dialog.Portal>
           <Dialog.Backdrop className={dialogBackdropClasses("z-50")} />
-          <Dialog.Popup className={`${dialogSurfaceClasses} top-[min(14vh,120px)] z-[60] flex max-h-[75vh] flex-col overflow-hidden ${split ? "h-[75vh] w-[min(1080px,calc(100vw-48px))]" : "w-[min(640px,calc(100vw-24px))]"}`}>
+          <Dialog.Popup finalFocus={() => !isBuffering()} className={`${dialogSurfaceClasses} top-[min(14vh,120px)] z-[60] flex max-h-[75vh] flex-col overflow-hidden ${split ? "h-[75vh] w-[min(1080px,calc(100vw-48px))]" : "w-[min(640px,calc(100vw-24px))]"}`}>
             <Dialog.Title className="sr-only">Search and actions</Dialog.Title>
             <div className="flex items-center gap-3 border-b border-kh-border px-4">
               <Search className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />

@@ -39,7 +39,7 @@ it("leads with Recent and Favorites, searches through ⌘K and leaves the change
   // The ⌘K hint takes 13px in the 40px search bar, not the 11px default.
   expect(html).toMatch(/<kbd class="[^"]*text-body-sm[^"]*">⌘K<\/kbd>/);
   expect(html).not.toContain("/sources/import");
-  expect(html).toContain("New note");
+  expect(html).toContain("Create document");
   expect(html).toContain('aria-label="Recent"');
   expect(html).toContain('aria-label="Favorites"');
   expect(html.indexOf('aria-label="Recent"')).toBeLessThan(html.indexOf('aria-label="Favorites"'));
@@ -219,7 +219,7 @@ describe("C on Home opens a new note", () => {
     expect(press({ defaultPrevented: true })).toBe(false);
   });
 
-  it("names the key on New note and marks the search bar", () => {
+  it("names the key on Create document and marks the search bar", () => {
     const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} />);
     expect(html).toMatch(/<a [^>]*href="\/w\/ws\/knowledge\/new"[^>]*aria-keyshortcuts="C"|<a [^>]*aria-keyshortcuts="C"[^>]*href="\/w\/ws\/knowledge\/new"/);
     expect(html).toMatch(/<button [^>]*data-home-search/);
@@ -237,7 +237,7 @@ describe("C on Home opens a new note", () => {
   // ellipsis says nothing a button label needs to say.
   it("names the whole visible label of the search field, ⌘K included", () => {
     const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} />);
-    const field = html.slice(html.indexOf("data-home-search"), html.indexOf("New note"));
+    const field = html.slice(html.indexOf("data-home-search"), html.indexOf("Create document"));
     // A label whose name skips the badge reads as a different label to a speech user.
     expect(field).toContain('aria-label="Search articles and notes ⌘K"');
     expect(field).toContain('aria-keyshortcuts="Meta+K Control+K"');

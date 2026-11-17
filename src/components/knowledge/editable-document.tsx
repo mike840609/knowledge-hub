@@ -26,6 +26,7 @@ import { buildRecoveryMarkdown } from "@/lib/recovery-markdown";
 import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
 import type { RenderedLinks } from "./rendered-links";
 import type { MarkdownEditor } from "./editor/editor-core";
+import { DOCUMENT_RENAMED, type DocumentRenamed } from "./knowledge-tree";
 import type { RenderedEditorProps } from "./editor/rendered-editor";
 import type { CaptureReviewAnchor, PreparedReviewComment } from "./inline-review-context";
 
@@ -52,6 +53,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   const [content, setContent] = useState<DocumentContent>({ title: initialTitle, markdown });
   const [savedRevision, setSavedRevision] = useState(revisionId);
   const [savedTitle, setSavedTitle] = useState(detail.title);
+  const lastSavedTitle = useRef(detail.title);
   const [savedAt, setSavedAt] = useState(detail.updatedAt);
   const [localRevisions, setLocalRevisions] = useState<DetailProps["inspectorData"]["revisions"]>([]);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -187,7 +189,11 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
         if (!live) return;
         acknowledgedRevisionNo.current = revision.revisionNo;
         setSavedRevision(revision.revisionId);
-        setSavedTitle(resolve(snapshot).title || "Untitled");
+        const title = resolve(snapshot).title || "Untitled";
+        // A new title is named in the tree at once, not on the next 30-second refresh, and without a refetch.
+        if (title !== lastSavedTitle.current) window.dispatchEvent(new CustomEvent<DocumentRenamed>(DOCUMENT_RENAMED, { detail: { documentId: detail.inspectorData.documentId, title } }));
+        lastSavedTitle.current = title;
+        setSavedTitle(title);
         const createdAt = new Date();
         setSavedAt(createdAt);
         setLocalRevisions(previous => {
@@ -459,11 +465,36 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   }
   // Arriving from a new note (`/knowledge/new` created it): the title is where to start typing, with
   // "Untitled" selected so the first keystroke replaces it.
+  // What was typed while the note was being made is the title, with the caret after it.
+  // Enter typed then: the caret goes to the body once the editor is ready (the effect below).
+  const bodyWhenReady = useRef(false);
   useEffect(() => {
-    if (!editable || !takeNewNote(detail.inspectorData.documentId)) return;
-    titleInput.current?.focus();
-    if (titleInput.current?.value === "Untitled") titleInput.current.select();
+    if (!editable) return;
+    const arrived = takeNewNote(detail.inspectorData.documentId);
+    const input = titleInput.current;
+    if (arrived === null) return;
+    if (arrived.title) {
+      change({ ...queue.current!.current, title: arrived.title });
+      // Set now, not on the next render, so the caret can go after it before another key lands.
+      if (input) input.value = arrived.title;
+    }
+    // Enter after the title: on to the body, as Enter in the title does. The rendered editor mounts
+    // after this (its `onReady` is later still), so the caret goes there once it is ready.
+    if (arrived.entered) {
+      if (ready || source || failed) leaveTitle();
+      else bodyWhenReady.current = true;
+      return;
+    }
+    if (!input) return;
+    input.focus();
+    if (arrived.title) input.setSelectionRange(arrived.title.length, arrived.title.length);
+    else if (input.value === "Untitled") input.select();
   }, [editable]);
+  useEffect(() => {
+    if ((!ready && !source && !failed) || !bodyWhenReady.current) return;
+    bodyWhenReady.current = false;
+    leaveTitle();
+  }, [ready, source, failed]);
   // ArrowUp on the content's first line, or Backspace in its empty first paragraph, leads to the title,
   // at its end (keys spec, decision 3). The editor fires `kh:editor-exit-top` (notion-keys' EXIT_TOP; the
   // editor is loaded lazily, so the name is spelled here rather than imported) and goes on only if claimed.
