@@ -24,6 +24,12 @@ async function openEditor(page: Page, url: string) {
   await expect(surface).toBeEditable(ROUND_TRIP);
   return surface;
 }
+/** Caret at the start or end of the first paragraph; ProseMirror reads a browser-moved caret a task after the key. */
+async function caretIn(page: Page, surface: ReturnType<Page["locator"]>, where: "Home" | "End") {
+  await surface.locator("p").first().click();
+  await page.keyboard.press(where === "Home" ? "ControlOrMeta+Home" : "ControlOrMeta+End");
+  await page.waitForTimeout(150);
+}
 async function save(page: Page) {
   await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
   const documentId = new URL(page.url()).pathname.split("/").at(-1);
@@ -46,8 +52,7 @@ test.describe("caret and keys in the rendered editor", () => {
   test("Tab stays in the text; ArrowUp on the first line and Backspace in an empty first line go to the title", async ({ page }) => {
     const title = unique("Top");
     const surface = await openEditor(page, await createNote(page, await mySpace(page), title, "First line"));
-    await surface.locator("p").first().click();
-    await page.keyboard.press("Home");
+    await caretIn(page, surface, "Home");
     await page.keyboard.press("Tab");
     await expect(surface).toBeFocused();
     await page.keyboard.press("ArrowUp");
@@ -57,8 +62,12 @@ test.describe("caret and keys in the rendered editor", () => {
     await page.keyboard.press("Enter");
     await expect(surface).toBeFocused();
     await page.keyboard.press("Enter");
+    // The page marks the new paragraphs (data-review-path) just after the Enter, and ProseMirror's repair of
+    // that would put back a caret ArrowUp moved meanwhile; a person never presses the two keys that fast.
+    await page.waitForTimeout(300);
     await page.keyboard.press("ArrowUp");
-    await page.waitForTimeout(150);
+    // The browser moves this caret; ProseMirror reads it on `selectionchange`, a task or more later.
+    await page.waitForTimeout(300);
     await page.keyboard.press("Backspace");
     await expect(titleField).toBeFocused();
     expect((await save(page)).trim().endsWith("First line")).toBe(true);
@@ -66,16 +75,18 @@ test.describe("caret and keys in the rendered editor", () => {
 
   test("Mod-Enter ticks a to-do, Mod-Alt-4 makes one, and a / mid-line adds a block below", async ({ page }) => {
     const surface = await openEditor(page, await createNote(page, await mySpace(page), unique("Keys"), "Start"));
-    await surface.locator("p").first().click();
-    await page.keyboard.press("End");
+    await caretIn(page, surface, "End");
     await page.keyboard.press("Enter");
     await page.keyboard.type("task");
+    await page.waitForTimeout(150); // ProseMirror reads a browser-moved caret a task after the key
     await page.keyboard.press("ControlOrMeta+Alt+4");
     await expect(surface.locator("li[data-item-type='task']")).toHaveCount(1);
     await page.keyboard.press("ControlOrMeta+Enter");
     await expect(surface.locator("li[data-item-type='task']")).toHaveAttribute("data-checked", "true");
     await page.keyboard.press("Enter");
     await page.keyboard.press("Enter");
+    // Out of the list: an empty paragraph after it, where a mid-line "/" is a top-level paragraph's.
+    await expect(surface.locator(":scope > p").last()).toHaveText("");
     await page.keyboard.type("words /quote");
     await expect(page.getByRole("listbox", { name: "Block commands" })).toBeVisible();
     await page.keyboard.press("Enter");
