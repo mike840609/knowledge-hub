@@ -64,6 +64,10 @@ function build(doc: ProseNode, editable: boolean, generation: number): Decoratio
     const checked = node.attrs.checked === true;
     widgets.push(Decoration.widget(pos + 1, (view) => control(view, pos, checked), {
       side: -1,
+      // The button handles its own keys and clicks; letting them reach the editor would run its
+      // keymap (Backspace, Mod-d, …) against a caret the writer cannot see.
+      stopEvent: () => true,
+      ignoreSelection: true,
       // The box's look and name both depend on the state, so a change replaces the widget.
       key: `kh-task-${pos}-${checked ? "x" : " "}-${editable ? "edit" : "read"}-${generation}`,
     }));

@@ -39,7 +39,9 @@ editor must write a wikilink back as it read it").
 5. **Turn into reaches Toggle and Callout.** A paragraph or heading becomes a
    toggle with its words as the summary, or a Note callout with its words as
    the body. The summary is plain text by design (`details_summary` accepts
-   text only): a wikilink keeps its written form, marks become text. Turning a
+   text only), so Toggle is offered only for plain words (line breaks become
+   spaces): a wikilink there would keep its words and lose its edge, an image
+   its address, a mark its meaning (review, 2026-11-17). Turning a
    callout into text drops the marker line only; a marker-looking line that is
    not alone is a plain quote and stays as written.
 6. **The `/` list is grouped and links to pages.** Rows sit under Basic blocks,

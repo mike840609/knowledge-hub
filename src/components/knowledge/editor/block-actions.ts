@@ -104,7 +104,18 @@ export function canTurnInto(node: ProseNode, target: BlockKind): boolean {
   // A toggle holds a summary and a body; no single block conversion can keep both.
   if (node.type.name === "details") return false;
   // A toggle or callout is a wrapper of its own; only a paragraph's or heading's words can become one.
-  if (target === "toggle" || target === "callout") return node.type.name === "paragraph" || node.type.name === "heading";
+  if (target === "toggle" || target === "callout") {
+    if (node.type.name !== "paragraph" && node.type.name !== "heading") return false;
+    // A toggle's summary is plain text: a wikilink would stay as words but lose its edge, an
+    // image its address and a mark its meaning. Offer it only where nothing would be lost (a line
+    // break becomes a space).
+    if (target === "toggle") {
+      let plain = true;
+      node.forEach((child) => { if (child.type.name !== "hardbreak" && (!child.isText || child.marks.length > 0)) plain = false; });
+      return plain;
+    }
+    return true;
+  }
   if (node.type.name === "list_item") {
     // Another list keeps the item (and any nested list) whole, splitting the list around it.
     if (LIST_KINDS.has(target)) return true;
@@ -342,7 +353,8 @@ export function deleteBlock(view: EditorView, pos: number): boolean {
     const $pos = view.state.doc.resolve(pos);
     const listPos = $pos.before($pos.depth);
     const listEnd = listPos + target.parent.nodeSize;
-    if ($pos.depth === 1) {
+    // Only where the list is its container's one block does an empty paragraph stand in for it.
+    if (view.state.doc.resolve(listPos).parent.childCount === 1) {
       const paragraph = view.state.schema.nodes.paragraph.create();
       dispatchBlockAction(view, view.state.tr.replaceWith(listPos, listEnd, paragraph), listPos + 1);
     } else {

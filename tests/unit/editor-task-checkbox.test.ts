@@ -86,3 +86,16 @@ it("keeps focus on the control after a keyboard tick", async () => {
   expect(document.activeElement?.getAttribute("role")).toBe("checkbox");
   expect(document.activeElement?.getAttribute("aria-checked")).toBe("true");
 });
+
+// Review (2026-11-17): a key on a focused box ran the editor's keymap against the hidden caret.
+it("keeps keys pressed on a focused checkbox away from the editor's keymap", async () => {
+  const { root, editor, view } = await open("Para\n\n- [ ] First\n- [ ] Second\n");
+  const { TextSelection } = await import("@milkdown/kit/prose/state");
+  let second = 0;
+  view.state.doc.descendants((node, pos) => { if (node.isText && node.text === "Second") second = pos; });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, second)));
+  const box = boxes(root)[0];
+  box.focus();
+  box.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", keyCode: 8, bubbles: true, cancelable: true }));
+  expect(editor.getMarkdown()).toBe("Para\n\n- [ ] First\n- [ ] Second\n");
+});

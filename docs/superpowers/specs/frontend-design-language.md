@@ -1906,8 +1906,8 @@ seven gaps left after the 22-decision pass of 2026-11-15:
 - Pressing a rendered code block opens its raw code, as Notion's does; the
   corner button stays for keyboard users and says "Done editing code".
 - Turn into adds **Toggle** and **Callout**. A toggle's summary is plain text by
-  design (`details_summary` accepts text only): a wikilink keeps its written
-  form, marks become text. A callout's marker line is dropped when it is turned
+  design (`details_summary` accepts text only), so Toggle is disabled for a block
+  holding a wikilink, an image or a mark, which it could carry only lossily. A callout's marker line is dropped when it is turned
   into text; a marker-looking line that is not alone on its line is a plain
   quote and stays as written.
 - The `/` list is grouped (Basic blocks, Lists, Blocks, Links) and adds

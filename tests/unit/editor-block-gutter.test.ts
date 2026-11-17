@@ -329,17 +329,23 @@ it("keeps an item's nested list when the item becomes another list kind", async 
   expect(markdown).toMatch(/^- c/m);
 });
 
-// The toggle summary is plain text by design (details_summary accepts text only), so the words
-// survive and the marks become text; the callout body keeps its inline marks.
-it("keeps a paragraph's words when it becomes a toggle, and its marks in a callout", async () => {
+// The toggle summary is plain text (details_summary accepts text only). A wikilink there would
+// keep its words and lose its edge (review, 2026-11-17), so Toggle is offered only for plain text;
+// the callout body keeps its inline marks.
+it("offers Toggle only for plain words, never a wikilink it would unlink", async () => {
   const markdown = "See [[Target]] and **bold**";
   const first = await openWith(markdown, false);
   caretAfter(first.view, "bold");
   reveal(first.view);
   button("Move block").click();
   menuItem("Turn into").click();
+  expect(menuItem("Toggle").disabled).toBe(true);
   menuItem("Toggle").click();
-  expect(first.editor.getMarkdown()).toContain("<summary>See [[Target]] and bold</summary>");
+  expect(first.editor.getMarkdown()).toBe(`${markdown}\n`);
+});
+
+it("keeps a paragraph's marks and wikilinks when it becomes a callout", async () => {
+  const markdown = "See [[Target]] and **bold**";
   const second = await openWith(markdown, false);
   caretAfter(second.view, "bold");
   reveal(second.view);
@@ -394,4 +400,14 @@ it("joins the lines of a paragraph with a space when it becomes a toggle", async
   menuItem("Turn into").click();
   menuItem("Toggle").click();
   expect(editor.getMarkdown()).toContain("<summary>First line second line</summary>");
+});
+
+// Review (2026-11-17): deleting a list's only item left an empty paragraph, saved as `<br />`.
+it("removes the whole list when its only item is deleted among other blocks", async () => {
+  const { editor, view } = await openWith("Before\n\n- only\n\nAfter\n", false);
+  caretAfter(view, "only");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Delete").click();
+  expect(editor.getMarkdown().trim()).toBe("Before\n\nAfter");
 });
