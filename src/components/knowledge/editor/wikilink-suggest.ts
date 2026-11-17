@@ -6,7 +6,8 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 import type { LinkTargetView } from "@/modules/knowledge/application/knowledge-link-service";
 import { createSuggestPopup, type SuggestMessage } from "./link-suggest-popup";
-import { findWikiLinkTrigger, rankSuggestions, type Suggestion } from "./link-suggestions";
+import { normalizeLinkKey } from "@/modules/knowledge/domain/link-resolution";
+import { createOffer, findWikiLinkTrigger, rankSuggestions, type Suggestion } from "./link-suggestions";
 import { keepsAsText } from "./wiki-link";
 
 /** How long a fetched list is trusted while someone is typing links (spec §6.1). */
@@ -21,6 +22,14 @@ export type WikiLinkSuggestOptions = {
   loadTargets: () => Promise<LinkTargetsResult>;
   /** The document being written, when it exists: a link to itself is never what `[[` is for. */
   excludeDocumentId?: () => string | undefined;
+  /**
+   * Makes a page called `title`. With it, a query no document answers to gets a last row, "Create page", which
+   * writes the link at once and calls this in the background: the link resolves from the moment the page exists.
+   * Without it, the list only offers what is there.
+   */
+  createPage?: (title: string) => Promise<void>;
+  /** `createPage` was refused or failed: the link stays, as typed text would, and the writer is told. */
+  onCreateFailed?: (title: string) => void;
   now?: () => number;
 };
 
@@ -30,6 +39,8 @@ type SuggestState = {
   /** Where the `[[` was when Esc was pressed; while the trigger is still there, the list stays closed. */
   dismissed: number | null;
   index: number;
+  /** The writer moved the choice with an arrow key: only then is the "Create page" row ever the one Enter takes. */
+  armed: boolean;
 };
 type SuggestMeta = { dismiss?: true; index?: number };
 
@@ -120,7 +131,7 @@ export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: Mil
     Boolean(state?.trigger) && state!.dismissed !== state!.trigger!.from;
 
   // What the view last showed, for the keys: they act on the list the person is looking at.
-  let shown: { suggestions: readonly Suggestion[]; visible: boolean } = { suggestions: [], visible: false };
+  let shown: { suggestions: readonly Suggestion[]; create: string | null; visible: boolean } = { suggestions: [], create: null, visible: false };
 
   function choose(view: EditorView, suggestion: Suggestion) {
     const state = key.getState(view.state);
@@ -136,12 +147,26 @@ export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: Mil
     view.focus();
   }
 
+  /** Titles of pages this editor has made or is making, so the list does not offer a second page while it is catching up. */
+  const made = new Set<string>();
+
+  /** The last row: the link goes in as the picked ones do, and the page is made behind it. */
+  function chooseCreate(view: EditorView, title: string) {
+    // Both ways a title is compared: as the resolver does, and as the list does (full-width letters folded).
+    const keys = [normalizeLinkKey(title), normalizeLinkKey(title.normalize("NFKC"))];
+    for (const known of keys) made.add(known);
+    choose(view, { target: { documentId: "", title } as LinkTargetView, link: `[[${title}]]`, sameTitle: 0 });
+    // The list is stale until the page exists; the next fetch holds it.
+    loadedAt = 0;
+    void options.createPage?.(title).then(() => { loadedAt = 0; }, () => { for (const known of keys) made.delete(known); options.onCreateFailed?.(title); });
+  }
+
   const plugin = $prose(
     () =>
       new Plugin<SuggestState>({
         key,
         state: {
-          init: () => ({ trigger: null, dismissed: null, index: 0 }),
+          init: () => ({ trigger: null, dismissed: null, index: 0, armed: false }),
           apply: (transaction, previous, _before, after) => {
             const trigger = detect(after);
             const meta = transaction.getMeta(key) as SuggestMeta | undefined;
@@ -150,7 +175,9 @@ export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: Mil
             if (meta?.dismiss && trigger) dismissed = trigger.from;
             const sameQuery = trigger !== null && previous.trigger !== null && trigger.query === previous.trigger.query;
             const index = meta?.index ?? (sameQuery ? previous.index : 0);
-            return { trigger, dismissed, index };
+            // A new query puts the choice back on the first row, and the create row, if it is the only one, is not chosen yet.
+            const armed = meta?.index !== undefined ? true : sameQuery ? previous.armed : false;
+            return { trigger, dismissed, index, armed };
           },
         },
         view: (editorView) => {
@@ -173,7 +200,7 @@ export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: Mil
           let ariaOn = false;
           const close = () => {
             popup.hide();
-            shown = { suggestions: [], visible: false };
+            shown = { suggestions: [], create: null, visible: false };
             if (ariaOn) setAria(null);
             ariaOn = false;
           };
@@ -187,21 +214,26 @@ export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: Mil
             }
             ensureTargets();
             const { suggestions, message } = suggestionsFor(state.trigger.query);
-            const active = suggestions.length === 0 ? 0 : Math.min(state.index, suggestions.length - 1);
-            popup.render({ suggestions, message, active }, (index) => {
+            const create = targets !== null && options.createPage ? createOffer(targets, truncated, state.trigger.query, made) : null;
+            const count = suggestions.length + (create ? 1 : 0);
+            // Enter must not make a page nobody asked for: the create row is not the chosen one until an arrow key moved there.
+            const chosen = count === 0 ? 0 : Math.min(state.index, count - 1);
+            const active = create && chosen === suggestions.length && !state.armed ? -1 : chosen;
+            popup.render({ suggestions, message, create, active }, (index) => {
               const picked = suggestions[index];
               if (picked) choose(current, picked);
+              else if (create && index === suggestions.length) chooseCreate(current, create);
             });
-            shown = { suggestions, visible: true };
+            shown = { suggestions, create, visible: true };
             reposition();
-            const open = suggestions.length > 0;
+            const open = count > 0;
             ariaOn = true;
             setAria({
               role: "combobox",
               "aria-haspopup": "listbox",
               "aria-autocomplete": "list",
               "aria-expanded": String(open),
-              ...(open ? { "aria-controls": popup.listboxId, "aria-activedescendant": popup.optionId(active) } : {}),
+              ...(open ? { "aria-controls": popup.listboxId, ...(active >= 0 ? { "aria-activedescendant": popup.optionId(active) } : {}) } : {}),
             });
           }
 
@@ -255,7 +287,7 @@ export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: Mil
     // An input method's Enter or arrow picks a candidate; it is not ours.
     if (event.isComposing || event.keyCode === 229) return false;
     if (event.metaKey || event.ctrlKey || event.altKey) return false;
-    const count = shown.suggestions.length;
+    const count = shown.suggestions.length + (shown.create ? 1 : 0);
     switch (event.key) {
       case "Escape":
         // The composer leaves the page on Esc; this one only closes the list.
@@ -273,7 +305,11 @@ export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: Mil
       case "Enter":
       case "Tab": {
         if (count === 0 || event.shiftKey) return false;
-        choose(view, shown.suggestions[Math.min(state.index, count - 1)]);
+        const index = Math.min(state.index, count - 1);
+        if (index < shown.suggestions.length) choose(view, shown.suggestions[index]);
+        else if (shown.create && state.armed) chooseCreate(view, shown.create);
+        // The create row, not chosen: the key is the editor's, as it is when nothing fits.
+        else return false;
         return true;
       }
       default:

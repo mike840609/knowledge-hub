@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ComponentType, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/components/ui/toast";
 import { DocumentDetailClient } from "./document-inspector";
 import { OwnerReviewPanel } from "./owner-review-panel";
 import { AutosaveIndicator } from "./autosave-indicator";
@@ -45,6 +46,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   links?: RenderedLinks;
 }) {
   const router = useRouter();
+  const showToast = useToast();
   const { confirmed, access } = useWorkspaceAuthorization();
   const currentMetadata = useRef(metadata);
   const metadataTitle = currentMetadata.current.title;
@@ -455,6 +457,14 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     refreshMetadata();
   }
   const displayTitle = dirty || recovery ? resolved.title || "Untitled" : savedTitle;
+  // The browser tab names the page as it is being written, as Notion's does; the app's name when it goes.
+  useEffect(() => {
+    const app = document.title;
+    const named = `${displayTitle} · ${app}`;
+    document.title = named;
+    // Only if the tab is still ours: a page the reader has gone to may have named it already.
+    return () => { if (document.title === named) document.title = app; };
+  }, [displayTitle]);
   /** Enter, or ArrowDown on the last line, in the title: on to the start of the content (never a line break in the title). */
   function leaveTitle() {
     if (source || failed) {
@@ -594,7 +604,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     }}>
       {!ready && !source && !failed && !recovery ? standIn : null}
       <Article tabIndex={-1} data-review-document={ready && !source && !failed ? "" : undefined} hidden={source || failed || !ready}>
-        {loaded && Editor && !failed && <Editor reviewMarkdown={ready && !source && !recovery ? content.markdown : undefined} renderCode={renderCode} renderLanguage={renderLanguage} links={links} workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId}
+        {loaded && Editor && !failed && <Editor onNotice={(message) => showToast({ message, tone: "danger" })} reviewMarkdown={ready && !source && !recovery ? content.markdown : undefined} renderCode={renderCode} renderLanguage={renderLanguage} links={links} workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId}
           markdown={content.markdown} editable={editable && !source} onReady={(instance, openedWith) => {
             editor.current = instance;
             if (openedWith !== queue.current!.current.markdown) instance.replaceMarkdown(queue.current!.current.markdown);
