@@ -273,7 +273,7 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
           // Milkdown's Backspace only joins textblocks: a list item holding nested items, and a quote
           // opening the document, would otherwise stay put or leave an empty bullet behind.
           if (event.key === "Backspace" && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.isComposing && event.keyCode !== 229 && (liftListItemOverNested(view) || liftFirstListItem(view) || liftAtDocumentStart(view))) return true;
-          if (event.key === "Enter" && event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.isComposing && event.keyCode !== 229 && flipNearestDetails(view, view.state.selection.$from.pos)) return true;
+          if (event.key === "Enter" && event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.isComposing && event.keyCode !== 229 && flipNearestDetails(view, view.state.selection.$from.pos, view.state.selection.$from.parent.type.name === "details_summary")) return true;
           if (event.key === "Enter" && event.shiftKey && !event.altKey && !event.isComposing && event.keyCode !== 229 && breakInTable(view)) return true;
           if (
             event.key === "ArrowDown" &&

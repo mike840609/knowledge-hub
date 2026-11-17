@@ -182,8 +182,8 @@ it("headingSlugAt hands out the slugs the reader does, repeats included", async 
   expect(headingSlugAt(view, 1)).toBeNull();
 });
 
-it("headingSlugAt agrees with the reader for headings holding a wikilink, an image or a line break", async () => {
-  const markdown = "# Setup\n\n## See [[Page]]\n\n## Img ![alt text](x.png) end\n\n## Setup\n\n## Two\\\nlines\n";
+it("headingSlugAt agrees with the reader for headings holding a wikilink, an image or an inline <br>", async () => {
+  const markdown = "# Setup\n\n## See [[Page]]\n\n## Img ![alt text](x.png) end\n\n## Setup\n\n## Two<br>lines\n\n## a <br> b\n";
   const { view } = await open(markdown);
   const positions: number[] = [];
   view.state.doc.descendants((node, pos) => { if (node.type.name === "heading") positions.push(pos); return true; });

@@ -10,7 +10,8 @@ the wikilink rule (CLAUDE.md). No colour, radius or elevation token is added.
 ## Decisions
 
 1. **`Mod-Enter` in a toggle's title opens or closes it.** A to-do still ticks
-   first. In a toggle's body, and anywhere else, the key stays the page's (save).
+   first. Closing it from its title keeps the caret where it was (Alt-Enter does the
+   same); from the body the caret goes to the title, where it stays visible. In a toggle's body, and anywhere else, the key stays the page's (save).
    The page's own key handler lets the key through to the editor in a title,
    as it does in a to-do.
 2. **Shift-Tab in the document's first line goes to the title.** Tab stays in
@@ -27,9 +28,6 @@ the wikilink rule (CLAUDE.md). No colour, radius or elevation token is added.
    node.** `**bold** /h` and `[[Page]]/h` open it; the line is read with inline
    nodes as one non-word character, so `and/or` and `a**b**/c` still do not. Inline code and link text keep a `/`
    as text (a path, an address), as `[[` does (`keepsAsText`).
-(Mod-Enter closing a toggle from its title keeps the caret where it was; from the
-body it goes to the title, where it stays visible.)
-
 5. **Two entries are added to the `/` list.** `/diagram` (alias `mermaid`)
    writes a fenced `mermaid` block holding a two-node sample, which the reader
    and the code preview already draw. `/date` (aliases `today`) writes today's
