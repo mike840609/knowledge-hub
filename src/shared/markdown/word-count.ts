@@ -5,14 +5,15 @@ const WORD = /[\p{L}\p{N}][\p{L}\p{M}\p{N}'’_-]*(?:[.,]\p{N}+)*/gu;
 
 /**
  * Words in Markdown, as the page shows them: what a reader reads, not the syntax around it. Link and image addresses, bare
- * addresses, reference definitions, HTML tags, fence markers and list markers are not words; a `[[wikilink]]` counts its
+ * addresses, reference definitions (a link's `[label]: address "title"`; a footnote's text is read), footnote markers, HTML tags, fence markers and list markers are not words; a `[[wikilink]]` counts its
  * target. Latin words and numbers count by run, CJK characters one each. Every scan is bounded by the line and by a length, so
  * a long line without a closer (pasted minified code, a log) cannot make it slow.
  */
 export function countWords(markdown: string): number {
   const text = markdown
     .replace(/^[ \t]*(?:```|~~~)[^\n]*$/gm, " ")
-    .replace(/^[ \t]*\[[^\]\n]{1,200}\]:[ \t]*\S+[^\n]{0,500}$/gm, " ")
+    .replace(/\[\^[^\]\n]{1,100}\]:?/g, " ")
+    .replace(/^[ \t]*\[[^\]\n]{1,200}\]:[ \t]*\S{1,2000}(?:[ \t]+(?:"[^"\n]{0,300}"|'[^'\n]{0,300}'|\([^)\n]{0,300}\)))?[ \t]*$/gm, " ")
     .replace(/!\[\[[^\]\n]{1,300}\]\]/g, " ")
     .replace(/!\[[^\]\n]{0,300}\]\([^)\n]{0,2000}\)/g, " ")
     .replace(/\]\([^)\n]{0,2000}\)/g, "]")

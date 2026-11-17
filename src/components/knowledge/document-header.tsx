@@ -35,6 +35,7 @@ export function DocumentHeader({
   editorActions,
   editHint,
   wordCount,
+  showFullWidth = true,
   readOnlyReason,
   favorite,
   onToggleFavorite,
@@ -51,6 +52,8 @@ export function DocumentHeader({
   editHint?: ReactNode;
   /** Words on the page, shown beside when it was updated, once the edit hint has gone (both on one line would wrap a phone-width header, and the layout must not move when the hint goes); omitted where it is not counted. */
   wordCount?: number;
+  /** The Full width button; a header drawn beside another document page (the side peek) leaves it to that page. */
+  showFullWidth?: boolean;
   readOnlyReason?: ReactNode;
   /** Whether this page is in the reader's favorites; absent where favoriting is not offered. */
   favorite?: boolean;
@@ -109,7 +112,7 @@ export function DocumentHeader({
             narrow topbar's copy of this button. */}
         <div className="flex shrink-0 items-center gap-2">
           {editorActions}
-          <Tooltip label="Full width">
+          {showFullWidth ? <Tooltip label="Full width">
             <button
               type="button"
               onClick={toggleFullWidth}
@@ -120,7 +123,7 @@ export function DocumentHeader({
             >
               {fullWidth ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}
             </button>
-          </Tooltip>
+          </Tooltip> : null}
           {onShareClick ? (
             <Tooltip label="Share link…">
               <button

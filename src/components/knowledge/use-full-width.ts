@@ -26,7 +26,10 @@ export function useFullWidth(): boolean {
 }
 
 export function toggleFullWidth() {
-  memory = !read();
-  writeStored("local", KEY, String(memory));
+  const next = !read();
+  writeStored("local", KEY, String(next));
+  // What is stored is what every tab reads (a `storage` event from another tab must be heard); the page keeps the choice
+  // itself only where storage refused it.
+  memory = readStored("local", KEY) === String(next) ? null : next;
   window.dispatchEvent(new Event(EVENT));
 }
