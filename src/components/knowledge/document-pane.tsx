@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode, Ref } from "react";
+import { useFullWidth } from "./use-full-width";
 
 /** Shared geometry for a document and its loading state. */
 export function DocumentPane({
@@ -18,9 +19,10 @@ export function DocumentPane({
   contentRef?: Ref<HTMLDivElement>;
   loading?: boolean;
 }) {
+  const fullWidth = useFullWidth();
   return (
     <div data-document-pane className="flex h-full min-h-0 overflow-hidden bg-kh-bg">
-      <div ref={contentRef} role="region" aria-label="Document content" aria-busy={loading || undefined} tabIndex={0}
+      <div ref={contentRef} role="region" aria-label="Document content" aria-busy={loading || undefined} data-full-width={fullWidth || undefined} tabIndex={0}
         className="kh-document-pane min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain contain-layout kh-focus-ring">
         <div className="flex items-start">
           <div className="min-w-0 flex-1">

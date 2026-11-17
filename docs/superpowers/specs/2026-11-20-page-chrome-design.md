@@ -9,19 +9,31 @@ Notion's. Two of them are decided here. Nothing stored in a document changes.
    words`, from the Markdown as it is being written, so the count follows the
    typing. A word is what a reader reads: link and image addresses, HTML tags,
    fence markers and list numbers are not words, a `[[wikilink]]` counts its
-   target, Latin words and numbers count by run, and each Han, kana or hangul
-   character counts as one (`src/shared/markdown/word-count.ts`). A page with no
+   target, Latin words and numbers count by run (`3.14` and `1,000` are one;
+   combining marks stay in their word, so Hindi, Hebrew and decomposed accents are
+   not split), and each Han, kana or hangul character counts as one (`src/shared/markdown/word-count.ts`). It is
+   counted when the Markdown changes (not on every render), and every scan is
+   bounded, so a long line without a closer cannot slow typing. A page with no
    words says nothing. It waits for the first-use edit hint to go ("Click anywhere
    in the text to edit"), which shares the line: both together wrap a phone-width
    header, and focusing the editor must not move the layout (`zz-editor-blocks`).
 2. **Full width is the reader's own arrangement.** A header button (`Full
    width`, a pressed toggle, from the `sm` breakpoint up) lets the reading
    column fill the pane. It is kept in this browser (`kh.document-full-width`,
-   local storage), not in the document, and is set as `data-full-width` on the
-   document pane by the document page. The column fills the pane with the
+   local storage), not in the document. One store (`use-full-width.ts`) serves the
+   button, which is in the header of every document page (an editable one, a
+   revision snapshot, a synced file, an archived page), and every document pane,
+   which draws `data-full-width`, so no page sits at another width than the rest
+   and a read-only one can undo it. It is read synchronously on the client, so a
+   page opened by a link in the app is drawn at its width at once; the first
+   server render of a page opened afresh is the narrow one, and a reader who
+   chose full width sees it settle once (no stylesheet can know a browser's
+   storage before scripts run, and an inline script for it is not worth its CSP
+   entry). The column fills the pane with the
    editor's 56px block gutter kept inside it, the article's own reading width
    is lifted, and the outline moves to the right rail at every width (a column
-   that fills the pane has no left margin to hang it from). While the
+   that fills the pane has no left margin to hang it from). The rules apply from `sm` (640px) up, where the button is drawn, so a stored
+   choice cannot change a narrow window that has no button to undo it. While the
    discussions rail is open the existing layout, which makes room for it, wins,
    and full width waits. No colour, radius or elevation token is added.
 

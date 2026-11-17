@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState, type Ref, type ReactNode } from "react";
-import { LockKeyhole, MessageSquare, MoreHorizontal, PanelRight, Star } from "lucide-react";
+import { LockKeyhole, Maximize2, Minimize2, MessageSquare, MoreHorizontal, PanelRight, Star } from "lucide-react";
+import { toggleFullWidth, useFullWidth } from "./use-full-width";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { ActionMenuItems } from "@/components/actions/action-menu";
 import type { Action } from "@/components/actions/action-registry";
@@ -79,6 +80,7 @@ export function DocumentHeader({
   pinned?: boolean;
 }) {
 
+  const fullWidth = useFullWidth();
   const [now, setNow] = useState<number | null>(null);
   // Before mount there is no "now" and no zone; both arrive in the same tick,
   // so the first render is the one the server also produced.
@@ -107,6 +109,18 @@ export function DocumentHeader({
             narrow topbar's copy of this button. */}
         <div className="flex shrink-0 items-center gap-2">
           {editorActions}
+          <Tooltip label="Full width">
+            <button
+              type="button"
+              onClick={toggleFullWidth}
+              aria-label="Full width"
+              aria-pressed={fullWidth}
+              data-pressed={fullWidth}
+              className={buttonClasses({ variant: "ghost", icon: true, className: "hidden data-[pressed=true]:bg-kh-bg-hover data-[pressed=true]:text-kh-text sm:inline-flex" })}
+            >
+              {fullWidth ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}
+            </button>
+          </Tooltip>
           {onShareClick ? (
             <Tooltip label="Share link…">
               <button

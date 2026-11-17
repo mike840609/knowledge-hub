@@ -19,12 +19,12 @@ async function openNote(page: Page, markdown: string) {
   const surface = page.locator("main").getByRole("textbox", { name: "Content" });
   await expect(surface).toBeEditable(ROUND_TRIP);
   await page.waitForTimeout(600);
-  return surface;
+  return { surface, url: `/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}` };
 }
 
 test.describe("page chrome", () => {
   test("the header counts the words, and the count follows the typing", async ({ page }) => {
-    const surface = await openNote(page, "one two three\n");
+    const { surface } = await openNote(page, "one two three\n");
     const count = page.locator("header").getByText(/\d+ words?/);
     // The first-use hint holds the line until the editor is focused.
     await surface.getByText("one two three", { exact: true }).click();
@@ -49,5 +49,36 @@ test.describe("page chrome", () => {
     await expect(page.getByRole("button", { name: "Full width" })).toHaveAttribute("aria-pressed", "true", ROUND_TRIP);
     await page.getByRole("button", { name: "Full width" }).click();
     await expect.poll(width).toBeLessThan(normal + 5);
+  });
+
+  const columnWidth = (page: Page) =>
+    page.locator("[data-document-pane] article").first().locator("xpath=ancestor::div[contains(@class,'kh-reading-column')][1]").evaluate((node) => ({ width: node.getBoundingClientRect().width, padding: getComputedStyle(node).paddingLeft }));
+
+  test("Full width moves the outline to the right rail, and every page of a document honours it", async ({ page }) => {
+    await page.setViewportSize({ width: 2200, height: 900 });
+    const { url } = await openNote(page, "Some text.\n\n## Heading one\n\ntext\n\n## Heading two\n\ntext\n");
+    const normal = (await columnWidth(page)).width;
+    await page.getByRole("button", { name: "Full width" }).click();
+    await expect.poll(async () => (await columnWidth(page)).width).toBeGreaterThan(normal + 100);
+    // The outline is in the right rail; the left-hung one, which needs the column's margin, is gone.
+    await expect(page.locator(".kh-outline-rail").first()).toBeVisible();
+    await expect(page.locator(".kh-outline-rail-left")).toBeHidden();
+    // A revision snapshot is a page that cannot be edited: it sits at the same width, and has the button to undo it.
+    await page.goto(`${url}?revision=1`);
+    await expect(page.locator("main article").first()).toBeVisible(ROUND_TRIP);
+    await expect.poll(async () => (await columnWidth(page)).width).toBeGreaterThan(normal + 100);
+    await expect(page.getByRole("button", { name: "Full width" })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: "Full width" }).click();
+    await expect.poll(async () => (await columnWidth(page)).width).toBeLessThan(normal + 5);
+  });
+
+  test("a stored Full width changes nothing below the width where its button is drawn", async ({ page }) => {
+    await page.setViewportSize({ width: 2200, height: 900 });
+    await openNote(page, "Some text.\n");
+    await page.getByRole("button", { name: "Full width" }).click();
+    await page.setViewportSize({ width: 500, height: 900 });
+    await expect(page.getByRole("button", { name: "Full width" })).toBeHidden();
+    // 24px, the column's own padding at a phone's width, not the 56px full width gives the block gutter.
+    await expect.poll(async () => (await columnWidth(page)).padding).toBe("24px");
   });
 });

@@ -986,16 +986,21 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 /* Full width (page-chrome spec, 2026-11-20): the reader's own choice, set on the pane by the document page. The
    column fills the pane, its left padding keeps the editor's 56px block gutter inside it, and the outline moves
    to the right rail at every width (a column that fills the pane has no left margin to hang it from). While the
-   discussions rail is open the layout above is the one that makes room for it, so full width waits. */
-.kh-document-pane[data-full-width]:not(:has(.kh-review-document[data-review-inline][data-review-open])) .kh-reading-column {
-  max-width: none;
-  margin-inline: 0;
-  padding-inline-start: theme("spacing.14");
+   discussions rail is open the layout above is the one that makes room for it, so full width waits. The button is
+   drawn from `sm` (640px) up, so the rule is too: below it a stored choice would change a page that cannot undo it. */
+@media (min-width: 640px) {
+  .kh-document-pane[data-full-width]:not(:has(.kh-review-document[data-review-inline][data-review-open])) .kh-reading-column {
+    max-width: none;
+    margin-inline: 0;
+    padding-inline-start: theme("spacing.14");
+  }
 }
 /* The article's own wrapper holds the same reading width; with the column open it opens too. */
-.kh-document-pane[data-full-width] .kh-review-document:not([data-review-open]) {
-  max-width: none;
-  margin-inline: 0;
+@media (min-width: 640px) {
+  .kh-document-pane[data-full-width] .kh-review-document:not([data-review-open]) {
+    max-width: none;
+    margin-inline: 0;
+  }
 }
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-inline { display: block; }
 .kh-document-pane .kh-review-document[data-review-inline][data-review-open] ~ * { max-width: calc(100% - 320px); }
