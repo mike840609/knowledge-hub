@@ -940,10 +940,14 @@ brings an empty line after it and the caret goes there, at the top level and in
 an item alike, so the next key neither replaces the divider nor types into the
 next item; a Table keeps the caret in its first cell. The grip menu, the
 toolbar's Turn into, the `/` list and the turn keys (`Mod-Alt-0`…`8`, where
-`0`–`3` turn an item and are otherwise Milkdown's own, and
+`0`–`3` turn an item from its first line and are otherwise Milkdown's own, and
 `Mod-Shift-7`/`8`/`9`) end in the same turn and give the same result for the
-same block (`tests/unit/editor-turn-parity.test.ts`); only the `/` list on an
-item with a nested list differs, as above.
+same item of a list (`tests/unit/editor-turn-parity.test.ts`). Two places
+differ. The `/` list on an item with a nested list puts the block below, as
+above. And an item inside a quote, a callout or a toggle's body: there
+`Mod-Alt-0`…`3` still turn the caret's item, inside its container, while the
+toolbar acts on the container as a whole and, in a toggle's body, disables
+every entry; no parity is claimed there.
 
 `+` writes a visible `/` on the line it adds and opens the same list there,
 through the path a typed `/` takes: what is typed next is that `/`'s query, in

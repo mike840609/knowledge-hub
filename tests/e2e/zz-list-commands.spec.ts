@@ -26,7 +26,10 @@ async function openNote(page: Page, markdown: string) {
   // By its label, not its role: it is a combobox, not a textbox, while the `/` list is open.
   const surface = page.locator('main .ProseMirror[aria-label="Content"]');
   await expect(surface).toBeEditable(ROUND_TRIP);
-  await page.waitForTimeout(600);
+  // Settled once the editor's plugins have drawn the block controls on the body and the review layer has loaded
+  // (its update is the last to reach the editor; a selection made before it can lose the toolbar's reveal).
+  await expect(page.locator(".kh-block-gutter")).toBeAttached(ROUND_TRIP);
+  await expect(page.getByRole("button", { name: /^Comment on paragraph: / }).first()).toBeAttached(ROUND_TRIP);
   return { surface, documentId: created.documentId };
 }
 
@@ -37,7 +40,12 @@ const toolbar = (page: Page) => page.locator('.kh-selection-toolbar[data-show="t
 async function caretAtEnd(page: Page, surface: Locator, text: string) {
   await surface.locator("li p").filter({ hasText: new RegExp(`^${text}$`) }).click();
   await page.keyboard.press("End");
-  await page.waitForTimeout(200);
+  await expect.poll(() => page.evaluate((expected) => {
+    const selection = window.getSelection();
+    const node = selection?.focusNode;
+    return !!selection?.isCollapsed && node?.textContent === expected && selection.focusOffset === expected.length
+      && !!node.parentElement?.closest(".ProseMirror");
+  }, text)).toBe(true);
 }
 
 test.describe("list commands", () => {
@@ -104,6 +112,7 @@ test.describe("list commands", () => {
       const at = (await line.boundingBox())!;
       await page.mouse.move(1000, at.y - 2);
       await page.mouse.move(1000, at.y + at.height / 2, { steps: 3 });
+      // Not every line brings its controls up (the pointer may rest on the menu), so this can only give them time.
       await page.waitForTimeout(100);
       const top = await page.evaluate(() => {
         const gutter = document.querySelector(".kh-block-gutter:not([hidden])")?.getBoundingClientRect();

@@ -127,10 +127,15 @@ Nothing stored changes.
   nested list reads back. A loose item (a blank line between its children) keeps `- <br />`: there the blank line
   already ends the HTML block, so what follows reads back inside the item.
 
-- **`Mod-Alt-0`…`3` turn a list item.** `2026-11-19-editor-keys-caret-design.md` (decision 5) left `0`–`3` to Milkdown. In a list
-  item Milkdown's keys set the item's line to a heading, which an item cannot start with, so they did nothing while the
-  grip turned the item; decision 7's parity test found it. With the caret in an item these four keys now call the
-  grip's turn. Anywhere else they stay Milkdown's: a paragraph in a quote still becomes a heading in the quote.
+- **`Mod-Alt-0`…`3` turn a list item from its first line.** `2026-11-19-editor-keys-caret-design.md` (decision 5)
+  left `0`–`3` to Milkdown. On an item's first line Milkdown's keys set that line to a heading, which an item cannot
+  start with, so they did nothing while the grip turned the item; decision 7's parity test found it. With the caret on
+  an item's first line these four keys now call the grip's turn, and the key is claimed even where the turn is refused
+  (an item with a nested list), where Milkdown's did nothing either. Anywhere else they stay Milkdown's: a loose
+  item's later paragraph or a code block in an item still turns in place, and a paragraph in a quote still becomes a
+  heading in the quote. Inside a quote, a callout or a toggle's body the keys turn the caret's item within its
+  container, while the toolbar's Turn into acts on the container as a whole (and in a toggle's body disables every
+  entry); decision 7's parity does not hold there and is not claimed.
 - **The block and table controls step aside while the toolbar's Turn into menu is open.** The toolbar lives inside
   the document pane, whose `contain: layout` makes a stacking context, so no `z-index` of its own lifts it over the
   controls drawn on the body at 30, and at 1440 × 900 its menu hangs over the gutter's column. The browser run found

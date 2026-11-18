@@ -395,7 +395,6 @@ function turnCurrentInto(target: BlockKind) {
 }
 
 /**
-/**
  * `Mod-Alt-0`…`-3` on a block chosen with Escape: the turn the block menu offers for that block. A range of
  * several blocks is the range plugin's (it turns all of them); with one block chosen the key would otherwise
  * reach Milkdown, which cannot set a heading on a list item and does nothing.
@@ -411,15 +410,19 @@ function turnChosenInto(target: BlockKind) {
 }
 
 /**
- * `Mod-Alt-0`…`-3` with the caret in a list item: the item turns, as the grip and the toolbar turn it (list commands
- * spec, decision 7). Milkdown's own keys would set the item's line to a heading, which an item cannot start with, and
- * do nothing. Anywhere else they stay Milkdown's.
+ * `Mod-Alt-0`…`-3` with the caret on a list item's first line: the item turns, as the grip and the toolbar turn it
+ * (list commands spec, decision 7). Milkdown's own keys would set that line to a heading, which an item cannot start
+ * with, and do nothing. The key is claimed there even when the turn is refused (an item with a nested list), where
+ * Milkdown's did nothing either. Anywhere else, a later paragraph or a code block in an item included, they stay
+ * Milkdown's.
  */
 function turnItemInto(target: BlockKind) {
   return (state: EditorState, dispatch?: unknown, view?: EditorView) => {
-    if (!view?.editable || !(state.selection instanceof TextSelection) || listKindAt(state) === null) return false;
-    const pos = actionBlockPos(state);
-    if (pos !== null && dispatch) turnBlockInto(view, pos, target);
+    if (!view?.editable || !(state.selection instanceof TextSelection)) return false;
+    const depth = listItemDepth(state);
+    const { $from } = state.selection;
+    if (depth === null || $from.parent.type.name !== "paragraph" || $from.parent !== $from.node(depth).firstChild) return false;
+    if (dispatch) turnBlockInto(view, $from.before(depth), target);
     return true;
   };
 }

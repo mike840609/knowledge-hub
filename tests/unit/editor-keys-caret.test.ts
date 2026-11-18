@@ -92,6 +92,54 @@ it.each([
   expect(view.state.selection.$from.parent.textContent).toBe("b");
   expect(press(view, digit, { ctrlKey: true, altKey: true }).defaultPrevented).toBe(true);
   expect(md(editor)).toBe(expected);
+  press(view, "z", { ctrlKey: true });
+  expect(md(editor)).toBe("- a\n- b\n- c");
+});
+
+/** The caret after the first occurrence of `text`. */
+function caretAfter(view: EditorView, text: string) {
+  let at = -1;
+  view.state.doc.descendants((node, pos) => {
+    if (at < 0 && node.isText && node.text!.includes(text)) at = pos + node.text!.indexOf(text) + text.length;
+    return at < 0;
+  });
+  expect(at, `"${text}" is in the document`).toBeGreaterThanOrEqual(0);
+  caretAt(view, at);
+}
+
+// Only an item's first line is the item's: the turn keys claim it there, and one Mod-z takes the turn back.
+it.each([
+  ["a to-do item", "- [ ] a\n- [ ] b\n- [ ] c", "b", "1", "- [ ] a\n\n# b\n\n- [ ] c"],
+  ["a numbered item", "1. a\n2. b\n3. c", "b", "3", "1. a\n\n### b\n\n3. c"],
+  ["an item in a quote, which turns inside the quote", "> - a\n> - b", "b", "2", "> - a\n>\n> ## b"],
+])("Mod-Alt-n on the first line of %s turns the item, in one undo step", async (_name, source, text, digit, expected) => {
+  const { editor, view } = await open(source);
+  caretAfter(view, text);
+  expect(press(view, digit, { ctrlKey: true, altKey: true }).defaultPrevented).toBe(true);
+  expect(md(editor)).toBe(expected);
+  press(view, "z", { ctrlKey: true });
+  expect(md(editor)).toBe(source);
+});
+
+it("Mod-Alt-2 on an item with a nested list is claimed and changes nothing, as the grip refuses it", async () => {
+  const { editor, view } = await open("- a\n  - b\n- c");
+  caretAfter(view, "a");
+  expect(press(view, "2", { ctrlKey: true, altKey: true }).defaultPrevented).toBe(true);
+  expect(md(editor)).toBe("- a\n  - b\n- c");
+});
+
+// Past the item's first line the keys stay Milkdown's, as before the list commands spec.
+it.each([
+  ["a loose item's second paragraph", "- a\n\n  second", "second", "2", "- a\n\n  ## second"],
+  ["a code block in an item, to text", "- a\n\n  ```\n  x\n  ```", "x", "0", "- a\n\n  x"],
+  ["a code block in an item, to a heading", "- a\n\n  ```\n  x\n  ```", "x", "2", "- a\n\n  ## x"],
+])("Mod-Alt-n in %s stays Milkdown's, in one undo step", async (_name, source, text, digit, expected) => {
+  const { editor, view } = await open(source);
+  caretAfter(view, text);
+  press(view, digit, { ctrlKey: true, altKey: true });
+  expect(md(editor)).toBe(expected);
+  press(view, "z", { ctrlKey: true });
+  expect(md(editor)).toBe(source);
 });
 
 it("Mod-Alt-2 outside a list item stays Milkdown's: a paragraph in a quote becomes a heading in the quote", async () => {
