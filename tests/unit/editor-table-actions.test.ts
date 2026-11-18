@@ -36,6 +36,25 @@ async function open(extraPlugins = [tableActions()]) {
   view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, pos)));
   return { root, editor, view };
 }
+
+/** The same editor over a caller's Markdown, for shapes the shared fixture cannot express. */
+async function openMarkdown(markdown: string) {
+  const root = document.body.appendChild(document.createElement("div"));
+  const editor = await createMarkdownEditor({
+    root, markdown, className: "kh-editor", ariaLabel: "Content", editable: true,
+    onUserEdit() {}, onMarkdown() {}, allowImage: () => false, extraPlugins: [tableActions()],
+  });
+  editors.push(editor);
+  const view = editor.action(ctx => ctx.get(editorViewCtx));
+  view.focus();
+  return { root, editor, view };
+}
+
+const caretInCell = (view: EditorView, text: string) => {
+  let at = 0;
+  view.state.doc.descendants((node, pos) => { if (node.isText && node.text === text) at = pos; });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
+};
 it("row menu inserts above and below", async () => {
   const { editor, view } = await open();
   const original = editor.getMarkdown();
@@ -191,6 +210,25 @@ it("Delete column stays available after the header row is deleted", async () => 
   remove.click();
   expect(rows(view)).toEqual([1, 1]);
   expect(editor.getMarkdown()).toContain("Before");
+});
+it("Deleting the header row of a header-plus-one-row table keeps the table valid", async () => {
+  const { editor, view } = await openMarkdown("| A | B |\n| - | - |\n| one | two |\n");
+  caretInCell(view, "A");
+  choose("Row 1 actions", "Delete row");
+  // The promoted row is the header; a table needs at least one body row, so an empty one remains.
+  expect(rows(view)).toEqual([2, 2]);
+  expect(() => view.state.doc.check()).not.toThrow();
+  expect(editor.getMarkdown()).toMatch(/\|\s*one\s*\|\s*two\s*\|/);
+  button("Add row").click();
+  expect(rows(view)).toEqual([2, 2, 2]);
+});
+it("Deleting the only body row leaves the caret in the emptied row, not the header", async () => {
+  const { view } = await openMarkdown("| A | B |\n| - | - |\n| one | two |\n");
+  caretInCell(view, "one");
+  choose("Row 2 actions", "Delete row");
+  // The row survives empty; the caret stays in its cell so the next keystroke cannot edit the header.
+  expect(cellIn(view)).toEqual({ row: 1, column: 0, rows: 2 });
+  expect(view.state.selection.$from.parent.textContent).toBe("");
 });
 it("opens a menu with ArrowDown on a grip and closes it with Escape", async () => {
   await open();

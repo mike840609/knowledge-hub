@@ -140,18 +140,22 @@ export function tableActions() {
         view.dispatch(closeHistory(select));
         command(view.state, transaction => {
           if (newColumn !== undefined) clearColumnAlignment(transaction, cell.tablePos, newColumn);
-          if (command === deleteRow || command === deleteColumn) {
-            // Map a surviving cell through the deletion. Mapping the deleted cell itself can
-            // land in another column or even in the paragraph following the table.
-            let { row, column } = cell;
-            if (command === deleteRow) row += row + 1 < cell.table.childCount ? 1 : -1;
-            else column += column + 1 < cell.table.child(row).childCount ? 1 : -1;
-            const neighbor = cellPosAt(cell.table, cell.tablePos, row, column) + 1;
-            const mapped = transaction.doc.resolve(transaction.mapping.map(neighbor));
-            transaction.setSelection(Selection.near(mapped));
-          }
           view.dispatch(closeHistory(transaction).scrollIntoView());
         });
+        if (command === deleteRow || command === deleteColumn) {
+          // Choose the cell in the table that remains, after any table fix has run: the same row and column
+          // where they survive, else the nearest. The deleted cell itself cannot be mapped.
+          const table = view.state.doc.nodeAt(cell.tablePos);
+          if (table) {
+            const row = Math.min(cell.row, table.childCount - 1);
+            const rowNode = table.child(row);
+            if (rowNode.childCount > 0) {
+              const column = Math.min(cell.column, rowNode.childCount - 1);
+              const selection = Selection.near(view.state.doc.resolve(cellPosAt(table, cell.tablePos, row, column) + 1));
+              view.dispatch(closeHistory(view.state.tr.setSelection(selection)).scrollIntoView());
+            }
+          }
+        }
         hovered = null;
         settle(view);
       }
@@ -181,7 +185,7 @@ export function tableActions() {
         // pointer (which is what showed the bar) is over another row.
         const caret = locateCell(view.state.doc, view.state.selection.$from.pos);
         const row = caret?.tablePos === target.tablePos ? caret.row : target.row;
-        run(addColumnAfter, cellPosAt(target.table, target.tablePos, row), columnCount(target.table));
+        run(addColumnAfter, cellPosAt(target.table, target.tablePos, row), target.table.child(row).childCount);
         const table = view.state.doc.nodeAt(target.tablePos);
         if (table) { view.dispatch(view.state.tr.setSelection(Selection.near(view.state.doc.resolve(cellPosAt(table, target.tablePos, row) + 1)))); settle(view); }
         view.focus(); position();
@@ -200,6 +204,13 @@ export function tableActions() {
         table.child(1).forEach((cell) => cells.push(headerCell.create(cell.attrs, cell.content, cell.marks)));
         const rows: ProseNode[] = [header.type.create(header.attrs, Fragment.fromArray(cells))];
         for (let index = 2; index < table.childCount; index++) rows.push(table.child(index));
+        // GFM requires at least one body row. A header-plus-one-row table leaves none after promotion,
+        // so keep an empty one rather than dispatch a table the schema refuses.
+        if (rows.length === 1) {
+          const empty: ProseNode[] = [];
+          for (let index = 0; index < rows[0].childCount; index++) empty.push(view.state.schema.nodes.table_cell.createAndFill()!);
+          rows.push(view.state.schema.nodes.table_row.create(null, Fragment.fromArray(empty)));
+        }
         const next = table.type.create(table.attrs, Fragment.fromArray(rows));
         const tr = view.state.tr.replaceWith(tablePos, tablePos + table.nodeSize, next);
         // The promoted row holds the column the writer was acting on.
