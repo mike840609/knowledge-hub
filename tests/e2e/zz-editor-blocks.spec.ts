@@ -185,6 +185,35 @@ test.describe("blocks in the rendered editor", () => {
     await expect(page.locator("[data-backlinks]").getByRole("heading", { name: "Linked from 1 document" })).toBeVisible(ROUND_TRIP);
   });
 
+  test("a copied block link reaches the same paragraph after it moves and saves", async ({ page }) => {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    const workspaceId = await mySpace(page);
+    const target = "The paragraph with a link.";
+    const filler = Array.from({ length: 32 }, (_, index) => `Earlier paragraph ${index + 1}.`);
+    const url = await createNote(page, workspaceId, unique("Block link"), [...filler, target, "The later paragraph."].join("\n\n"));
+    const surface = await openEditor(page, url);
+    await surface.getByText(target, { exact: true }).click();
+    await page.keyboard.press("Alt+F10");
+    await page.getByRole("button", { name: "Move block" }).click();
+    await page.getByRole("menuitem", { name: "Copy link to block" }).click();
+    const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
+    await expect.poll(clipboard).toMatch(/#kh-block-[0-9a-f-]{36}$/);
+    const link = new URL(await clipboard());
+    const id = link.hash.slice(1);
+    await expect(surface.locator(`[id="${id}"]`)).toHaveText(target);
+    await surface.getByText(target, { exact: true }).click();
+    await page.keyboard.press("Alt+F10");
+    await page.getByRole("button", { name: "Move block" }).click();
+    await page.getByRole("menuitem", { name: "Move down" }).click();
+    const markdown = await save(page);
+    expect(markdown).toContain(id);
+    expect(markdown.indexOf(target)).toBeGreaterThan(markdown.indexOf("The later paragraph."));
+    await page.goto(link.href);
+    const landing = page.locator(`main article [id="${id}"]`).first();
+    await expect(landing).toHaveText(target, ROUND_TRIP);
+    await expect(landing).toBeInViewport();
+  });
+
   test('"/" on an empty line lists the blocks, and the pick is saved as Markdown', async ({ page }) => {
     const workspaceId = await mySpace(page);
     const url = await createNote(page, workspaceId, unique("Slash"), "Opening line.");

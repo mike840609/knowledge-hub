@@ -6,6 +6,7 @@ import { readReviewRange, reviewBlockAnchor, selectionAnchorInBlock } from "../r
 import { isAllowedMarkdownImageSrc } from "@/components/knowledge/markdown-image-policy";
 import { MARKDOWN_PROSE } from "@/components/knowledge/markdown-prose";
 import { governanceRequest } from "@/components/workspaces/governance-error";
+import { documentIdInPath } from "@/lib/document-shortcuts";
 import { blockGutter } from "./block-gutter";
 import { tableActions } from "./table-actions";
 import { slashCommands } from "./slash-commands";
@@ -121,13 +122,26 @@ export function RenderedEditor(props: RenderedEditorProps) {
     });
     const slash = slashCommands();
     const gutter = blockGutter({
-      available: (view, pos) => !!reviewRef.current?.blockAvailable && !!editorReviewBlockElement(view, pos)?.textContent?.trim(),
+      available: (view, pos) => {
+        const markdown = latest.current.reviewMarkdown;
+        if (!reviewRef.current?.blockAvailable || markdown === undefined) return false;
+        const element = editorReviewBlockElement(view, pos);
+        return !!element && !!reviewBlockAnchor(element, markdown);
+      },
       run: (view, pos) => reviewRef.current?.request(markdown => {
         updateEditorReviewPaths(view, markdown);
         const element = editorReviewBlockElement(view, pos);
         const anchor = element && reviewBlockAnchor(element, markdown);
-        return anchor && (selectionAnchorInBlock(view.dom, markdown, anchor, view.dom.ownerDocument.getSelection()) ?? anchor);
+        if (!anchor) {
+          latest.current.onNotice?.("The block changed. Open its menu to try commenting again.");
+          return null;
+        }
+        return selectionAnchorInBlock(view.dom, markdown, anchor, view.dom.ownerDocument.getSelection()) ?? anchor;
       }),
+    }, () => {
+      const { pathname } = window.location;
+      const documentId = latest.current.documentId;
+      return documentId && documentIdInPath(pathname) === documentId ? pathname : undefined;
     });
     const emoji = emojiSuggest();
     const links = $prose(() => new Plugin({ props: { nodeViews: {

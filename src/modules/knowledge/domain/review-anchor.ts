@@ -1,5 +1,6 @@
 import type { Nodes } from "mdast";
 import { parseMarkdown } from "@/shared/markdown/parse";
+import { applyBlockLinks } from "@/shared/markdown/remark-block-links";
 import { replaceWikiLinks, shownText } from "./replace-wiki-links";
 import { calloutMarker } from "@/shared/markdown/remark-callouts";
 import { htmlAsText, isCommentHtml, isLineBreakHtml } from "@/shared/markdown/remark-known-html";
@@ -58,6 +59,7 @@ export function projectReviewBlocks(markdown:string):CanonicalReviewBlock[] {
    if("children" in node) node.children.forEach((n,i)=>walk(n as Nodes,[...path,i],i===0?marker:0));
  }
  const tree=parseMarkdown(markdown);
+ applyBlockLinks(tree);
  replaceWikiLinks(tree,markdown,match=>({type:"text",value:shownText(match)}));
  walk(tree,[]);return result;
 }

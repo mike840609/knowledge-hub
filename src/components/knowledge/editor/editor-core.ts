@@ -2,8 +2,8 @@ import { Editor, defaultValueCtx, editorViewCtx, editorViewOptionsCtx, remarkPlu
 import type { Ctx, MilkdownPlugin } from "@milkdown/kit/ctx";
 import { history } from "@milkdown/kit/plugin/history";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
-import { commonmark, hardbreakFilterNodes, imageSchema } from "@milkdown/kit/preset/commonmark";
-import { gfm, tableSchema, wrapInTaskListInputRule } from "@milkdown/kit/preset/gfm";
+import { commonmark, codeBlockSchema, hardbreakFilterNodes, imageSchema, paragraphSchema } from "@milkdown/kit/preset/commonmark";
+import { extendListItemSchemaForTask, gfm, tableSchema, wrapInTaskListInputRule } from "@milkdown/kit/preset/gfm";
 import { Plugin, Selection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $ctx, $prose, getMarkdown, replaceAll } from "@milkdown/kit/utils";
@@ -18,6 +18,8 @@ import { pasteHtml } from "./paste-html";
 import { markdownPastePlugins } from "./markdown-paste";
 import { TASK_EDITABLE_CHANGED } from "./task-checkbox";
 import { configureWikiLinkStringify, wikiLinkPlugins } from "./wiki-link";
+import { remarkBlockLinks } from "@/shared/markdown/remark-block-links";
+import { blockLinkPlugin, linkedCodeBlock, linkedListItem, linkedParagraph } from "./block-links";
 
 /** The editor could not make a document of this Markdown; the caller should fall back to the source. */
 export class EditorParseError extends Error {
@@ -71,14 +73,26 @@ const safeImageSchema = imageSchema.extendSchema((previous) => (ctx) => {
     },
   };
 });
-const commonmarkWithSafeImages = commonmark.filter((plugin) => plugin !== imageSchema[0] && plugin !== imageSchema[1]);
+const commonmarkWithLocalSchemas = commonmark.flatMap(plugin => {
+  if (plugin === imageSchema[0] || plugin === imageSchema[1]) return [];
+  if (plugin === paragraphSchema[0]) return [linkedParagraph[0]];
+  if (plugin === paragraphSchema[1]) return [linkedParagraph[1]];
+  if (plugin === codeBlockSchema[0]) return [linkedCodeBlock[0]];
+  if (plugin === codeBlockSchema[1]) return [linkedCodeBlock[1]];
+  return [plugin];
+});
 
 const scrollableTable = tableSchema.extendSchema(previous => ctx => ({
   ...previous(ctx),
   toDOM: () => ["div", { class: "kh-markdown-table kh-editor-table", role: "region", "aria-label": "Table", tabindex: "0" }, ["table", ["tbody", 0]]],
 }));
 // Without Milkdown's `[ ] ` rule: notion-keys' own covers list items too, and asks which line it is on.
-const gfmWithScrollableTables = gfm.filter(plugin => plugin !== tableSchema[0] && plugin !== tableSchema[1] && plugin !== wrapInTaskListInputRule);
+const gfmWithLocalSchemas = gfm.flatMap(plugin => {
+  if (plugin === tableSchema[0] || plugin === tableSchema[1] || plugin === wrapInTaskListInputRule) return [];
+  if (plugin === extendListItemSchemaForTask[0]) return [linkedListItem[0]];
+  if (plugin === extendListItemSchemaForTask[1]) return [linkedListItem[1]];
+  return [plugin];
+});
 
 type MarkdownNode = { type: string; title?: string | null; children?: MarkdownNode[] };
 type DefinitionNode = MarkdownNode & { identifier?: string; url?: string };
@@ -249,7 +263,7 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
       configureCellBreakStringify(ctx);
       // Milkdown also refuses Shift+Enter in a table, where a break could only be written as a space. Here it has a writing.
       ctx.set(hardbreakFilterNodes.key, ["code_block"]);
-      ctx.update(remarkPluginsCtx, (previous) => [...previous, { plugin: resolveImageReferences, options: {} }, { plugin: fillNullImageTitles, options: {} }, { plugin: remarkCellBreaks, options: {} }] as typeof previous);
+      ctx.update(remarkPluginsCtx, (previous) => [...previous, { plugin: remarkBlockLinks, options: {} }, { plugin: resolveImageReferences, options: {} }, { plugin: fillNullImageTitles, options: {} }, { plugin: remarkCellBreaks, options: {} }] as typeof previous);
       ctx.update(editorViewOptionsCtx, (previous) => ({
         ...previous,
         editable: () => editable,
@@ -306,15 +320,16 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
       });
     })
     .use(detailsRemark)
-    .use(commonmarkWithSafeImages)
+    .use(commonmarkWithLocalSchemas)
     .use(detailsPlugins)
     .use(safeImageSchema)
     .use(imagePolicyCtx)
-    .use(gfmWithScrollableTables)
+    .use(gfmWithLocalSchemas)
     .use(scrollableTable)
     // In every host of the editor, not an extra: a document with a wikilink must survive being opened in it.
     .use(wikiLinkPlugins)
     .use(readerHints)
+    .use(blockLinkPlugin)
     .use(notionKeys)
     .use(pasteHtml)
     .use(markdownPastePlugins)

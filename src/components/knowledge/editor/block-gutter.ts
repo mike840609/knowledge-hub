@@ -2,6 +2,8 @@ import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 import { HeadingSlugger } from "@/shared/markdown/heading-slug";
+import { isBlockId } from "@/shared/markdown/remark-block-links";
+import { closeHistory } from "@milkdown/kit/prose/history";
 import { openBlockList } from "./slash-commands";
 import { blockKind, canTurnInto, headingText, deleteBlock, duplicateBlock, insertBlockBelow, moveBlock, siblingBlocks, topLevelBlocks, turnBlockInto, type BlockKind } from "./block-actions";
 
@@ -38,7 +40,7 @@ export function headingSlugAt(view: EditorView, pos: number): string | null {
   return found;
 }
 
-export function blockGutter(comment?: { available: (view: EditorView, pos: number) => boolean; run: (view: EditorView, pos: number) => void }) {
+export function blockGutter(comment?: { available: (view: EditorView, pos: number) => boolean; run: (view: EditorView, pos: number) => void }, linkTo?: () => string | undefined) {
   const dragKey = new PluginKey<number | null>("khDraggedBlock");
   let focusControls: (() => boolean) | undefined;
   return $prose(() => new Plugin<number | null>({
@@ -132,16 +134,44 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
         const heading = activeNode()?.type.name === "heading" ? menuButton("Copy link to heading", () => {
           const slug = active === null ? null : headingSlugAt(view, active);
           closeMenu();
-          if (slug === null) return;
-          // The same words twice are not announced twice: clear first, so a second copy is said again.
-          live.textContent = "";
-          const failed = () => { live.textContent = "Couldn't copy the link"; };
-          if (!navigator.clipboard) { failed(); return; }
-          const href = `${window.location.origin}${window.location.pathname}#${encodeURIComponent(slug)}`;
-          void navigator.clipboard.writeText(href).then(() => { live.textContent = "Link copied"; }, failed);
+          if (slug !== null) copyLink(window.location.pathname, slug);
         }) : null;
-        menu.append(turn, duplicate, remove, ...(commentAction ? [commentAction] : []), ...(heading ? [heading] : []), separator(), up, down);
+        const node = activeNode();
+        const blockLink = node && Object.hasOwn(node.attrs, "blockId") && node.content.size && linkTo?.()
+          ? menuButton("Copy link to block", copyBlockLink) : null;
+        menu.append(turn, duplicate, remove);
+        if (commentAction) menu.append(commentAction);
+        const link = heading ?? blockLink;
+        if (link) menu.append(link);
+        menu.append(separator(), up, down);
         return turn;
+      }
+      function copyLink(path: string, fragment: string): boolean {
+        live.textContent = "";
+        const failed = () => { live.textContent = "Couldn't copy the link"; };
+        if (!navigator.clipboard) { failed(); return false; }
+        const href = new URL(path, window.location.origin);
+        href.hash = encodeURIComponent(fragment);
+        void navigator.clipboard.writeText(href.href).then(() => { live.textContent = "Link copied"; }, failed);
+        return true;
+      }
+      function copyBlockLink() {
+        const pos = active;
+        const node = activeNode();
+        const path = linkTo?.();
+        closeMenu();
+        grip.focus();
+        if (!view.editable || pos === null || !node || !path) return;
+        if (isBlockId(node.attrs.blockId)) { copyLink(path, node.attrs.blockId); return; }
+        if (!navigator.clipboard || !globalThis.crypto?.randomUUID) {
+          live.textContent = "Couldn't copy the link";
+          return;
+        }
+        const id = `kh-block-${crypto.randomUUID()}`;
+        if (!copyLink(path, id)) return;
+        const tr = view.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, blockId: id });
+        view.dispatch(closeHistory(tr));
+        view.dispatch(closeHistory(view.state.tr));
       }
       function renderTurn(): void {
         menuMode = "turn";

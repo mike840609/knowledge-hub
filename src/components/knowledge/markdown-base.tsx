@@ -10,6 +10,7 @@ import { headingSlug } from "@/shared/markdown/heading-slug";
 import { remarkHeadingIds } from "@/shared/markdown/remark-heading-ids";
 import { remarkKnownHtml } from "@/shared/markdown/remark-known-html";
 import { remarkReviewPaths } from "@/shared/markdown/remark-review-paths";
+import { remarkBlockLinks } from "@/shared/markdown/remark-block-links";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { MarkdownQuote } from "./markdown-callout";
 import { MarkdownDetails, MarkdownKbd, MarkdownMark, MarkdownSummary } from "./markdown-html";
@@ -238,8 +239,8 @@ export function MarkdownBase({
   return (
     <div className={MARKDOWN_PROSE} lang={contentLanguage(markdown)}>
       <ReactMarkdown
-        // `remarkReviewPaths` first: it records each block's place before anything moves one.
-        remarkPlugins={[remarkGfm, remarkReviewPaths, remarkHeadingIds, remarkKnowledgeLinks, remarkKnownHtml, ...remarkPlugins]}
+        // Record review paths after removing block metadata, as the server does in projectReviewBlocks.
+        remarkPlugins={[remarkGfm, remarkBlockLinks, remarkReviewPaths, remarkHeadingIds, remarkKnowledgeLinks, remarkKnownHtml, ...remarkPlugins]}
         rehypePlugins={rehypePlugins}
         components={{
           a: (props: AnchorProps) => <LinkedImageScope><MarkdownAnchor {...props} links={links} unresolvedAsText={unresolvedAsText} /></LinkedImageScope>,

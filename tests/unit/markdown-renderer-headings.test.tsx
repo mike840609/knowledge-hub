@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
 import { extractOutline } from "@/shared/markdown/outline";
+import { blockLinkMarker } from "@/shared/markdown/remark-block-links";
+import { projectReviewBlocks } from "@/modules/knowledge/domain/review-anchor";
 
 function renderedHeadingIds(markdown: string): string[] {
   const html = renderToStaticMarkup(<MarkdownRenderer markdown={markdown} />);
@@ -48,4 +50,20 @@ describe("heading ids in the rendered document", () => {
   it("does not give ids to things that are not headings", () => {
     expect(renderedHeadingIds("```\n# not a heading\n```\n\nplain **bold**\n")).toEqual([]);
   });
+});
+
+it("renders persistent paragraph, list and code targets without shifting review paths", () => {
+  const ids = [1, 2, 3].map(number => `kh-block-f81d4fae-7dec-11d0-a765-00a0c91e6bf${number}`);
+  const plain = "# Heading\n\nParagraph\n\n- [x] **Checked**\n- Other item\n\n```js\nconst value = 42\n```\n\nNext paragraph";
+  const markdown = plain
+    .replace("Paragraph", `${blockLinkMarker(ids[0])}\n\nParagraph`)
+    .replace("**Checked**", `**Checked**${blockLinkMarker(ids[1])}`)
+    .replace("```js", `${blockLinkMarker(ids[2])}\n\n\`\`\`js`);
+  const html = renderToStaticMarkup(<MarkdownRenderer markdown={markdown} />);
+  expect(html).toMatch(new RegExp(`<p[^>]*id="${ids[0]}"[^>]*>Paragraph</p>`));
+  expect(html).toMatch(new RegExp(`<li[^>]*id="${ids[1]}"`));
+  expect(html).toMatch(new RegExp(`<code[^>]*id="${ids[2]}"`));
+  expect(html).toContain('id="heading"');
+  expect(html).not.toContain("&lt;!--");
+  expect(projectReviewBlocks(markdown)).toEqual(projectReviewBlocks(plain));
 });
