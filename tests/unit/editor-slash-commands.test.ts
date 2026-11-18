@@ -424,7 +424,7 @@ it('date stays inline in the item', async () => {
   expect(itemTexts(doc.child(0))[1]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 });
 
-it.each([['hr', 'hr'], ['table', 'table'], ['tog', 'details'], ['call', 'blockquote'], ['mermaid', 'code_block']])('/%s alone in an item splits the list around a %s', async (query, type) => {
+it.each([['table', 'table'], ['tog', 'details'], ['call', 'blockquote'], ['mermaid', 'code_block']])('/%s alone in an item splits the list around a %s', async (query, type) => {
   const { editor, view } = await typedInItem('- a\n- b\n- c', 1, '', '/' + query);
   key(view.dom, 'Enter');
   const { doc } = await saved(editor);
@@ -514,4 +514,103 @@ it('an item holding a wikilink keeps it, and its edge, when a mid-line block goe
   let wiki = 0;
   doc.child(0).descendants(node => { if (node.type.name === 'wiki_link') wiki++; });
   expect(wiki).toBe(1);
+});
+
+// Fix round: a divider in an item is followed by an empty line, as at the top level, and the caret goes there, so the
+// next key neither replaces the divider nor types into the next item.
+it.each([
+  ['the middle item', '- a\n- b\n- c', 1, '', ['bullet_list', 'hr', 'paragraph', 'bullet_list']],
+  ['the last item', '- a\n- b', 1, '', ['bullet_list', 'hr', 'paragraph']],
+  ['the only item', '- b', 0, '', ['hr', 'paragraph']],
+  ['the last item, mid-line', '- a\n- b', 1, 'b', ['bullet_list', 'hr', 'paragraph']],
+])('/hr in %s keeps the divider, and what is typed next goes on a line after it', async (_name, markdown, n, text, types) => {
+  const { editor, view } = await typedInItem(markdown, n, text, text ? ' /hr' : '/hr');
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('Z'));
+  const { doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(types);
+  const after = types.indexOf('hr') + 1;
+  expect(doc.child(after).textContent).toBe('Z');
+  if (types.at(-1) === 'bullet_list' && types.length > 3) expect(itemTexts(doc.child(after + 1))).toEqual(['c']);
+});
+
+it('/table in the middle of a list puts the caret in its first cell, not in the next item', async () => {
+  const { editor, view } = await typedInItem('- a\n- b\n- c', 1, '', '/table');
+  key(view.dom, 'Enter');
+  expect(view.state.selection.$from.node(-1).type.name).toBe('table_header');
+  view.dispatch(view.state.tr.insertText('Z'));
+  const { doc } = await saved(editor);
+  expect(itemTexts(doc.child(2))).toEqual(['c']);
+  expect(doc.child(1).firstChild!.firstChild!.textContent).toBe('Z');
+});
+
+// Deviation (list commands spec): an item with a nested list keeps it; a block that would replace the item goes below it.
+it('a quote chosen alone in an item with a nested list goes after the item, keeping the nested list', async () => {
+  const { editor, view } = await typedInItem('- a\n- p\n  - n\n- c', 1, '', '/quo');
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('said'));
+  const { markdown, doc } = await saved(editor);
+  expect(markdown).not.toContain('/quo');
+  expect(childTypes(doc)).toEqual(['bullet_list', 'blockquote', 'bullet_list']);
+  expect(itemTexts(doc.child(0))).toEqual(['a', '']);
+  const parent = doc.child(0).child(1);
+  expect(childTypes(parent)).toEqual(['paragraph', 'bullet_list']);
+  expect(itemTexts(parent.child(1))).toEqual(['n']);
+  expect(doc.child(1).textContent).toBe('said');
+  expect(itemTexts(doc.child(2))).toEqual(['c']);
+});
+
+it('works in a list item inside a toggle body', async () => {
+  const { editor, view } = await typedInItem('<details open>\n<summary>T</summary>\n\n- a\n- b\n\n</details>', 1, '', '/code');
+  expect(menu().hidden).toBe(false);
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('x'));
+  const { doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(['details']);
+  expect(childTypes(doc.child(0).lastChild!)).toEqual(['bullet_list', 'code_block']);
+  expect(doc.child(0).lastChild!.lastChild!.textContent).toBe('x');
+});
+
+it('works in a list item inside a callout', async () => {
+  const { editor, view } = await typedInItem('> [!NOTE]\n> - a\n> - b', 1, '', '/code');
+  expect(menu().hidden).toBe(false);
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('x'));
+  const { markdown, doc } = await saved(editor);
+  expect(markdown).toContain('[!NOTE]');
+  expect(childTypes(doc)).toEqual(['blockquote']);
+  expect(childTypes(doc.child(0))).toEqual(['paragraph', 'bullet_list', 'code_block']);
+  expect(doc.child(0).lastChild!.textContent).toBe('x');
+});
+
+it('a mid-line /todo in a to-do item adds an unchecked to-do after it', async () => {
+  const { editor, view } = await typedInItem('- [x] a\n- [x] b', 1, 'b', ' /todo');
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('new'));
+  const { doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(['bullet_list']);
+  expect(itemTexts(doc.child(0)).map(text => text.trim())).toEqual(['a', 'b', 'new']);
+  const checked: unknown[] = []; doc.child(0).forEach(item => checked.push(item.attrs.checked));
+  expect(checked).toEqual([true, true, false]);
+});
+
+it('a mid-line same-kind item in a numbered list takes no stale label', async () => {
+  const { view } = await typedInItem('1. a\n2. b\n3. c', 1, 'b', ' /num');
+  key(view.dom, 'Enter');
+  const list = view.state.doc.child(0);
+  expect(list.childCount).toBe(4);
+  expect(list.child(2).attrs.label).not.toBe(list.child(1).attrs.label);
+});
+
+// An item whose first line is empty and which holds more is not written `- <br />`: the indented lines after a lone
+// `<br />` read back as part of that HTML, and the nested list was lost on reopening.
+it.each(['- a\n- p\n  - n\n- c', '1. a\n2. p\n   1. n\n3. c', '- [ ] a\n- [x] p\n  - [ ] n\n- [ ] c'])('an item with an empty first line keeps its nested list through save and reopen: %j', async (source) => {
+  const { editor, view } = await open(source);
+  inItem(view, 1, '');
+  const { markdown, doc } = await saved(editor);
+  if (!source.includes('[')) expect(markdown).not.toContain('<br />');
+  expect(doc.toString()).toBe(view.state.doc.toString());
+  const checked: unknown[] = []; doc.descendants(node => { if (node.type.name === 'list_item') checked.push(node.attrs.checked); });
+  const before: unknown[] = []; view.state.doc.descendants(node => { if (node.type.name === 'list_item') before.push(node.attrs.checked); });
+  expect(checked).toEqual(before);
 });

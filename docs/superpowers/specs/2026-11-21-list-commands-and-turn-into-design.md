@@ -105,6 +105,27 @@ Nothing stored changes.
    the `/` list and the turn keys call the same function for the same blocks.
    A test turns the same item through each and compares the saved Markdown.
 
+## Deviations
+
+- **An item with a nested list keeps it under `/`.** Decision 2 says a choice made with `/query` alone replaces
+  the item. Some choices would drop the item's nested list: Text, a heading, Quote and Code (Turn into's leaf kinds),
+  and Divider, Table, Diagram, Toggle and Callout. For these, the `/` list puts the block below the item and its
+  nested list, as a choice made after text does (decision 3), and leaves the item's first line empty. The grip's Turn
+  into refuses these kinds on such an item (`canTurnInto`), so here the two entries give different results, and
+  decision 7's parity test excludes this case. The `/` path is chosen because it is safer than losing content: the
+  writer typed `/`, and a choice should not silently delete the item's children.
+- **In an item, a divider brings an empty line after it.** A divider there is followed by an empty paragraph, and
+  the caret goes into it, as `/hr` does at the top level. Otherwise, in a list's last item, the caret would stay on
+  the divider and the next key would replace it, and in a middle item the next key would type into the next item. A
+  divider chosen in a middle item therefore saves as list, divider, empty line (`<br />`), list. A table keeps the
+  caret in its first cell, as at the top level.
+- **An item whose first line is empty saves without that line.** Milkdown writes an empty paragraph as `<br />`. At
+  the start of an item that holds a nested list, `- <br />` begins an HTML block, which swallows the indented lines
+  after it, so the nested list was lost on reopening. Emptying a parent item's text did this before this spec, and
+  the deviation above makes it routine. Such an item is now written `-` with its nested list below, which reads back
+  as the same item (`editor/empty-quote.ts`). A to-do keeps `- [ ] <br />`: after the box the tag is inline, and the
+  nested list reads back.
+
 ## Out of scope, recorded
 
 - **Colour and "Turn into page."** Markdown has no colour, and a page is a

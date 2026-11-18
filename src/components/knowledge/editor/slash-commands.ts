@@ -219,9 +219,10 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
     const item = tr.doc.nodeAt(itemPos)!;
     const kind = COMMAND_KIND[command.id];
     const [made, offset] = blockFor(view, command);
-    // In an item a divider stands alone: the caret goes on to what follows it.
-    const nodes = command.id === "divider" ? [view.state.schema.nodes.hr.create()] : Array.isArray(made) ? made : [made];
-    const caret = command.id === "divider" ? nodes[0].nodeSize : offset;
+    // A divider brings an empty line after it, as at the top level, and the caret goes there: the next key neither
+    // replaces the divider nor types into the next item.
+    const nodes = Array.isArray(made) ? made : [made];
+    const caret = offset;
     if (!trigger.inline) {
       // The item's own kind keeps it as it is; another list kind or a leaf turns it as Turn into does.
       if (kind && kind === blockKind(item)) { dispatchBlockAction(view, tr, trigger.from); return; }

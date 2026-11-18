@@ -284,7 +284,9 @@ export function insertAfterListItem(tr: Transaction, itemPos: number, nodes: Pro
   const only = nodes.length === 1 ? nodes[0] : null;
   if (only?.type.name === "list_item" && blockKind(only) === blockKind(item)) {
     const at = itemPos + item.nodeSize;
-    tr.insert(at, item.type.create({ ...item.attrs, checked: item.attrs.checked == null ? null : false }, only.content));
+    // The new item's own label, not the one it follows: the writer numbers a list's items again from its start.
+    const label = item.attrs.listType === "ordered" ? `${(Number(tr.doc.resolve(itemPos).parent.attrs.order) || 1) + tr.doc.resolve(itemPos).index() + 1}.` : "-";
+    tr.insert(at, item.type.create({ ...item.attrs, label, checked: item.attrs.checked == null ? null : false }, only.content));
     return at;
   }
   return splitListAt(tr, itemPos, only?.type.name === "list_item" ? [listOf(tr.doc.type.schema, [only])] : nodes, false);
