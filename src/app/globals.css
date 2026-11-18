@@ -649,7 +649,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-fade-in { animation: kh-fade-in theme("transitionDuration.120") theme("transitionTimingFunction.out"); }
 .kh-slash-menu:not([hidden]),
 .kh-emoji-menu:not([hidden]),
-.kh-block-move-menu:not([hidden]),
+.kh-block-move-menu:not([hidden]) { animation: kh-pop-in theme("transitionDuration.120") theme("transitionTimingFunction.out"); }
 .kh-block-gutter:not([hidden]),
 .kh-selection-bubble { animation: kh-fade-in theme("transitionDuration.120") theme("transitionTimingFunction.out"); }
 .kh-tree-drop-line:not([hidden]),
@@ -1148,6 +1148,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-table-grip, .kh-table-col-grip {
   @apply flex size-6 items-center justify-center rounded-md border border-kh-border bg-kh-bg-raised text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text kh-focus-ring;
 }
+/* The column grip sits inside the table, its top on the table's top border: nothing above the table is covered. */
 .kh-table-col-grip svg { transform: rotate(90deg); }
 .kh-block-gutter[hidden], .kh-block-move-menu[hidden], .kh-slash-menu[hidden] { display: none; }
 .kh-block-gutter button {

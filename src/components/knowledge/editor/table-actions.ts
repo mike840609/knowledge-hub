@@ -212,7 +212,7 @@ export function tableActions() {
         rowGrip.style.left = `${editorRect.left + (56 - 24) / 2}px`;
         rowGrip.style.top = `${rowRect.top + rowRect.height / 2 - 12}px`;
         colGrip.style.left = `${headerRect.left + headerRect.width / 2 - 12}px`;
-        colGrip.style.top = `${headerRect.top - 12}px`;
+        colGrip.style.top = `${headerRect.top}px`;
         if (!menu.hidden && menuGrip && menuGrip.hidden) closeMenu();
       }
       function rowOffset(target: CellLocation) {
