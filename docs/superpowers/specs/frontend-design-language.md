@@ -886,7 +886,9 @@ ring: one adds a block below (a new sibling item on a list) and, at the top
 level, opens the `/` list on it; one is dragged to move the block and clicked
 for the block menu. The menu offers **Turn into** (Text, Heading 1–3, Bulleted
 list, Numbered list, To-do list, Quote, Code, Toggle, Callout), **Duplicate**,
-**Delete**, then a rule and **Move up** / **Move down**. Turn into is a second
+**Delete**, then **Copy link to block** where the block can carry a persistent
+target, **Comment** where the owner can start a discussion on it, then a rule
+and **Move up** / **Move down**. Turn into is a second
 page of the same menu, not a nested popover: a conversion that would drop
 content — a several-item list into one heading, a quote with several paragraphs
 into one code block — is disabled rather than performed lossily; converting one
@@ -899,6 +901,16 @@ block is dragged it is tinted `kh-bg-selected` and a 2px `--kh-primary` line
 marks where it will land. On a device with no hover the controls follow the
 block the caret is in.
 
+**Copy link to block** writes `<document address>#kh-block-<uuid>` and gives
+the block that id if it has none. Markdown carries the id as an HTML comment
+adjacent to the block (`<!-- kh-block-… -->` before a paragraph or fence,
+inline at the end of a list item's paragraph): the reader and editor remove it
+and put the id on the block's element, so a hash link scrolls to it and the
+comment is invisible elsewhere. Ids are per document, survive moves and round
+trips, and a split keeps the original's id and leaves the new fragment without
+one (2026-11-17 amendment). Headings keep **Copy link to heading**, which uses
+their slug; quotes and tables have neither.
+
 The `/` list takes what the `[[` list takes — the `lg` radius, a border, the
 `popover` elevation, the row in force in `kh-bg-selected` — and behaves as it
 does: focus stays in the document, the editor is a `combobox` while it is
@@ -907,7 +919,9 @@ open, and the keys are the editor's. An empty paragraph the caret is in reads
 sentence instead.
 
 Rows are grouped under **Basic blocks**, **Lists**, **Blocks** and **Links**
-(2026-11-17, below), each heading `caption` muted text and not an option. Each
+(2026-11-17, below), each heading `caption` muted text and not an option. With
+no query, a **Recent** group of up to four distinct commands chosen in this
+browser comes first; a query shows none. Each
 row leads with a 16px Lucide glyph (`size-4`, `text-kh-text-muted`, also
 on the row in force, `aria-hidden`) beside its label and its `caption` hint:
 Type, Heading 1–3, List, List ordered, List todo, Quote, Code, Minus, Table,
@@ -1955,8 +1969,8 @@ seven gaps left after the 22-decision pass of 2026-11-15:
 
 Out of scope, recorded: comments inside a team document's editor (the review
 API is document-scoped but its editor wiring is personal-workspace-only; making
-it general is an authorization change), copy-link-to-block and move-to-page (no
-block IDs or block tree), multi-block selection (deferred by the 2026-11-15
+it general is an authorization change), move-to-page (no block tree; copy-link
+to block is now in scope, above), multi-block selection (deferred by the 2026-11-15
 spec), row/column drag reorder, and the earlier deferred list (mentions, page
 width, images, columns, embeds, real-time collaboration).
 

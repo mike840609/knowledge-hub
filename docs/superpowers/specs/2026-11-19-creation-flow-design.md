@@ -19,12 +19,14 @@ decides each and amends the design-language contract. Nothing stored changes.
    still mounting. Keys typed in either were lost, which kept only the tail of
    the title, such as "iately" from "Typed immediately".
 
-   - **The buffer.** `typing-ahead.ts` keeps plain characters and Backspace
-     from the press until the title field takes focus. Every entry starts it:
+   - **The buffer.** `typing-ahead.ts` keeps what is typed where no field has
+     focus from the press until the starter's fields take over: plain
+     characters, spaces, Enter (which ends the title and starts the body) and
+     Backspace, with the title capped at 512 characters. Every entry starts it:
      the sidebar `+`, Home's button and its `C` key, and the action runner,
      which covers the palette, row menus and the folder `+`. A field that
      still has focus as it starts, such as the palette's search while the
-     palette closes, loses it (the starter's own title keeps it, so an IME
+     palette closes, loses it (the starter's own fields keep it, so an IME
      goes on composing there), and a closing dialog hands focus back to no
      field. Keys typed into another field or a contenteditable are that
      field's. Untaken after ten seconds, it stops and forgets what it kept.

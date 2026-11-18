@@ -131,6 +131,8 @@ export function editorReviewBlockElement(view: EditorView, pos: number): HTMLEle
   if (!(element instanceof HTMLElement)) return null;
   if (element.matches("p,h1,h2,h3,h4,h5,h6,pre")) return element;
   if (element.matches("li")) return element.querySelector(":scope > p");
+  // A code block's node view is a wrapper whose own <pre> is hidden until it is edited; the
+  // rendered block inside the wrapper is the visible surface.
   if (view.state.doc.nodeAt(pos)?.type.name === "code_block") return element.querySelector("pre:not([hidden], [hidden] *)");
   return null;
 }

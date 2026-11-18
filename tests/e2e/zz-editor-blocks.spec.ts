@@ -214,6 +214,23 @@ test.describe("blocks in the rendered editor", () => {
     await expect(landing).toBeInViewport();
   });
 
+  test("a block link lands below the pinned path line", async ({ page }) => {
+    const workspaceId = await mySpace(page);
+    const id = "kh-block-f81d4fae-7dec-11d0-a765-00a0c91e6bf7";
+    const target = "The paragraph a block link points at.";
+    const filler = Array.from({ length: 32 }, (_, index) => `Earlier paragraph ${index + 1}.`);
+    const url = await createNote(page, workspaceId, unique("Block scroll"), [...filler, `<!-- ${id} -->\n\n${target}`, "A later paragraph."].join("\n\n"));
+    await page.goto(`${url}#${id}`);
+    const landing = page.locator(`main article [id="${id}"]`).first();
+    await expect(landing).toHaveText(target, ROUND_TRIP);
+    await expect(landing).toBeInViewport();
+    const crumb = page.getByRole("region", { name: "Document content" }).getByRole("navigation", { name: "Breadcrumb" });
+    await expect.poll(async () => {
+      const [targetBox, crumbBox] = await Promise.all([landing.boundingBox(), crumb.boundingBox()]);
+      return !!targetBox && !!crumbBox && Math.round(targetBox.y) >= Math.round(crumbBox.y + crumbBox.height);
+    }).toBe(true);
+  });
+
   test('"/" on an empty line lists the blocks, and the pick is saved as Markdown', async ({ page }) => {
     const workspaceId = await mySpace(page);
     const url = await createNote(page, workspaceId, unique("Slash"), "Opening line.");

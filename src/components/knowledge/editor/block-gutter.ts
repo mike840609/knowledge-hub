@@ -137,12 +137,13 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
           if (slug !== null) copyLink(window.location.pathname, slug);
         }) : null;
         const node = activeNode();
-        const blockLink = node && Object.hasOwn(node.attrs, "blockId") && node.content.size && linkTo?.()
+        // A read-only copy cannot mint an id, but an id the Markdown already has is still a link to copy.
+        const blockLink = node && Object.hasOwn(node.attrs, "blockId") && node.content.size && linkTo?.() && (isBlockId(node.attrs.blockId) || view.editable)
           ? menuButton("Copy link to block", copyBlockLink) : null;
         menu.append(turn, duplicate, remove);
-        if (commentAction) menu.append(commentAction);
         const link = heading ?? blockLink;
         if (link) menu.append(link);
+        if (commentAction) menu.append(commentAction);
         menu.append(separator(), up, down);
         return turn;
       }
@@ -161,8 +162,9 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
         const path = linkTo?.();
         closeMenu();
         grip.focus();
-        if (!view.editable || pos === null || !node || !path) return;
+        if (pos === null || !node || !path) return;
         if (isBlockId(node.attrs.blockId)) { copyLink(path, node.attrs.blockId); return; }
+        if (!view.editable) return;
         if (!navigator.clipboard || !globalThis.crypto?.randomUUID) {
           live.textContent = "Couldn't copy the link";
           return;

@@ -326,12 +326,13 @@ test("where the pane has no room for a rail, the owner's discussions open over t
   await expect(page.getByRole("complementary", { name: "Document comments" })).toBeHidden();
 });
 
-test("a document nobody has commented on shows the owner no way into discussions, and no margin for marks", async ({ page, request }) => {
+test("a document nobody has commented on still offers its discussion panel, and gives marks no margin", async ({ page, request }) => {
   const doc = await createReviewDocument(request, "## Alpha\n\nA paragraph.\n\n## Beta\n\nAnother.\n");
   await page.setViewportSize({ width: 1680, height: 900 });
   await page.goto(doc.href);
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
-  await expect(page.getByRole("button", { name: /discussions/ })).toHaveCount(0);
+  const comments = page.getByRole("button", { name: /^Show comments, 0 comments, 0 open/ });
+  await expect(comments).toBeVisible();
   await expect(page.locator("[data-review-marker]")).toHaveCount(0);
   // Retried, not read once: the reading copy is replaced as the editor takes over, and a node read mid-swap has no style.
   await expect(page.locator("[data-review-document]")).toHaveCSS("padding-right", "0px");

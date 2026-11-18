@@ -283,6 +283,7 @@ it("moves the list item up among its siblings", async () => {
 
 it.each([
   ["First\n\nSecond", "First", "p"],
+  ["- First\n- Second", "First", "li"],
   ["- [x] First\n- [ ] Second", "First", "li"],
   ["```js\nFirst\n```\n\nSecond", "First", "pre"],
 ])("copies a persistent block link, keeping its target across a move and round trip in %s", async (markdown, text, tagName) => {

@@ -10,19 +10,27 @@ import { browserDraftStorage, readDraft, syncDraft, type DraftKey } from "@/lib/
 import { bufferTyping, finishTyping, takeTyped, type NewNoteDraft } from "./typing-ahead";
 
 type Created = { documentId: string; sourceId: string };
-let arriving: { documentId: string; draft: NewNoteDraft } | null = null;
+/** The same ten seconds the typing buffer keeps: past it, an arrival never reached its editor. */
+const ARRIVAL_TTL_MS = 10_000;
+let arriving: { documentId: string; draft: NewNoteDraft; at: number } | null = null;
+
+function arrivalFor(documentId: string) {
+  if (!arriving || arriving.documentId !== documentId) return null;
+  if (Date.now() - arriving.at > ARRIVAL_TTL_MS) { arriving = null; return null; }
+  return arriving;
+}
 
 export function hasNewNoteDraft(documentId: string): boolean {
-  return arriving?.documentId === documentId;
+  return arrivalFor(documentId) !== null;
 }
 
 /** The editor consumes its own draft once, including keystrokes during the route change. */
 export function takeNewNote(documentId: string): NewNoteDraft | null {
-  if (arriving?.documentId !== documentId) return null;
-  const { draft } = arriving;
+  const arrival = arrivalFor(documentId);
+  if (!arrival) return null;
   arriving = null;
-  finishTyping(draft);
-  return draft;
+  finishTyping(arrival.draft);
+  return arrival.draft;
 }
 
 function focusAtEnd(field: HTMLTextAreaElement | null) {
@@ -108,7 +116,7 @@ export function NewNoteStarter({ workspaceId, userId, folderId, seedTitle, compo
     if (!created || composing || composingField.current || carry.current) return;
     const draft = bufferTyping({ text: titleField.current?.value, body: bodyField.current?.value, entered: entered.current, keepFocus: true });
     carry.current = draft;
-    arriving = { documentId: created.documentId, draft };
+    arriving = { documentId: created.documentId, draft, at: Date.now() };
     const href = `/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}`;
     refreshOnArrival(href);
     router.replace(href);

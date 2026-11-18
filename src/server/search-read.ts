@@ -93,8 +93,13 @@ export async function getSearchPageModel(workspaceId: string, input: SearchPageI
       return { locations, folders };
     });
     const paths = new Map(locations.map(entry => [entry.documentId, entry.sourcePath]));
+    // An imported document has no Hub tree node; its folder is the directory part of its source path.
+    const importedFolder = (sourcePath: string | null | undefined) => {
+      const folder = sourcePath?.split("/").slice(0, -1).join(" › ");
+      return folder || undefined;
+    };
     return { ...base, result: { ...result, hits: result.hits.map(hit => ({
-      ...hit, sourcePath: paths.get(hit.documentId), folderPath: folders.get(hit.documentId),
+      ...hit, sourcePath: paths.get(hit.documentId), folderPath: folders.get(hit.documentId) ?? importedFolder(paths.get(hit.documentId)),
     })) }, timedOut: false };
   } catch (error) {
     if (error instanceof ValidationError) return { ...base, result: null, timedOut: false, filterError: error.message };

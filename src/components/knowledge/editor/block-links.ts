@@ -59,7 +59,10 @@ export const linkedListItem = extendListItemSchemaForTask.extendSchema(previous 
         const label = node.label != null ? `${node.label}.` : "•";
         const listType = node.label != null ? "ordered" : "bullet";
         const checked = node.checked == null ? null : Boolean(node.checked);
-        state.openNode(type, { blockId, label, listType, checked, spread: node.spread ?? true }).next(node.children).closeNode();
+        // The same defaults as the runners this extends: task items are loose unless stated, and every
+        // other item keeps the base schema's tight default.
+        const spread = checked === null ? node.spread ?? false : node.spread ?? true;
+        state.openNode(type, { blockId, label, listType, checked, spread }).next(node.children).closeNode();
       },
     },
     toMarkdown: {
