@@ -234,6 +234,46 @@ describe("transient failures", () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(write).toHaveBeenCalledTimes(1);
   });
+  it("get one last try, outliving the page, when the editor goes by navigation; a refusal does not", async () => {
+    const write = vi.fn().mockRejectedValueOnce(new TypeError("Failed to fetch")).mockResolvedValue({ revisionId: "r2", revisionNo: 2, changed: true });
+    const { queue } = retrying(write);
+    queue.change({ ...original, markdown: "Mine" });
+    await vi.advanceTimersByTimeAsync(1000);
+    queue.leave();
+    expect(write).toHaveBeenLastCalledWith({ ...original, markdown: "Mine" }, "r1", { keepalive: true });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(write).toHaveBeenCalledTimes(2);
+    const refused = vi.fn().mockRejectedValue(new Error("conflict"));
+    const other = retrying(refused).queue;
+    other.change({ ...original, markdown: "Mine" });
+    await vi.advanceTimersByTimeAsync(1000);
+    other.leave();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(refused).toHaveBeenCalledTimes(1);
+  });
+  it("wait from 2s again after Retry save or a refusal, not from where an earlier streak stopped", async () => {
+    const write = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+    const { queue } = retrying(write);
+    queue.change({ ...original, markdown: "Mine" });
+    await vi.advanceTimersByTimeAsync(1000 + 2000 + 4000 + 8000);
+    expect(write).toHaveBeenCalledTimes(4);
+    void queue.retry();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(write).toHaveBeenCalledTimes(5);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(write).toHaveBeenCalledTimes(6);
+  });
+  it("a try while saving is paused leaves no error behind", async () => {
+    const write = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+    const { queue } = retrying(write);
+    queue.change({ ...original, markdown: "Mine" });
+    await vi.advanceTimersByTimeAsync(1000);
+    queue.pause(true);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(queue.status).toBe("pending");
+    expect(queue.error).toBeUndefined();
+  });
 });
 
 describe("leaving", () => {

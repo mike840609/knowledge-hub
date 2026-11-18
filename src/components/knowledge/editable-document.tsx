@@ -122,6 +122,12 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     const writer = queue.current;
     if (!writer || discardingRef.current) return;
     const draft = writer.dirty ? { ...writer.current, baseRevisionId: staleDraftBase.current ? staleDraftBase.current.revisionId : writer.revisionId } : null;
+    if (!draft && !alive.current) {
+      // A save sent on leaving was acknowledged after the editor went. The same document may be open
+      // again with newer text; only the copy of what this one saved is cleared.
+      const stored = readDraft(browserDraftStorage(), keyRef.current);
+      if (stored && (stored.title !== writer.saved.title || stored.markdown !== writer.saved.markdown)) return;
+    }
     // A tab-local copy also protects personal drafts while the account request is in flight.
     if (draft) syncDraft(browserDraftStorage(), keyRef.current, draft, { title: "\0", markdown: "\0" });
     else clearDraft(browserDraftStorage(), keyRef.current);
@@ -189,7 +195,15 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
         keepRecovery();
         // Clear remote recovery only after all current text has reached the document.
         if (!writer.dirty) void persistent.current?.flush();
-        if (!live) return;
+        if (!live) {
+          // Sent on leaving: another tab still hears of it.
+          if (typeof BroadcastChannel === "function") {
+            const saves = new BroadcastChannel("kh:document-saved");
+            saves.postMessage({ documentId: detail.inspectorData.documentId, revisionId: revision.revisionId });
+            saves.close();
+          }
+          return;
+        }
         acknowledgedRevisionNo.current = revision.revisionNo;
         setSavedRevision(revision.revisionId);
         const title = resolve(snapshot).title || "Untitled";
@@ -257,7 +271,11 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
         if (draft.baseRevisionId !== revisionId) staleDraftBase.current = { revisionId: draft.baseRevisionId };
         writer.change({ title: draft.title, markdown: draft.markdown });
         setContent(writer.current);
-        if (draft.baseRevisionId === revisionId) writer.pause(!authorization.current);
+        if (draft.baseRevisionId === revisionId) {
+          writer.pause(!authorization.current);
+          // Saved at once, so typing on top of it starts from the revision it makes, not a conflict with it.
+          void writer.flush();
+        }
         else {
           setRecovery("stale");
           const { revisions } = detail.inspectorData;

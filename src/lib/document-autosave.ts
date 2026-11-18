@@ -71,6 +71,7 @@ export class DocumentAutosave {
   rebase(theirs: DocumentContent, revisionId: string, merged: DocumentContent) {
     if (this.disposed || this.flight || !this.error) return false;
     this.error = undefined;
+    this.attempts = 0;
     this.saved = theirs;
     this.revisionId = revisionId;
     this.dirtySince = undefined;
@@ -115,8 +116,8 @@ export class DocumentAutosave {
           // 2s, 4s, 8s … at most 30s apart, until one succeeds or the editor goes.
           const wait = Math.min(RETRY_FIRST * 2 ** this.attempts, RETRY_LONGEST);
           this.attempts++;
-          this.retryTimer = setTimeout(() => { this.retryTimer = undefined; void this.retry(); }, wait);
-        }
+          this.retryTimer = setTimeout(() => { this.retryTimer = undefined; void this.retry(false); }, wait);
+        } else this.attempts = 0;
         this.options.change();
       }
     } finally {
@@ -145,15 +146,18 @@ export class DocumentAutosave {
     this.dirtySince = undefined;
     return true;
   }
-  retry() {
+  /** `manual`: the writer asked (Retry save), so a failure after it waits from the shortest delay again. */
+  retry(manual = true) {
     clearTimeout(this.retryTimer);
     this.retryTimer = undefined;
+    if (manual) this.attempts = 0;
     this.error = undefined;
+    if (this.status === "error") this.status = this.dirty ? "pending" : "saved";
     return this.flush();
   }
   /** The connection came back, or the page did: a failure being tried again is tried now. */
   retryNow() {
-    if (this.retrying) void this.retry();
+    if (this.retrying) void this.retry(false);
   }
   /** Whether what is unsaved could go with the page (`leave`, or `flush` with `keepalive`), or would be left behind. */
   canSendOnLeave() {
@@ -167,6 +171,8 @@ export class DocumentAutosave {
    */
   leave() {
     if (this.disposed) return;
+    // A failure being tried again gets one last try on the way out; a refusal does not.
+    if (this.retrying) this.error = undefined;
     this.leaving = true;
     this.dispose();
     void this.flush({ keepalive: true });
