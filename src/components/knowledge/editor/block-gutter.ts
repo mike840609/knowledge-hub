@@ -41,6 +41,20 @@ export function headingSlugAt(view: EditorView, pos: number): string | null {
   return found;
 }
 
+/**
+ * Whether the pane leaves the gutter room (2026-11-21 block-unit spec, decision 7): at least 56px between the editor's
+ * text left edge and the left edge of its nearest clipping ancestor (the viewport's, 0, where none clips).
+ */
+export function gutterFits(dom: HTMLElement): boolean {
+  let clipLeft = 0;
+  for (let node = dom.parentElement; node; node = node.parentElement) {
+    const overflow = getComputedStyle(node).overflowX;
+    if (overflow && overflow !== "visible") { clipLeft = node.getBoundingClientRect().left; break; }
+  }
+  const textLeft = dom.getBoundingClientRect().left + (Number.parseFloat(getComputedStyle(dom).paddingLeft) || 0);
+  return textLeft - clipLeft >= 56;
+}
+
 export function blockGutter() {
   // The blocks being dragged: one, or every block of the range (2026-11-21 block-unit spec, decision 6).
   const dragKey = new PluginKey<number[] | null>("khDraggedBlock");
@@ -296,17 +310,37 @@ export function blockGutter() {
       toolbar.addEventListener("keydown", event => {
         if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeMenu(); view.focus(); }
       });
+      // Typing, or a button held for a selection, keeps the controls hidden until the pointer moves / is released.
+      let typed = false;
+      let held = false;
+      let lastX = 0;
+      let lastY = 0;
       const hover = (event: MouseEvent) => {
+        const moved = event.clientX !== lastX || event.clientY !== lastY;
+        lastX = event.clientX; lastY = event.clientY;
+        if (typed && moved) typed = false;
         if (dragging || !menu.hidden || !view.editable) return;
+        if (held || typed) { if (!toolbar.contains(document.activeElement)) hide(); return; }
         const rect = dom.getBoundingClientRect();
         const gutterWidth = Number.parseFloat(getComputedStyle(dom).paddingLeft) || 56;
-        if (event.clientX < rect.left || event.clientX >= rect.left + gutterWidth) {
+        // Anywhere on the block's line when the pane gives the gutter room; otherwise the gutter alone.
+        const inTrigger = gutterFits(dom)
+          ? event.clientX >= rect.left && event.clientX < rect.right
+          : event.clientX >= rect.left && event.clientX < rect.left + gutterWidth;
+        if (!inTrigger) {
           if (!toolbar.contains(document.activeElement)) hide();
           return;
         }
         pointerY = event.clientY;
         if (!frame) frame = requestAnimationFrame(() => { frame = 0; if (!destroyed) { active = pointAt(pointerY); position(); } });
       };
+      const keydown = (event: KeyboardEvent) => {
+        if (["Shift", "Control", "Alt", "Meta"].includes(event.key) || !menu.hidden) return;
+        typed = true;
+        if (!toolbar.contains(document.activeElement)) hide();
+      };
+      const mousedown = () => { held = true; if (!toolbar.contains(document.activeElement)) hide(); };
+      const mouseup = () => { held = false; };
       const leave = (event: MouseEvent) => {
         if (event.relatedTarget instanceof Node && (toolbar.contains(event.relatedTarget) || menu.contains(event.relatedTarget))) return;
         if (menu.hidden && !dragging && !toolbar.contains(document.activeElement)) hide();
@@ -455,7 +489,7 @@ export function blockGutter() {
         if (moveBlock(view, source.blocks[0].pos, before)) live.textContent = "Block moved";
       };
       const dragLeave = (event: DragEvent) => { if (!event.relatedTarget) { dropAt = null; line.hidden = true; } };
-      dom.addEventListener("mousemove", hover); dom.addEventListener("mouseleave", leave); toolbar.addEventListener("mouseleave", leave);
+      dom.addEventListener("mousemove", hover); dom.addEventListener("keydown", keydown); dom.addEventListener("mousedown", mousedown); document.addEventListener("mouseup", mouseup); dom.addEventListener("mouseleave", leave); toolbar.addEventListener("mouseleave", leave);
       dom.addEventListener("focus", focus); dom.addEventListener("blur", blur);
       document.addEventListener("pointerdown", outside);
       document.addEventListener("dragover", dragOver, true); document.addEventListener("drop", drop, true); document.addEventListener("dragend", cancelDrag); document.addEventListener("dragleave", dragLeave);
@@ -468,7 +502,7 @@ export function blockGutter() {
         if (!toolbar.hidden || (usesTouch() && view.hasFocus())) position();
       }, destroy() {
         destroyed = true; focusControls = undefined; cancelAnimationFrame(frame); cancelDrag(); toolbar.remove(); menu.remove(); line.remove(); live.remove();
-        dom.removeEventListener("mousemove", hover); dom.removeEventListener("mouseleave", leave); dom.removeEventListener("focus", focus); dom.removeEventListener("blur", blur);
+        dom.removeEventListener("mousemove", hover); dom.removeEventListener("keydown", keydown); dom.removeEventListener("mousedown", mousedown); document.removeEventListener("mouseup", mouseup); dom.removeEventListener("mouseleave", leave); dom.removeEventListener("focus", focus); dom.removeEventListener("blur", blur);
         document.removeEventListener("pointerdown", outside); document.removeEventListener("dragover", dragOver, true); document.removeEventListener("drop", drop, true); document.removeEventListener("dragend", cancelDrag); document.removeEventListener("dragleave", dragLeave);
         window.removeEventListener("scroll", reposition, true); window.removeEventListener("resize", reposition);
       } };

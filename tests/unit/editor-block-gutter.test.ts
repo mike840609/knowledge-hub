@@ -4,7 +4,7 @@ import { undo } from "@milkdown/kit/prose/history";
 import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import { afterEach, expect, it } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
-import { blockGutter } from "@/components/knowledge/editor/block-gutter";
+import { blockGutter, gutterFits } from "@/components/knowledge/editor/block-gutter";
 import { slashCommands } from "@/components/knowledge/editor/slash-commands";
 
 const rect = (top: number, bottom: number) => ({ x: 20, y: top, left: 20, right: 600, top, bottom, width: 580, height: bottom - top, toJSON: () => ({}) }) as DOMRect;
@@ -542,4 +542,76 @@ it("Move down on a list's last item takes it out of the list", async () => {
   expect(menuItem("Move down").disabled).toBe(false);
   menuItem("Move down").click();
   expect(editor.getMarkdown()).toBe("- a\n\nPara\n\n- b\n");
+});
+
+// Block-unit spec decision 7: the pointer anywhere on a block's line shows its controls.
+async function openWide() {
+  const opened = await open(false);
+  // Room for a gutter left of the text: the editor starts 100px in.
+  opened.view.dom.getBoundingClientRect = () => ({ ...rect(40, 300), left: 100, x: 100 });
+  return opened;
+}
+const move = async (view: import("@milkdown/kit/prose/view").EditorView, x: number, y = 60) => {
+  view.dom.dispatchEvent(new MouseEvent("mousemove", { clientX: x, clientY: y, bubbles: true }));
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+};
+const gutterToolbar = () => document.querySelector<HTMLElement>(".kh-block-gutter")!;
+
+it("pointer over the text shows the controls", async () => {
+  const { view } = await openWide();
+  await move(view, 300, 130);
+  expect(gutterToolbar().hidden).toBe(false);
+  expect(gutterToolbar().style.top).toBe("100px");
+});
+
+it("typing hides them until the pointer moves", async () => {
+  const { view } = await openWide();
+  await move(view, 300);
+  expect(gutterToolbar().hidden).toBe(false);
+  view.dom.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true }));
+  expect(gutterToolbar().hidden).toBe(true);
+  await move(view, 300);
+  expect(gutterToolbar().hidden).toBe(true);
+  await move(view, 310);
+  expect(gutterToolbar().hidden).toBe(false);
+});
+
+it("a pure modifier key does not hide them", async () => {
+  const { view } = await openWide();
+  await move(view, 300);
+  view.dom.dispatchEvent(new KeyboardEvent("keydown", { key: "Shift", bubbles: true }));
+  expect(gutterToolbar().hidden).toBe(false);
+});
+
+it("a held mouse button keeps them hidden", async () => {
+  const { view } = await openWide();
+  await move(view, 300);
+  view.dom.dispatchEvent(new MouseEvent("mousedown", { clientX: 300, clientY: 60, bubbles: true }));
+  expect(gutterToolbar().hidden).toBe(true);
+  await move(view, 320);
+  expect(gutterToolbar().hidden).toBe(true);
+  document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+  await move(view, 330);
+  expect(gutterToolbar().hidden).toBe(false);
+});
+
+it("a narrow gutter keeps the gutter-only trigger", async () => {
+  const { view } = await open(false);
+  expect(gutterFits(view.dom)).toBe(false);
+  await move(view, 200);
+  expect(gutterToolbar().hidden).toBe(true);
+  await move(view, 25);
+  expect(gutterToolbar().hidden).toBe(false);
+});
+
+it("gutterFits measures against the nearest clipping ancestor", async () => {
+  const { view } = await openWide();
+  expect(gutterFits(view.dom)).toBe(true);
+  const clip = document.body.appendChild(document.createElement("div"));
+  clip.style.overflowX = "auto";
+  clip.appendChild(view.dom.parentElement!);
+  clip.getBoundingClientRect = () => ({ ...rect(0, 900), left: 80, x: 80 });
+  expect(gutterFits(view.dom)).toBe(false);
+  clip.getBoundingClientRect = () => ({ ...rect(0, 900), left: 40, x: 40 });
+  expect(gutterFits(view.dom)).toBe(true);
 });
