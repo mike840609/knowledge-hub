@@ -754,3 +754,49 @@ it("Mod-Shift-ArrowDown with a selection across blocks moves the first one, and 
   expect(md(second.editor)).toBe("B\n\nAlpha\n\nCharlie\n");
   expect(caret(second.view)).toEqual({ text: "Alpha", offset: 0, empty: true });
 });
+
+it.each(["copy", "cut"] as const)("%s preserves a partial ordered list through paste", async action => {
+  const markdown = "5. A\n6. B\n7. C\n8. D\n";
+  const source = await open(markdown);
+  escapeOn(source.view, "C");
+  shift(source.view, "ArrowUp");
+  const { data } = clipEvent(source.view, action);
+  const html = document.createElement("div");
+  html.innerHTML = data.get("text/html") ?? "";
+  expect(html.firstElementChild?.tagName).toBe("OL");
+  expect(html.firstElementChild?.getAttribute("start")).toBe("6");
+  const target = await open("Replace");
+  choose(target.view, 0);
+  const paste = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(paste, "clipboardData", { value: { getData: (type: string) => data.get(type) ?? "", types: [...data.keys()], files: [] } });
+  target.view.dom.dispatchEvent(paste);
+  expect(md(target.editor)).toBe("6. B\n7. C\n");
+  if (action === "cut") {
+    expect(md(source.editor)).toBe("5. A\n6. D\n");
+    expect(undo(source.view.state, source.view.dispatch)).toBe(true);
+  }
+  expect(md(source.editor)).toBe(markdown);
+});
+
+it("copies a single selected numbered item with its number", async () => {
+  const { view } = await open("5. A\n6. B\n");
+  escapeOn(view, "B");
+  const { data } = clipEvent(view, "copy");
+  const html = document.createElement("div");
+  html.innerHTML = data.get("text/html") ?? "";
+  expect(html.querySelector("ol")?.start).toBe(6);
+  expect(html.textContent).toBe("B");
+});
+
+it("copies a mixed range with both partial lists and the block between them", async () => {
+  const { view } = await open("5. A\n6. B\n\nMiddle\n\n3. C\n4. D\n");
+  escapeOn(view, "B");
+  shift(view, "ArrowDown");
+  shift(view, "ArrowDown");
+  const { data } = clipEvent(view, "copy");
+  const html = document.createElement("div");
+  html.innerHTML = data.get("text/html") ?? "";
+  expect([...html.children].map(node => [node.tagName, node.getAttribute("start"), node.textContent])).toEqual([
+    ["OL", "6", "B"], ["P", null, "Middle"], ["OL", "3", "C"],
+  ]);
+});

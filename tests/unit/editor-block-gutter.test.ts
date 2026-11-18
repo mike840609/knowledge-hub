@@ -692,3 +692,24 @@ it("gutterFits measures against the nearest clipping ancestor", async () => {
   clip.getBoundingClientRect = () => ({ ...rect(0, 900), left: 40, x: 40 });
   expect(gutterFits(view.dom)).toBe(true);
 });
+
+it.each([
+  ["- A\n- B\n- C\n", false, "- A\n- C\n"],
+  ["- A\n- B\n- C\n", true, "- A\n"],
+  ["- Outer\n  - A\n  - B\n  - C\n", false, "- Outer\n  - A\n  - C\n"],
+  ["- Outer\n  - A\n  - B\n  - C\n", true, "- Outer\n  - A\n"],
+] as const)("Alt+F10 targets the chosen item or range in %s (range %s)", async (markdown, range, remaining) => {
+  const { editor, view } = await openWith(markdown, false);
+  caretAfter(view, "B");
+  view.dom.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+  if (range) shiftKey(view, "ArrowDown");
+  reveal(view);
+  expect(document.activeElement).toBe(button("Add block below"));
+  button("Move block").focus();
+  button("Move block").click();
+  expect(document.querySelector('[role="menu"]')?.getAttribute("aria-label")).toBe(range ? "Block actions, 2 blocks" : "Block actions");
+  menuItem("Delete").click();
+  expect(editor.getMarkdown()).toBe(remaining);
+  expect(undo(view.state, view.dispatch)).toBe(true);
+  expect(editor.getMarkdown()).toBe(markdown);
+});

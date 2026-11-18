@@ -1,5 +1,5 @@
 import { closeHistory } from "@milkdown/kit/prose/history";
-import { Mark, type Node as ProseNode } from "@milkdown/kit/prose/model";
+import { Fragment, Mark, Slice, type Node as ProseNode } from "@milkdown/kit/prose/model";
 import { NodeSelection, Plugin, PluginKey, Selection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
@@ -93,20 +93,43 @@ export function keepRange(view: EditorView, state: EditorState, tr: Transaction,
   setRange(view, tr, next);
 }
 
-/** The span a range covers, from its first block's start to its last block's end (copy takes it as one slice). */
-function span(blocks: EditorBlock[]) {
-  const last = blocks[blocks.length - 1];
-  return { from: blocks[0].pos, to: last.pos + last.node.nodeSize };
+/** A closed clipboard slice. Each run of items keeps its source list and starts at its first copied number. */
+function clipboardSlice(doc: ProseNode, blocks: EditorBlock[]): Slice {
+  const nodes: ProseNode[] = [];
+  for (let at = 0; at < blocks.length;) {
+    const block = blocks[at];
+    if (block.node.type.name !== "list_item") {
+      nodes.push(block.node);
+      at++;
+      continue;
+    }
+    const $item = doc.resolve(block.pos);
+    const list = $item.parent;
+    const first = $item.index();
+    const count = Math.min(list.childCount - first, blocks.length - at);
+    const attrs = list.type.name === "ordered_list" ? { ...list.attrs, order: list.attrs.order + first } : list.attrs;
+    const items: ProseNode[] = [];
+    for (let index = first; index < first + count; index++) items.push(list.child(index));
+    nodes.push(list.type.create(attrs, Fragment.fromArray(items), list.marks));
+    at += count;
+  }
+  return new Slice(Fragment.fromArray(nodes), 0, 0);
 }
 
-/** Copy and cut of the whole range: the selection ProseMirror holds is the anchor block alone, which would take one of several. */
+/** Copy the chosen blocks, including the list wrapper a list-item node selection leaves out. */
 function clip(view: EditorView, event: ClipboardEvent, cut: boolean): boolean {
-  const range = key.getState(view.state);
-  if (!view.editable || !range || !event.clipboardData) return false;
-  const blocks = blocksIn(view.state.doc, range);
-  if (blocks.length < 2) return false;
-  const { from, to } = span(blocks);
-  const { dom, text } = view.serializeForClipboard(view.state.doc.slice(from, to));
+  if (!view.editable || !event.clipboardData) return false;
+  const { state } = view;
+  const range = key.getState(state);
+  let blocks: EditorBlock[];
+  if (range) {
+    blocks = blocksIn(state.doc, range);
+  } else {
+    const { selection } = state;
+    if (!(selection instanceof NodeSelection) || selection.node.type.name !== "list_item" || selectedBlockPos(state) === null) return false;
+    blocks = [{ pos: selection.from, node: selection.node }];
+  }
+  const { dom, text } = view.serializeForClipboard(clipboardSlice(state.doc, blocks));
   event.preventDefault();
   event.clipboardData.clearData();
   event.clipboardData.setData("text/html", dom.innerHTML);

@@ -484,6 +484,24 @@ describe("Mod-Shift-7/8/9 on a list chosen with Escape (5: the keys toggle off)"
   });
 });
 
+describe("Mod-Alt-0…3 on a list item chosen with Escape", () => {
+  it.each([
+    ["0", "one\n\n- two\n"],
+    ["1", "# one\n\n- two\n"],
+    ["2", "## one\n\n- two\n"],
+    ["3", "### one\n\n- two\n"],
+  ])("Mod-Alt-%s turns the chosen item, as the block menu does", async (digit, expected) => {
+    const { editor, view } = await open("- one\n- two\n");
+    caretAt(view, findText(view, "one") + 1);
+    press(view, "Escape");
+    expect(view.state.selection).toBeInstanceOf(NodeSelection);
+    expect((view.state.selection as NodeSelection).node.type.name).toBe("list_item");
+    const event = mod(view, digit, { altKey: true });
+    expect(event.defaultPrevented).toBe(true);
+    expect(editor.getMarkdown()).toBe(expected);
+  });
+});
+
 it("[x] typed at the start of an item's later paragraph does not check the item", async () => {
   const { editor, view } = await open("- first\n\n  later\n");
   caretAt(view, findText(view, "later"));

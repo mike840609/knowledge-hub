@@ -13,7 +13,7 @@ import { Fragment, type Mark, type Node as ProseNode } from "@milkdown/kit/prose
 import { ReplaceStep } from "@milkdown/kit/prose/transform";
 import { $inputRule, $prose, $useKeymap } from "@milkdown/kit/utils";
 import { blockKind, canTurnInto, deleteBlock, duplicateBlock, isBlockItem, moveBlock, selectedBlockPos, siblingBlocks, turnBlockInto, type BlockKind } from "./block-actions";
-import { blockRange } from "./block-range";
+import { blockRange, rangeBlocks } from "./block-range";
 import { moveBlocks, sequenceOf } from "./block-sequence";
 import { flipNearestDetails } from "./details-toggle";
 import { findWikiLinkTrigger } from "./link-suggestions";
@@ -395,6 +395,21 @@ function turnCurrentInto(target: BlockKind) {
 }
 
 /**
+ * `Mod-Alt-0`…`-3` on a block chosen with Escape: the turn the block menu offers for that block. A range of
+ * several blocks is the range plugin's (it turns all of them); with one block chosen the key would otherwise
+ * reach Milkdown, which cannot set a heading on a list item and does nothing.
+ */
+function turnChosenInto(target: BlockKind) {
+  return (state: EditorState, dispatch?: (tr: Transaction) => void, view?: EditorView) => {
+    if (!view?.editable || rangeBlocks(state) !== null) return false;
+    const pos = selectedBlockPos(state);
+    if (pos === null) return false;
+    if (dispatch) turnBlockInto(view, pos, target);
+    return true;
+  };
+}
+
+/**
  * `Mod-Enter` in a to-do: tick it, or untick it (keys spec, decision 4). Elsewhere the key is the page's
  * (save). Called from editor-core's direct `handleKeyDown`, which claims `Mod-Enter` before any keymap.
  */
@@ -423,7 +438,12 @@ export function flipToggleAtTitle(view: EditorView): boolean {
 
 // Milkdown merges these into the editor's one keymap, ahead of ProseMirror's base keymap (priority 50).
 const notionKeymap = $useKeymap("khNotionKeys", {
-  // Notion's `Mod-Alt` digits (keys spec, decision 5): 0–3 stay Milkdown's (text, headings); 4–8 are Notion's.
+  // Notion's `Mod-Alt` digits (keys spec, decision 5): 0–3 stay Milkdown's (text, headings) except on a block
+  // chosen with Escape, where they turn that block; 4–8 are Notion's.
+  TextByDigitChosen: { shortcuts: "Mod-Alt-0", priority: 70, command: () => turnChosenInto("paragraph") as never },
+  H1ByDigitChosen: { shortcuts: "Mod-Alt-1", priority: 70, command: () => turnChosenInto("h1") as never },
+  H2ByDigitChosen: { shortcuts: "Mod-Alt-2", priority: 70, command: () => turnChosenInto("h2") as never },
+  H3ByDigitChosen: { shortcuts: "Mod-Alt-3", priority: 70, command: () => turnChosenInto("h3") as never },
   TodoByDigit: { shortcuts: "Mod-Alt-4", priority: 70, command: () => toggleList("task") as never },
   BulletByDigit: { shortcuts: "Mod-Alt-5", priority: 70, command: () => toggleList("bullet") as never },
   NumberedByDigit: { shortcuts: "Mod-Alt-6", priority: 70, command: () => toggleList("ordered") as never },

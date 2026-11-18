@@ -4,7 +4,7 @@ import { $prose } from "@milkdown/kit/utils";
 import { isInTable } from "@milkdown/kit/prose/tables";
 import { HeadingSlugger } from "@/shared/markdown/heading-slug";
 import { openBlockList } from "./slash-commands";
-import { blockKind, canTurnInto, headingText, deleteBlock, dispatchBlockAction, duplicateBlock, insertBlockBelow, moveBlock, siblingBlocks, topLevelBlocks, turnBlockInto, type BlockKind, type EditorBlock } from "./block-actions";
+import { blockKind, canTurnInto, headingText, deleteBlock, dispatchBlockAction, duplicateBlock, insertBlockBelow, moveBlock, selectedBlockPos, siblingBlocks, topLevelBlocks, turnBlockInto, type BlockKind, type EditorBlock } from "./block-actions";
 import { keepRange, rangeBlocks, setBlockRange } from "./block-range";
 import { deleteBlocks, duplicateBlocks, moveBlocks, sequenceOf, turnBlocks } from "./block-sequence";
 
@@ -247,6 +247,8 @@ export function blockGutter() {
         if (!destroyed && dragKey.getState(view.state) != null) view.dispatch(view.state.tr.setMeta(dragKey, null));
       }
       function selectedBlock() {
+        const chosen = selectedBlockPos(view.state);
+        if (chosen !== null) return chosen;
         const { $from } = view.state.selection;
         // The nearest list item under the caret is the block a writer is pointing at; otherwise
         // the top-level block, as before.
