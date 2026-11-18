@@ -19,6 +19,7 @@ export async function GET(request: Request, context: { params: Promise<{ workspa
       title: hit.title,
       pageIcon: hit.pageIcon,
       sourceName: hit.sourceName,
+      folderPath: hit.folderPath ?? hit.sourcePath?.split("/").slice(0, -1).join(" › "),
       snippet: hit.snippet,
       snippetClipped: hit.snippetClipped,
     })) ?? [],

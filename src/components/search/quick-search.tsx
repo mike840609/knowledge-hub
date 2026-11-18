@@ -36,6 +36,7 @@ type QuickHit = {
   sourceId: string;
   title: string;
   sourceName: string;
+  folderPath?: string;
   snippet: string;
   snippetClipped?: { start: boolean; end: boolean };
   pageIcon?: string | null;
@@ -137,14 +138,18 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   );
   // While a search is in flight the hits on screen answer the previous query: shown, so the list does not
   // blank on every keystroke, but not rows, so Enter can never open a document the current query did not find.
-  const rows = useMemo<PaletteRow[]>(
-    () => [
-      ...recentRows,
-      ...matched.map((action) => ({ kind: "action" as const, action })),
-      ...(loading ? [] : hits.map((hit) => ({ kind: "hit" as const, hit }))),
-    ],
-    [recentRows, matched, hits, loading],
-  );
+  const queryNeedle = trimmed.toLowerCase();
+  const commandRank = useCallback((action: Action) => {
+    if (action.label.toLowerCase().replace(/…$/, "") === queryNeedle) return 0;
+    return action.keywords.some(keyword => keyword.toLowerCase() === queryNeedle) ? 1 : 2;
+  }, [queryNeedle]);
+  const commandFirst = !trimmed || matched.some(action => commandRank(action) < 2);
+  const rows = useMemo<PaletteRow[]>(() => {
+    const actions = commandFirst && trimmed ? [...matched].sort((a, b) => commandRank(a) - commandRank(b)) : matched;
+    const results = trimmed && !loading ? hits.map(hit => ({ kind: "hit" as const, hit })) : [];
+    const commands = actions.map(action => ({ kind: "action" as const, action }));
+    return [...recentRows, ...(commandFirst ? [...commands, ...results] : [...results, ...commands])];
+  }, [recentRows, matched, hits, loading, commandFirst, commandRank, trimmed]);
   // The first row is the default target, and the row set changes as results
   // arrive; leaving the index where it was would point it at something else.
   useEffect(() => setActiveIndex(0), [trimmed, open]);
@@ -157,7 +162,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
     shownRecents.current = recentRows.length;
     if (added !== 0) setActiveIndex((index) => (index === 0 ? 0 : Math.max(0, index + added)));
   }, [recentRows.length]);
-  const activeRow = rows[activeIndex];
+  const activeRow = loading && !commandFirst ? undefined : rows[activeIndex];
 
   // Wide windows split the palette: results on the left, the active document previewed on the right. Narrow
   // ones keep the single list, and never fetch a preview nobody can see. Always split while wide, whether or
@@ -246,6 +251,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
         });
         if (!response.ok) throw new Error("Search unavailable");
         const result = await response.json() as QuickResponse;
+        if (controller.signal.aborted) return;
         setHits(result.hits);
         setMessage(result.tooLong ? "Use at most 200 characters." : result.timedOut ? "Search timed out. Try a shorter query." : "");
       } catch {
@@ -286,6 +292,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
 
   // A document, whether it was searched for or remembered: what it is called, and where it is (and, for a
   // search, the line that matched).
+  const location = (hit: QuickHit) => [hit.sourceName, hit.folderPath].filter(Boolean).join(" › ");
   const documentRow = (hit: QuickHit, index: number) => (
     <button type="button" onClick={() => choose({ kind: "hit", hit })} onMouseEnter={() => setActiveIndex(index)} className={`w-full rounded-md px-3 py-2 text-left kh-focus-ring ${index === activeIndex ? "bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`}>
       <span className="flex min-w-0 items-center gap-2">
@@ -295,11 +302,11 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
           {/* Split, the matched passage has lines of its own; in the narrow list it stays one line, beside the source. */}
           {split ? (
             <>
-              <span className="block truncate text-caption text-kh-text-muted">{hit.sourceName}</span>
+              <span className="block truncate text-caption text-kh-text-muted">{location(hit)}</span>
               {hit.snippet ? <span className="mt-0.5 line-clamp-2 text-body-sm text-kh-text-muted"><HighlightedSearchText text={plainSearchSnippet(hit.snippet, hit.snippetClipped)} terms={terms} /></span> : null}
             </>
           ) : (
-            <span className="block truncate text-caption text-kh-text-muted">{hit.sourceName}{hit.snippet ? <> · <HighlightedSearchText text={plainSearchSnippet(hit.snippet, hit.snippetClipped)} terms={terms} /></> : null}</span>
+            <span className="block truncate text-caption text-kh-text-muted">{location(hit)}{hit.snippet ? <> · <HighlightedSearchText text={plainSearchSnippet(hit.snippet, hit.snippetClipped)} terms={terms} /></> : null}</span>
           )}
         </span>
       </span>
@@ -341,7 +348,12 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                 // Back to the first row in the same update as the text: left to the effect below, an Enter
                 // pressed before it ran chose by the old index — past the end of a shorter list, which is
                 // "see all results" instead of the row on show.
-                onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  if (next.trim() !== trimmed) setLoading(Boolean(next.trim()));
+                  setQuery(next);
+                  setActiveIndex(0);
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "ArrowDown" && rows.length) {
                     event.preventDefault();
@@ -386,9 +398,18 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                     </Fragment>
                   );
                 })}
-                {matched.map((action) => {
+                {rows.slice(recentRows.length).map((row) => {
                   rowIndex += 1;
                   const index = rowIndex;
+                  const selected = activeRow === row;
+                  if (row.kind === "hit") {
+                    return (
+                      <li key={row.hit.documentId} id={`quick-row-${index}`} role="option" aria-selected={selected}>
+                        {documentRow(row.hit, index)}
+                      </li>
+                    );
+                  }
+                  const { action } = row;
                   const first = !groupsShown.has(action.group);
                   groupsShown.add(action.group);
                   return (
@@ -398,30 +419,21 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                           {actionGroupLabels[action.group]}
                         </li>
                       ) : null}
-                      <li id={`quick-row-${index}`} role="option" aria-selected={index === activeIndex}>
+                      <li id={`quick-row-${index}`} role="option" aria-selected={selected}>
                         <button
                           type="button"
-                          onClick={() => choose({ kind: "action", action })}
+                          onClick={() => choose(row)}
                           onMouseEnter={() => setActiveIndex(index)}
-                          className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left kh-focus-ring ${index === activeIndex ? "bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`}
+                          className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left kh-focus-ring ${selected ? "bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`}
                         >
                           <ActionIcon name={action.icon} />
-                          <span className={`min-w-0 flex-1 truncate text-body ${index === activeIndex ? "text-kh-selected-text" : "text-kh-text"}`}>
+                          <span className={`min-w-0 flex-1 truncate text-body ${selected ? "text-kh-selected-text" : "text-kh-text"}`}>
                             {action.label}
                           </span>
                           {action.shortcut ? <Kbd className="shrink-0">{shortcutLabel(action.shortcut)}</Kbd> : null}
                         </button>
                       </li>
                     </Fragment>
-                  );
-                })}
-                {!loading && hits.map((hit) => {
-                  rowIndex += 1;
-                  const index = rowIndex;
-                  return (
-                    <li key={hit.documentId} id={`quick-row-${index}`} role="option" aria-selected={index === activeIndex}>
-                      {documentRow(hit, index)}
-                    </li>
                   );
                 })}
               </ul>
@@ -438,7 +450,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                         <span className="w-[14px] shrink-0" />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-body font-medium text-kh-text">{hit.title}</span>
-                          <span className="block truncate text-caption text-kh-text-muted">{hit.sourceName}</span>
+                          <span className="block truncate text-caption text-kh-text-muted">{location(hit)}</span>
                           {split && hit.snippet ? <span data-stale-snippet className="mt-0.5 line-clamp-2 text-body-sm text-kh-text-muted">{plainSearchSnippet(hit.snippet, hit.snippetClipped)}</span> : null}
                         </span>
                       </li>
