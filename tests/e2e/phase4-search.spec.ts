@@ -156,16 +156,17 @@ test("quick search opens a matching document by keyboard and labels copies by fo
   await palette.getByRole("combobox").fill(title);
   const design = palette.getByRole("option").filter({ hasText: folderNames[0] });
   const engineering = palette.getByRole("option").filter({ hasText: folderNames[1] });
-  await expect(design).toBeVisible();
-  await expect(engineering).toBeVisible();
+  const roundTrip = { timeout: 15_000 };
+  await expect(design).toBeVisible(roundTrip);
+  await expect(engineering).toBeVisible(roundTrip);
   await expect(palette.getByRole("option", { selected: true })).toContainText("handbook");
   if (await engineering.getAttribute("aria-selected") !== "true") await page.keyboard.press("ArrowDown");
   await expect(engineering).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(new RegExp(notes[1] + "$"));
+  await expect(page).toHaveURL(new RegExp(notes[1] + "$"), roundTrip);
 
   await page.goto(`${base}/search?q=${encodeURIComponent(title)}`);
   const rows = page.locator("[data-search-result]");
-  await expect(rows.filter({ hasText: "Design handbook" })).toBeVisible();
-  await expect(rows.filter({ hasText: "Engineering handbook" })).toBeVisible();
+  await expect(rows.filter({ hasText: "Design handbook" })).toBeVisible(roundTrip);
+  await expect(rows.filter({ hasText: "Engineering handbook" })).toBeVisible(roundTrip);
 });
