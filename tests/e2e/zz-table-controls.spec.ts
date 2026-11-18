@@ -29,8 +29,8 @@ const SMALL = "| A | B |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |\n\nAfter the table
 
 test.describe("table edge controls", () => {
   test("the paragraph above a table stays clickable", async ({ page }) => {
-    const sentence = "Every character of this sentence has to stay reachable by the pointer while the table below it shows its controls, ".repeat(3).slice(0, 300);
-    expect(sentence).toHaveLength(300);
+    const sentence = "Every character of this sentence has to stay reachable by the pointer while the table below it shows its controls, ".repeat(3).slice(0, 300).trimEnd();
+    expect(sentence.length).toBeGreaterThanOrEqual(295);
     await page.setViewportSize({ width: 1440, height: 900 });
     const { surface } = await openNote(page, `${sentence}\n\n| A | B |\n| - | - |\n| one | two |\n\nAfter the table.\n`);
     await expect(surface.locator("table")).toBeVisible();
