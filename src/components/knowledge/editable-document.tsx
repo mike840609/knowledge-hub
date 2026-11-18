@@ -561,13 +561,13 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   }
   const Article = "article";
   // With the page's actions in the pinned line rather than on a row of its own above the title.
-  const markdownToggle = <Button type="button" variant="ghost" aria-label="Markdown source" aria-pressed={source || failed} data-pressed={source || failed} disabled={!loaded || failed} className="max-sm:px-2 data-[pressed=true]:bg-kh-bg-hover data-[pressed=true]:text-kh-text" onClick={() => {
+  const markdownToggle = <Button type="button" variant="ghost" aria-label="Markdown source" title="Markdown source" aria-pressed={source || failed} data-pressed={source || failed} disabled={!loaded || failed} className="px-2 data-[pressed=true]:bg-kh-bg-hover data-[pressed=true]:text-kh-text" onClick={() => {
     flushEditor();
     if (!source) sourceRef.current = true;
     setSource(value => !value);
   }}>
-    <FileCode2 className="h-4 w-4 sm:hidden" aria-hidden="true" />
-    <span className="max-sm:sr-only">Markdown source</span>
+    <FileCode2 className="h-4 w-4 2xl:hidden" aria-hidden="true" />
+    <span className="max-2xl:sr-only">Markdown source</span>
   </Button>;
   const article = <>
     {recovery && <p role="status" className="mb-3 text-body-sm">

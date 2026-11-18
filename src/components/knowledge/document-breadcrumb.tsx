@@ -17,7 +17,7 @@ export function DocumentBreadcrumb({ segments }: { segments: DocumentBreadcrumbS
           return (
             <li
               key={`${segment.label}-${index}`}
-              className={`flex items-center ${isParent ? "min-w-0 max-w-[58%] shrink-0" : isLast ? "min-w-[min(30%,7ch)] flex-auto" : "min-w-0 overflow-hidden focus-within:overflow-visible"}`}
+              className={`flex items-center ${isParent ? "min-w-0 max-w-[76%] shrink-0" : isLast ? "min-w-[min(30%,7ch)] flex-auto" : "min-w-0 overflow-hidden focus-within:overflow-visible"}`}
             >
               {index > 0 ? <ChevronRight className="mx-1 h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : null}
               {segment.href && !isLast ? (
