@@ -8,7 +8,8 @@ import { OwnerReviewPanel } from "./owner-review-panel";
 import { AutosaveIndicator } from "./autosave-indicator";
 import { ReadRevisionMarker } from "./read-revision-marker";
 import { Button } from "@/components/ui/button";
-import { FileCode2, Pencil } from "lucide-react";
+import { FileCode2 } from "lucide-react";
+import { Tooltip } from "@/components/ui/tooltip";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { readStored, writeStored } from "@/components/shell/use-persisted-state";
@@ -22,6 +23,7 @@ import { caretOnLastLine } from "@/lib/title-keys";
 import { isListKey } from "@/lib/form-keys";
 import { carryTitle, resolveAuthoredTitle } from "@/lib/authored-title";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
+import { MARKDOWN_SOURCE_FIELD } from "./markdown-source";
 import { downloadMarkdown } from "@/lib/download-markdown";
 import { buildRecoveryMarkdown } from "@/lib/recovery-markdown";
 import { countWords } from "@/shared/markdown/word-count";
@@ -401,7 +403,9 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   useEffect(() => {
     const textarea = sourceTextarea.current;
     if (!textarea) return;
-    const fit = () => { textarea.style.height = "auto"; textarea.style.height = `${textarea.scrollHeight}px`; };
+    // `scrollHeight` includes padding but not the field's border: a border-box height of it alone
+    // would leave the last two pixels of text behind the border.
+    const fit = () => { textarea.style.height = "auto"; textarea.style.height = `${textarea.scrollHeight + textarea.offsetHeight - textarea.clientHeight}px`; };
     fit();
     let width = textarea.clientWidth;
     const observer = new ResizeObserver(() => {
@@ -544,31 +548,21 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     event.preventDefault();
     editor.current?.focusEnd();
   }
-  function focusTitle() {
-    flushEditor();
-    if (resolve(queue.current!.current).source !== "H1") {
-      titleInput.current?.focus();
-      titleInput.current?.select();
-    } else if (source || failed) {
-      const textarea = sourceTextarea.current;
-      if (!textarea) return;
-      const match = /^﻿?(?:[ \t]*\r?\n)*#[ \t]+/.exec(textarea.value);
-      if (!match) return;
-      const end = textarea.value.indexOf("\n", match[0].length);
-      textarea.focus();
-      textarea.setSelectionRange(match[0].length, end < 0 ? textarea.value.length : end);
-    } else editor.current?.selectOpeningHeading();
-  }
   const Article = "article";
-  // With the page's actions in the pinned line rather than on a row of its own above the title.
-  const markdownToggle = <Button type="button" variant="ghost" aria-label="Markdown source" title="Markdown source" aria-pressed={source || failed} data-pressed={source || failed} disabled={!loaded || failed} className="px-2 data-[pressed=true]:bg-kh-bg-hover data-[pressed=true]:text-kh-text" onClick={() => {
-    flushEditor();
-    if (!source) sourceRef.current = true;
-    setSource(value => !value);
-  }}>
-    <FileCode2 className="h-4 w-4 2xl:hidden" aria-hidden="true" />
-    <span className="max-2xl:sr-only">Markdown source</span>
-  </Button>;
+  // The page's own actions live in the pinned line rather than on a row above the title.
+  // The title is edited where it is read, so there is no Rename control: a button for it
+  // only repeats what the title (or the opening H1) already does.
+  const markdownToggle = <Tooltip label={source || failed ? "Show the rendered editor" : "Show Markdown source"} shortcut="Meta+/ Control+/">
+    <Button type="button" variant="ghost" icon aria-label="Markdown source" aria-keyshortcuts="Meta+/ Control+/" aria-pressed={source || failed} data-pressed={source || failed} disabled={!loaded || failed}
+      title={!loaded ? "Markdown source is available once the editor loads" : failed ? "Rendered editing is unavailable; the Markdown source stays open" : undefined}
+      className="data-[pressed=true]:bg-kh-bg-hover data-[pressed=true]:text-kh-text" onClick={() => {
+        flushEditor();
+        if (!source) sourceRef.current = true;
+        setSource(value => !value);
+      }}>
+      <FileCode2 className="h-4 w-4" aria-hidden="true" />
+    </Button>
+  </Tooltip>;
   const article = <>
     {recovery && <p role="status" className="mb-3 text-body-sm">
       This document changed while you were away. Your recovered text is kept here; download it before loading the latest version.
@@ -625,12 +619,13 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
           }} onMarkdown={() => { if (pending.current) flushEditor(); }} />}
       </Article>
       {(source || failed) && <textarea ref={sourceTextarea} aria-label="Markdown" value={content.markdown} disabled={!editable}
+        spellCheck={false} autoCapitalize="off" autoCorrect="off" placeholder="Write in Markdown. Start with # to name the document."
         onChange={event => {
           const next = event.target.value;
           const before = resolve(content);
           const after = resolve({ ...content, markdown: next });
           change({ title: carryTitle(before, after, content.title), markdown: next });
-        }} className="min-h-[60vh] w-full resize-y border-0 bg-transparent text-reading text-kh-text outline-none" />}
+        }} className={MARKDOWN_SOURCE_FIELD} />}
     </div>
   </>;
   return <DocumentDetailClient {...detail} title={displayTitle} updatedAt={savedAt} onInspect={refreshMetadata} onKeepVersion={editable && !recovery ? keepVersion : undefined}
@@ -639,7 +634,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     contentOwnsTitle={markdownOpensWithHeading(content.markdown)}
     wordCount={words}
     editHint={showEditHint ? "Click anywhere in the text to edit." : undefined}
-    editorActions={<><AutosaveIndicator state={status} attention={attention} /><Button type="button" variant="ghost" aria-label="Rename document" title="Rename document" disabled={!editable || !!recovery || (!ready && !source && !failed)} onClick={focusTitle}><Pencil className="h-4 w-4" aria-hidden="true" /></Button>{markdownToggle}</>}
+    editorActions={<><AutosaveIndicator state={status} attention={attention} />{markdownToggle}</>}
     titleControl={resolved.source !== "H1" ? <textarea ref={titleInput} name="title" aria-label="Title" value={content.title} disabled={!editable || titleHandoffPending} maxLength={512} rows={1}
       onChange={event => change({ ...queue.current!.current, title: event.target.value })}
       onKeyDown={event => {
@@ -653,7 +648,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       className="mt-2 block w-full resize-none overflow-hidden break-words border-0 bg-transparent p-0 text-page-title font-semibold tracking-tight text-kh-text outline-none"
       onCompositionStart={() => { composing.current = true; writer?.pause(true); }}
       onCompositionEnd={() => { composing.current = false; writer?.pause(!editable || !!recovery); settleRef.current?.(); }} /> : undefined}>
-    <div className="kh-reading-column py-6" data-press-below={editable ? "" : undefined} onMouseDown={pressBelow}>
+    <div className="kh-reading-column py-6" data-press-below={editable && !source && !failed ? "" : undefined} onMouseDown={pressBelow}>
       {personal && <ReadRevisionMarker workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId} revisionId={savedRevision} />}
       {personal ? <OwnerReviewPanel documentId={detail.inspectorData.documentId} revisionId={savedRevision} markdown={content.markdown} prepareComment={prepareComment} commentAvailable={editable && ready && !recovery && !source && !failed} contentPending={dirty || !!recovery || source || failed || !ready}>{article}</OwnerReviewPanel> : article}
       {backlinks}

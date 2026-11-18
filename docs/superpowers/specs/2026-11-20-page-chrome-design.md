@@ -39,9 +39,13 @@ Notion's. Two of them are decided here. Nothing stored in a document changes.
 
 ## Out of scope, recorded
 
-- Removing the Rename pencil: Notion has none, but here it is the only way to
+- ~~Removing the Rename pencil: Notion has none, but here it is the only way to
   reach the title when the document's own `#` heading is its title (there is no
-  title field then), and the title-field case is one Tab away. It stays.
+  title field then), and the title-field case is one Tab away. It stays.~~
+  **Superseded:** the pencil is removed. The title field is the
+  control when there is one, and the opening H1 is edited in the article when
+  it is the title; the button repeated either click
+  (`2026-11-18-editor-source-and-title-design.md`).
 - A hover row above the title (Add icon, Add comment): the icon picker is
   already the page icon, and comments open from the selection toolbar and the
   header's comment button.

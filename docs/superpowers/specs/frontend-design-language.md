@@ -1990,8 +1990,9 @@ marks only removes them.
 The third Notion-parity group (`2026-11-19-editor-keys-caret-design.md`)
 changes where the caret goes and adds keys, but no surface:
 
-- An editable document keeps 30vh of room under its column, and a press there
-  writes at the end.
+- An editable document keeps 30vh of room under its column in the rendered
+  editor, and a press there writes at the end. The Markdown source does not:
+  a press below a textarea places no caret (`2026-11-18-editor-source-and-title-design.md`).
 - On the document page, Tab at a bare caret in plain text stays in the editor.
   Escape then Tab leaves it. Selected text still tabs into the formatting
   toolbar.
@@ -2012,3 +2013,20 @@ heading's block menu gains "Copy link to heading".
 
 The room below the text is a plain `padding-bottom` in `globals.css`. No
 colour, radius, elevation or type token was added.
+
+### Markdown source and the title's control (2026-11-18)
+
+The source view is a code surface, not the page with its formatting removed
+(`2026-11-18-editor-source-and-title-design.md`). It is the same inset fill and
+monospace as a fenced block — `font-mono` 13/24, `border-strong`, `md` radius,
+16/12 padding, 12rem minimum — and one `MARKDOWN_SOURCE_FIELD` is shared by the
+inline editor and the composer. It is a field, so it takes `border-strong` where
+a rendered code block takes the decorative `border`; the caret and border carry
+focus, as the title field's do, so it stays in the focus-ring exception. The
+header's source toggle is an icon action with the `FileCode2` glyph, the
+pressed fill and a `Tooltip` carrying `⌘/`; it is no longer a wide text button.
+
+The title has no Rename control. A typed or frontmatter title is the title field
+itself; a document whose title is its opening H1 is renamed by editing that
+heading in the article. The header keeps actions that do something the text
+cannot, rather than one that repeats a click.
