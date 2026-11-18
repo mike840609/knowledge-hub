@@ -763,3 +763,46 @@ it("marks the current kind aria-current in the grip's Turn into for a single blo
   expect(current[0].disabled).toBe(true);
   expect(menuItem("Numbered list").disabled).toBe(false);
 });
+
+// List commands spec, decision 4, the cases Task 2 left untested: a nested item, an item with children, and leaving
+// the line without choosing.
+it("plus on a nested item adds an empty sibling in the nested list, with the / list open on it", async () => {
+  const { editor, view, list, press } = await openWithList("- a\n  - b\n  - c\n- d\n", "b");
+  const nested = view.state.doc.firstChild!.child(0).child(1);
+  expect(nested.childCount).toBe(3);
+  expect(nested.child(1).textContent).toBe("/");
+  expect(view.state.selection.$from.node(-1)).toBe(nested.child(1));
+  expect(list.hidden).toBe(false);
+  press("Escape");
+  expect(editor.getMarkdown()).toBe("- a\n  - b\n  - <br />\n  - c\n- d\n");
+});
+
+it("plus on an item with children adds the new item after the item and its nested list", async () => {
+  const { editor, view, list, press } = await openWithList("- a\n  - b\n- c\n", "a");
+  const items = view.state.doc.firstChild!;
+  expect(items.childCount).toBe(3);
+  expect(items.child(0).childCount).toBe(2);
+  expect(items.child(1).textContent).toBe("/");
+  expect(list.hidden).toBe(false);
+  view.dispatch(view.state.tr.insertText("h2"));
+  press("Enter");
+  view.dispatch(view.state.tr.insertText("H"));
+  expect(editor.getMarkdown()).toBe("- a\n  - b\n\n## H\n\n- c\n");
+});
+
+it("clicking away after plus on an item takes the lone / back and leaves the empty item", async () => {
+  const { editor, view, list } = await openWithList("- a\n- b\n", "a");
+  expect(list.hidden).toBe(false);
+  view.dom.blur();
+  view.dom.dispatchEvent(new FocusEvent("blur"));
+  expect(list.hidden).toBe(true);
+  expect(view.state.doc.firstChild!.child(1).textContent).toBe("");
+  expect(editor.getMarkdown()).toBe("- a\n- <br />\n- b\n");
+});
+
+it("moving the caret out after plus on an item takes the lone / back too", async () => {
+  const { editor, view, list } = await openWithList("- a\n- b\n", "a");
+  caretAfter(view, "b");
+  expect(list.hidden).toBe(true);
+  expect(editor.getMarkdown()).toBe("- a\n- <br />\n- b\n");
+});

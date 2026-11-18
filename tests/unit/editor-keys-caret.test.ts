@@ -78,6 +78,32 @@ it.each([
   expect(md(editor)).toMatch(/^```/);
 });
 
+// 2026-11-21 list commands spec, decision 7: in a list item, Mod-Alt-0…3 turn the item as the grip does. Milkdown's
+// own keys would set the item's line to a heading, which an item cannot start with, and did nothing.
+it.each([
+  ["0", "- a\n\nb\n\n- c"],
+  ["1", "- a\n\n# b\n\n- c"],
+  ["2", "- a\n\n## b\n\n- c"],
+  ["3", "- a\n\n### b\n\n- c"],
+])("Mod-Alt-%s in a list item turns the item, splitting its list", async (digit, expected) => {
+  const { editor, view } = await open("- a\n- b\n- c");
+  caretAt(view, 9);
+  expect(view.state.selection.$from.parent.type.name).toBe("paragraph");
+  expect(view.state.selection.$from.parent.textContent).toBe("b");
+  expect(press(view, digit, { ctrlKey: true, altKey: true }).defaultPrevented).toBe(true);
+  expect(md(editor)).toBe(expected);
+});
+
+it("Mod-Alt-2 outside a list item stays Milkdown's: a paragraph in a quote becomes a heading in the quote", async () => {
+  const { editor, view } = await open("one\n\n> two");
+  caretAt(view, 2);
+  press(view, "2", { ctrlKey: true, altKey: true });
+  expect(md(editor)).toBe("## one\n\n> two");
+  caretAt(view, view.state.doc.content.size - 2);
+  press(view, "2", { ctrlKey: true, altKey: true });
+  expect(md(editor)).toBe("## one\n\n> ## two");
+});
+
 it("Mod-Enter in a to-do outside the document page (the composer) leaves it to save, unticked", async () => {
   const { editor, view } = await open("* [ ] task");
   view.dom.closest("[data-tab-stays]")!.removeAttribute("data-tab-stays");

@@ -127,6 +127,16 @@ Nothing stored changes.
   nested list reads back. A loose item (a blank line between its children) keeps `- <br />`: there the blank line
   already ends the HTML block, so what follows reads back inside the item.
 
+- **`Mod-Alt-0`…`3` turn a list item.** `2026-11-19-editor-keys-caret-design.md` (decision 5) left `0`–`3` to Milkdown. In a list
+  item Milkdown's keys set the item's line to a heading, which an item cannot start with, so they did nothing while the
+  grip turned the item; decision 7's parity test found it. With the caret in an item these four keys now call the
+  grip's turn. Anywhere else they stay Milkdown's: a paragraph in a quote still becomes a heading in the quote.
+- **The block and table controls step aside while the toolbar's Turn into menu is open.** The toolbar lives inside
+  the document pane, whose `contain: layout` makes a stacking context, so no `z-index` of its own lifts it over the
+  controls drawn on the body at 30, and at 1440 × 900 its menu hangs over the gutter's column. The browser run found
+  the gutter painted over the menu. A `body:has(…)` rule in `globals.css` hides those controls (`visibility: hidden`)
+  while the menu is open.
+
 ## Out of scope, recorded
 
 - **Colour and "Turn into page."** Markdown has no colour, and a page is a
@@ -153,7 +163,8 @@ Nothing stored changes.
     selection.
   - Numbered list enabled in a bulleted item.
   - Several blocks turned with one `Mod-z` back.
-  - Toolbar, grip, `/` and keys give the same Markdown for the same item.
+- `tests/unit/editor-turn-parity.test.ts`: toolbar, grip, `/` and keys give the same result for the same item (the
+  `/` path, which empties the item, by node types and list kinds), for a plain item and an item holding a `[[link]]`.
 - `tests/e2e/zz-list-commands.spec.ts`:
   - The audit's three cases (`+` on an item, `/quo` in an item, Numbered list
     from the toolbar in a bulleted item), read from the saved Markdown.

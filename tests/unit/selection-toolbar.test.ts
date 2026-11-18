@@ -1106,3 +1106,53 @@ describe("turnEntry, the one Turn into predicate both menus use", () => {
     expect(turnEntry([], "paragraph")).toEqual({ checked: false, disabled: true });
   });
 });
+
+// Browser run (list commands, Task 4): the document pane's `contain: layout` keeps the toolbar, and its Turn into menu,
+// under the block and table controls drawn on the body at 30, and the menu hangs over the gutter's column. While the
+// menu is open those controls step aside; the rule that does it must match them then, and only then.
+describe("the controls drawn on the body step aside while the Turn into menu is open", () => {
+  it("hides the block and table controls by a rule that matches only while the menu is open", async () => {
+    const { readFileSync } = await import("node:fs");
+    const css = readFileSync("src/app/globals.css", "utf8");
+    const rule = /\n(body:has\(\.kh-selection-toolbar \[role="menu"\]:not\(\[hidden\]\)\)[^{]+)\{\s*visibility:\s*hidden;\s*\}/.exec(css);
+    expect(rule).not.toBeNull();
+    const selector = rule![1].trim();
+    const controls = ["kh-block-gutter", "kh-table-grip", "kh-table-col-grip", "kh-table-add"].map((name) => {
+      const element = document.body.appendChild(document.createElement("div"));
+      element.className = name;
+      return element;
+    });
+    const editor = await open("- a\n- b\n");
+    mountToolbar(editor);
+    selectText(editor, "b");
+    expect(controls.some((element) => element.matches(selector))).toBe(false);
+    openTurnMenu();
+    expect(controls.every((element) => element.matches(selector))).toBe(true);
+    key(turnMenu(), { key: "Escape" });
+    expect(turnMenu().hidden).toBe(true);
+    expect(controls.some((element) => element.matches(selector))).toBe(false);
+  });
+});
+
+// Recorded in the design-language contract (list commands, Task 4): the toolbar acts on the blocks the block-unit spec
+// names, so a selection inside a quote turns the whole quote, and inside a toggle's body nothing is offered.
+describe("Turn into on the toolbar, inside a container", () => {
+  it("turns the whole quote from a selection in one of its paragraphs", async () => {
+    const editor = await open("> one\n>\n> two\n");
+    mountToolbar(editor);
+    selectText(editor, "two");
+    expect(turnButton().textContent).toBe("Quote");
+    openTurnMenu();
+    entry("Text").click();
+    expect(editor.getMarkdown()).toBe("one\n\ntwo\n");
+  });
+
+  it("offers nothing inside a toggle's body", async () => {
+    const editor = await open("<details>\n<summary>Title</summary>\n\nbody words\n\n</details>\n");
+    mountToolbar(editor);
+    selectText(editor, "body");
+    openTurnMenu();
+    expect(entries().length).toBeGreaterThan(0);
+    expect(entries().every((item) => item.disabled)).toBe(true);
+  });
+});

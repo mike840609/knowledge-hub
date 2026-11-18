@@ -395,6 +395,7 @@ function turnCurrentInto(target: BlockKind) {
 }
 
 /**
+/**
  * `Mod-Alt-0`…`-3` on a block chosen with Escape: the turn the block menu offers for that block. A range of
  * several blocks is the range plugin's (it turns all of them); with one block chosen the key would otherwise
  * reach Milkdown, which cannot set a heading on a list item and does nothing.
@@ -407,6 +408,28 @@ function turnChosenInto(target: BlockKind) {
     if (dispatch) turnBlockInto(view, pos, target);
     return true;
   };
+}
+
+/**
+ * `Mod-Alt-0`…`-3` with the caret in a list item: the item turns, as the grip and the toolbar turn it (list commands
+ * spec, decision 7). Milkdown's own keys would set the item's line to a heading, which an item cannot start with, and
+ * do nothing. Anywhere else they stay Milkdown's.
+ */
+function turnItemInto(target: BlockKind) {
+  return (state: EditorState, dispatch?: unknown, view?: EditorView) => {
+    if (!view?.editable || !(state.selection instanceof TextSelection) || listKindAt(state) === null) return false;
+    const pos = actionBlockPos(state);
+    if (pos !== null && dispatch) turnBlockInto(view, pos, target);
+    return true;
+  };
+}
+
+/** Both digit inputs: a block chosen with Escape first, then the caret on a list item's first line. */
+function turnDigitInto(target: BlockKind) {
+  const chosen = turnChosenInto(target);
+  const item = turnItemInto(target);
+  return (state: EditorState, dispatch?: (tr: Transaction) => void, view?: EditorView) =>
+    chosen(state, dispatch, view) || item(state, dispatch, view);
 }
 
 /**
@@ -439,11 +462,11 @@ export function flipToggleAtTitle(view: EditorView): boolean {
 // Milkdown merges these into the editor's one keymap, ahead of ProseMirror's base keymap (priority 50).
 const notionKeymap = $useKeymap("khNotionKeys", {
   // Notion's `Mod-Alt` digits (keys spec, decision 5): 0–3 stay Milkdown's (text, headings) except on a block
-  // chosen with Escape, where they turn that block; 4–8 are Notion's.
-  TextByDigitChosen: { shortcuts: "Mod-Alt-0", priority: 70, command: () => turnChosenInto("paragraph") as never },
-  H1ByDigitChosen: { shortcuts: "Mod-Alt-1", priority: 70, command: () => turnChosenInto("h1") as never },
-  H2ByDigitChosen: { shortcuts: "Mod-Alt-2", priority: 70, command: () => turnChosenInto("h2") as never },
-  H3ByDigitChosen: { shortcuts: "Mod-Alt-3", priority: 70, command: () => turnChosenInto("h3") as never },
+  // chosen with Escape or with the caret on a list item's first line, where they turn that block; 4–8 are Notion's.
+  TextByDigitInItem: { shortcuts: "Mod-Alt-0", priority: 70, command: () => turnDigitInto("paragraph") as never },
+  H1ByDigitInItem: { shortcuts: "Mod-Alt-1", priority: 70, command: () => turnDigitInto("h1") as never },
+  H2ByDigitInItem: { shortcuts: "Mod-Alt-2", priority: 70, command: () => turnDigitInto("h2") as never },
+  H3ByDigitInItem: { shortcuts: "Mod-Alt-3", priority: 70, command: () => turnDigitInto("h3") as never },
   TodoByDigit: { shortcuts: "Mod-Alt-4", priority: 70, command: () => toggleList("task") as never },
   BulletByDigit: { shortcuts: "Mod-Alt-5", priority: 70, command: () => toggleList("bullet") as never },
   NumberedByDigit: { shortcuts: "Mod-Alt-6", priority: 70, command: () => toggleList("ordered") as never },
