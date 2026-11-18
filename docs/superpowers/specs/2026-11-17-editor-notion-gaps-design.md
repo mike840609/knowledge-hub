@@ -27,8 +27,10 @@ editor must write a wikilink back as it read it").
    that goes on after it keeping its numbers. Delete removes the item and keeps
    the list; deleting the only item removes the list. Escape still selects the
    top-level block, as 2026-11-15 decision 7 says, and the list keys still act
-   on that selection.
-3. **A table column can be aligned.** The table actions add a **Column
+   on that selection. (Amended 2026-11-21: Escape selects the item too,
+   `2026-11-21-block-unit-design.md`, decision 1.)
+3. **A table column can be aligned.** (Moved 2026-11-21 into the column menu:
+   `2026-11-21-table-controls-design.md`, decision 3.) The table actions add a **Column
    alignment** select (default, left, centre, right). It writes every cell in
    the column, and GFM's delimiter row is what the reader reads back. A
    header-row toggle is not offered: GFM requires exactly one header row, so

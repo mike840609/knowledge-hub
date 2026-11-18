@@ -48,6 +48,10 @@ level, as it does for one block), the existing single-block rules apply.
 
 ## Out of scope, recorded
 
+(Amended 2026-11-21: list items in a range, the grip menu and drag on a range,
+and one undo step for every turn are `2026-11-21-block-unit-design.md`,
+decisions 3-6.)
+
 - A filterable block menu on `Mod-/`: that key is the Markdown source toggle on
   the document page (`editable-document.tsx`), and a second meaning would break
   a shortcut people have learned. The block menu stays on the gutter grip and
