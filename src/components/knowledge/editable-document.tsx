@@ -476,38 +476,42 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       textarea?.setSelectionRange(0, 0);
     } else editor.current?.focusStart();
   }
-  // Arriving from a new note (`/knowledge/new` created it): the title is where to start typing, with
-  // "Untitled" selected so the first keystroke replaces it.
-  // What was typed while the note was being made is the title, with the caret after it.
-  // Enter typed then: the caret goes to the body once the editor is ready (the effect below).
-  const bodyWhenReady = useRef(false);
-  useEffect(() => {
-    if (!editable) return;
+  const focusDraftMarkdown = useRef(false);
+  useLayoutEffect(() => {
+    if (!editable || (!ready && !source && !failed)) return;
     const arrived = takeNewNote(detail.inspectorData.documentId);
-    const input = titleInput.current;
     if (arrived === null) return;
-    if (arrived.title) {
-      change({ ...queue.current!.current, title: arrived.title });
-      // Set now, not on the next render, so the caret can go after it before another key lands.
-      if (input) input.value = arrived.title;
+    const previous = queue.current!.current;
+    const next = { title: arrived.text || previous.title, markdown: arrived.body || previous.markdown };
+    if (next.title !== previous.title || next.markdown !== previous.markdown) change(next);
+    if (arrived.body && !source && !failed) {
+      try { editor.current?.replaceMarkdown(next.markdown); }
+      catch {
+        focusDraftMarkdown.current = arrived.entered;
+        setFailed(true);
+      }
     }
-    // Enter after the title: on to the body, as Enter in the title does. The rendered editor mounts
-    // after this (its `onReady` is later still), so the caret goes there once it is ready.
     if (arrived.entered) {
-      if (ready || source || failed) leaveTitle();
-      else bodyWhenReady.current = true;
+      if (source || failed) focusDraftMarkdown.current = true;
+      else if (!focusDraftMarkdown.current) editor.current?.focusEnd(false);
       return;
     }
+    const input = titleInput.current;
     if (!input) return;
+    // Update before focusing, so the selection is in the handed-over value in this frame.
+    if (arrived.text) input.value = arrived.text;
     input.focus();
-    if (arrived.title) input.setSelectionRange(arrived.title.length, arrived.title.length);
+    if (arrived.text) input.setSelectionRange(arrived.text.length, arrived.text.length);
     else if (input.value === "Untitled") input.select();
-  }, [editable]);
-  useEffect(() => {
-    if ((!ready && !source && !failed) || !bodyWhenReady.current) return;
-    bodyWhenReady.current = false;
-    leaveTitle();
-  }, [ready, source, failed]);
+  }, [editable, ready, source, failed]);
+  useLayoutEffect(() => {
+    const input = sourceTextarea.current;
+    if (!input || !focusDraftMarkdown.current) return;
+    focusDraftMarkdown.current = false;
+    input.value = queue.current!.current.markdown;
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }, [ready, source, failed, content.markdown]);
   // ArrowUp on the content's first line, or Backspace in its empty first paragraph, leads to the title,
   // at its end (keys spec, decision 3). The editor fires `kh:editor-exit-top` (notion-keys' EXIT_TOP; the
   // editor is loaded lazily, so the name is spelled here rather than imported) and goes on only if claimed.

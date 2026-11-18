@@ -28,14 +28,17 @@ decides each and amends the design-language contract. Nothing stored changes.
      goes on composing there), and a closing dialog hands focus back to no
      field. Keys typed into another field or a contenteditable are that
      field's. Untaken after ten seconds, it stops and forgets what it kept.
-   - **The starter page.** While the note is being made, the starter shows a
-     title field with what was typed so far.
-   - **On arrival.** The editor takes the text as the title and puts the caret
-     after it.
-   - **Enter.** Pressed in that time, Enter ends the title and the caret goes
-     to the body, as Enter in the title does, once the editor is ready. The
-     starter's title field is read-only from then on. Keys typed after it,
-     before the editor is ready, are not kept.
+   - **The starter page.** While the note is being made, the title and body
+     accept edits. Enter in the title moves focus to the body. The buffer
+     keeps both fields through the gaps where neither has focus.
+   - **On arrival.** The editor takes the title and body, puts the caret after
+     the text in the active field, and autosaves. An active composition in
+     the starter finishes before the page opens the editor.
+   - **On failure.** Both fields remain visible and editable. Retry opens the
+     same draft after creation succeeds. The new-document form is still
+     available from the error message.
+   - **Separate visits.** Each visit starts a create request. Replaying the
+     effect on a mounted starter keeps the same request.
    - **A plain click only.** A modified click (a new tab or window) starts
      nothing, so the tab left behind keeps its keys.
    - **Not kept, recorded.** An IME composes only into a focused field. In

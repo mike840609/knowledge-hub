@@ -1,36 +1,32 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { bufferTyping, setTyped, takeTyped } from "./typing-ahead";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { refreshOnArrival } from "@/components/shell/refresh-on-arrival";
 import { GovernanceError, governanceFailure, governanceRequest, type GovernanceFailure } from "@/components/workspaces/governance-error";
+import { bufferTyping, finishTyping, takeTyped, type NewNoteDraft } from "./typing-ahead";
 
 type Created = { documentId: string; sourceId: string };
+let arriving: { documentId: string; draft: NewNoteDraft } | null = null;
 
-// Module state: one create per address within a few seconds, so a double click or a remount of this
-// page opens the same note instead of making two.
-let recent: { href: string; at: number; created: Promise<Created> } | null = null;
-let arriving: string | null = null;
-
-/**
- * When the editor opening `documentId` is arriving from a note just made here: the title typed while
- * it was made ("" for none), and whether Enter was pressed after it. `null` otherwise. Asks once.
- */
-export function takeNewNote(documentId: string): { title: string; entered: boolean } | null {
-  if (arriving !== documentId) return null;
+/** The editor consumes its own draft once, including keystrokes during the route change. */
+export function takeNewNote(documentId: string): NewNoteDraft | null {
+  if (arriving?.documentId !== documentId) return null;
+  const { draft } = arriving;
   arriving = null;
-  const { text, entered } = takeTyped();
-  // Not trimmed: a space typed last is the start of the next word (the save trims the title it stores).
-  return { title: text, entered };
+  finishTyping(draft);
+  return draft;
 }
 
-/**
- * A new note exists as soon as it is asked for, as a Notion page does: it is created "Untitled" (or
- * with the title a broken link gave it) and opened in the editor, where autosave takes over. The page
- * is replaced in history, so Back leaves the note rather than creating another.
- */
+function focusAtEnd(field: HTMLTextAreaElement | null) {
+  if (!field) return;
+  field.focus({ preventScroll: true });
+  field.setSelectionRange(field.value.length, field.value.length);
+}
+
+/** Create at once and replace this route in history when the document is ready for autosave. */
 export function NewNoteStarter({ workspaceId, folderId, seedTitle, composeHref }: {
   workspaceId: string;
   folderId: string | null;
@@ -39,60 +35,103 @@ export function NewNoteStarter({ workspaceId, folderId, seedTitle, composeHref }
   composeHref: string;
 }) {
   const router = useRouter();
+  const active = useRef(false);
+  const initialized = useRef(false);
   const started = useRef(false);
+  const requested = useRef(false);
+  const [created, setCreated] = useState<Created | null>(null);
   const [failure, setFailure] = useState<GovernanceFailure | null>(null);
   const [title, setTitle] = useState("");
-  const titleNow = useRef("");
-  const enteredHere = useRef(false);
-  // After Enter the title is done: what is typed while the note is still being made is not kept (decision 3).
-  const [done, setDone] = useState(false);
-  titleNow.current = title;
+  const [body, setBody] = useState("");
+  const titleField = useRef<HTMLTextAreaElement>(null);
+  const bodyField = useRef<HTMLTextAreaElement>(null);
+  const entered = useRef(false);
+  const carry = useRef<NewNoteDraft | null>(null);
+  const [composing, setComposing] = useState(false);
+  const compositionFrame = useRef(0);
+
+  useLayoutEffect(() => {
+    active.current = true;
+    if (!initialized.current) {
+      initialized.current = true;
+      const early = takeTyped();
+      entered.current = early.entered;
+      setTitle(early.text);
+      setBody(early.body);
+      const field = early.entered ? bodyField.current : titleField.current;
+      if (field) field.value = early.entered ? early.body : early.text;
+      focusAtEnd(field);
+    }
+    return () => {
+      active.current = false;
+      cancelAnimationFrame(compositionFrame.current);
+    };
+  }, []);
+
+  const create = useCallback(async () => {
+    if (requested.current) return;
+    requested.current = true;
+    setFailure(null);
+    try {
+      const result = await governanceRequest<Created>(`/api/workspaces/${workspaceId}/documents`, "POST", {
+        title: seedTitle ?? "Untitled", markdown: "", ...(folderId ? { parentId: folderId } : {}),
+      });
+      if (active.current) setCreated(result);
+    } catch (error) {
+      requested.current = false;
+      if (active.current) setFailure(governanceFailure(error));
+    }
+  }, [workspaceId, folderId, seedTitle]);
+
   useEffect(() => {
-    // Once per visit: a ref survives React's development double mount.
+    // One POST for this visit, including React's development effect replay. A new visit gets its own.
     if (started.current) return;
     started.current = true;
-    // Keys typed before this page was drawn: the start of the title, the field taking over from here.
-    const early = takeTyped();
-    if (early.text) setTitle(early.text);
-    if (early.entered) { enteredHere.current = true; setDone(true); }
-    const address = window.location.href;
-    if (!recent || recent.href !== address || Date.now() - recent.at > 5000) {
-      recent = { href: address, at: Date.now(), created: governanceRequest<Created>(`/api/workspaces/${workspaceId}/documents`, "POST", {
-        title: seedTitle ?? "Untitled", markdown: "", ...(folderId ? { parentId: folderId } : {}),
-      }) };
-    }
-    recent.created.then(created => {
-      const href = `/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}`;
-      arriving = created.documentId;
-      // And between leaving this page and the editor's title taking focus.
-      bufferTyping(titleNow.current, true);
-      if (enteredHere.current) setTyped(titleNow.current, true);
-      refreshOnArrival(href);
-      router.replace(href);
-    }, error => setFailure(governanceFailure(error)));
-  }, [workspaceId, folderId, seedTitle, router]);
+    void create();
+  }, [create]);
+
+  useEffect(() => {
+    if (!created || composing || carry.current) return;
+    const draft = bufferTyping({ text: titleField.current?.value, body: bodyField.current?.value, entered: entered.current, keepFocus: true });
+    carry.current = draft;
+    arriving = { documentId: created.documentId, draft };
+    const href = `/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}`;
+    refreshOnArrival(href);
+    router.replace(href);
+  }, [created, composing, router, workspaceId]);
+
   return (
-    <div className="mx-auto max-w-reading px-4 py-8">
+    <div className="mx-auto max-w-reading px-4 py-8" onCompositionStart={() => {
+      cancelAnimationFrame(compositionFrame.current);
+      setComposing(true);
+    }} onCompositionEnd={() => {
+      // The browser can dispatch the final input after compositionend.
+      compositionFrame.current = requestAnimationFrame(() => setComposing(false));
+    }}>
+      <textarea ref={titleField} aria-label="Title" placeholder={seedTitle ?? "Untitled"} value={title} rows={1} maxLength={512}
+        onFocus={() => { entered.current = false; if (carry.current) carry.current.entered = false; }}
+        onChange={event => {
+          setTitle(event.target.value);
+          if (carry.current) carry.current.text = event.target.value;
+        }}
+        onKeyDown={event => {
+          if (event.key !== "Enter" || composing || event.nativeEvent.isComposing || event.keyCode === 229) return;
+          event.preventDefault();
+          if (!event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) focusAtEnd(bodyField.current);
+        }}
+        className="mt-14 block w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-page-title font-semibold tracking-tight text-kh-text outline-none placeholder:text-kh-text-muted" />
+      <textarea ref={bodyField} aria-label="Content" placeholder="Write here" value={body} rows={4}
+        onFocus={() => { entered.current = true; if (carry.current) carry.current.entered = true; }}
+        onChange={event => {
+          setBody(event.target.value);
+          if (carry.current) carry.current.body = event.target.value;
+        }}
+        className="mt-4 block w-full resize-y border-0 bg-transparent p-0 text-reading text-kh-text outline-none placeholder:text-kh-text-muted" />
       {failure ? <>
         <GovernanceError error={failure} />
+        <Button className="mt-3" onClick={() => { focusAtEnd(entered.current ? bodyField.current : titleField.current); void create(); }}>Retry creation</Button>
         <p className="mt-3 text-body"><Link className="underline" href={composeHref}>Write it in the new-document form instead</Link></p>
-      </> : <>
-        {/* Typing starts as soon as the button is pressed: what is typed here, before the note exists, is
-            carried to its title (creation-flow spec, decision 3). */}
-        <textarea autoFocus aria-label="Title" placeholder={seedTitle ?? "Untitled"} value={title} rows={1} maxLength={512}
-          onChange={(event) => { setTitle(event.target.value); setTyped(event.target.value); }}
-          readOnly={done}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
-            event.preventDefault();
-            enteredHere.current = true;
-            setDone(true);
-            // Already made and on its way: the buffer holds the title now, and Enter ends it there too.
-            setTyped(event.currentTarget.value, true);
-          }}
-          className="mt-14 block w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-page-title font-semibold tracking-tight text-kh-text outline-none placeholder:text-kh-text-muted" />
-        <p role="status" className="mt-2 text-caption text-kh-text-muted">Creating a new note…</p>
-      </>}
+      </> : <p role="status" className="mt-2 text-caption text-kh-text-muted">{created ? "Opening the note…" : "Creating a new note…"}</p>}
     </div>
   );
 }

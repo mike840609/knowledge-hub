@@ -204,8 +204,8 @@ export type MarkdownEditor = {
   focus: () => void;
   /** Focus with the caret at the very start of the document. */
   focusStart: () => void;
-  /** Caret at the end, in an empty paragraph added there unless the document already ends in one (keys spec, decision 1). */
-  focusEnd: () => void;
+  /** Caret at the end. By default, make room to type in a new paragraph. */
+  focusEnd: (appendParagraph?: boolean) => void;
   /** Select the opening H1 so its existing content can be renamed in place. */
   selectOpeningHeading: () => void;
   action: <T>(fn: (ctx: Ctx) => T) => T;
@@ -363,14 +363,14 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
         view.dispatch(view.state.tr.setSelection(Selection.atStart(view.state.doc)));
         view.focus();
       }),
-    focusEnd: () =>
+    focusEnd: (appendParagraph = true) =>
       editor.action((ctx) => {
         const view = ctx.get(editorViewCtx);
         const { doc, schema } = view.state;
         const last = doc.lastChild;
         const tr = view.state.tr;
         // Not an edit: the empty line is room to type in, and a press that writes nothing must not save a revision or start the autosave.
-        if (view.editable && !(last?.type.name === "paragraph" && last.content.size === 0)) tr.insert(doc.content.size, schema.nodes.paragraph.create()).setMeta("addToHistory", false);
+        if (appendParagraph && view.editable && !(last?.type.name === "paragraph" && last.content.size === 0)) tr.insert(doc.content.size, schema.nodes.paragraph.create()).setMeta("addToHistory", false);
         view.dispatch(tr.setSelection(Selection.atEnd(tr.doc)).scrollIntoView());
         view.focus();
       }),
