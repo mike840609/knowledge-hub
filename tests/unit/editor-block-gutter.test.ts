@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { editorViewCtx } from "@milkdown/kit/core";
 import { TextSelection } from "@milkdown/kit/prose/state";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { blockGutter } from "@/components/knowledge/editor/block-gutter";
 import { slashCommands } from "@/components/knowledge/editor/slash-commands";
@@ -17,9 +17,9 @@ afterEach(async () => { for (const editor of opened.splice(0)) await editor.dest
 async function open(reveal = true) {
   return openWith('First\n\nSecond\n\nThird', reveal);
 }
-async function openWith(markdown: string, reveal = true) {
+async function openWith(markdown: string, reveal = true, comment?: Parameters<typeof blockGutter>[0]) {
   const root = document.body.appendChild(document.createElement('div'));
-  const editor = await createMarkdownEditor({ root, markdown, className: 'kh-editor', ariaLabel: 'Content', editable: true, onUserEdit: () => {}, onMarkdown: () => {}, allowImage: () => false, extraPlugins: [blockGutter()] });
+  const editor = await createMarkdownEditor({ root, markdown, className: 'kh-editor', ariaLabel: 'Content', editable: true, onUserEdit: () => {}, onMarkdown: () => {}, allowImage: () => false, extraPlugins: [blockGutter(comment)] });
   opened.push(editor);
   const view = editor.action(ctx => ctx.get(editorViewCtx));
   view.dom.getBoundingClientRect = () => rect(40, 300);
@@ -63,6 +63,21 @@ it('offers bounded move actions and moves the selected block down', async () => 
   expect(down.disabled).toBe(false);
   down.click();
   expect(editor.getMarkdown()).toMatch(/Second[\s\S]*First[\s\S]*Third/);
+});
+
+it('offers Comment for the current block without a text selection when review is available', async () => {
+  let available = false;
+  const run = vi.fn();
+  const { view } = await openWith('First\n\nSecond', true, { available: () => available, run });
+  button('Move block').click();
+  expect(menuItem('Comment')).toBeUndefined();
+  button('Move block').click();
+  available = true;
+  button('Move block').click();
+  expect(view.state.selection.empty).toBe(true);
+  menuItem('Comment')!.click();
+  expect(run).toHaveBeenCalledWith(view, 0);
+  expect(document.querySelector<HTMLElement>('.kh-block-move-menu')!.hidden).toBe(true);
 });
 
 it('turns a block into a heading from the gutter menu', async () => {

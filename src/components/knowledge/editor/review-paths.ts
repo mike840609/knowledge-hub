@@ -125,6 +125,16 @@ export const createEditorReviewPathsPlugin = () => new Plugin<DecorationSet>({
 });
 export const editorReviewPathsPlugin = $prose(createEditorReviewPathsPlugin);
 
+/** The block handle stands for the paragraph of a list item and the visible surface of code. */
+export function editorReviewBlockElement(view: EditorView, pos: number): HTMLElement | null {
+  const element = view.nodeDOM(pos);
+  if (!(element instanceof HTMLElement)) return null;
+  if (element.matches("p,h1,h2,h3,h4,h5,h6,pre")) return element;
+  if (element.matches("li")) return element.querySelector(":scope > p");
+  if (view.state.doc.nodeAt(pos)?.type.name === "code_block") return element.querySelector("pre:not([hidden], [hidden] *)");
+  return null;
+}
+
 export function updateEditorReviewPaths(view: EditorView, markdown: string | undefined): boolean {
   view.dom.querySelectorAll(`[data-inline-code-preview] [${REVIEW_PATH}]`).forEach(element => element.removeAttribute(REVIEW_PATH));
   const copy = view.dom.cloneNode(true) as HTMLElement;

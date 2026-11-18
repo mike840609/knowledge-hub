@@ -38,7 +38,7 @@ export function headingSlugAt(view: EditorView, pos: number): string | null {
   return found;
 }
 
-export function blockGutter() {
+export function blockGutter(comment?: { available: (view: EditorView, pos: number) => boolean; run: (view: EditorView, pos: number) => void }) {
   const dragKey = new PluginKey<number | null>("khDraggedBlock");
   let focusControls: (() => boolean) | undefined;
   return $prose(() => new Plugin<number | null>({
@@ -124,6 +124,11 @@ export function blockGutter() {
         const index = activeIndex();
         up.disabled = index <= 0;
         down.disabled = index < 0 || index === blocks.length - 1;
+        const commentAction = comment && active !== null && comment.available(view, active) ? menuButton("Comment", () => {
+          const pos = active;
+          closeMenu();
+          if (pos !== null && comment.available(view, pos)) comment.run(view, pos);
+        }) : null;
         const heading = activeNode()?.type.name === "heading" ? menuButton("Copy link to heading", () => {
           const slug = active === null ? null : headingSlugAt(view, active);
           closeMenu();
@@ -135,7 +140,7 @@ export function blockGutter() {
           const href = `${window.location.origin}${window.location.pathname}#${encodeURIComponent(slug)}`;
           void navigator.clipboard.writeText(href).then(() => { live.textContent = "Link copied"; }, failed);
         }) : null;
-        menu.append(turn, duplicate, remove, ...(heading ? [heading] : []), separator(), up, down);
+        menu.append(turn, duplicate, remove, ...(commentAction ? [commentAction] : []), ...(heading ? [heading] : []), separator(), up, down);
         return turn;
       }
       function renderTurn(): void {

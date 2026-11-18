@@ -2,7 +2,7 @@
 
 import { useContext, useLayoutEffect, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { InlineReviewContext } from "../inline-review-context";
-import { readReviewRange } from "../review-selection";
+import { readReviewRange, reviewBlockAnchor, selectionAnchorInBlock } from "../review-selection";
 import { isAllowedMarkdownImageSrc } from "@/components/knowledge/markdown-image-policy";
 import { MARKDOWN_PROSE } from "@/components/knowledge/markdown-prose";
 import { governanceRequest } from "@/components/workspaces/governance-error";
@@ -17,7 +17,7 @@ import { selectionToolbar, storedLinkTarget } from "./selection-toolbar";
 import { wikiLinkSuggest } from "./wikilink-suggest";
 
 import { editorViewCtx } from "@milkdown/kit/core";
-import { editorReviewPathsPlugin, preserveEditorSelection, updateEditorReviewPaths } from "./review-paths";
+import { editorReviewBlockElement, editorReviewPathsPlugin, preserveEditorSelection, updateEditorReviewPaths } from "./review-paths";
 import { createPortal } from "react-dom";
 import { NodeSelection, Plugin, TextSelection } from "@milkdown/kit/prose/state";
 import { $prose } from "@milkdown/kit/utils";
@@ -120,6 +120,15 @@ export function RenderedEditor(props: RenderedEditorProps) {
       onCreateFailed: (title) => latest.current.onNotice?.(`Couldn't create the page "${title}". The link is kept.`),
     });
     const slash = slashCommands();
+    const gutter = blockGutter({
+      available: (view, pos) => !!reviewRef.current?.blockAvailable && !!editorReviewBlockElement(view, pos)?.textContent?.trim(),
+      run: (view, pos) => reviewRef.current?.request(markdown => {
+        updateEditorReviewPaths(view, markdown);
+        const element = editorReviewBlockElement(view, pos);
+        const anchor = element && reviewBlockAnchor(element, markdown);
+        return anchor && (selectionAnchorInBlock(view.dom, markdown, anchor, view.dom.ownerDocument.getSelection()) ?? anchor);
+      }),
+    });
     const emoji = emojiSuggest();
     const links = $prose(() => new Plugin({ props: { nodeViews: {
       wiki_link(node) {
@@ -232,7 +241,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
       onUserEdit: () => latest.current.onUserEdit(),
       onMarkdown: (markdown) => latest.current.onMarkdown(markdown),
       allowImage: (src) => isAllowedMarkdownImageSrc(src, { origin: window.location.origin }),
-      extraPlugins: [editorReviewPathsPlugin, ...toolbar.plugins, ...suggest.plugins, ...slash.plugins, ...emoji.plugins, ...(latest.current.links ? [links] : []), ...(latest.current.renderCode ? [codes] : []), blockGutter(), tableActions(), taskCheckbox()],
+      extraPlugins: [editorReviewPathsPlugin, ...toolbar.plugins, ...suggest.plugins, ...slash.plugins, ...emoji.plugins, ...(latest.current.links ? [links] : []), ...(latest.current.renderCode ? [codes] : []), gutter, tableActions(), taskCheckbox()],
       configure: (ctx) => {
         toolbar.configure(ctx);
         suggest.configure(ctx);

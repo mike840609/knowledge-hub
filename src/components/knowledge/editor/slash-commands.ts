@@ -33,6 +33,21 @@ const commands = [
   { id: "link", label: "Page link", hint: "Another page in this workspace", words: "link to page document wiki 連結 頁面", aliases: ["page"], group: "Links", Icon: Link2 },
 ] as const;
 type Command = typeof commands[number];
+const RECENT_KEY = "kh-recent-slash-commands";
+const RECENT_LIMIT = 4;
+
+function recentCommands(): Command[] {
+  try {
+    const ids: unknown = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
+    if (!Array.isArray(ids)) return [];
+    return [...new Set(ids)].flatMap(id => commands.find(command => command.id === id) ?? []).slice(0, RECENT_LIMIT);
+  } catch { return []; }
+}
+
+function rememberCommand(command: Command): void {
+  const ids = [command, ...recentCommands().filter(old => old !== command)].slice(0, RECENT_LIMIT).map(item => item.id);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(ids)); } catch { /* Slash commands still work without storage. */ }
+}
 /** `pos`: the paragraph's position; `from`: its "/"; `inline`: the "/" follows text on the line (keys spec, decision 7). */
 type Trigger = { pos: number; from: number; query: string; inline: boolean };
 /**
@@ -144,6 +159,7 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
   function choose(view: EditorView, command: Command) {
     const trigger = key.getState(view.state)?.trigger;
     if (!view.editable || !trigger) return;
+    rememberCommand(command);
     const { nodes } = view.state.schema;
     const current = view.state.doc.nodeAt(trigger.pos)!;
     if (command.id === "date") {
@@ -284,14 +300,17 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
       function sync() {
         const state = key.getState(view.state);
         if (!view.editable || !view.hasFocus() || !state?.trigger || state.dismissed === state.trigger.from || view.composing) { close(); return; }
-        shown = matchingCommands(state.trigger.query);
+        const recent = state.trigger.query ? [] : recentCommands();
+        const matches = matchingCommands(state.trigger.query);
+        shown = [...recent, ...matches.filter(command => !recent.includes(command))];
         const active = Math.min(state.index, shown.length - 1);
         popup.replaceChildren();
         const rows: HTMLElement[] = [];
         let group = "";
         shown.forEach((command, index) => {
-          if (command.group !== group) {
-            group = command.group;
+          const nextGroup = index < recent.length ? "Recent" : command.group;
+          if (nextGroup !== group) {
+            group = nextGroup;
             const heading = document.createElement("div");
             heading.className = "px-2 pb-1 pt-2 text-caption text-kh-text-muted";
             heading.setAttribute("data-slash-group", group);
