@@ -356,10 +356,12 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           turnSeparator.className = "mx-0.5 h-4 w-px bg-kh-border";
           buttons.append(turnButton, turnSeparator);
           const turnMenu = document.createElement("div");
-          turnMenu.className = "kh-block-move-menu";
+          turnMenu.className = "kh-block-move-menu outline-none";
           turnMenu.hidden = true;
           turnMenu.setAttribute("role", "menu");
           turnMenu.setAttribute("aria-label", "Turn into");
+          // Focus falls back to the menu itself when no entry is enabled (a table, a toggle), so Escape still closes it.
+          turnMenu.tabIndex = -1;
           element.append(turnMenu);
           function setTurnLabel(view: EditorView) {
             const label = turnLabel(blocksTouched(view.state));
@@ -397,7 +399,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             void computePosition(turnButton, turnMenu, { strategy: "fixed", placement: "bottom-start", middleware: [offset(4), flip(), shift({ padding: 8 })] }).then(({ x, y }) => {
               Object.assign(turnMenu.style, { left: `${x}px`, top: `${y}px` });
             });
-            turnMenu.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+            (turnMenu.querySelector<HTMLButtonElement>("button:not(:disabled)") ?? turnMenu).focus();
           }
           turnButton.addEventListener("mousedown", (event) => event.preventDefault());
           turnButton.addEventListener("click", () => {

@@ -751,3 +751,15 @@ it.each([
   expect(undo(view.state, view.dispatch)).toBe(true);
   expect(editor.getMarkdown()).toBe(markdown);
 });
+
+it("marks the current kind aria-current in the grip's Turn into for a single block, and disables it", async () => {
+  const { view } = await openWith("- First\n- Second\n", false);
+  caretAfter(view, "Second");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  const current = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"][aria-current="true"]')];
+  expect(current.map((item) => item.textContent)).toEqual(["Bulleted list"]);
+  expect(current[0].disabled).toBe(true);
+  expect(menuItem("Numbered list").disabled).toBe(false);
+});

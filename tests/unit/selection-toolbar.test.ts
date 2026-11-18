@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { RenderedEditor, type RenderedEditorProps } from "@/components/knowledge/editor/rendered-editor";
 import { selectionToolbar } from "@/components/knowledge/editor/selection-toolbar";
+import { turnEntry } from "@/components/knowledge/editor/block-gutter";
+import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
 
 // Layout (floating-ui positioning, where the toolbar lands) is not something jsdom has, so
 // nothing here asserts a position; the browser run in Task 3 covers that. These pin the DOM
@@ -658,6 +660,74 @@ describe("Turn into on the selection toolbar", () => {
     expect(turnButton().textContent).toBe("Text");
   });
 
+  it("keeps the same text selected after Mixed turns into one numbered list", async () => {
+    const editor = await open("Para\n\n- alpha\n- beta\n");
+    mountToolbar(editor);
+    selectText(editor, "ara", "be");
+    openTurnMenu();
+    entry("Numbered list").click();
+    expect(editor.getMarkdown()).toBe("1. Para\n2. alpha\n3. beta\n");
+    expect(selectedText(editor)).toBe("ara|alpha|be");
+  });
+
+  it("drops a callout's marker line on a turn into Text, and keeps the words selected", async () => {
+    const editor = await open("> [!NOTE]\n> some words\n");
+    mountToolbar(editor);
+    selectText(editor, "words");
+    expect(turnButton().textContent).toBe("Callout");
+    openTurnMenu();
+    entry("Text").click();
+    expect(editor.getMarkdown()).toBe("some words\n");
+    expect(selectedText(editor)).toBe("words");
+  });
+
+  it("keeps the selection in the paragraph it turned when another has the same text", async () => {
+    const editor = await open("same text\n\nsame text\n");
+    mountToolbar(editor);
+    const second = viewOf(editor).state.doc.child(0).nodeSize + 1;
+    select(editor, second + 5, second + 9);
+    expect(selectedText(editor)).toBe("text");
+    openTurnMenu();
+    entry("Heading 2").click();
+    expect(editor.getMarkdown()).toBe("same text\n\n## same text\n");
+    const { state } = viewOf(editor);
+    expect(selectedText(editor)).toBe("text");
+    expect(state.selection.$from.parent.type.name).toBe("heading");
+    // The bold lands in the heading, not the first paragraph.
+    button("Bold").click();
+    expect(editor.getMarkdown()).toBe("same text\n\n## same **text**\n");
+  });
+
+  it("keeps a [[wikilink]] as a link through a toolbar turn", async () => {
+    const editor = await open("see [[Target]] here\n");
+    mountToolbar(editor);
+    selectText(editor, "here");
+    const before = extractDocumentLinks(editor.getMarkdown()).map(({ kind, target }) => ({ kind, target }));
+    expect(before).toEqual([{ kind: "WIKI", target: "Target" }]);
+    openTurnMenu();
+    entry("Bulleted list").click();
+    expect(editor.getMarkdown()).toBe("- see [[Target]] here\n");
+    expect(extractDocumentLinks(editor.getMarkdown()).map(({ kind, target }) => ({ kind, target }))).toEqual(before);
+    openTurnMenu();
+    entry("Heading 2").click();
+    expect(editor.getMarkdown()).toBe("## see [[Target]] here\n");
+    expect(extractDocumentLinks(editor.getMarkdown()).map(({ kind, target }) => ({ kind, target }))).toEqual(before);
+  });
+
+  it("focuses the menu itself when no entry is enabled, so Escape still closes it", async () => {
+    const editor = await open("| a | b |\n| - | - |\n| c | d |\n");
+    mountToolbar(editor);
+    selectText(editor, "c");
+    expect(turnButton().textContent).toBe("Turn into");
+    openTurnMenu();
+    expect(entries().every((item) => item.disabled)).toBe(true);
+    expect(document.activeElement).toBe(turnMenu());
+    key(turnMenu(), { key: "Escape" });
+    expect(turnMenu().hidden).toBe(true);
+    expect(document.activeElement).toBe(editorDom(editor));
+    expect(selectedText(editor)).toBe("c");
+  });
+
   it("does nothing while the view is not editable", async () => {
     const editor = await open("some text\n", false);
     mountToolbar(editor);
@@ -1001,4 +1071,38 @@ it("clears formatting but keeps links, so select-all and clear never drops a URL
   await throttleWindow();
   button("Clear formatting").click();
   expect(editor.getMarkdown()).toBe("a [site](https://example.com) b\n");
+});
+
+describe("turnEntry, the one Turn into predicate both menus use", () => {
+  const blocksOf = async (markdown: string) => {
+    const editor = await open(markdown);
+    const { doc } = viewOf(editor).state;
+    const blocks: { pos: number; node: import("@milkdown/kit/prose/model").Node }[] = [];
+    doc.forEach((node, pos) => {
+      if (node.type.name === "bullet_list" || node.type.name === "ordered_list") node.forEach((item, inner) => blocks.push({ pos: pos + 1 + inner, node: item }));
+      else blocks.push({ pos, node });
+    });
+    return blocks;
+  };
+
+  it("checks and disables the kind every block already is", async () => {
+    const blocks = await blocksOf("## A\n\n## B\n");
+    expect(turnEntry(blocks, "h2")).toEqual({ checked: true, disabled: true });
+    expect(turnEntry(blocks, "paragraph")).toEqual({ checked: false, disabled: false });
+  });
+
+  it("enables a kind some blocks already are, where the rest can take it", async () => {
+    const blocks = await blocksOf("P\n\n- a\n");
+    expect(turnEntry(blocks, "bullet")).toEqual({ checked: false, disabled: false });
+  });
+
+  it("disables a kind one block cannot take", async () => {
+    const blocks = await blocksOf("P\n\n```\ncode\n```\n");
+    expect(turnEntry(blocks, "toggle")).toEqual({ checked: false, disabled: true });
+    expect(turnEntry(blocks, "quote")).toEqual({ checked: false, disabled: false });
+  });
+
+  it("disables everything for no blocks", () => {
+    expect(turnEntry([], "paragraph")).toEqual({ checked: false, disabled: true });
+  });
 });
