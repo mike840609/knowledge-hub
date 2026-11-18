@@ -5,7 +5,7 @@ import { readStored, writeStored } from "@/components/shell/use-persisted-state"
 
 /**
  * Full width: the reader's own arrangement of a document page (2026-11-20 page-chrome spec), kept in this browser. One store for
- * every surface that draws a document pane and for the header's button, so no page of a kind that cannot toggle it sits at a
+ * every surface that draws a document pane and for the header's checked menu item, so no page of a kind that cannot toggle it sits at a
  * different width than the rest. Read synchronously on the client (the first server render is the narrow one), so a page opened
  * by a link in the app is drawn at its width at once.
  */

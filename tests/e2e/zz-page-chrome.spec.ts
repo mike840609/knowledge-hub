@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "./fixtures/test";
 import { personalWorkspaceId as mySpace } from "./fixtures/my-space";
+import { chooseOption } from "./fixtures/select-menu";
 
 // Server-bound assertions only; see the note in phase5-authoring.spec.ts.
 const ROUND_TRIP = { timeout: 15_000 };
@@ -10,9 +11,9 @@ function unique(label: string) {
   return `${label} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-async function openNote(page: Page, markdown: string) {
+async function openNote(page: Page, markdown: string, title = unique("Chrome"), parentId?: string) {
   const workspaceId = await mySpace(page);
-  const response = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title: unique("Chrome"), markdown } });
+  const response = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title, markdown, parentId } });
   expect(response.ok()).toBe(true);
   const created = (await response.json()) as { sourceId: string; documentId: string };
   await page.goto(`/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}`);
@@ -22,7 +23,53 @@ async function openNote(page: Page, markdown: string) {
   return { surface, url: `/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}` };
 }
 
+async function fullWidthAction(page: Page) {
+  await page.getByRole("button", { name: "Document actions" }).click();
+  return page.getByRole("menuitemcheckbox", { name: "Full width" });
+}
+
 test.describe("page chrome", () => {
+  test("the nearest folder stays readable beside desktop document actions", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const workspaceId = await mySpace(page);
+    const folder = async (name: string, parentId?: string) => {
+      const response = await page.request.post(`/api/workspaces/${workspaceId}/folders`, { data: { name, parentId } });
+      expect(response.ok()).toBe(true);
+      return (await response.json() as { treeNodeId: string }).treeNodeId;
+    };
+    const ancestor = await folder(unique("Design references and working notes for the wider team"));
+    const nearest = "Roadmaps and planning";
+    const parent = await folder(nearest, ancestor);
+    const title = "Roadmap for the next release and related decisions across the design and engineering teams";
+    await openNote(page, "Some text.\n", title, parent);
+    const breadcrumb = page.getByRole("navigation", { name: "Breadcrumb" });
+    const fits = (node: HTMLElement | SVGElement) => node.scrollWidth <= node.clientWidth;
+    await expect(breadcrumb.getByText(nearest, { exact: true })).toBeVisible();
+    await expect.poll(() => breadcrumb.getByText(nearest, { exact: true }).evaluate(fits)).toBe(true);
+    await expect(breadcrumb.getByText(title, { exact: true })).toBeVisible();
+    await expect.poll(() => breadcrumb.getByText(title, { exact: true }).evaluate(fits)).toBe(false);
+    await expect(page.getByRole("button", { name: "Share link…" }).getByText("Share", { exact: true })).toBeVisible();
+  });
+
+  test("Comments opens the empty document discussion panel", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openNote(page, "A paragraph for the first comment.\n");
+    const entry = page.getByRole("button", { name: /Show comments, 0 comments/ });
+    await expect(entry).toBeVisible();
+    await entry.click();
+    await expect(page.getByText(/No comments yet.*select text or use a block/i)).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Add comment" })).toHaveCount(0);
+  });
+
+  test("the share summary follows the selected link expiry", async ({ page }) => {
+    await openNote(page, "Some text.\n");
+    await page.getByRole("button", { name: "Share link…" }).click();
+    const dialog = page.getByRole("dialog", { name: "Share link" });
+    await expect(dialog).toHaveAccessibleDescription(/expires after 30 days/i);
+    await chooseOption(dialog.getByLabel("Expires after", { exact: true }), "1");
+    await expect(dialog).toHaveAccessibleDescription(/expires after 1 day\./i);
+  });
+
   test("the header counts the words, and the count follows the typing", async ({ page }) => {
     const { surface } = await openNote(page, "one two three\n");
     const count = page.locator("header").getByText(/\d+ words?/);
@@ -40,14 +87,14 @@ test.describe("page chrome", () => {
     const column = page.locator("[data-document-pane] article").locator("xpath=ancestor::div[contains(@class,'kh-reading-column')][1]");
     const width = () => column.evaluate((node) => node.getBoundingClientRect().width);
     const normal = await width();
-    const toggle = page.getByRole("button", { name: "Full width" });
-    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    const toggle = await fullWidthAction(page);
+    await expect(toggle).toHaveAttribute("aria-checked", "false");
     await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-pressed", "true");
     await expect.poll(width).toBeGreaterThan(normal + 100);
     await page.reload();
-    await expect(page.getByRole("button", { name: "Full width" })).toHaveAttribute("aria-pressed", "true", ROUND_TRIP);
-    await page.getByRole("button", { name: "Full width" }).click();
+    const stored = await fullWidthAction(page);
+    await expect(stored).toHaveAttribute("aria-checked", "true", ROUND_TRIP);
+    await stored.click();
     await expect.poll(width).toBeLessThan(normal + 5);
   });
 
@@ -58,26 +105,27 @@ test.describe("page chrome", () => {
     await page.setViewportSize({ width: 2200, height: 900 });
     const { url } = await openNote(page, "Some text.\n\n## Heading one\n\ntext\n\n## Heading two\n\ntext\n");
     const normal = (await columnWidth(page)).width;
-    await page.getByRole("button", { name: "Full width" }).click();
+    await (await fullWidthAction(page)).click();
     await expect.poll(async () => (await columnWidth(page)).width).toBeGreaterThan(normal + 100);
     // The outline is in the right rail; the left-hung one, which needs the column's margin, is gone.
     await expect(page.locator(".kh-outline-rail").first()).toBeVisible();
     await expect(page.locator(".kh-outline-rail-left")).toBeHidden();
-    // A revision snapshot is a page that cannot be edited: it sits at the same width, and has the button to undo it.
+    // A revision snapshot sits at the same width and offers the same setting.
     await page.goto(`${url}?revision=1`);
     await expect(page.locator("main article").first()).toBeVisible(ROUND_TRIP);
     await expect.poll(async () => (await columnWidth(page)).width).toBeGreaterThan(normal + 100);
-    await expect(page.getByRole("button", { name: "Full width" })).toHaveAttribute("aria-pressed", "true");
-    await page.getByRole("button", { name: "Full width" }).click();
+    const stored = await fullWidthAction(page);
+    await expect(stored).toHaveAttribute("aria-checked", "true");
+    await stored.click();
     await expect.poll(async () => (await columnWidth(page)).width).toBeLessThan(normal + 5);
   });
 
-  test("a stored Full width changes nothing below the width where its button is drawn", async ({ page }) => {
+  test("a stored Full width leaves the reading column at its phone width", async ({ page }) => {
     await page.setViewportSize({ width: 2200, height: 900 });
     await openNote(page, "Some text.\n");
-    await page.getByRole("button", { name: "Full width" }).click();
+    await (await fullWidthAction(page)).click();
     await page.setViewportSize({ width: 500, height: 900 });
-    await expect(page.getByRole("button", { name: "Full width" })).toBeHidden();
+    await expect(await fullWidthAction(page)).toBeHidden();
     // 24px, the column's own padding at a phone's width, not the 56px full width gives the block gutter.
     await expect.poll(async () => (await columnWidth(page)).padding).toBe("24px");
   });
