@@ -362,6 +362,7 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
       let typed = false;
       let held = false;
       let fits: boolean | null = null;
+      let fitAt = "";
       let lastX = 0;
       let lastY = 0;
       const hover = (event: MouseEvent) => {
@@ -373,8 +374,13 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
         const rect = dom.getBoundingClientRect();
         const gutterWidth = Number.parseFloat(getComputedStyle(dom).paddingLeft) || 56;
         // Anywhere on the block's line when the pane gives the gutter room; otherwise the gutter alone. The room is
-        // measured once and again after a resize or a scroll, not on every move (it reads computed styles up the tree).
-        fits ??= gutterFits(dom);
+        // re-measured when the editor's box moves or resizes, and after a window resize or scroll, not on every move
+        // (it reads computed styles up the tree).
+        const boxAt = `${rect.left}:${rect.width}`;
+        if (fits === null || boxAt !== fitAt) {
+          fitAt = boxAt;
+          fits = gutterFits(dom);
+        }
         const inTrigger = fits
           ? event.clientX >= rect.left && event.clientX < rect.right
           : event.clientX >= rect.left && event.clientX < rect.left + gutterWidth;
@@ -548,6 +554,13 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
       document.addEventListener("dragover", dragOver, true); document.addEventListener("drop", drop, true); document.addEventListener("dragend", cancelDrag); document.addEventListener("dragleave", dragLeave);
       const reposition = () => { fits = null; if (!toolbar.hidden) position(); };
       window.addEventListener("scroll", reposition, true); window.addEventListener("resize", reposition);
+      // A layout-only change (an inspector opens, a side rail appears) never reaches window resize: the editor's box
+      // moves instead. What is shown was placed for the old box, so hide it until the pointer asks again.
+      const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => {
+        fits = null;
+        if (!toolbar.hidden) hide();
+      });
+      resizeObserver?.observe(dom);
       return { update(_view, previous) {
         if (dragging && view.state.doc !== dragging.doc) cancelDrag();
         if (!view.editable) { cancelDrag(); hide(); return; }
@@ -558,6 +571,7 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
         dom.removeEventListener("mousemove", hover); dom.removeEventListener("keydown", keydown); dom.removeEventListener("mousedown", mousedown); document.removeEventListener("mouseup", release); document.removeEventListener("dragend", release); document.removeEventListener("drop", release); dom.removeEventListener("mouseleave", leave); dom.removeEventListener("focus", focus); dom.removeEventListener("blur", blur);
         document.removeEventListener("pointerdown", outside); document.removeEventListener("dragover", dragOver, true); document.removeEventListener("drop", drop, true); document.removeEventListener("dragend", cancelDrag); document.removeEventListener("dragleave", dragLeave);
         window.removeEventListener("scroll", reposition, true); window.removeEventListener("resize", reposition);
+        resizeObserver?.disconnect();
       } };
     },
   }));

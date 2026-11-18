@@ -748,21 +748,38 @@ it("a text drag that ends without a mouseup does not keep them hidden", async ()
   expect(gutterToolbar().hidden).toBe(false);
 });
 
-it("the gutter's room is measured once, again after a resize or scroll, not on every pointer move", async () => {
+it("re-measures the gutter's room when the pane's box changes, without a window event", async () => {
   const { view } = await openWide();
   await move(view, 300);
   expect(gutterToolbar().hidden).toBe(false);
-  // The pane narrows without telling anyone: the pointer keeps the trigger it had.
+  // The reading column narrows for a layout reason (an inspector opens): no resize or scroll reaches the window.
   view.dom.getBoundingClientRect = () => rect(40, 300);
   await move(view, 310);
-  expect(gutterToolbar().hidden).toBe(false);
-  window.dispatchEvent(new Event("resize"));
-  await move(view, 320);
   expect(gutterToolbar().hidden).toBe(true);
+  // Widened again: the text trigger comes back after the next move.
   view.dom.getBoundingClientRect = () => ({ ...rect(40, 300), left: 100, x: 100 });
-  document.dispatchEvent(new Event("scroll"));
   await move(view, 330);
   expect(gutterToolbar().hidden).toBe(false);
+});
+
+it("hides the controls when the pane changes size while the pointer stands still", async () => {
+  let notify: ResizeObserverCallback | undefined;
+  const Original = globalThis.ResizeObserver;
+  globalThis.ResizeObserver = class {
+    constructor(callback: ResizeObserverCallback) { notify = callback; }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+  try {
+    const { view } = await openWide();
+    await move(view, 300);
+    expect(gutterToolbar().hidden).toBe(false);
+    notify?.([], {} as ResizeObserver);
+    expect(gutterToolbar().hidden).toBe(true);
+  } finally {
+    globalThis.ResizeObserver = Original;
+  }
 });
 
 it("a narrow gutter keeps the gutter-only trigger", async () => {
