@@ -4,6 +4,7 @@ import { undo } from "@milkdown/kit/prose/history";
 import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { selectedBlockPos } from "@/components/knowledge/editor/block-actions";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { slashCommands } from "@/components/knowledge/editor/slash-commands";
 import { wikiLinkSuggest } from "@/components/knowledge/editor/wikilink-suggest";
@@ -39,7 +40,7 @@ function type(view: EditorView, text: string) {
   }
 }
 
-const CODES: Record<string, number> = { Tab: 9, Backspace: 8, Escape: 27, ArrowUp: 38, ArrowDown: 40, "7": 55, "8": 56, "9": 57, s: 83, a: 65, d: 68, "&": 55, "*": 56, "(": 57 };
+const CODES: Record<string, number> = { Enter: 13, Tab: 9, Backspace: 8, Escape: 27, ArrowUp: 38, ArrowDown: 40, "7": 55, "8": 56, "9": 57, s: 83, a: 65, d: 68, "&": 55, "*": 56, "(": 57 };
 /** A keydown with the keyCode a browser reports; `ctrl` stands for Mod (jsdom is not a Mac). */
 function press(view: EditorView, key: string, init: KeyboardEventInit = {}) {
   const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init });
@@ -593,12 +594,62 @@ describe("Escape selects the list item, not the list", () => {
     expect(lines(editor.getMarkdown())).toEqual(["- a", "- b", "- b", "- c"]);
   });
 
-  it("Tab with an item selected does not indent or throw", async () => {
+  it("Tab and Shift-Tab with an item selected do not indent, and are left to the browser", async () => {
     const { editor, view } = await open("- a\n- b\n- c");
     caretAt(view, findText(view, "b") + 1);
     press(view, "Escape");
-    press(view, "Tab");
+    expect(press(view, "Tab").defaultPrevented).toBe(false);
     expect(lines(editor.getMarkdown())).toEqual(["- a", "- b", "- c"]);
+    expect(press(view, "Tab", { shiftKey: true }).defaultPrevented).toBe(false);
+    expect(lines(editor.getMarkdown())).toEqual(["- a", "- b", "- c"]);
+  });
+
+  // Block-unit spec, "Out of scope, recorded": blocks inside a toggle, quote or callout are not blocks of their own.
+  it.each([
+    ["a quote", "> - a\n> - b\n\nAfter\n", "blockquote"],
+    ["a callout", "> [!NOTE]\n> - a\n> - b\n\nAfter\n", "blockquote"],
+    ["a toggle", "<details>\n<summary>T</summary>\n\n- a\n- b\n\n</details>\n\nAfter\n", "details"],
+  ])("Escape in a list item inside %s selects the container", async (_name, markdown, container) => {
+    const { editor, view } = await open(markdown);
+    caretAt(view, findText(view, "b") + 1);
+    expect(press(view, "Escape").defaultPrevented).toBe(true);
+    expect(view.state.selection).toBeInstanceOf(NodeSelection);
+    expect((view.state.selection as NodeSelection).node.type.name).toBe(container);
+    expect(view.state.selection.from).toBe(0);
+    // Backspace takes the container, as with any chosen top-level block.
+    press(view, "Backspace");
+    expect(lines(editor.getMarkdown())).toEqual(["After"]);
+  });
+
+  it("an item inside a quote, chosen as a node, is not a block of a sequence", async () => {
+    const { view } = await open("> - a\n> - b\n");
+    const item = findText(view, "a") - 2;
+    expect(view.state.doc.nodeAt(item)?.type.name).toBe("list_item");
+    view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, item)));
+    expect(selectedBlockPos(view.state)).toBeNull();
+    const nested = await open("- a\n  - n\n");
+    const inner = findText(nested.view, "n") - 2;
+    nested.view.dispatch(nested.view.state.tr.setSelection(NodeSelection.create(nested.view.state.doc, inner)));
+    expect(selectedBlockPos(nested.view.state)).toBe(inner);
+  });
+
+  it.each([
+    ["the middle item", "- a\n- b\n- c\n", "b"],
+    ["a nested item", "- a\n  - n\n- c\n", "n"],
+    ["a top-level paragraph", "One\n\nTwo\n", "Two"],
+    ["a quote", "> q1\n>\n> q2\n\nAfter\n", "q1"],
+  ])("Enter on %s chosen with Escape returns to the end of its text and changes nothing", async (_name, markdown, text) => {
+    const { editor, view } = await open(markdown);
+    const before = editor.getMarkdown();
+    caretAt(view, findText(view, text) + 1);
+    press(view, "Escape");
+    expect(view.state.selection).toBeInstanceOf(NodeSelection);
+    expect(press(view, "Enter").defaultPrevented).toBe(true);
+    expect(editor.getMarkdown()).toBe(before);
+    expect(view.state.selection).toBeInstanceOf(TextSelection);
+    expect(view.state.selection.empty).toBe(true);
+    expect(view.state.selection.$from.parent.textContent).toBe(text);
+    expect(view.state.selection.$from.parentOffset).toBe(text.length);
   });
 
   it("Shift-ArrowDown from an item does not throw", async () => {

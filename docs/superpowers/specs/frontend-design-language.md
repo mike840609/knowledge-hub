@@ -941,7 +941,9 @@ decisions 6-8; `editor/notion-keys.ts`). Escape in the text, with no menu open,
 selects the current block as a node selection, drawn `kh-bg-selected` at the
 `sm` radius with no outline (`.ProseMirror-selectednode`): in a list item's text
 that is the innermost item, with whatever is nested under it, and elsewhere the
-top-level block (block-unit spec, decision 1). Escape again returns to the text.
+top-level block (block-unit spec, decision 1); an item inside a quote, callout or
+toggle is not a block of its own, and Escape there chooses the container. Escape
+again, or Enter, returns to the text (Enter at the end of the block's first line).
 A list item is its own block for every input — Escape, the pointer's controls,
 the block menu, drag, `Mod-d` and `Mod-Shift-ArrowUp/Down`. Shift-ArrowDown/Up
 widens a chosen block into a range, a run of blocks in one sequence (the
@@ -950,7 +952,8 @@ item's sequence is its own list), each drawn with the same fill
 (`.kh-block-in-range`). The block menu, the `[[` and `/` lists and the
 toolbar's link field take Escape first. A selected block is the current block
 for `Mod-Shift-ArrowUp/Down` (move) and `Mod-d` (duplicate), which run the same
-commands as the menu's Move and Duplicate. No colour, radius or elevation token
+commands as the menu's Move and Duplicate; with only the caret in a block, the
+move is the same one, and the caret keeps its place in the block's words. No colour, radius or elevation token
 was added.
 
 **The selection toolbar and the link card** (editor Notion-parity spec,

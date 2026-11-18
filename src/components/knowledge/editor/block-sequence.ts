@@ -142,10 +142,15 @@ function replace(state: EditorState, region: Region, entries: Entry[], chosen: E
   return { tr, placed };
 }
 
-/** Removes every block. A list left with no items goes; a container left empty (the document) keeps one empty paragraph. */
+/**
+ * Removes every block. A list left with no items goes; a container left empty (the document, or a quote) keeps one
+ * empty paragraph. Two lists of one type that the delete leaves side by side join, as a move joins them; two that
+ * already stood so stay two.
+ */
 export function deleteBlocks(state: EditorState, blocks: EditorBlock[]): Transaction {
   const { sequence, first, last } = locate(state, blocks);
-  const region = readRegion(state.doc, sequence, first, last);
+  // One block either side as well: the neighbours the delete may leave side by side.
+  const region = readRegion(state.doc, sequence, Math.max(0, first - 1), Math.min(sequence.length - 1, last + 1));
   const gone = new Set(blocks.map((block) => block.pos));
   const kept = region.entries.filter((entry) => !gone.has(entry.pos));
   // A list whose first item went starts where its first item now is: a deletion renumbers, it does not split.
@@ -153,6 +158,7 @@ export function deleteBlocks(state: EditorState, blocks: EditorBlock[]): Transac
     const remaining = kept.find((entry) => entry.key === key);
     if (remaining && !kept.some((entry) => entry.key === key && entry.first)) remaining.first = true;
   }
+  join(kept, region.lists, true);
   const { nodes, offsets } = regroup(kept, region.lists);
   if (!nodes.length && (region.whole || state.doc.resolve(region.from).parent.childCount === 1)) nodes.push(state.schema.nodes.paragraph.create());
   const tr = state.tr.replaceWith(region.from, region.to, nodes);

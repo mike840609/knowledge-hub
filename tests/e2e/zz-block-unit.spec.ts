@@ -109,5 +109,10 @@ test.describe("one block is one block", () => {
     const paragraphBox = (await paragraph.boundingBox())!;
     expect(gripBox.y + gripBox.height / 2).toBeGreaterThanOrEqual(paragraphBox.y - 4);
     expect(gripBox.y).toBeLessThanOrEqual(paragraphBox.y + paragraphBox.height);
+    // Drawn in the gutter, never over the text (2026-11-15's "controls stay in the gutter"): the grip ends where the
+    // editor's text column begins, or before.
+    const textLeft = await surface.evaluate((element) => element.getBoundingClientRect().left + Number.parseFloat(getComputedStyle(element).paddingLeft));
+    expect(gripBox.x + gripBox.width).toBeLessThanOrEqual(textLeft + 0.5);
+    expect(paragraphBox.x).toBeGreaterThanOrEqual(textLeft - 0.5);
   });
 });

@@ -338,11 +338,26 @@ export function turnBlockInto(view: EditorView, pos: number, target: BlockKind):
   return true;
 }
 
-/** The position of the selected block: a `NodeSelection` of a top-level node or of a list item, else null. */
+/**
+ * Whether the list item at `pos` is a block of its own: every node between it and the document is a list or a list
+ * item. An item inside a quote, callout or toggle is not; there the container is the block (2026-11-21 block-unit
+ * spec, "Out of scope, recorded").
+ */
+export function isBlockItem(doc: ProseNode, pos: number): boolean {
+  if (doc.nodeAt(pos)?.type.name !== "list_item") return false;
+  const $pos = doc.resolve(pos);
+  for (let depth = $pos.depth; depth >= 1; depth--) {
+    const name = $pos.node(depth).type.name;
+    if (name !== "bullet_list" && name !== "ordered_list" && name !== "list_item") return false;
+  }
+  return true;
+}
+
+/** The position of the selected block: a `NodeSelection` of a top-level node or of a list item that is a block, else null. */
 export function selectedBlockPos(state: EditorState): number | null {
   const { selection } = state;
   if (!(selection instanceof NodeSelection)) return null;
-  if (selection.node.type.name === "list_item") return selection.from;
+  if (selection.node.type.name === "list_item") return isBlockItem(state.doc, selection.from) ? selection.from : null;
   return state.doc.resolve(selection.from).depth === 0 ? selection.from : null;
 }
 

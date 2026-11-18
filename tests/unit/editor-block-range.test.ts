@@ -4,7 +4,7 @@ import { closeHistory, redo, undo } from "@milkdown/kit/prose/history";
 import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { afterEach, expect, it } from "vitest";
-import { moveBlocks, sequenceOf } from "@/components/knowledge/editor/block-sequence";
+import { deleteBlocks, moveBlocks, sequenceOf } from "@/components/knowledge/editor/block-sequence";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
 import { LINK_MARKDOWN_FIXTURES } from "../fixtures/link-markdown";
@@ -615,4 +615,126 @@ it("a range moved up into an ordered list leaves the part after it its numbers",
   expect(inRange(view)).toEqual(["P", "Q"]);
   undo(view.state, view.dispatch);
   expect(md(editor)).toBe(markdown);
+});
+
+// Final review: a delete joins the lists it leaves side by side, as a move does.
+it("deleting the blocks between two lists of one kind joins them, in one undo step", async () => {
+  const markdown = "- a\n- x\n\nP\n\n- m\n";
+  const { editor, view } = await open(markdown);
+  escapeOn(view, "x");
+  shift(view, "ArrowDown");
+  expect(inRange(view)).toEqual(["x", "P"]);
+  press(view, "Backspace");
+  expect(md(editor)).toBe("- a\n- m\n");
+  expect(listNodes(view)).toEqual(["bullet_list"]);
+  undo(view.state, view.dispatch);
+  expect(md(editor)).toBe(markdown);
+});
+
+it("deleting the blocks between two ordered lists makes one list numbered on from the first", async () => {
+  const markdown = "1. a\n2. x\n\nP\n\n1. m\n2. n\n";
+  const { editor, view } = await open(markdown);
+  escapeOn(view, "x");
+  shift(view, "ArrowDown");
+  press(view, "Delete");
+  expect(md(editor)).toBe("1. a\n2. m\n3. n\n");
+  expect(listNodes(view)).toEqual(["ordered_list"]);
+  undo(view.state, view.dispatch);
+  expect(md(editor)).toBe(markdown);
+});
+
+it("a delete keeps apart two lists that already stood side by side", async () => {
+  const markdown = "- a\n- b\n\n* c\n* d\n\nP\n";
+  const { editor, view } = await open(markdown);
+  escapeOn(view, "d");
+  shift(view, "ArrowDown");
+  press(view, "Backspace");
+  expect(listNodes(view)).toEqual(["bullet_list", "bullet_list"]);
+  expect(md(editor)).toBe("- a\n- b\n\n* c\n");
+});
+
+it("emptying a list in a quote leaves the quote one empty paragraph, written without <br />", async () => {
+  const { editor, view } = await open("> - a\n> - b\n\nAfter\n");
+  let first = -1;
+  view.state.doc.descendants((node, pos) => { if (first < 0 && node.type.name === "list_item") first = pos; return first < 0; });
+  const sequence = sequenceOf(view.state.doc, first);
+  expect(sequence.map(block => block.node.textContent)).toEqual(["a", "b"]);
+  view.dispatch(closeHistory(deleteBlocks(view.state, sequence)));
+  expect(view.state.doc.firstChild!.type.name).toBe("blockquote");
+  expect(view.state.doc.firstChild!.childCount).toBe(1);
+  expect(view.state.doc.firstChild!.firstChild!.type.name).toBe("paragraph");
+  expect(md(editor)).not.toContain("<br");
+  expect(md(editor)).toBe(">\n\nAfter\n");
+  // `>` reads back as that same quote, and is written again as it was.
+  const again = await open(">\n\nAfter\n");
+  expect(again.view.state.doc.firstChild!.toString()).toBe("blockquote(paragraph)");
+  expect(md(again.editor)).toBe(">\n\nAfter\n");
+  // A quote holding anything else is written as before.
+  const other = await open("> q\n>\n> <br />\n\nAfter\n");
+  expect(md(other.editor)).toBe("> q\n>\n> <br />\n\nAfter\n");
+});
+
+// Final review, R2 for the caret: Mod-Shift-Arrow with no block chosen moves the caret's block by its sequence.
+function caretIn(view: EditorView, text: string, offset: number) {
+  let at = -1;
+  view.state.doc.descendants((node, pos) => { if (at < 0 && node.isTextblock && node.textContent === text) at = pos + 1; return at < 0; });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at + offset)));
+}
+const caret = (view: EditorView) => ({ text: view.state.selection.$from.parent.textContent, offset: view.state.selection.$from.parentOffset, empty: view.state.selection.empty });
+
+it("Mod-Shift-ArrowDown with the caret in a paragraph above a list passes one item, and the caret stays put in its text", async () => {
+  const markdown = "Pa\n\n- a\n- b\n\nQ\n";
+  const { editor, view } = await open(markdown);
+  caretIn(view, "Pa", 1);
+  mod(view, "ArrowDown", { shiftKey: true });
+  expect(md(editor)).toBe("- a\n\nPa\n\n- b\n\nQ\n");
+  expect(view.state.selection).toBeInstanceOf(TextSelection);
+  expect(caret(view)).toEqual({ text: "Pa", offset: 1, empty: true });
+  mod(view, "ArrowUp", { shiftKey: true });
+  expect(md(editor)).toBe(markdown);
+  expect(caret(view)).toEqual({ text: "Pa", offset: 1, empty: true });
+  undo(view.state, view.dispatch);
+  expect(md(editor)).toBe("- a\n\nPa\n\n- b\n\nQ\n");
+});
+
+it("Mod-Shift-ArrowDown with the caret in a list's last item does what it does to that item chosen", async () => {
+  const markdown = "- a\n- bb\n\nQ\n";
+  const chosen = await open(markdown);
+  escapeOn(chosen.view, "bb");
+  mod(chosen.view, "ArrowDown", { shiftKey: true });
+  const { editor, view } = await open(markdown);
+  caretIn(view, "bb", 2);
+  mod(view, "ArrowDown", { shiftKey: true });
+  expect(md(editor)).toBe(md(chosen.editor));
+  expect(md(editor)).toBe("- a\n\nQ\n\n- bb\n");
+  expect(caret(view)).toEqual({ text: "bb", offset: 2, empty: true });
+});
+
+// The wikilink rule (CLAUDE.md) for a range moved, and a range turned into a list.
+it("a range moved, and a range turned into a list, keep their wikilinks as links", async () => {
+  const sentence = LINK_MARKDOWN_FIXTURES.find(fixture => fixture.name === "a wikilink in a sentence")!;
+  const markdown = `${sentence.markdown}\n- [[Target]]\n- b\n\nAfter\n`;
+  const target = JSON.stringify({ kind: "WIKI", target: "Target", fragment: null, display: null });
+  const before = [...sentence.links.map(link => JSON.stringify(link)), target].sort();
+  const wikiNodes = (view: EditorView) => { let count = 0; view.state.doc.descendants(node => { if (node.type.name === "wiki_link") count++; }); return count; };
+
+  const moved = await open(markdown);
+  expect(links(md(moved.editor))).toEqual(before);
+  escapeOn(moved.view, "b");
+  shift(moved.view, "ArrowUp");
+  shift(moved.view, "ArrowUp");
+  expect(inRange(moved.view)).toHaveLength(3);
+  mod(moved.view, "ArrowDown", { shiftKey: true });
+  expect(md(moved.editor)).toBe(`After\n\n${sentence.markdown}\n- [[Target]]\n- b\n`);
+  expect(links(md(moved.editor))).toEqual(before);
+  expect(wikiNodes(moved.view)).toBe(2);
+
+  const turned = await open(markdown);
+  escapeOn(turned.view, "b");
+  shift(turned.view, "ArrowUp");
+  shift(turned.view, "ArrowUp");
+  press(turned.view, "6", { ctrlKey: true, altKey: true });
+  expect(md(turned.editor)).toMatch(/^1\. .*\n2\. \[\[Target\]\]\n3\. b\n\nAfter\n$/);
+  expect(links(md(turned.editor))).toEqual(before);
+  expect(wikiNodes(turned.view)).toBe(2);
 });

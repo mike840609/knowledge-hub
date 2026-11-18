@@ -142,6 +142,7 @@ export function blockGutter() {
         const duplicate = menuButton("Duplicate", () => {
           const blocks = groupNow();
           if (blocks) {
+            if (!view.editable) return;
             const { state } = view;
             const { tr, copies } = duplicateBlocks(state, blocks);
             // The copies become the range, in its direction.
@@ -157,6 +158,7 @@ export function blockGutter() {
         const remove = menuButton("Delete", () => {
           const blocks = groupNow();
           if (blocks) {
+            if (!view.editable) return;
             setBlockRange(view, deleteBlocks(view.state, blocks), null);
             view.focus();
             live.textContent = `${blocks.length} blocks deleted`;
@@ -198,6 +200,7 @@ export function blockGutter() {
           const button = menuButton(label, () => {
             const blocks = groupNow();
             if (blocks) {
+              if (!view.editable) return;
               // One transaction for every block, one undo step; the range ends, as the turn keys end it.
               const tr = turnBlocks(view.state, blocks, kind);
               if (!tr) return;
@@ -313,6 +316,7 @@ export function blockGutter() {
       // Typing, or a button held for a selection, keeps the controls hidden until the pointer moves / is released.
       let typed = false;
       let held = false;
+      let fits: boolean | null = null;
       let lastX = 0;
       let lastY = 0;
       const hover = (event: MouseEvent) => {
@@ -323,8 +327,10 @@ export function blockGutter() {
         if (held || typed) { if (!toolbar.contains(document.activeElement)) hide(); return; }
         const rect = dom.getBoundingClientRect();
         const gutterWidth = Number.parseFloat(getComputedStyle(dom).paddingLeft) || 56;
-        // Anywhere on the block's line when the pane gives the gutter room; otherwise the gutter alone.
-        const inTrigger = gutterFits(dom)
+        // Anywhere on the block's line when the pane gives the gutter room; otherwise the gutter alone. The room is
+        // measured once and again after a resize or a scroll, not on every move (it reads computed styles up the tree).
+        fits ??= gutterFits(dom);
+        const inTrigger = fits
           ? event.clientX >= rect.left && event.clientX < rect.right
           : event.clientX >= rect.left && event.clientX < rect.left + gutterWidth;
         if (!inTrigger) {
@@ -340,7 +346,8 @@ export function blockGutter() {
         if (!toolbar.contains(document.activeElement)) hide();
       };
       const mousedown = () => { held = true; if (!toolbar.contains(document.activeElement)) hide(); };
-      const mouseup = () => { held = false; };
+      // A native drag of selected text ends with dragend or drop, never mouseup: either one lets go too.
+      const release = () => { held = false; };
       const leave = (event: MouseEvent) => {
         if (event.relatedTarget instanceof Node && (toolbar.contains(event.relatedTarget) || menu.contains(event.relatedTarget))) return;
         if (menu.hidden && !dragging && !toolbar.contains(document.activeElement)) hide();
@@ -360,6 +367,7 @@ export function blockGutter() {
        * chosen over its new places; a single block keeps the caret in its text, as before.
        */
       function moveRun(blocks: EditorBlock[], toIndex: number) {
+        if (!view.editable) return;
         const { state } = view;
         const { tr, moved } = moveBlocks(state, blocks, toIndex);
         if (blocks.length > 1) { keepRange(view, state, tr, moved); view.focus(); }
@@ -489,11 +497,11 @@ export function blockGutter() {
         if (moveBlock(view, source.blocks[0].pos, before)) live.textContent = "Block moved";
       };
       const dragLeave = (event: DragEvent) => { if (!event.relatedTarget) { dropAt = null; line.hidden = true; } };
-      dom.addEventListener("mousemove", hover); dom.addEventListener("keydown", keydown); dom.addEventListener("mousedown", mousedown); document.addEventListener("mouseup", mouseup); dom.addEventListener("mouseleave", leave); toolbar.addEventListener("mouseleave", leave);
+      dom.addEventListener("mousemove", hover); dom.addEventListener("keydown", keydown); dom.addEventListener("mousedown", mousedown); document.addEventListener("mouseup", release); document.addEventListener("dragend", release); document.addEventListener("drop", release); dom.addEventListener("mouseleave", leave); toolbar.addEventListener("mouseleave", leave);
       dom.addEventListener("focus", focus); dom.addEventListener("blur", blur);
       document.addEventListener("pointerdown", outside);
       document.addEventListener("dragover", dragOver, true); document.addEventListener("drop", drop, true); document.addEventListener("dragend", cancelDrag); document.addEventListener("dragleave", dragLeave);
-      const reposition = () => { if (!toolbar.hidden) position(); };
+      const reposition = () => { fits = null; if (!toolbar.hidden) position(); };
       window.addEventListener("scroll", reposition, true); window.addEventListener("resize", reposition);
       return { update(_view, previous) {
         if (dragging && view.state.doc !== dragging.doc) cancelDrag();
@@ -502,7 +510,7 @@ export function blockGutter() {
         if (!toolbar.hidden || (usesTouch() && view.hasFocus())) position();
       }, destroy() {
         destroyed = true; focusControls = undefined; cancelAnimationFrame(frame); cancelDrag(); toolbar.remove(); menu.remove(); line.remove(); live.remove();
-        dom.removeEventListener("mousemove", hover); dom.removeEventListener("keydown", keydown); dom.removeEventListener("mousedown", mousedown); document.removeEventListener("mouseup", mouseup); dom.removeEventListener("mouseleave", leave); dom.removeEventListener("focus", focus); dom.removeEventListener("blur", blur);
+        dom.removeEventListener("mousemove", hover); dom.removeEventListener("keydown", keydown); dom.removeEventListener("mousedown", mousedown); document.removeEventListener("mouseup", release); document.removeEventListener("dragend", release); document.removeEventListener("drop", release); dom.removeEventListener("mouseleave", leave); dom.removeEventListener("focus", focus); dom.removeEventListener("blur", blur);
         document.removeEventListener("pointerdown", outside); document.removeEventListener("dragover", dragOver, true); document.removeEventListener("drop", drop, true); document.removeEventListener("dragend", cancelDrag); document.removeEventListener("dragleave", dragLeave);
         window.removeEventListener("scroll", reposition, true); window.removeEventListener("resize", reposition);
       } };

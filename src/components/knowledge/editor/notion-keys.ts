@@ -12,7 +12,7 @@ import { customInputRulesKey } from "@milkdown/kit/prose";
 import { Fragment, type Mark, type Node as ProseNode } from "@milkdown/kit/prose/model";
 import { ReplaceStep } from "@milkdown/kit/prose/transform";
 import { $inputRule, $prose, $useKeymap } from "@milkdown/kit/utils";
-import { blockKind, canTurnInto, deleteBlock, duplicateBlock, moveBlock, selectedBlockPos, siblingBlocks, turnBlockInto, type BlockKind } from "./block-actions";
+import { blockKind, canTurnInto, deleteBlock, duplicateBlock, isBlockItem, moveBlock, selectedBlockPos, siblingBlocks, turnBlockInto, type BlockKind } from "./block-actions";
 import { blockRange } from "./block-range";
 import { moveBlocks, sequenceOf } from "./block-sequence";
 import { flipNearestDetails } from "./details-toggle";
@@ -274,16 +274,26 @@ function moveCurrentBlock(direction: -1 | 1) {
   return (state: EditorState, dispatch?: unknown, view?: EditorView) => {
     const pos = actionBlockPos(state);
     if (pos === null || !view?.editable) return false;
-    // A block chosen with Escape moves past its neighbour in its sequence (2026-11-21 block-unit spec): a paragraph
-    // passes one item, not the whole list, and an item at its list's end leaves the list. It stays chosen.
-    const chosen = selectedBlockPos(state);
-    const sequence = chosen === null ? [] : sequenceOf(state.doc, chosen);
-    const at = sequence.findIndex((block) => block.pos === chosen);
+    // The block moves past its neighbour in its sequence (2026-11-21 block-unit spec, R2), chosen with Escape or
+    // holding the caret alike: a paragraph passes one item, not the whole list, and an item at its list's end leaves
+    // the list. A chosen block stays chosen; the caret stays where it was in the block's words.
+    const sequence = sequenceOf(state.doc, pos);
+    const at = sequence.findIndex((block) => block.pos === pos);
     if (at >= 0) {
       const toIndex = at + direction;
       if (toIndex < 0 || toIndex >= sequence.length) return true;
       if (!dispatch) return true;
-      view.dispatch(closeHistory(moveBlocks(state, [sequence[at]], toIndex).tr).scrollIntoView());
+      const { tr, moved } = moveBlocks(state, [sequence[at]], toIndex);
+      if (selectedBlockPos(state) === null) {
+        // The region is replaced, so mapping would not carry the caret: the block's content is the same node, so the
+        // caret's offsets from the block's start still hold.
+        const shift = moved[0].pos - pos;
+        const { selection } = state;
+        // Any other selection (cells of a table) gives way to the moved block chosen, as `moveBlocks` leaves it.
+        if (selection instanceof NodeSelection) tr.setSelection(NodeSelection.create(tr.doc, selection.from + shift));
+        else if (selection instanceof TextSelection) tr.setSelection(TextSelection.create(tr.doc, selection.anchor + shift, selection.head + shift));
+      }
+      view.dispatch(closeHistory(tr).scrollIntoView());
       view.dispatch(closeHistory(view.state.tr));
       return true;
     }
@@ -555,10 +565,30 @@ const escapeSelection = $prose(
     }),
 );
 
-/** The innermost list item the selection is in, as a position, or null. */
+/**
+ * The innermost list item the selection is in, as a position, when it is a block of its own (`isBlockItem`); null
+ * otherwise. In a quote, callout or toggle the container is the block, so Escape there falls back to it.
+ */
 function itemPos(state: EditorState): number | null {
   const depth = listItemDepth(state);
-  return depth === null ? null : state.selection.$from.before(depth);
+  if (depth === null) return null;
+  const pos = state.selection.$from.before(depth);
+  return isBlockItem(state.doc, pos) ? pos : null;
+}
+
+/** The end of the first textblock of the block at `pos` (the block itself, if it is one), or null when it has none. */
+function firstTextblockEnd(doc: ProseNode, pos: number): number | null {
+  const node = doc.nodeAt(pos);
+  if (!node) return null;
+  if (node.isTextblock) return pos + node.nodeSize - 1;
+  let end: number | null = null;
+  node.descendants((child, offset) => {
+    if (end !== null) return false;
+    if (!child.isTextblock) return true;
+    end = pos + 1 + offset + child.nodeSize - 1;
+    return false;
+  });
+  return end;
 }
 
 /** A list item chosen with Escape, as a position (not an item the caret merely sits in). */
@@ -584,6 +614,16 @@ const chosenItemEdits = $prose(
           },
         },
         handleKeyDown(view, event) {
+          if (event.key === "Enter" && !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey && !composing(event) && view.editable) {
+            // Enter on a chosen block (an item, or a top-level block) goes back to its words, at the end of its first
+            // textblock, and changes nothing: it used to split a list around the item. A range claims Enter first.
+            const pos = selectedBlockPos(view.state);
+            const end = pos === null ? null : firstTextblockEnd(view.state.doc, pos);
+            if (end === null) return false; // No words to go back to (a divider, an image): Enter is the editor's own.
+            event.preventDefault();
+            view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, end)).scrollIntoView());
+            return true;
+          }
           if ((event.key !== "Backspace" && event.key !== "Delete") || composing(event) || !view.editable) return false;
           const pos = chosenItemPos(view.state);
           if (pos === null) return false;
@@ -596,6 +636,8 @@ const chosenItemEdits = $prose(
           if (pos === null || from !== view.state.selection.from || to !== view.state.selection.to) return false;
           const item = view.state.doc.nodeAt(pos);
           const first = item?.firstChild;
+          // Never taken: the schema gives a list item `paragraph block*` content, so its first child is a paragraph.
+          // The check only keeps the replace below from writing into anything else should that schema ever change.
           if (!item || !first || first.type.name !== "paragraph") return false;
           const start = pos + 2;
           const tr = view.state.tr.replaceWith(start, start + first.content.size, view.state.schema.text(text));

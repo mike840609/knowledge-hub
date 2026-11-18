@@ -484,6 +484,55 @@ it("Turn into is disabled when one block cannot take it", async () => {
   expect(menuItem("Toggle").disabled).toBe(true);
 });
 
+it.each([
+  ["a paragraph and a heading 2", "One\n\nPara\n\n## H\n", "Heading 2", false],
+  ["two headings 2", "One\n\n## G\n\n## H\n", "Heading 2", true],
+  ["a code block and a paragraph", "One\n\n```\ncode\n```\n\nPara\n", "Toggle", true],
+  ["a code block and a paragraph", "One\n\n```\ncode\n```\n\nPara\n", "Text", false],
+])("Turn into on %s: %s disabled is %s", async (_name, markdown, label, disabled) => {
+  const { view } = await openWith(markdown, false);
+  rangeTwoThree(view);
+  reveal(view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  expect(menuItem(label).disabled).toBe(disabled);
+});
+
+it("the range's menu entries and a range move do nothing once the editor is read-only", async () => {
+  for (const label of ["Duplicate", "Delete", "Move up"]) {
+    const { editor, view } = await openRange();
+    const original = editor.getMarkdown();
+    button("Move block").click();
+    const item = menuItem(label);
+    view.setProps({ editable: () => false });
+    item.click();
+    expect(editor.getMarkdown()).toBe(original);
+    view.setProps({ editable: () => true });
+  }
+  const { editor, view } = await openRange();
+  const original = editor.getMarkdown();
+  button("Move block").click();
+  menuItem("Turn into").click();
+  const heading = menuItem("Heading 2");
+  view.setProps({ editable: () => false });
+  heading.click();
+  expect(editor.getMarkdown()).toBe(original);
+});
+
+it.each([
+  ["a quote", "> - a\n\nAfter\n", ">\n\nAfter\n"],
+  ["a callout", "> [!NOTE]\n> - a\n\nAfter\n", null],
+])("the grip's Delete on the last item of a list in %s writes no <br />", async (_name, markdown, expected) => {
+  const { editor, view } = await openWith(markdown, false);
+  caretAfter(view, "a");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Delete").click();
+  expect(editor.getMarkdown()).not.toContain("<br");
+  expect(editor.getMarkdown()).not.toContain("- a");
+  if (expected) expect(editor.getMarkdown()).toBe(expected);
+});
+
 it("no Copy link to heading on a range", async () => {
   const { view } = await openWith("One\n\n## Two\n\n## Three", false);
   rangeTwoThree(view);
@@ -591,6 +640,34 @@ it("a held mouse button keeps them hidden", async () => {
   await move(view, 320);
   expect(gutterToolbar().hidden).toBe(true);
   document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+  await move(view, 330);
+  expect(gutterToolbar().hidden).toBe(false);
+});
+
+it("a text drag that ends without a mouseup does not keep them hidden", async () => {
+  const { view } = await openWide();
+  await move(view, 300);
+  view.dom.dispatchEvent(new MouseEvent("mousedown", { clientX: 300, clientY: 60, bubbles: true }));
+  expect(gutterToolbar().hidden).toBe(true);
+  // A native drag of selected text: the browser sends dragend, never mouseup.
+  view.dom.dispatchEvent(new Event("dragend", { bubbles: true }));
+  await move(view, 330);
+  expect(gutterToolbar().hidden).toBe(false);
+});
+
+it("the gutter's room is measured once, again after a resize or scroll, not on every pointer move", async () => {
+  const { view } = await openWide();
+  await move(view, 300);
+  expect(gutterToolbar().hidden).toBe(false);
+  // The pane narrows without telling anyone: the pointer keeps the trigger it had.
+  view.dom.getBoundingClientRect = () => rect(40, 300);
+  await move(view, 310);
+  expect(gutterToolbar().hidden).toBe(false);
+  window.dispatchEvent(new Event("resize"));
+  await move(view, 320);
+  expect(gutterToolbar().hidden).toBe(true);
+  view.dom.getBoundingClientRect = () => ({ ...rect(40, 300), left: 100, x: 100 });
+  document.dispatchEvent(new Event("scroll"));
   await move(view, 330);
   expect(gutterToolbar().hidden).toBe(false);
 });

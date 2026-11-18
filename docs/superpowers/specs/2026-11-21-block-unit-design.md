@@ -161,6 +161,37 @@ Recorded during implementation:
   that kind or `canTurnInto` holds for it, and disabled when every block
   already is that kind.
 
+Recorded at the final review:
+
+- **Delete joins the lists it leaves side by side.** Decision 4's Delete now
+  also joins two lists of one type that the deleted blocks stood between, as
+  Move does: `- a`, `- x`, `P`, `- m` with `x` and `P` deleted is one list
+  `a`, `m`; two ordered lists join into one numbered on from the first list's
+  start. Two lists that already stood side by side stay two. Notion has no
+  list boundary to keep.
+- **R2 covers the caret too.** `Mod-Shift-ArrowUp/Down` with no block chosen
+  moves the caret's block by the same rule as a chosen one: past one block of
+  its sequence (a paragraph passes one item; a list's last item leaves its
+  list). The caret keeps its place in the block's words. It used to move past
+  a whole list. A block of no sequence still moves among its siblings.
+- **Enter on a chosen block returns to its text.** With an item or a
+  top-level block chosen, Enter puts the caret at the end of the block's first
+  textblock and changes nothing, as Escape again does at the start. It used to
+  split the list around a chosen item. A block with no text (a divider, an
+  image) keeps the editor's own Enter; a range still ignores Enter.
+- **Items inside a quote, callout or toggle are not blocks.** As "Out of
+  scope, recorded" says, Escape in such an item chooses the container, and a
+  quoted item selected as a node is not a chosen block (no range starts from
+  it). The pointer's grip on such an item acts on the item, as since
+  2026-11-17.
+- **An emptied list in a quote leaves an empty paragraph.** A quote (or
+  callout) whose list loses its last item keeps one empty paragraph where it
+  had nothing else; a callout keeps its marker. A quote holding only an empty
+  paragraph is written as an empty quote, `>`, which reads back as the same
+  quote, instead of Milkdown's `> <br />` (`editor/empty-quote.ts`). A
+  document that already held `> <br />` alone is written `>` the next time it
+  is saved; every other quote and empty paragraph is written as before.
+
 ## Verification
 
 - `tests/unit/editor-block-range.test.ts` (extended) and
@@ -171,6 +202,12 @@ Recorded during implementation:
   - The turn keys on an item.
   - A paragraph-item-item range: delete, duplicate, move both ways (lists
     joined), and turn to H2 with one `Mod-z` restoring all of them.
+- Final review, through the rendered editor and the saved Markdown: Escape
+  in a quoted, callout or toggle item chooses the container; Enter on a chosen
+  item or block; a delete that joins two lists (bullet and ordered); the
+  caret's `Mod-Shift-Arrow` by the sequence; an emptied quoted list written
+  without `<br />`; the wikilinks of a range moved and of a range turned into
+  a list.
 - `tests/unit/editor-block-gutter.test.ts`:
   - The grip menu on a range: duplicate, delete, move, turn.
   - Turn into is disabled when one block cannot take it.
