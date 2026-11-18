@@ -289,9 +289,12 @@ function moveCurrentBlock(direction: -1 | 1) {
         // caret's offsets from the block's start still hold.
         const shift = moved[0].pos - pos;
         const { selection } = state;
-        // Any other selection (cells of a table) gives way to the moved block chosen, as `moveBlocks` leaves it.
-        if (selection instanceof NodeSelection) tr.setSelection(NodeSelection.create(tr.doc, selection.from + shift));
-        else if (selection instanceof TextSelection) tr.setSelection(TextSelection.create(tr.doc, selection.anchor + shift, selection.head + shift));
+        const inside = selection.from >= pos && selection.to <= pos + sequence[at].node.nodeSize;
+        // A selection reaching past the block (into the next ones) cannot go with it: the caret goes to the start of
+        // the moved block's words, as a move did before. Any other selection (cells of a table) gives way likewise.
+        if (inside && selection instanceof NodeSelection) tr.setSelection(NodeSelection.create(tr.doc, selection.from + shift));
+        else if (inside && selection instanceof TextSelection) tr.setSelection(TextSelection.create(tr.doc, selection.anchor + shift, selection.head + shift));
+        else tr.setSelection(Selection.near(tr.doc.resolve(moved[0].pos + 1)));
       }
       view.dispatch(closeHistory(tr).scrollIntoView());
       view.dispatch(closeHistory(view.state.tr));

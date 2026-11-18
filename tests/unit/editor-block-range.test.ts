@@ -738,3 +738,19 @@ it("a range moved, and a range turned into a list, keep their wikilinks as links
   expect(links(md(turned.editor))).toEqual(before);
   expect(wikiNodes(turned.view)).toBe(2);
 });
+
+it("Mod-Shift-ArrowDown with a selection across blocks moves the first one, and the caret goes to its start", async () => {
+  const { editor, view } = await open("Alpha\n\nB\n\nCharlie\n");
+  const charlie = view.state.doc.child(0).nodeSize + view.state.doc.child(1).nodeSize + 3;
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 3, charlie)));
+  expect(() => mod(view, "ArrowDown", { shiftKey: true })).not.toThrow();
+  expect(md(editor)).toBe("B\n\nAlpha\n\nCharlie\n");
+  expect(view.state.selection).toBeInstanceOf(TextSelection);
+  expect(caret(view)).toEqual({ text: "Alpha", offset: 0, empty: true });
+  // To the end of the last block: shifted by the move, the head would fall past the document.
+  const second = await open("Alpha\n\nB\n\nCharlie\n");
+  second.view.dispatch(second.view.state.tr.setSelection(TextSelection.create(second.view.state.doc, 3, second.view.state.doc.content.size - 1)));
+  expect(() => mod(second.view, "ArrowDown", { shiftKey: true })).not.toThrow();
+  expect(md(second.editor)).toBe("B\n\nAlpha\n\nCharlie\n");
+  expect(caret(second.view)).toEqual({ text: "Alpha", offset: 0, empty: true });
+});
