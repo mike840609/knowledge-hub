@@ -149,21 +149,24 @@ test("the toolbar goes away when focus leaves the editor", async ({ page }) => {
   await expect(toolbar).toBeHidden();
 });
 
-test("the bulleted-list button wraps a paragraph into a list and lifts it back out", async ({ page }) => {
+test("Turn into wraps a paragraph into a list and turns it back into text", async ({ page }) => {
   const url = await createNote(page, unique("List Toggle"), "item\n");
   const surface = await openEditor(page, url);
   const toolbar = page.getByRole("toolbar", { name: "Formatting" });
   await surface.locator("p").click();
   await surface.locator("p").selectText();
-  await toolbar.getByRole("button", { name: "Bulleted list" }).click();
+  // The list buttons became entries of the toolbar's Turn into menu (2026-11-21 list-commands spec, decision 5).
+  await toolbar.getByRole("button", { name: /^Turn into/ }).click();
+  await toolbar.getByRole("menuitemradio", { name: "Bulleted list" }).click();
   await expect(surface.getByRole("listitem")).toHaveCount(1);
-  await expect(toolbar.getByRole("button", { name: "Bulleted list" })).toHaveAttribute("aria-pressed", "true");
+  await expect(toolbar.getByRole("button", { name: "Turn into, Bulleted list" })).toBeVisible();
   let source = await showMarkdown(composer(page));
   await expect(source).toHaveValue("- item\n");
 
   await composer(page).getByRole("button", { name: /^Markdown( source)?$/ }).click();
   await surface.locator("li p").selectText();
-  await toolbar.getByRole("button", { name: "Bulleted list" }).click();
+  await toolbar.getByRole("button", { name: /^Turn into/ }).click();
+  await toolbar.getByRole("menuitemradio", { name: "Text" }).click();
   await expect(surface.getByRole("listitem")).toHaveCount(0);
   source = await showMarkdown(composer(page));
   await expect(source).toHaveValue("item\n");

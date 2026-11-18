@@ -3,26 +3,23 @@ import { commandsCtx } from "@milkdown/kit/core";
 import type { Ctx, MilkdownPlugin } from "@milkdown/kit/ctx";
 import { TooltipProvider, tooltipFactory } from "@milkdown/kit/plugin/tooltip";
 import {
-  liftListItemCommand,
   toggleInlineCodeCommand,
   toggleEmphasisCommand,
   toggleLinkCommand,
   toggleStrongCommand,
-  turnIntoTextCommand,
-  wrapInBulletListCommand,
-  wrapInHeadingCommand,
-  wrapInOrderedListCommand,
 } from "@milkdown/kit/preset/commonmark";
 import { toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
 import { posToDOMRect } from "@milkdown/kit/prose";
 import { closeHistory } from "@milkdown/kit/prose/history";
-import { NodeSelection, Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
+import { NodeSelection, Plugin, PluginKey, TextSelection, type Transaction } from "@milkdown/kit/prose/state";
 import { $prose } from "@milkdown/kit/utils";
-import type { Mark } from "@milkdown/kit/prose/model";
+import type { Mark, Node as ProseNode } from "@milkdown/kit/prose/model";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { buttonClasses } from "@/components/ui/button";
 import { fieldClasses } from "@/components/ui/field";
-import { convertBlockToDetails, inDetails } from "./details-toggle";
+import { blockKind, type BlockKind, type EditorBlock } from "./block-actions";
+import { TURN_OPTIONS, turnEntry } from "./block-gutter";
+import { blocksTouched, turnBlocks } from "./block-sequence";
 import { parseDocumentHref } from "@/modules/knowledge/domain/document-links";
 import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
 import type { RenderedLinks } from "../rendered-links";
@@ -36,21 +33,85 @@ function markActive(view: EditorView, name: string): boolean {
   return empty ? Boolean(type.isInSet(view.state.storedMarks ?? $from.marks())) : view.state.doc.rangeHasMark(from, to, type);
 }
 
-function headingLevel(view: EditorView): number {
-  const { parent } = view.state.selection.$from;
-  return parent.type.name === "heading" ? Number(parent.attrs.level) : 0;
+/** What Turn into's button reads for `blocks`: their one kind, or Mixed (2026-11-21 list-commands spec, decision 5). */
+export function turnLabel(blocks: readonly EditorBlock[]): string {
+  const kinds = new Set(blocks.map((block) => blockKind(block.node)));
+  if (kinds.size > 1) return "Mixed";
+  const [kind] = kinds as Set<BlockKind | undefined>;
+  if (kind === "h4" || kind === "h5" || kind === "h6") return `Heading ${kind.slice(1)}`;
+  return TURN_OPTIONS.find(([option]) => option === kind)?.[1] ?? "Turn into";
 }
 
-type ListName = "bullet_list" | "ordered_list";
+/** Every textblock of the document, in order. */
+function textblocks(doc: ProseNode): { pos: number; node: ProseNode }[] {
+  const found: { pos: number; node: ProseNode }[] = [];
+  doc.descendants((node, pos) => {
+    if (node.isTextblock) { found.push({ pos, node }); return false; }
+    return true;
+  });
+  return found;
+}
 
-/** The list the caret is directly in (the innermost one), if any. */
-function currentList(view: EditorView): ListName | null {
-  const { $from } = view.state.selection;
-  for (let depth = $from.depth; depth > 0; depth -= 1) {
-    const name = $from.node(depth).type.name;
-    if (name === "bullet_list" || name === "ordered_list") return name;
+/**
+ * Where a position in `before` is in `tr.doc` after a turn, by its textblock and its offset in it. A turn replaces
+ * whole blocks, so `tr.mapping` sends every position inside them to their edges; the words, though, stay in a
+ * textblock of their own. Textblocks the turn left alone match from either end; between those, a turn adds at most a
+ * callout's marker line before a block's words or a toggle's empty body after them, or takes a marker line away, so
+ * the rest match in order by their text.
+ */
+function mapThroughTurn(before: ProseNode, after: ProseNode, pos: number): number {
+  const old = textblocks(before);
+  const now = textblocks(after);
+  const index = old.findIndex((block) => pos > block.pos && pos <= block.pos + block.node.nodeSize - 1);
+  if (index < 0 || !now.length) return Math.min(pos, after.content.size);
+  let head = 0;
+  while (head < old.length && head < now.length && old[head].node.eq(now[head].node)) head++;
+  let tail = 0;
+  while (tail < old.length - head && tail < now.length - head && old[old.length - 1 - tail].node.eq(now[now.length - 1 - tail].node)) tail++;
+  const same = (a: ProseNode, b: ProseNode | undefined) => b !== undefined && a.textContent === b.textContent;
+  let target: number;
+  if (index < head) target = index;
+  else if (index >= old.length - tail) target = index + now.length - old.length;
+  else {
+    const end = now.length - tail;
+    let at = head;
+    target = head;
+    for (let step = head; step <= index; step++) {
+      const node = old[step].node;
+      if (at < end && same(node, now[at].node)) target = at++;
+      else if (at + 1 < end && same(node, now[at + 1].node)) { target = at + 1; at += 2; }
+      // A line the turn took away (a callout's marker): its words' neighbour takes its place.
+      else if (step + 1 < old.length - tail && at < end && same(old[step + 1].node, now[at].node)) target = at;
+      else target = Math.min(at++, end - 1);
+      if (step === index) break;
+    }
+    target = Math.max(0, Math.min(target, now.length - 1));
   }
-  return null;
+  const from = old[index];
+  const to = now[target];
+  const offset = pos - from.pos - 1;
+  const lost = from.node.content.size - to.node.content.size;
+  // Words kept after a dropped marker (`[!NOTE]` and its break, in one line) keep their place among themselves.
+  const shifted = !same(from.node, to.node) && lost > 0 && from.node.textContent.endsWith(to.node.textContent) ? offset - lost : offset;
+  return to.pos + 1 + Math.max(0, Math.min(shifted, to.node.content.size));
+}
+
+/**
+ * Turns the blocks the text selection touches into `kind`, in one undo step, with the same text selected afterwards so a
+ * mark can follow (2026-11-21 list-commands spec, decision 6). False when the turn is refused.
+ */
+function turnSelection(view: EditorView, kind: BlockKind): boolean {
+  const { state } = view;
+  const blocks = blocksTouched(state);
+  if (!view.editable || turnEntry(blocks, kind).disabled) return false;
+  const tr: Transaction | null = turnBlocks(state, blocks, kind);
+  if (!tr) return false;
+  const { anchor, head } = state.selection;
+  tr.setSelection(TextSelection.create(tr.doc, mapThroughTurn(state.doc, tr.doc, anchor), mapThroughTurn(state.doc, tr.doc, head)));
+  view.dispatch(closeHistory(tr).scrollIntoView());
+  // Typing straight after starts an undo step of its own, as after the grip's turn.
+  view.dispatch(closeHistory(view.state.tr));
+  return true;
 }
 
 // A pressed toggle reads as selected, as the composer's own Markdown toggle does.
@@ -185,45 +246,6 @@ const items: Item[] = [
     disabled: (view) => selectedLink(view).kind === "multiple" || !linkAllowed(view),
     run: (_ctx, _view, openLink) => openLink(),
   },
-  ...[1, 2, 3].map<Item>((level) => ({
-    label: `Heading ${level}`,
-    text: `H${level}`,
-    active: (view) => headingLevel(view) === level,
-    run: (ctx, view) => {
-      const commands = ctx.get(commandsCtx);
-      if (headingLevel(view) === level) commands.call(turnIntoTextCommand.key);
-      else commands.call(wrapInHeadingCommand.key, level);
-    },
-  })),
-  // Inside a list, the other type's button is disabled: on an item's first paragraph, wrapping
-  // would put a list first in the item, which the schema refuses. (A later paragraph of an item
-  // could take a nested list; typing `- ` still does that.)
-  {
-    label: "Bulleted list",
-    text: "•",
-    active: (view) => currentList(view) === "bullet_list",
-    disabled: (view) => currentList(view) === "ordered_list",
-    run: (ctx, view) => ctx.get(commandsCtx).call(currentList(view) === "bullet_list" ? liftListItemCommand.key : wrapInBulletListCommand.key),
-  },
-  {
-    label: "Numbered list",
-    text: "1.",
-    active: (view) => currentList(view) === "ordered_list",
-    disabled: (view) => currentList(view) === "bullet_list",
-    run: (ctx, view) => ctx.get(commandsCtx).call(currentList(view) === "ordered_list" ? liftListItemCommand.key : wrapInOrderedListCommand.key),
-  },
-  {
-    label: "Toggle section",
-    text: "Toggle",
-    active: (view) => inDetails(view),
-    disabled: (view) => {
-      const parent = view.state.selection.$from.parent;
-      return parent.type.name !== "paragraph" && parent.type.name !== "heading";
-    },
-    run: (ctx, view) => {
-      convertBlockToDetails(view);
-    },
-  },
   // Notion's clear-formatting habit: one press takes every inline mark off the selection, or the
   // mark the caret would type with. Cmd/Ctrl-\ runs the same action (the editor's shortcut).
   { label: "Clear formatting", text: "Tx", className: "text-caption", active: () => false, run: (_ctx, view) => { clearFormatting(view); } },
@@ -311,6 +333,98 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           }
           setLinkMode(false);
           element.append(buttons, linkRow);
+
+          // ---- Turn into (2026-11-21 list-commands spec, decisions 5-7) ------------------------------
+          // First on the toolbar: the current kind and a chevron. Its menu is the grip menu's Turn into list, in the
+          // block menu's own surface, under the button; it is part of the toolbar, so focus in it keeps the toolbar.
+          const turnButton = document.createElement("button");
+          turnButton.type = "button";
+          turnButton.className = buttonClasses({ variant: "ghost", size: "sm", className: `${PRESSED} shrink-0` });
+          turnButton.title = "Turn into";
+          turnButton.setAttribute("aria-haspopup", "menu");
+          turnButton.setAttribute("aria-expanded", "false");
+          const turnText = document.createElement("span");
+          const chevron = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          for (const [name, value] of Object.entries({ viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true", class: "size-3" })) chevron.setAttribute(name, value);
+          const chevronPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          chevronPath.setAttribute("d", "m6 9 6 6 6-6");
+          chevron.append(chevronPath);
+          turnButton.append(turnText, chevron);
+          const turnSeparator = document.createElement("div");
+          turnSeparator.setAttribute("role", "separator");
+          turnSeparator.setAttribute("aria-orientation", "vertical");
+          turnSeparator.className = "mx-0.5 h-4 w-px bg-kh-border";
+          buttons.append(turnButton, turnSeparator);
+          const turnMenu = document.createElement("div");
+          turnMenu.className = "kh-block-move-menu";
+          turnMenu.hidden = true;
+          turnMenu.setAttribute("role", "menu");
+          turnMenu.setAttribute("aria-label", "Turn into");
+          element.append(turnMenu);
+          function setTurnLabel(view: EditorView) {
+            const label = turnLabel(blocksTouched(view.state));
+            turnText.textContent = label;
+            turnButton.setAttribute("aria-label", `Turn into, ${label}`);
+          }
+          function renderTurnMenu(view: EditorView) {
+            const blocks = blocksTouched(view.state);
+            turnMenu.replaceChildren(...TURN_OPTIONS.map(([kind, label]) => {
+              const entry = document.createElement("button");
+              entry.type = "button";
+              entry.setAttribute("role", "menuitemradio");
+              entry.textContent = label;
+              const { checked, disabled } = turnEntry(blocks, kind);
+              entry.setAttribute("aria-checked", String(checked));
+              entry.disabled = disabled;
+              entry.addEventListener("click", () => {
+                if (entry.disabled) return;
+                // Focus goes back first: a focused entry that is hidden would blur to nowhere, which hides the toolbar.
+                editorView.focus();
+                closeTurnMenu();
+                turnSelection(editorView, kind);
+              });
+              return entry;
+            }));
+          }
+          function closeTurnMenu() {
+            turnMenu.hidden = true;
+            turnButton.setAttribute("aria-expanded", "false");
+          }
+          function openTurnMenu() {
+            renderTurnMenu(editorView);
+            turnMenu.hidden = false;
+            turnButton.setAttribute("aria-expanded", "true");
+            void computePosition(turnButton, turnMenu, { strategy: "fixed", placement: "bottom-start", middleware: [offset(4), flip(), shift({ padding: 8 })] }).then(({ x, y }) => {
+              Object.assign(turnMenu.style, { left: `${x}px`, top: `${y}px` });
+            });
+            turnMenu.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+          }
+          turnButton.addEventListener("mousedown", (event) => event.preventDefault());
+          turnButton.addEventListener("click", () => {
+            if (!editorView.editable) return;
+            if (turnMenu.hidden) openTurnMenu();
+            else { editorView.focus(); closeTurnMenu(); }
+          });
+          // As the grip menu: arrows move among the enabled entries; Escape and Tab close it and go back to the text,
+          // and stop here, so the composer's Escape does not leave the page.
+          turnMenu.addEventListener("keydown", (event) => {
+            if (event.isComposing || event.keyCode === 229) return;
+            if (event.key === "Escape" || event.key === "Tab") {
+              event.preventDefault();
+              event.stopPropagation();
+              editorView.focus();
+              closeTurnMenu();
+              return;
+            }
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+              event.preventDefault();
+              event.stopPropagation();
+              const enabled = [...turnMenu.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+              if (!enabled.length) return;
+              const at = enabled.indexOf(document.activeElement as HTMLButtonElement);
+              enabled[(at + (event.key === "ArrowDown" ? 1 : -1) + enabled.length) % enabled.length].focus();
+            }
+          });
 
           const pressers = items.map((item) => {
             const button = document.createElement("button");
@@ -690,7 +804,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             },
             floatingUIOptions: { middleware: [flip(() => ({ boundary: boundary() })), offset(8), shift()] },
           });
-          provider.onHide = showButtons;
+          provider.onHide = () => { closeTurnMenu(); showButtons(); };
           // The provider re-evaluates only on ProseMirror updates, and neither a blur nor a focus
           // dispatches one. Focus moving into the toolbar itself (the link box) keeps it; focus
           // coming back (from the Markdown view, the title field) re-evaluates, so an unchanged
@@ -726,11 +840,16 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           editorView.dom.addEventListener("blur", hideOnBlur);
           editorView.dom.addEventListener("focus", showOnFocus);
           linkRow.addEventListener("focusout", hideOnLinkBoxBlur);
+          turnMenu.addEventListener("focusout", hideOnLinkBoxBlur);
 
           return {
             update: (view, prevState) => {
               syncCard(view, !prevState || (prevState.doc.eq(view.state.doc) && !prevState.selection.eq(view.state.selection)));
               commentGroup.hidden = !comment?.available();
+              setTurnLabel(view);
+              turnButton.disabled = !view.editable;
+              // The menu is for the blocks it opened over: another selection, or another document, closes it.
+              if (!turnMenu.hidden && prevState && (!prevState.doc.eq(view.state.doc) || !prevState.selection.eq(view.state.selection))) closeTurnMenu();
               for (const { item, button } of pressers) {
                 button.setAttribute("aria-pressed", String(item.active(view)));
                 button.disabled = item.disabled?.(view) ?? false;

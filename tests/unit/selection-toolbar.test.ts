@@ -144,17 +144,12 @@ describe("the selection toolbar's DOM contract", () => {
     mountToolbar(editor);
     const buttons = [...buttonRow().querySelectorAll("button")];
     expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Turn into, Text",
       "Bold",
       "Italic",
       "Strikethrough",
       "Inline code",
       "Link",
-      "Heading 1",
-      "Heading 2",
-      "Heading 3",
-      "Bulleted list",
-      "Numbered list",
-      "Toggle section",
       "Clear formatting",
     ]);
     for (const b of buttons) expect(b.getAttribute("type")).toBe("button");
@@ -165,17 +160,12 @@ describe("the selection toolbar's DOM contract", () => {
     const editor = await open("some text\n", true, { available: () => true, run: () => {} });
     mountToolbar(editor);
     expect([...buttonRow().querySelectorAll("button")].map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Turn into, Text",
       "Bold",
       "Italic",
       "Strikethrough",
       "Inline code",
       "Link",
-      "Heading 1",
-      "Heading 2",
-      "Heading 3",
-      "Bulleted list",
-      "Numbered list",
-      "Toggle section",
       "Clear formatting",
       "Comment on selection",
     ]);
@@ -421,33 +411,273 @@ describe("editing links", () => {
 });
 
 
-describe("the list buttons", () => {
-  // Bulleted ⇄ numbered is not a conversion ProseMirror offers: a list cannot be the first
-  // child of a list item, so the other type's button would do nothing. It says so instead.
-  it.each([
-    ["- item\n", "Numbered list", "Bulleted list"],
-    ["1. item\n", "Bulleted list", "Numbered list"],
-  ])("in %j, disables %s and leaves %s pressable", async (markdown, other, same) => {
-    const editor = await open(markdown);
+// The H1-H3, list and Toggle buttons became one Turn into menu (2026-11-21 list-commands spec, decisions 5-7).
+// What their tests pinned (a turn from the toolbar, which conversions it allows in a list) is pinned here,
+// through the menu.
+const turnButton = () => toolbarElement().querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!;
+const turnMenu = () => toolbarElement().querySelector<HTMLElement>('[role="menu"]')!;
+const entries = () => [...turnMenu().querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
+const entry = (label: string) => entries().find((item) => item.textContent === label)!;
+const viewOf = (editor: MarkdownEditor) => editor.action((ctx) => ctx.get(editorViewCtx));
+const selectedText = (editor: MarkdownEditor) => { const { state } = viewOf(editor); return state.doc.textBetween(state.selection.from, state.selection.to, "|"); };
+/** Selects `text` (its first occurrence) in the document. */
+function selectText(editor: MarkdownEditor, text: string, to?: string) {
+  const { state } = viewOf(editor);
+  const find = (needle: string) => {
+    let at = -1;
+    state.doc.descendants((node, pos) => {
+      if (at >= 0 || !node.isText) return at < 0;
+      const index = node.text!.indexOf(needle);
+      if (index >= 0) at = pos + index;
+      return false;
+    });
+    if (at < 0) throw new Error(`no ${needle} in the document`);
+    return at;
+  };
+  const from = find(text);
+  select(editor, from, to === undefined ? from + text.length : find(to) + to.length);
+}
+function openTurnMenu() {
+  turnButton().click();
+  expect(turnMenu().hidden).toBe(false);
+}
+
+describe("Turn into on the selection toolbar", () => {
+  it("sits first, a ghost sm button with a chevron, then a separator before the marks", async () => {
+    const editor = await open("some text\n");
     mountToolbar(editor);
-    select(editor, 3, 7);
-    expect(button(other).disabled).toBe(true);
-    expect(button(other).type).toBe("button");
-    expect(button(same).disabled).toBe(false);
-    expect(button(same).getAttribute("aria-pressed")).toBe("true");
-    button(other).click();
-    expect(editor.getMarkdown()).toBe(markdown);
+    const row = buttonRow();
+    expect(row.firstElementChild).toBe(turnButton());
+    expect(turnButton().nextElementSibling?.getAttribute("role")).toBe("separator");
+    expect(turnButton().type).toBe("button");
+    expect(turnButton().getAttribute("aria-expanded")).toBe("false");
+    expect(turnButton().querySelector("svg")).not.toBeNull();
+    expect(turnButton().className).toContain("h-6");
   });
 
-  it("disables neither outside a list, and enables them again on leaving one", async () => {
-    const editor = await open("text\n\n- item\n");
+  it.each([
+    ["some text\n", "some", "Text"],
+    ["## Title\n", "Title", "Heading 2"],
+    ["- item\n", "item", "Bulleted list"],
+    ["1. item\n", "item", "Numbered list"],
+    ["- [ ] task\n", "task", "To-do list"],
+    ["> quoted\n", "quoted", "Quote"],
+    ["```\ncode\n```\n", "code", "Code"],
+  ])("label names the kind: in %j, selecting %j reads %s", async (markdown, text, label) => {
+    const editor = await open(markdown);
     mountToolbar(editor);
-    select(editor, 9, 13);
-    expect(button("Numbered list").disabled).toBe(true);
-    select(editor, 1, 5);
-    expect(button("Bulleted list").disabled).toBe(false);
-    expect(button("Numbered list").disabled).toBe(false);
+    selectText(editor, text);
+    expect(turnButton().textContent).toBe(label);
+    expect(turnButton().getAttribute("aria-label")).toBe(`Turn into, ${label}`);
   });
+
+  it("names a selection over several kinds Mixed, and turns them into one numbered list, one undo away", async () => {
+    const { undo } = await import("@milkdown/kit/prose/history");
+    const editor = await open("P\n\n- a\n- b\n");
+    mountToolbar(editor);
+    selectText(editor, "P", "b");
+    expect(turnButton().textContent).toBe("Mixed");
+    openTurnMenu();
+    expect(entries().some((item) => item.getAttribute("aria-checked") === "true")).toBe(false);
+    entry("Numbered list").click();
+    const { state } = viewOf(editor);
+    expect(state.doc.childCount).toBe(1);
+    expect(state.doc.firstChild!.type.name).toBe("ordered_list");
+    expect(state.doc.firstChild!.childCount).toBe(3);
+    expect(editor.getMarkdown()).toBe("1. P\n2. a\n3. b\n");
+    editor.action((ctx) => { const view = ctx.get(editorViewCtx); undo(view.state, view.dispatch); });
+    expect(editor.getMarkdown()).toBe("P\n\n- a\n- b\n");
+  });
+
+  it("enables Numbered list in a bulleted item, and turns only that item", async () => {
+    const editor = await open("- a\n- b\n- c\n");
+    mountToolbar(editor);
+    selectText(editor, "b");
+    expect(turnButton().textContent).toBe("Bulleted list");
+    openTurnMenu();
+    expect(entry("Numbered list").disabled).toBe(false);
+    // The item's own kind is checked, and there is nothing to turn it into.
+    expect(entry("Bulleted list").getAttribute("aria-checked")).toBe("true");
+    expect(entry("Bulleted list").disabled).toBe(true);
+    entry("Numbered list").click();
+    const { doc } = viewOf(editor).state;
+    expect(Array.from({ length: doc.childCount }, (_, index) => doc.child(index).type.name)).toEqual(["bullet_list", "ordered_list", "bullet_list"]);
+    expect(editor.getMarkdown()).toContain("1. b");
+    expect(turnButton().textContent).toBe("Numbered list");
+  });
+
+  it("turns a bulleted item back into text, where the Bulleted list button used to lift it", async () => {
+    const editor = await open("- item\n");
+    mountToolbar(editor);
+    selectText(editor, "item");
+    openTurnMenu();
+    entry("Text").click();
+    expect(editor.getMarkdown()).toBe("item\n");
+  });
+
+  it.each([
+    ["Heading 1", "# some text\n"],
+    ["Heading 3", "### some text\n"],
+    ["Bulleted list", "- some text\n"],
+    ["Quote", "> some text\n"],
+    ["Toggle", "<details open>"],
+  ])("turns a paragraph into %s from the menu", async (label, expected) => {
+    const editor = await open("some text\n");
+    mountToolbar(editor);
+    selectText(editor, "some");
+    openTurnMenu();
+    entry(label).click();
+    expect(editor.getMarkdown()).toContain(expected);
+    expect(turnMenu().hidden).toBe(true);
+  });
+
+  it("keeps the same text selected after a turn, so a mark can follow", async () => {
+    const editor = await open("first line\n\nsecond line\n");
+    mountToolbar(editor);
+    selectText(editor, "line", "second");
+    expect(selectedText(editor)).toBe("line|second");
+    openTurnMenu();
+    entry("Bulleted list").click();
+    expect(selectedText(editor)).toBe("line|second");
+    expect(document.activeElement).toBe(editorDom(editor));
+    button("Bold").click();
+    expect(editor.getMarkdown()).toBe("- first **line**\n- **second** line\n");
+  });
+
+  it("keeps the text selected through a turn into a heading and a callout", async () => {
+    const editor = await open("some text\n");
+    mountToolbar(editor);
+    selectText(editor, "text");
+    openTurnMenu();
+    entry("Heading 2").click();
+    expect(selectedText(editor)).toBe("text");
+    openTurnMenu();
+    entry("Callout").click();
+    expect(selectedText(editor)).toBe("text");
+  });
+
+  it("offers the grip menu's entries, in its order", async () => {
+    const editor = await open("some text\n");
+    mountToolbar(editor);
+    selectText(editor, "some");
+    openTurnMenu();
+    expect(entries().map((item) => item.textContent)).toEqual(["Text", "Heading 1", "Heading 2", "Heading 3", "Bulleted list", "Numbered list", "To-do list", "Quote", "Code", "Toggle", "Callout"]);
+    for (const item of entries()) expect(item.type).toBe("button");
+    expect(turnMenu().className).toContain("kh-block-move-menu");
+    expect(turnButton().getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("follows canTurnInto: in a code block, Toggle is disabled", async () => {
+    const editor = await open("```\ncode\n```\n");
+    mountToolbar(editor);
+    selectText(editor, "code");
+    openTurnMenu();
+    expect(entry("Toggle").disabled).toBe(true);
+    expect(entry("Callout").disabled).toBe(true);
+    expect(entry("Text").disabled).toBe(false);
+    entry("Toggle").click();
+    expect(editor.getMarkdown()).toBe("```\ncode\n```\n");
+  });
+
+  it("keeps the toolbar open while the menu is open and focused", async () => {
+    const editor = await open("some text\n");
+    mountToolbar(editor);
+    await throttleWindow();
+    selectText(editor, "some");
+    await throttleWindow();
+    openTurnMenu();
+    expect(turnMenu().contains(document.activeElement)).toBe(true);
+    editorDom(editor).dispatchEvent(new FocusEvent("blur", { relatedTarget: document.activeElement }));
+    mountToolbar(editor);
+    await throttleWindow();
+    expect(toolbarElement().dataset.show).toBe("true");
+    expect(turnMenu().hidden).toBe(false);
+  });
+
+  it("closes on Escape and returns to the text, the selection as it was", async () => {
+    const editor = await open("some text\n");
+    mountToolbar(editor);
+    selectText(editor, "text");
+    openTurnMenu();
+    const reached: string[] = [];
+    const listener = (event: KeyboardEvent) => reached.push(event.key);
+    document.addEventListener("keydown", listener);
+    try {
+      const event = key(document.activeElement as HTMLElement, { key: "Escape" });
+      expect(event.defaultPrevented).toBe(true);
+      expect(reached).toEqual([]);
+    } finally {
+      document.removeEventListener("keydown", listener);
+    }
+    expect(turnMenu().hidden).toBe(true);
+    expect(turnButton().getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(editorDom(editor));
+    expect(selectedText(editor)).toBe("text");
+    expect(editor.getMarkdown()).toBe("some text\n");
+  });
+
+  it("moves between enabled entries with the arrow keys", async () => {
+    const editor = await open("some text\n");
+    mountToolbar(editor);
+    selectText(editor, "some");
+    openTurnMenu();
+    // Text is the current kind, so the first enabled entry is Heading 1.
+    expect(document.activeElement).toBe(entry("Heading 1"));
+    key(document.activeElement as HTMLElement, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(entry("Heading 2"));
+    key(document.activeElement as HTMLElement, { key: "ArrowUp" });
+    key(document.activeElement as HTMLElement, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(entry("Callout"));
+  });
+
+  it("acts on the item, not its list, for a selection inside a nested item", async () => {
+    const editor = await open("- a\n  - b\n  - c\n");
+    mountToolbar(editor);
+    selectText(editor, "c");
+    openTurnMenu();
+    entry("Quote").click();
+    expect(editor.getMarkdown()).toContain("> c");
+    expect(editor.getMarkdown()).toContain("- b");
+  });
+
+  it("takes the two top-level items for a selection from a nested item out to its parent's sibling", async () => {
+    const editor = await open("- a\n  - b\n- c\n");
+    mountToolbar(editor);
+    selectText(editor, "b", "c");
+    openTurnMenu();
+    entry("Numbered list").click();
+    expect(editor.getMarkdown()).toBe("1. a\n   - b\n2. c\n");
+    expect(selectedText(editor)).toBe("b|c");
+  });
+
+  it("leaves out a block whose text the selection only reaches the start of", async () => {
+    const editor = await open("some text\n\n## Next\n");
+    mountToolbar(editor);
+    const next = viewOf(editor).state.doc.child(0).nodeSize + 1;
+    select(editor, 6, next);
+    expect(turnButton().textContent).toBe("Text");
+  });
+
+  it("does nothing while the view is not editable", async () => {
+    const editor = await open("some text\n", false);
+    mountToolbar(editor);
+    selectText(editor, "some");
+    turnButton().click();
+    expect(turnMenu().hidden).toBe(true);
+    expect(editor.getMarkdown()).toBe("some text\n");
+  });
+});
+
+it("no H1, H2, H3, list or Toggle buttons remain on the toolbar", async () => {
+  const editor = await open("- item\n");
+  mountToolbar(editor);
+  selectText(editor, "item");
+  for (const label of ["Heading 1", "Heading 2", "Heading 3", "Bulleted list", "Numbered list", "Toggle section"]) {
+    expect(buttonRow().querySelector(`button[aria-label="${label}"]`)).toBeNull();
+  }
+  for (const text of ["H1", "H2", "H3", "•", "1.", "Toggle"]) {
+    expect([...buttonRow().querySelectorAll("button")].some((item) => item.textContent === text)).toBe(false);
+  }
 });
 
 describe("hiding on blur", () => {
