@@ -129,6 +129,9 @@ test("the palette offers actions as well as documents, and keeps the keyboard ov
 
   await field.fill("settings");
   await expect(list.getByRole("option", { name: "Go to Settings" })).toBeVisible();
+  // While the search is in flight the row is on screen but not the active target; wait for the answer to
+  // settle, or Enter runs the full search instead of the command the reader can see.
+  await expect(list.getByRole("option", { name: "Go to Settings" })).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(new RegExp(`/w/${QUERY_MASTER_WORKSPACE}/settings`));
 });
@@ -139,8 +142,9 @@ test("favouriting from the row menu reaches the sidebar without a reload", async
   await row.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Add to favorites" }).click();
 
-  const favorites = page.getByRole("region", { name: "Favorites", exact: true });
-  await expect(favorites.getByRole("link", { name: "Runbooks", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Favorite documents", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: /Runbooks/ })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   // And the registry now offers the inverse, because the target's state changed.
   await row.click({ button: "right" });

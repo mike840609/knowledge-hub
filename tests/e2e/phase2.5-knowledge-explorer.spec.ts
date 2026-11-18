@@ -139,14 +139,16 @@ test("a favorite from a synced source carries the read-only cue; one from a Hub 
   await explorer.getByRole("button", { name: "Add to favorites: Compliance Policy", exact: true }).click();
   await explorer.getByRole("button", { name: "Add to favorites: Runbooks", exact: true }).click();
   try {
-    const favorites = explorer.getByRole("region", { name: "Favorites", exact: true });
-    const synced = favorites.getByRole("link", { name: /Compliance Policy/ });
-    const hub = favorites.getByRole("link", { name: /Runbooks/ });
+    await explorer.getByRole("button", { name: "Favorite documents", exact: true }).click();
+    const favorites = page.getByRole("menu");
+    const synced = favorites.getByRole("menuitem", { name: /Compliance Policy/ });
+    const hub = favorites.getByRole("menuitem", { name: /Runbooks/ });
     await expect(synced.locator("[data-read-only-cue]")).toBeVisible();
     await expect(synced).toHaveAccessibleDescription("Synced from a folder, read-only in the Hub");
     await expect(hub.locator("[data-read-only-cue]")).toHaveCount(0);
     await expect(hub).not.toHaveAccessibleDescription(/read-only/);
   } finally {
+    await page.keyboard.press("Escape");
     for (const title of ["Compliance Policy", "Runbooks"]) {
       const remove = explorer.getByRole("button", { name: `Remove from favorites: ${title}`, exact: true }).first();
       if (await remove.count()) await remove.click();

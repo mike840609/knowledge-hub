@@ -16,7 +16,7 @@ async function createNote(page: Page, workspaceId: string, title: string) {
 
 /**
  * Retrieval-first layout: at 1024–1279 the explorer is a strip and a drawer,
- * and returns as a 288px inline explorer at 1280px.
+ * not a 288px column; above 1280 it is inline again. Favorites and Recent each open from the explorer toolbar.
  */
 test("the explorer becomes a drawer between the narrow and wide desktop layouts", async ({ page }) => {
   const workspaceId = await mySpace(page);
@@ -50,8 +50,7 @@ test("the explorer becomes a drawer between the narrow and wide desktop layouts"
   await expect(page.getByRole("button", { name: "Show documents", exact: true })).toHaveCount(0);
 });
 
-test("wide Favorites stay visible and Recent remembers its open state", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+test("Favorites and Recent open independently from adjacent toolbar buttons", async ({ page }) => {
   const workspaceId = await mySpace(page);
   const recentTitle = unique("Retrieval recent");
   const favoriteTitle = unique("Retrieval favorite");
@@ -65,21 +64,19 @@ test("wide Favorites stay visible and Recent remembers its open state", async ({
     (JSON.parse(localStorage.getItem(key) ?? "{}").recent ?? []).some((value: string) => value.endsWith(`:${id}`)),
   { key: `kh:document-shortcuts:${workspaceId}`, id: recent.documentId }), ROUND_TRIP).toBe(true);
   await page.goto(favorite.href);
-  await page.getByRole("treeitem", { name: favoriteTitle, exact: true }).getByRole("button", { name: `Add to favorites: ${favoriteTitle}`, exact: true }).click();
+  await page.getByRole("button", { name: `Add to favorites: ${favoriteTitle}`, exact: true }).click();
 
-  const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
-  const favorites = explorer.getByRole("region", { name: "Favorites" });
-  const recents = explorer.getByRole("region", { name: "Recent" });
-  const disclosure = recents.getByRole("button", { name: "Recent", exact: true });
-  await expect(favorites.getByRole("link", { name: favoriteTitle })).toBeVisible(ROUND_TRIP);
-  await expect(disclosure).toHaveAttribute("aria-expanded", "false");
-  await expect(recents.getByRole("link")).toHaveCount(0);
-  await disclosure.click();
-  await expect(recents.getByRole("link", { name: recentTitle })).toBeVisible(ROUND_TRIP);
-  await expect(recents.getByRole("link", { name: favoriteTitle })).toHaveCount(0);
-  await page.reload();
-  await expect(disclosure).toHaveAttribute("aria-expanded", "true", ROUND_TRIP);
-  await expect(recents.getByRole("link", { name: recentTitle })).toBeVisible();
+  const favorites = page.getByRole("button", { name: "Favorite documents", exact: true });
+  const clock = page.getByRole("button", { name: "Recent documents", exact: true });
+  await expect(page.getByRole("heading", { name: "Documents", exact: true })).toHaveCount(0);
+  await expect(favorites).toHaveAttribute("aria-expanded", "false");
+  await expect(clock).toHaveAttribute("aria-expanded", "false");
+  await favorites.click();
+  await expect(page.getByRole("menuitem").filter({ hasText: favoriteTitle })).toBeVisible(ROUND_TRIP);
+  await expect(page.getByRole("menuitem").filter({ hasText: recentTitle })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await clock.click();
+  await expect(page.getByRole("menuitem").filter({ hasText: recentTitle })).toBeVisible(ROUND_TRIP);
 });
 
 // The explorer is what records an open, so it stays mounted where it is not shown: a document read at a width

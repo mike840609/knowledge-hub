@@ -12,7 +12,6 @@ import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-auth
 import { MenuCheckboxItem, MenuContent, MenuItem, MenuRoot, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import type { TreeLoadState } from "./source-tree-cache";
 import { useSidebarShortcuts } from "./use-sidebar-shortcuts";
-import { useIsWide } from "./use-is-wide";
 import { KnowledgeTree } from "./knowledge-tree";
 import { useSharedTargets } from "./shared-folders";
 import { SidebarGetStarted, hasNoDocuments, startActions } from "./sidebar-get-started";
@@ -28,7 +27,6 @@ import { actionsFor, type ActionTarget, type FolderTarget, type SourceTarget } f
 
 /** Why a synced source's documents cannot be edited here; read after the name, never part of it. */
 const READ_ONLY_DESCRIPTION = "Synced from a folder, read-only in the Hub";
-const VISIBLE_SHORTCUTS = 4;
 
 export type SourceSidebarProps = {
   workspaceId: string;
@@ -76,12 +74,9 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   const readOnlyDescriptionId = useId();
   const [expanded, setExpanded, expandedReady] = usePersistedJson<Record<string, boolean>>(`kh:tree-expanded:${workspaceId}`, {}, isBooleanRecord);
   const { shortcuts, update: updateShortcuts, ready: shortcutsReady } = useDocumentShortcuts(workspaceId);
-  const inlineExplorer = useIsWide(1280);
-  const recentListId = useId();
-  const [recentExpanded, setRecentExpanded, recentReady] = usePersistedJson(`kh:explorer-recent-open:${workspaceId}`, false, isBoolean);
   const [recentMenuOpen, setRecentMenuOpen] = useState(false);
   const [recentMenuKeys, setRecentMenuKeys] = useState<string[] | null>(null);
-  const sidebarReady = queryReady && filterReady && expandedReady && shortcutsReady && (!inlineExplorer || recentReady);
+  const sidebarReady = queryReady && filterReady && expandedReady && shortcutsReady;
   const recentMenuPopulated = useRef(false);
   const showArchived = searchParams.get("includeArchived") === "true";
   const resolvedDocumentId = selectedDocumentId ?? (typeof routeParams?.documentId === "string" ? routeParams.documentId : undefined);
@@ -120,11 +115,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   }, [visibleCollections, shortcutMetadata.documents, recentMetadata.documents, collections]);
   const favoriteKeys = shortcuts.favorites.filter((key) => documents.has(key));
   const favoritesLoading = !shortcutsReady || shortcutMetadata.loading;
-  function eligibleRecents(keys: string[]) {
-    return keys.filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== `${source?.id}:${resolvedDocumentId}`);
-  }
-  const recentCandidates = eligibleRecents(recentMenuKeys ?? shortcuts.recent);
-  const recentKeys = eligibleRecents(shortcuts.recent);
+  const recentCandidates = (recentMenuKeys ?? shortcuts.recent).filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== `${source?.id}:${resolvedDocumentId}`);
   // Freeze only after a usable link has appeared. Raw history can contain
   // exclusively current, favorite, or inaccessible documents and still be empty.
   useEffect(() => {
@@ -157,73 +148,21 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   const runAction = useActionRunner({ onToggleFavorite: toggleFavorite });
   const mutations = useTreeMutations();
 
-  function shortcutRow(key: string, inMenu = false) {
+  function shortcutMenuItem(key: string) {
     const document = documents.get(key);
     if (!document) return null;
     const selected = document.documentId === resolvedDocumentId;
-    const href = `/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`;
-    const readOnly = document.ownership === "SOURCE_MANAGED";
-    const selectedClass = selected ? "bg-kh-bg-selected font-medium text-kh-selected-text" : "";
-    const content = <>
-      {document.pageIcon ? <span className="flex size-3.5 shrink-0 items-center justify-center text-body leading-none" aria-hidden="true">{document.pageIcon}</span> : <FileText size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
-      <span className="min-w-0 flex-1 truncate" title={document.label}>{document.label}</span>
-      {inMenu ? <span className="max-w-[40%] shrink-0 truncate text-caption text-kh-text-muted">{document.sourceName}</span> : null}
-      {readOnly ? <LockKeyhole size={14} data-read-only-cue="" className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : null}
-    </>;
-    const linkProps = {
-      href,
-      prefetch: selected ? false as const : undefined,
-      "aria-current": selected ? "page" as const : undefined,
-      "aria-describedby": readOnly ? readOnlyDescriptionId : undefined,
-    };
-    return inMenu ? (
-      <MenuItem key={key} render={<Link {...linkProps} />} className={selectedClass}>{content}</MenuItem>
-    ) : (
-      <Link key={key} {...linkProps} className={`kh-interactive-row kh-control kh-rail-row kh-rail-text kh-focus-ring flex items-center gap-2 rounded-md px-2 ${selectedClass || "text-kh-text"}`}>
-        {content}
-      </Link>
-    );
-  }
-
-  function favoritesMenu(detailed: boolean) {
-    const label = detailed ? "View all favorite documents" : "Favorite documents";
     return (
-      <MenuRoot>
-        <MenuTrigger aria-label={label} title={label} className={buttonClasses({ variant: "ghost", icon: true, size: detailed ? "sm" : undefined })}>
-          {detailed ? <MoreHorizontal size={15} aria-hidden="true" /> : <Star size={16} aria-hidden="true" />}
-        </MenuTrigger>
-        <MenuContent align={detailed ? "end" : "start"} className="max-h-[min(24rem,60vh)] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain">
-          {favoriteKeys.map(key => shortcutRow(key, true))}
-          {favoritesLoading ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Loading favorite documents…</p>
-            : shortcutMetadata.error ? <>
-              <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Favorite documents could not be loaded.</p>
-              <MenuItem closeOnClick={false} onClick={shortcutMetadata.retry}>Retry</MenuItem>
-            </> : favoriteKeys.length === 0 ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">No favorite documents</p> : null}
-        </MenuContent>
-      </MenuRoot>
-    );
-  }
-
-  function recentMenu(detailed: boolean) {
-    const label = detailed ? "View all recent documents" : "Recent documents";
-    return (
-      <MenuRoot open={recentMenuOpen} onOpenChange={(open) => {
-        recentMenuPopulated.current = false;
-        setRecentMenuOpen(open);
-        setRecentMenuKeys(open && shortcutsReady ? [...shortcuts.recent] : null);
-      }}>
-        <MenuTrigger aria-label={label} title={label} className={buttonClasses({ variant: "ghost", icon: true, size: detailed ? "sm" : undefined })}>
-          {detailed ? <MoreHorizontal size={15} aria-hidden="true" /> : <Clock3 size={16} aria-hidden="true" />}
-        </MenuTrigger>
-        <MenuContent align={detailed ? "end" : "start"} className="max-h-[min(24rem,60vh)] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain">
-          {recentCandidates.map(key => shortcutRow(key, true))}
-          {recentLoading ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Loading recent documents…</p>
-            : recentMetadata.error ? <>
-              <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Recent documents could not be loaded.</p>
-              <MenuItem closeOnClick={false} onClick={recentMetadata.retry}>Retry</MenuItem>
-            </> : recentCandidates.length === 0 ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">No recent documents</p> : null}
-        </MenuContent>
-      </MenuRoot>
+      <MenuItem
+        key={key}
+        render={<Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} prefetch={selected ? false : undefined} aria-current={selected ? "page" : undefined} aria-describedby={document.ownership === "SOURCE_MANAGED" ? readOnlyDescriptionId : undefined} />}
+        className={selected ? "bg-kh-bg-selected font-medium text-kh-selected-text" : ""}
+      >
+        {document.pageIcon ? <span className="shrink-0 text-body leading-none" aria-hidden="true">{document.pageIcon}</span> : <FileText size={14} className="shrink-0" aria-hidden="true" />}
+        <span className="min-w-0 flex-1 truncate" title={document.label}>{document.label}</span>
+        <span className="max-w-[40%] shrink-0 truncate text-caption text-kh-text-muted">{document.sourceName}</span>
+        {document.ownership === "SOURCE_MANAGED" ? <LockKeyhole size={14} data-read-only-cue="" className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : null}
+      </MenuItem>
     );
   }
 
@@ -262,7 +201,38 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   return (
     <aside aria-label="Knowledge explorer" aria-busy={!sidebarReady} className="kh-sidebar-surface flex h-full min-h-0 w-full shrink-0 flex-col gap-3 border-t border-kh-border lg:border-r lg:border-t-0 bg-kh-bg-explorer px-3 pb-3 pt-2">
       <div className="flex shrink-0 items-center gap-2">
-        {!inlineExplorer ? <div className="flex items-center gap-0.5">{favoritesMenu(false)}{recentMenu(false)}</div> : null}
+        <div className="flex items-center gap-0.5">
+          <MenuRoot>
+            <MenuTrigger aria-label="Favorite documents" title="Favorite documents" className={buttonClasses({ variant: "ghost", icon: true })}>
+              <Star size={16} aria-hidden="true" />
+            </MenuTrigger>
+            <MenuContent align="start" className="max-h-[min(24rem,60vh)] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain">
+              {favoriteKeys.map(shortcutMenuItem)}
+              {favoritesLoading ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Loading favorite documents…</p>
+                : shortcutMetadata.error ? <>
+                  <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Favorite documents could not be loaded.</p>
+                  <MenuItem closeOnClick={false} onClick={shortcutMetadata.retry}>Retry</MenuItem>
+                </> : favoriteKeys.length === 0 ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">No favorite documents</p> : null}
+            </MenuContent>
+          </MenuRoot>
+          <MenuRoot open={recentMenuOpen} onOpenChange={(open) => {
+            recentMenuPopulated.current = false;
+            setRecentMenuOpen(open);
+            setRecentMenuKeys(open && shortcutsReady ? [...shortcuts.recent] : null);
+          }}>
+            <MenuTrigger aria-label="Recent documents" title="Recent documents" className={buttonClasses({ variant: "ghost", icon: true })}>
+              <Clock3 size={16} aria-hidden="true" />
+            </MenuTrigger>
+            <MenuContent align="start" className="max-h-[min(24rem,60vh)] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain">
+              {recentCandidates.map(shortcutMenuItem)}
+              {recentLoading ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Loading recent documents…</p>
+                : recentMetadata.error ? <>
+                  <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Recent documents could not be loaded.</p>
+                  <MenuItem closeOnClick={false} onClick={recentMetadata.retry}>Retry</MenuItem>
+                </> : recentCandidates.length === 0 ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">No recent documents</p> : null}
+            </MenuContent>
+          </MenuRoot>
+        </div>
         <div className="flex items-center gap-0.5">
           <Tooltip label="Filter documents and sources">
             <button
@@ -313,41 +283,6 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
           scrollIntoView the pane could not satisfy scrolled the whole shell away. */}
       <nav aria-label="Document tree" className="relative min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain">
         <span id={readOnlyDescriptionId} hidden>{READ_ONLY_DESCRIPTION}</span>
-        {inlineExplorer ? (
-          <div className="mb-2 space-y-2 border-b border-kh-border pb-2">
-            <section aria-label="Favorites">
-              <div className="flex min-h-6 items-center justify-between gap-1 px-2">
-                <h2 className="text-caption font-medium text-kh-text-muted">Favorites</h2>
-                {favoriteKeys.length > VISIBLE_SHORTCUTS || shortcutMetadata.error ? favoritesMenu(true) : null}
-              </div>
-              {favoriteKeys.slice(0, VISIBLE_SHORTCUTS).map(key => shortcutRow(key))}
-              {favoriteKeys.length === 0 ? <p className="px-2 py-1 text-caption text-kh-text-muted">
-                {favoritesLoading ? "Loading favorite documents…" : shortcutMetadata.error ? "Favorite documents could not be loaded." : "No favorite documents"}
-              </p> : null}
-            </section>
-            <section aria-label="Recent">
-              <div className="flex items-center">
-                <button
-                  type="button"
-                  aria-controls={recentListId}
-                  aria-expanded={recentExpanded}
-                  onClick={() => setRecentExpanded(open => !open)}
-                  className="kh-control kh-focus-ring flex min-h-6 flex-1 items-center gap-1 rounded-md px-2 text-left text-caption font-medium text-kh-text-muted hover:bg-kh-bg-hover"
-                >
-                  <ChevronRight size={12} aria-hidden="true" className={recentExpanded ? "rotate-90" : undefined} />
-                  Recent
-                </button>
-                {recentExpanded && (recentKeys.length > VISIBLE_SHORTCUTS || recentMetadata.error) ? <div className="pr-2">{recentMenu(true)}</div> : null}
-              </div>
-              <div id={recentListId} hidden={!recentExpanded}>
-                {recentExpanded ? recentKeys.slice(0, VISIBLE_SHORTCUTS).map(key => shortcutRow(key)) : null}
-                {recentExpanded && recentKeys.length === 0 ? <p className="px-2 py-1 text-caption text-kh-text-muted">
-                  {recentLoading ? "Loading recent documents…" : recentMetadata.error ? "Recent documents could not be loaded." : "No recent documents"}
-                </p> : null}
-              </div>
-            </section>
-          </div>
-        ) : null}
         {getStarted ? <SidebarGetStarted actions={getStarted} compact={pathname === `/w/${workspaceId}/knowledge`} /> : null}
         {!getStarted && !hasNotes && canCreate && (!needle || "notes".includes(needle)) ? (
           <div className="flex items-center justify-between pl-2">
