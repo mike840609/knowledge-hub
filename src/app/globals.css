@@ -332,12 +332,15 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-editor .kh-wikilink.ProseMirror-selectednode {
     @apply rounded-sm bg-kh-bg-selected;
   }
-  /* A block chosen with Escape (editor Notion-parity spec, decision 7): one top-level node, drawn like any selection. */
-  .kh-editor > .ProseMirror-selectednode {
+  /* A block chosen with Escape (editor Notion-parity spec, decision 7): a top-level node, or a list item
+     (block-unit spec, decision 1), drawn like any selection. */
+  .kh-editor > .ProseMirror-selectednode,
+  .kh-editor li.ProseMirror-selectednode {
     @apply rounded-sm bg-kh-bg-selected outline-none;
   }
-  /* The blocks a Shift-Arrow widened a chosen block to (multi-block spec): the same selection fill. */
-  .kh-editor > .kh-block-in-range {
+  /* The blocks a Shift-Arrow widened a chosen block to (multi-block spec; items too, block-unit spec): the same fill. */
+  .kh-editor > .kh-block-in-range,
+  .kh-editor li.kh-block-in-range {
     @apply rounded-sm bg-kh-bg-selected;
   }
   .kh-editor img:not([data-diagram]) {
@@ -441,7 +444,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 
   /* The toolbar over a selection. Milkdown's tooltip sets `left`/`top` and `data-show`. */
   .kh-selection-toolbar {
-    /* Wraps rather than overflow a phone: the row below it is `flex-wrap`, as `.kh-table-actions` is. */
+    /* Wraps rather than overflow a phone: the row below it is `flex-wrap`. */
     max-width: calc(100vw - 16px);
     @apply absolute z-20 flex items-center rounded-lg border border-kh-border bg-kh-bg-raised p-1 shadow-popover;
     /* Overlays enter and leave (design language §9). The tooltip only toggles `data-show` —
@@ -649,8 +652,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-fade-in { animation: kh-fade-in theme("transitionDuration.120") theme("transitionTimingFunction.out"); }
 .kh-slash-menu:not([hidden]),
 .kh-emoji-menu:not([hidden]),
-.kh-block-move-menu:not([hidden]),
-.kh-table-actions:not([hidden]) { animation: kh-pop-in theme("transitionDuration.120") theme("transitionTimingFunction.out"); }
+.kh-block-move-menu:not([hidden]) { animation: kh-pop-in theme("transitionDuration.120") theme("transitionTimingFunction.out"); }
 .kh-block-gutter:not([hidden]),
 .kh-selection-bubble { animation: kh-fade-in theme("transitionDuration.120") theme("transitionTimingFunction.out"); }
 .kh-tree-drop-line:not([hidden]),
@@ -1160,13 +1162,24 @@ input[type="search"]::-webkit-search-cancel-button:hover {
    that, the pane clips what does not fit. */
 .kh-editor-blocks { padding-left: 3.5rem; margin-left: -3.5rem; }
 .kh-block-gutter { position: fixed; z-index: 30; display: flex; gap: 2px; }
-.kh-table-actions { position: fixed; z-index: 31; display: flex; gap: 4px; padding: 3px; max-width: calc(100vw - 16px); flex-wrap: wrap; border: 1px solid var(--kh-table-border); border-radius: 6px; color: var(--kh-text-secondary); background: var(--kh-bg-raised); box-shadow: var(--kh-shadow-popover); }
-.kh-table-actions select { @apply h-6 rounded-sm border border-kh-border bg-kh-bg px-1 text-caption text-kh-text-muted outline-none focus-visible:ring-2 focus-visible:ring-kh-focus; }
-.kh-table-actions[hidden] { display: none; }
-.kh-table-actions button { padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
-.kh-table-actions button:hover { color: var(--kh-text); background: var(--kh-bg-hover); }
-.kh-table-actions button:focus-visible { outline: 2px solid var(--kh-focus); outline-offset: -2px; }
+.kh-table-grip, .kh-table-col-grip { position: fixed; z-index: 31; }
+.kh-table-grip[hidden], .kh-table-col-grip[hidden], .kh-table-add[hidden] { display: none; }
+/* The + bars fill the strip directly below and directly right of the table: nothing outside the table is covered. */
+.kh-table-add { position: fixed; z-index: 31; width: 0.75rem; height: 0.75rem; padding: 0; border: 1px solid var(--kh-border); @apply flex items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text kh-focus-ring; }
+.kh-table-add svg { width: 100%; height: 100%; }
+.kh-table-grip, .kh-table-col-grip {
+  @apply flex items-center justify-center rounded-md border border-kh-border bg-kh-bg-raised text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text kh-focus-ring;
+}
+.kh-table-grip { @apply size-6; }
+/* The column grip is a low handle across the table's top border: half in the table's own top margin, which holds no text,
+   half over the header cell's padding above its text. */
+.kh-table-col-grip { @apply h-3 w-6; }
+.kh-table-col-grip svg { flex: none; transform: rotate(90deg); }
 .kh-block-gutter[hidden], .kh-block-move-menu[hidden], .kh-slash-menu[hidden] { display: none; }
+/* The selection toolbar's Turn into menu hangs over the gutter's column, inside the document pane, whose `contain: layout`
+   keeps it under anything drawn on the body at 30: while it is open, the controls drawn there step aside.
+   Global across editors on the page: only one selection, so one Turn into menu, can be open at a time. */
+body:has(.kh-selection-toolbar [role="menu"]:not([hidden])) :is(.kh-block-gutter, .kh-table-grip, .kh-table-col-grip, .kh-table-add) { visibility: hidden; }
 .kh-block-gutter button {
   @apply flex size-6 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text kh-focus-ring;
 }
@@ -1190,7 +1203,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-slash-option[aria-selected="true"] { @apply bg-kh-bg-selected text-kh-selected-text; }
 .kh-tree-drop-line, .kh-block-drop-line { position: fixed; z-index: 50; height: 2px; background: var(--kh-primary); pointer-events: none; }
 .kh-block-is-dragging { cursor: grabbing; }
-@media print { .kh-block-gutter, .kh-block-move-menu, .kh-slash-menu, .kh-block-drop-line, .kh-tree-drop-line, .kh-table-actions { display: none; } }
+@media print { .kh-block-gutter, .kh-block-move-menu, .kh-slash-menu, .kh-block-drop-line, .kh-tree-drop-line, .kh-table-grip, .kh-table-col-grip, .kh-table-add { display: none; } }
 
 /* The whole block stays marked while it moves, nested content included. */
 .kh-editor .kh-block-drag-source {

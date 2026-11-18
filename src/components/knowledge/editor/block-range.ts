@@ -1,19 +1,22 @@
 import { closeHistory } from "@milkdown/kit/prose/history";
-import { Mark, type Node as ProseNode } from "@milkdown/kit/prose/model";
+import { Fragment, Mark, Slice, type Node as ProseNode } from "@milkdown/kit/prose/model";
 import { NodeSelection, Plugin, PluginKey, Selection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
-import { blockKind, topLevelBlocks, turnBlockInto, type BlockKind, type EditorBlock } from "./block-actions";
+import { blockKind, selectedBlockPos, type BlockKind, type EditorBlock } from "./block-actions";
+import { deleteBlocks, duplicateBlocks, moveBlocks, sequenceOf, turnBlocks } from "./block-sequence";
 
 /**
- * Several top-level blocks chosen at once (2026-11-20 multi-block spec). A block chosen with Escape is a node
- * selection; Shift-ArrowDown/Up then widens it to the blocks around it. The selection ProseMirror holds stays
+ * Several blocks chosen at once (2026-11-20 multi-block spec). A block chosen with Escape is a node selection;
+ * Shift-ArrowDown/Up then widens it to the blocks around it in its sequence (2026-11-21 block-unit spec, decision 3:
+ * a list item is a block, and a nested item's sequence is its own list). The selection ProseMirror holds stays
  * that one node, at the block the range began at (`anchor`); the rest of the range is this plugin's state, drawn
  * with a decoration, and ends the moment the selection or the document changes by any other way.
- * Delete, duplicate, move and turn-into then act on the whole range; typing is ignored, so a stray key never
- * replaces one block of several.
+ * Delete, duplicate, move and turn-into then act on the whole range, each one undo step (`block-sequence.ts`);
+ * typing is ignored, so a stray key never replaces one block of several.
  */
-type Range = { anchor: number; head: number };
+export type BlockRange = { anchor: number; head: number };
+type Range = BlockRange;
 const key = new PluginKey<Range | null>("khBlockRange");
 // A dead key (an accent waiting for its letter) starts a composition on some platforms before any keyCode says so.
 const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -22,7 +25,7 @@ const composing = (event: KeyboardEvent) => event.isComposing || event.keyCode =
 const blocksIn = (doc: ProseNode, range: Range): EditorBlock[] => {
   const low = Math.min(range.anchor, range.head);
   const high = Math.max(range.anchor, range.head);
-  return topLevelBlocks(doc).filter((block) => block.pos >= low && block.pos <= high);
+  return sequenceOf(doc, range.anchor).filter((block) => block.pos >= low && block.pos <= high);
 };
 
 /**
@@ -47,8 +50,7 @@ function sameBlocks(before: ProseNode, after: ProseNode): boolean {
 }
 
 /** The anchor block, when it is chosen as a node (a block taken with Escape). */
-const chosenBlock = (state: EditorState): number | null =>
-  state.selection instanceof NodeSelection && state.selection.$from.depth === 0 ? state.selection.from : null;
+const chosenBlock = (state: EditorState): number | null => selectedBlockPos(state);
 
 /** Mod-Alt-0…8 and Mod-Shift-7/8/9, as the single-block keys name them. */
 const BY_DIGIT: Record<string, BlockKind> = { "0": "paragraph", "1": "h1", "2": "h2", "3": "h3", "4": "task", "5": "bullet", "6": "ordered", "7": "toggle", "8": "code" };
@@ -60,30 +62,117 @@ function setRange(view: EditorView, tr: Transaction, range: Range | null, scroll
   view.dispatch(closeHistory(view.state.tr));
 }
 
-/** The blocks of the range taken out; one empty paragraph stays if that was everything. */
-function removeRange(view: EditorView, from: number, to: number) {
-  const { state } = view;
-  const whole = from === 0 && to === state.doc.content.size;
-  const tr = whole ? state.tr.replaceWith(from, to, state.schema.nodes.paragraph.create()) : state.tr.delete(from, to);
-  tr.setSelection(Selection.near(tr.doc.resolve(Math.min(from + (whole ? 1 : 0), tr.doc.content.size)), -1));
-  setRange(view, tr, null);
+/** Dispatches `tr` as one undo step, with `range` (null ends it) as the range afterwards. The grip menu and drag use it. */
+export function setBlockRange(view: EditorView, tr: Transaction, range: BlockRange | null, scroll = true): void {
+  setRange(view, tr, range, scroll);
 }
 
-/** Copy and cut of the whole range: the selection ProseMirror holds is the anchor block alone, which would take one of several. */
+/** The range's blocks, when it holds two or more; else null. */
+export function rangeBlocks(state: EditorState): EditorBlock[] | null {
+  const range = key.getState(state);
+  if (!range) return null;
+  const blocks = blocksIn(state.doc, range);
+  return blocks.length > 1 ? blocks : null;
+}
+
+/** The range again over the blocks' new places, in its direction: the anchor's block stays the anchor. */
+function relocated(range: Range, blocks: EditorBlock[], placed: EditorBlock[]): Range {
+  const at = (pos: number) => placed[blocks.findIndex((block) => block.pos === pos)].pos;
+  return { anchor: at(range.anchor), head: at(range.head) };
+}
+
+/**
+ * Dispatches a duplicate or move of the whole range (`tr`, from `state`), keeping the range over `placed`, the blocks'
+ * new places, in its direction: the anchor's block is chosen again. Shared by the keys, the grip menu and drag.
+ */
+export function keepRange(view: EditorView, state: EditorState, tr: Transaction, placed: EditorBlock[]): void {
+  const range = key.getState(state);
+  if (!range) { setRange(view, tr, null); return; }
+  const next = relocated(range, blocksIn(state.doc, range), placed);
+  tr.setSelection(NodeSelection.create(tr.doc, next.anchor));
+  setRange(view, tr, next);
+}
+
+/** A closed clipboard slice. Each run of items keeps its source list and starts at its first copied number. */
+function clipboardSlice(doc: ProseNode, blocks: EditorBlock[]): Slice {
+  const nodes: ProseNode[] = [];
+  for (let at = 0; at < blocks.length;) {
+    const block = blocks[at];
+    if (block.node.type.name !== "list_item") {
+      nodes.push(block.node);
+      at++;
+      continue;
+    }
+    const $item = doc.resolve(block.pos);
+    const list = $item.parent;
+    const first = $item.index();
+    const count = Math.min(list.childCount - first, blocks.length - at);
+    const attrs = list.type.name === "ordered_list" ? { ...list.attrs, order: Number(list.attrs.order ?? 1) + first } : list.attrs;
+    const items: ProseNode[] = [];
+    for (let index = first; index < first + count; index++) items.push(list.child(index));
+    nodes.push(list.type.create(attrs, Fragment.fromArray(items), list.marks));
+    at += count;
+  }
+  return new Slice(Fragment.fromArray(nodes), 0, 0);
+}
+
+/** Copy marks its list wrappers, so a paste back into a list can put their items beside the target item. */
+const COPIED_LIST = "data-kh-copied-list";
+
+/** Copy the chosen blocks, including the list wrapper a list-item node selection leaves out. */
 function clip(view: EditorView, event: ClipboardEvent, cut: boolean): boolean {
-  const range = key.getState(view.state);
-  if (!view.editable || !range || !event.clipboardData) return false;
-  const blocks = blocksIn(view.state.doc, range);
-  if (blocks.length < 2) return false;
-  const from = blocks[0].pos;
-  const last = blocks[blocks.length - 1];
-  const to = last.pos + last.node.nodeSize;
-  const { dom, text } = view.serializeForClipboard(view.state.doc.slice(from, to));
+  if (!view.editable || !event.clipboardData) return false;
+  const { state } = view;
+  const range = key.getState(state);
+  let blocks: EditorBlock[];
+  if (range) {
+    blocks = blocksIn(state.doc, range);
+  } else {
+    const { selection } = state;
+    if (!(selection instanceof NodeSelection) || selection.node.type.name !== "list_item" || selectedBlockPos(state) === null) return false;
+    blocks = [{ pos: selection.from, node: selection.node }];
+  }
+  if (!blocks.length) return false;
+  const { dom, text } = view.serializeForClipboard(clipboardSlice(state.doc, blocks));
+  for (const child of Array.from(dom.children)) {
+    if (child.tagName === "OL" || child.tagName === "UL") child.setAttribute(COPIED_LIST, "");
+  }
   event.preventDefault();
   event.clipboardData.clearData();
   event.clipboardData.setData("text/html", dom.innerHTML);
   event.clipboardData.setData("text/plain", text);
-  if (cut) removeRange(view, from, to);
+  if (cut) setRange(view, deleteBlocks(view.state, blocks), null);
+  return true;
+}
+
+/**
+ * Our own copied items, pasted into a list of their kind, become siblings of the target item: the wrapper
+ * that lets them paste at the top level would otherwise nest them one level down. A whole list copied by
+ * a text selection carries no marker and keeps nesting.
+ */
+function pasteCopiedList(view: EditorView, event: ClipboardEvent, slice: Slice): boolean {
+  if (!view.editable || !(event.clipboardData?.getData("text/html") ?? "").includes(COPIED_LIST)) return false;
+  const { $from } = view.state.selection;
+  let depth = -1;
+  for (let at = $from.depth; at >= 1; at--) if ($from.node(at).type.name === "list_item") { depth = at; break; }
+  if (depth < 1) return false;
+  const list = slice.content.childCount === 1 ? slice.content.firstChild : null;
+  if (!list || list.type !== $from.node(depth - 1).type) return false;
+  const items: ProseNode[] = [];
+  list.forEach((item) => items.push(item));
+  if (!items.length) return false;
+  const item = $from.node(depth);
+  if ($from.parentOffset === 0 && $from.parent === item.firstChild && $from.parent.content.size > 0) {
+    // At the start of the item's text, inserting through replaceSelection would split the paragraph and
+    // leave an empty item above the pasted ones; they belong before the item instead.
+    const at = $from.before(depth);
+    const fragment = Fragment.fromArray(items);
+    const tr = view.state.tr.insert(at, fragment);
+    tr.setSelection(Selection.near(tr.doc.resolve(at + fragment.size)));
+    view.dispatch(tr.scrollIntoView());
+    return true;
+  }
+  view.dispatch(view.state.tr.replaceSelection(new Slice(Fragment.fromArray(items), 0, 0)).scrollIntoView());
   return true;
 }
 
@@ -104,7 +193,7 @@ export const blockRange = $prose(
       },
       appendTransaction(transactions, _old, state) {
         const range = key.getState(state);
-        if (!range || chosenBlock(state) === range.anchor || !transactions.some((transaction) => transaction.docChanged) || state.doc.resolve(range.anchor).depth !== 0 || !state.doc.nodeAt(range.anchor)) return null;
+        if (!range || chosenBlock(state) === range.anchor || !transactions.some((transaction) => transaction.docChanged) || !sequenceOf(state.doc, range.anchor).some((block) => block.pos === range.anchor)) return null;
         return state.tr.setSelection(NodeSelection.create(state.doc, range.anchor)).setMeta(key, range).setMeta("addToHistory", false);
       },
       props: {
@@ -119,11 +208,14 @@ export const blockRange = $prose(
           return Boolean(range && blocksIn(view.state.doc, range).length > 1);
         },
         // Paste would replace the anchor block alone, as typing would: with a range it is refused.
-        handlePaste(view, event) {
+        handlePaste(view, event, slice) {
+          if (!view.editable) return false;
           const range = key.getState(view.state);
-          if (!view.editable || !range || blocksIn(view.state.doc, range).length < 2) return false;
-          event.preventDefault();
-          return true;
+          if (range && blocksIn(view.state.doc, range).length >= 2) {
+            event.preventDefault();
+            return true;
+          }
+          return pasteCopiedList(view, event as ClipboardEvent, slice);
         },
         handleDOMEvents: {
           copy: (view, event) => clip(view, event as ClipboardEvent, false),
@@ -148,10 +240,13 @@ export const blockRange = $prose(
           const moveKey = event.key === "ArrowDown" || event.key === "ArrowUp";
           // Widen, or narrow: Shift-Arrow moves the far end of the range by one block.
           if (plain && event.shiftKey && moveKey) {
-            const blocks = topLevelBlocks(state.doc);
+            const blocks = sequenceOf(state.doc, anchor);
             const at = blocks.findIndex((block) => block.pos === (range?.head ?? anchor));
+            // A whole list chosen as one node is no block of a sequence: it has no range to widen.
+            if (at < 0) return false;
             const next = at + (event.key === "ArrowDown" ? 1 : -1);
-            if (at < 0 || next < 0 || next >= blocks.length) { event.preventDefault(); return true; }
+            // A sequence's ends stop it: a nested item's range never leaves its own list.
+            if (next < 0 || next >= blocks.length) { event.preventDefault(); return true; }
             event.preventDefault();
             const head = blocks[next].pos;
             setRange(view, state.tr, head === anchor ? null : { anchor, head }, false);
@@ -161,39 +256,28 @@ export const blockRange = $prose(
           if (!range) return false;
           const blocks = blocksIn(state.doc, range);
           if (blocks.length < 2) return false;
-          const from = blocks[0].pos;
-          const last = blocks[blocks.length - 1];
-          const to = last.pos + last.node.nodeSize;
           // Backspace and Delete with Shift, Ctrl, Alt or Cmd (a word, a line) take the range, as the plain keys do: none of them
           // may take the anchor block alone. Ctrl-H is Backspace on a Mac (elsewhere it is the browser's history).
           if (event.key === "Backspace" || event.key === "Delete" || (isMac() && event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === "h")) {
             event.preventDefault();
-            removeRange(view, from, to);
+            setRange(view, deleteBlocks(state, blocks), null);
             return true;
           }
           if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key === "d") {
             event.preventDefault();
-            const tr = state.tr.insert(to, blocks.map((block) => block.node));
+            const { tr, copies } = duplicateBlocks(state, blocks);
             // The copies keep the range's direction: the copy of the anchor block is the anchor.
-            const copied = { anchor: to + (anchor - from), head: to + (range.head - from) };
-            tr.setSelection(NodeSelection.create(tr.doc, copied.anchor));
-            setRange(view, tr, copied);
+            keepRange(view, state, tr, copies);
             return true;
           }
           if ((event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey && moveKey) {
             event.preventDefault();
-            const all = topLevelBlocks(state.doc);
-            const index = all.findIndex((block) => block.pos === from);
-            const up = event.key === "ArrowUp";
-            const neighbour = up ? all[index - 1] : all[index + blocks.length];
-            if (!neighbour) return true;
-            const size = neighbour.node.nodeSize;
-            const tr = state.tr.delete(neighbour.pos, neighbour.pos + size);
-            // Up: the one above goes below the range. Down: the one below goes above it.
-            tr.insert(up ? to - size : from, neighbour.node);
-            const shift = up ? -size : size;
-            tr.setSelection(NodeSelection.create(tr.doc, anchor + shift));
-            setRange(view, tr, { anchor: anchor + shift, head: range.head + shift });
+            const all = sequenceOf(state.doc, anchor);
+            // The place in the sequence without the range: one before it, or one after its next neighbour.
+            const toIndex = all.findIndex((block) => block.pos === blocks[0].pos) + (event.key === "ArrowUp" ? -1 : 1);
+            if (toIndex < 0 || toIndex > all.length - blocks.length) return true;
+            const { tr, moved } = moveBlocks(state, blocks, toIndex);
+            keepRange(view, state, tr, moved);
             return true;
           }
           // Ctrl+Alt is also AltGr on Windows: there only the character decides (AltGr+7 is `{` on a German keyboard, not a
@@ -205,18 +289,9 @@ export const blockRange = $prose(
             event.preventDefault();
             // The same kind on every block toggles it off; bottom first, so a block's position holds until it is done.
             const into = blocks.every((block) => blockKind(block.node) === wanted) ? "paragraph" : wanted;
-            const { nodes } = state.schema;
-            // Lines made lists become one list, an item each, not a list apiece.
-            if ((into === "bullet" || into === "ordered" || into === "task") && blocks.every((block) => block.node.type === nodes.paragraph || block.node.type === nodes.heading)) {
-              const ordered = into === "ordered";
-              const items = blocks.map((block) => nodes.list_item.create({ listType: ordered ? "ordered" : "bullet", label: ordered ? "1." : "-", ...(into === "task" ? { checked: false } : {}) }, nodes.paragraph.create(null, block.node.content)));
-              const list = (ordered ? nodes.ordered_list : nodes.bullet_list).create(ordered ? { order: 1 } : null, items);
-              const tr = state.tr.replaceWith(from, to, list);
-              tr.setSelection(Selection.near(tr.doc.resolve(from + 1)));
-              setRange(view, tr, null);
-              return true;
-            }
-            for (const block of [...blocks].reverse()) turnBlockInto(view, block.pos, into);
+            // One transaction for every block; lines and items made one list kind become one list.
+            const tr = turnBlocks(state, blocks, into);
+            if (tr) setRange(view, tr, null);
             return true;
           }
           // A character, with Shift or Option or AltGr as much as without, or Enter, would replace one block of several;

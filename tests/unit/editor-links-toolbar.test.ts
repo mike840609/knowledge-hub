@@ -48,7 +48,7 @@ function paste(view: EditorView, text: string) {
 }
 
 describe("the toolbar's new buttons", () => {
-  it("strikes through, codes and makes Heading 3, with active states", async () => {
+  it("strikes through, codes and makes Heading 3 through Turn into, with active states", async () => {
     const { editor, view } = await open("some text\n");
     select(view, 1, 5);
     const press = (label: string) => toolbarEl().querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
@@ -60,9 +60,12 @@ describe("the toolbar's new buttons", () => {
     expect(editor.getMarkdown()).toBe("`some` text\n");
     expect(press("Inline code").getAttribute("aria-pressed")).toBe("true");
     press("Inline code").click();
-    press("Heading 3").click();
+    // Heading 3 is an entry of the toolbar's Turn into menu now (2026-11-21 list-commands spec, decision 5).
+    expect(press("Heading 3")).toBeNull();
+    toolbarEl().querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!.click();
+    [...toolbarEl().querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find((item) => item.textContent === "Heading 3")!.click();
     expect(editor.getMarkdown()).toBe("### some text\n");
-    expect(press("Heading 3").getAttribute("aria-pressed")).toBe("true");
+    expect(toolbarEl().querySelector('button[aria-haspopup="menu"]')!.textContent).toBe("Heading 3");
   });
 });
 

@@ -12,6 +12,7 @@ import { readerHints } from "./reader-hints";
 import { liftAtDocumentStart, liftFirstListItem, liftListItemOverNested } from "./block-backspace";
 import { flipNearestDetails, handleDetailsDeleteKey } from "./details-toggle";
 import { handleCalloutBackspace } from "./reader-hints";
+import { configureEmptyQuoteStringify } from "./empty-quote";
 import { configureCellBreakStringify, remarkCellBreaks } from "./table-cell-breaks";
 import { flipToggleAtTitle, notionKeys, tickTodo } from "./notion-keys";
 import { pasteHtml } from "./paste-html";
@@ -259,6 +260,7 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
       // this is the half that cannot be a plugin (the stringify options are read when the editor is built).
       configureWikiLinkStringify(ctx);
       configureCellBreakStringify(ctx);
+      configureEmptyQuoteStringify(ctx);
       // Milkdown also refuses Shift+Enter in a table, where a break could only be written as a space. Here it has a writing.
       ctx.set(hardbreakFilterNodes.key, ["code_block"]);
       ctx.update(remarkPluginsCtx, (previous) => [...previous, { plugin: remarkBlockLinks, options: {} }, { plugin: resolveImageReferences, options: {} }, { plugin: fillNullImageTitles, options: {} }, { plugin: remarkCellBreaks, options: {} }] as typeof previous);
