@@ -51,7 +51,7 @@ it("switches the relationship tab, the status and the unread toggle", async () =
   expect(onKindChange).toHaveBeenCalledWith("follow");
   await chooseStatus("open");
   expect(onStatusChange).toHaveBeenCalledWith("open");
-  await act(async () => { [...host.querySelectorAll("button")].find(b => b.textContent === "Unread")!.click(); });
+  await act(async () => { host.querySelector<HTMLInputElement>(`input[type="checkbox"]`)!.click(); });
   expect(onUnreadChange).toHaveBeenCalledWith(true);
 });
 
@@ -64,7 +64,7 @@ it("names the four relationships and marks the current one and the unread toggle
   expect(host.querySelector('[role="group"]')?.getAttribute("aria-label")).toBe("Inbox relationships");
   expect(host.querySelector('[role="combobox"]')?.getAttribute("aria-label")).toBe("Status");
   expect(host.querySelector('[role="combobox"]')?.getAttribute("data-value")).toBe("resolved");
-  expect([...host.querySelectorAll("button")].find(b => b.textContent === "Unread")?.getAttribute("aria-pressed")).toBe("true");
+  expect(host.querySelector<HTMLInputElement>(`input[type="checkbox"]`)?.checked).toBe(true);
 });
 
 it("renders a discussion row and selects it without navigating", async () => {

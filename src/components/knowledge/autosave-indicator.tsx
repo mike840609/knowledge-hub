@@ -5,16 +5,20 @@ import { useEffect, useRef, useState } from "react";
 export function AutosaveIndicator({ state, attention }: { state: string; attention?: string }) {
   const [message, setMessage] = useState("");
   const shown = useRef(false);
+  const previous = useRef(state);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const wasSaving = previous.current === "saving" || previous.current === "pending";
+    previous.current = state;
     if (attention) {
       shown.current = false;
       setMessage("");
     } else if (state === "saving") {
       setMessage("");
       timer = setTimeout(() => { shown.current = true; setMessage("Saving…"); }, 1000);
-    } else if (state === "saved" && shown.current) {
+    } else if (state === "saved" && (shown.current || wasSaving)) {
       setMessage("Saved");
+      shown.current = true;
       timer = setTimeout(() => { shown.current = false; setMessage(""); }, 2000);
     } else {
       shown.current = false;

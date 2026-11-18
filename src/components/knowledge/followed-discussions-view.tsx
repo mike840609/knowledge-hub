@@ -35,7 +35,7 @@ export function FollowedDiscussionsView({ workspaceId, items, filter, unread, fi
     } catch { setError("Could not update this discussion. Try again."); }
     finally { pending.current = false; setBusy(null); }
   }
-  return <main className="kh-page pb-6">
+  return <div className="kh-page-wide pb-6">
     <SharesHeader workspaceId={workspaceId} active="discussions" discussionsUnread={unread} description="Discussions you follow on shared articles. Following never extends a link's access."/>
     <form ref={filterForm} action={`/w/${workspaceId}/shares`} method="get" aria-label="Filter discussions" className="mt-4 flex flex-wrap items-center gap-2">
       <Input type="hidden" name="tab" value="discussions"/>
@@ -60,5 +60,5 @@ export function FollowedDiscussionsView({ workspaceId, items, filter, unread, fi
             <Button variant="ghost" size="sm" aria-label="Remove discussion" disabled={busy !== null} onClick={() => void drop(item)}>Remove</Button>
           </div>}
     </li>)}</ul>
-  </main>;
+  </div>;
 }

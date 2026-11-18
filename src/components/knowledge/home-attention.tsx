@@ -3,6 +3,7 @@ import { isLinkEntry, notificationHref, notificationLine } from "./notification-
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
 import type { FreshnessReminder } from "@/modules/personal/application/knowledge-freshness";
 import { Timestamp } from "@/components/ui/timestamp";
+import { AlertTriangle, ChevronRight } from "lucide-react";
 import { navigateListRows } from "@/lib/list-row-navigation";
 
 /** An unread-comment notice as it crosses to the client: dates are ISO strings. */
@@ -14,10 +15,13 @@ function SourceReminder({ workspaceId, reminders }: { workspaceId: string; remin
   const first = [...reminders].sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status))[0];
   const failed = reminders.some(item => item.status === "failed");
   const href = reminders.length > 1 ? `/w/${workspaceId}/sources` : first.previewId ? `/w/${workspaceId}/sources/imports/${first.previewId}` : `/w/${workspaceId}/sources/${first.sourceId}/update`;
-  const message = reminders.length > 1 ? `${reminders.length} sources need attention${failed ? " · Import failed" : ""} · Review sources` : first.status === "failed" ? "Import failed · Retry import" : first.status === "pending" ? "Awaiting Apply · Review preview" : "Check for folder updates";
-  return <Link className={`kh-interactive-row kh-focus-ring block rounded-md px-3 py-2 text-body-sm ${failed ? "text-kh-warning" : "text-kh-text"}`} href={href}>
-    <span className="block font-medium">{message}</span>
-    {reminders.length === 1 ? <span className="mt-1 block truncate text-caption text-kh-text-muted">{first.sourceName}</span> : null}
+  const message = reminders.length > 1 ? `${reminders.length} sources need attention${failed ? " · Import failed" : ""} · Review sources` : first.status === "failed" ? "Import failed · Retry import" : first.status === "pending" ? "Awaiting Apply · Review preview" : "Update from folder";
+  return <Link className={`kh-interactive-row kh-focus-ring flex items-center gap-3 rounded-md px-3 py-2 text-body-sm ${failed ? "text-kh-warning" : "text-kh-text"}`} href={href}>
+    <span className="min-w-0 flex-1">
+      <span className="block font-medium">{message}</span>
+      {reminders.length === 1 ? <span className="mt-1 block truncate text-caption text-kh-text-muted">{first.sourceName}{first.lastImportedAt ? <> · Last imported <Timestamp value={first.lastImportedAt} variant="relative" /></> : null}</span> : null}
+    </span>
+    <ChevronRight size={16} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
   </Link>;
 }
 
@@ -41,9 +45,9 @@ export function UnreadDiscussions({ notices }: { notices: readonly HomeNotice[] 
 /** Sources that need the user on Home. Renders nothing otherwise; unread comments live in Discussions. */
 export function AttentionList({ workspaceId, reminders }: { workspaceId: string; reminders: readonly FreshnessReminder[] }) {
   if (!reminders.length) return null;
-  return <section aria-label="Needs attention" className="rounded-md border border-kh-border py-1">
+  return <section aria-label="Needs attention" className="rounded-md border border-kh-border bg-kh-bg-subtle py-1">
     <div className="flex items-baseline justify-between px-3 pb-1 pt-2">
-      <h2 className="text-caption font-medium text-kh-text-muted">Needs attention</h2>
+      <span className="flex items-center gap-1.5"><AlertTriangle size={12} className="text-kh-warning" aria-hidden="true" /><h2 className="text-caption font-medium text-kh-text-muted">Needs attention</h2></span>
       <Link className="kh-focus-ring inline-flex min-h-6 items-center rounded-md text-caption text-kh-link" href={`/w/${workspaceId}/updates`}>View all updates</Link>
     </div>
     <SourceReminder workspaceId={workspaceId} reminders={reminders} />

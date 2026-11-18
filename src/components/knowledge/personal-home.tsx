@@ -157,7 +157,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
   const manySources = new Set(shown.map(doc => doc.sourceId)).size > 1;
   const sourceChanges = (docs: readonly Doc[], i: number) => manySources && docs[i - 1]?.sourceId !== docs[i].sourceId;
 
-  function documentRow(doc: Doc, { timestamp, eventLabel, showSource, stackProvenance = false }: { timestamp?: string; eventLabel?: string; showSource: boolean; stackProvenance?: boolean }) {
+  function documentRow(doc: Doc, { timestamp, eventLabel, showSource, showPath = true, stackProvenance = false }: { timestamp?: string; eventLabel?: string; showSource: boolean; showPath?: boolean; stackProvenance?: boolean }) {
     const key = keyOf(doc);
     const favorite = shortcuts.favorites.includes(key);
     const actions = actionsFor("row", { workspaceId, workspaceType: "PERSONAL", isPersonalOwner: access.isPersonalOwner, can: access.actions, confirmed,
@@ -171,7 +171,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
         icon={doc.pageIcon ? <span className="text-body leading-none" aria-hidden="true">{doc.pageIcon}</span> : <FileText size={14} aria-hidden="true" />}
         title={doc.title}
         timestamp={timestamp} eventLabel={eventLabel}
-        provenance={[showSource ? doc.sourceName : undefined, doc.sourcePath].filter(Boolean).join(" · ")}
+        provenance={[showSource ? doc.sourceName : undefined, showPath ? doc.sourcePath : undefined].filter(Boolean).join(" · ")}
         stackProvenance={stackProvenance}
         actions={actions}
         onRun={runAction}
@@ -217,16 +217,21 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
   }
 
   const recentDocs = recentShown.map(item => item.doc);
-  const recentRow = (item: RecentItem, i: number) => documentRow(item.doc, { timestamp: item.at, eventLabel: item.label, showSource: sourceChanges(recentDocs, i) });
+  // A folder repeated on every row is noise; say it once only when it changes.
+  const uniformRecentPath = recentDocs.length > 1 && recentDocs.every(doc => doc.sourcePath === recentDocs[0].sourcePath);
+  const recentRow = (item: RecentItem, i: number) => documentRow(item.doc, { timestamp: item.at, eventLabel: item.label, showSource: sourceChanges(recentDocs, i), showPath: !uniformRecentPath });
 
   return (
     <GuidanceVisibilityContext.Provider value={{ dismissed, setDismissed }}>
-    <div className="kh-page space-y-6 pb-6">
+    <div className="kh-page-wide space-y-6 pb-6">
       <PageHeader
         location="My Space"
         locationHref={`/w/${workspaceId}/home`}
         title="Home"
         actions={<>
+          <Tooltip label="Create document" shortcut="C">
+            <Link className={buttonClasses()} href={newNoteHref} onClick={(event) => { if (!plainClick(event)) return; bufferTyping(); }} aria-keyshortcuts="C"><Plus size={16} aria-hidden="true" />Create document</Link>
+          </Tooltip>
           <MenuRoot>
             <MenuTrigger aria-label="Home actions" className={buttonClasses({ variant: "ghost", icon: true })}><MoreHorizontal size={16} aria-hidden="true" /></MenuTrigger>
             <MenuContent align="end" className="w-72">
@@ -250,9 +255,6 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
           <span className="flex-1 truncate text-left">Search articles and notes</span>{" "}
           <Kbd size="md" className="hidden shrink-0 sm:inline-flex">⌘K</Kbd>
         </button>
-        <Tooltip label="Create document" shortcut="C">
-          <Link className={buttonClasses({ variant: "secondary" })} href={newNoteHref} onClick={(event) => { if (!plainClick(event)) return; bufferTyping(); }} aria-keyshortcuts="C"><Plus size={16} aria-hidden="true" />Create document</Link>
-        </Tooltip>
       </div>
       {slots?.guidance}
       <AttentionList workspaceId={workspaceId} reminders={reminders} />

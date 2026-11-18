@@ -1,17 +1,19 @@
 "use client";
 import {useState} from "react";
-import Link from "next/link";
 import { SelectMenu } from "@/components/ui/select-menu";
-import {Timestamp} from "@/components/ui/timestamp";
-import {FRESHNESS_THRESHOLDS, knowledgeFreshness, type FreshnessThreshold} from "@/modules/personal/application/knowledge-freshness";
+import {FRESHNESS_THRESHOLDS, type FreshnessThreshold} from "@/modules/personal/application/knowledge-freshness";
 import type {SourceListItemModel} from "@/server/source-read";
 import { Label } from "@/components/ui/label";
 
-export function FreshnessReminders({workspaceId,items,preference,now}: {workspaceId:string;items:SourceListItemModel[];preference:{thresholdDays:FreshnessThreshold;version:number};now:string}) {
+/**
+ * The threshold is the only thing this panel owns now. A folder's freshness is
+ * shown on its row in the source list, so the same folder is not listed twice
+ * with two vocabularies and two actions.
+ */
+export function FreshnessReminders({workspaceId,items,preference}: {workspaceId:string;items:SourceListItemModel[];preference:{thresholdDays:FreshnessThreshold;version:number}}) {
   const [setting,setSetting]=useState(preference);
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
-  const reminders=knowledgeFreshness(items,setting.thresholdDays,new Date(now));
   async function save(thresholdDays:FreshnessThreshold) {
     setSaving(true);setError("");
     try {
@@ -24,20 +26,14 @@ export function FreshnessReminders({workspaceId,items,preference,now}: {workspac
   }
   if (!items.some(item => item.source.sourceType === "FOLDER_SYNC" && item.source.status === "ACTIVE")) return null;
   return <section aria-label="Knowledge freshness" className="px-3 space-y-2">
-    {reminders.length > 0 ? <h2 className="text-caption font-medium text-kh-text-muted">Folders to review</h2> : null}
     <details>
-      <summary className="kh-focus-ring w-fit cursor-pointer rounded-md text-caption text-kh-text-muted">Freshness reminder settings</summary>
+      <summary className="kh-focus-ring inline-flex min-h-6 w-fit cursor-pointer items-center rounded-md text-caption text-kh-text-muted">Freshness reminder settings</summary>
       <div className="mt-2 space-y-2">
         <Label inline className="flex-wrap">Review folders after<SelectMenu aria-label="Freshness threshold" value={setting.thresholdDays} disabled={saving} onValueChange={days=>void save(days)} options={FRESHNESS_THRESHOLDS.map(days=>({value:days,label:days === 7 ? "1 week" : days === 14 ? "2 weeks" : "1 month"}))} /></Label>
-        <p className="text-caption text-kh-text-muted">Age reflects the last applied import. External folders are not checked automatically.</p>
+        <p className="text-caption text-kh-text-muted">Folders older than this are marked “Stale” in the list above. Age reflects the last applied import; external folders are not checked automatically.</p>
       </div>
     </details>
     {error?<p role="alert" className="text-body-sm text-kh-text">{error}</p>:null}
     {saving?<p role="status" className="text-caption text-kh-text-muted">Saving reminder preference…</p>:null}
-    {reminders.length?<ul className="space-y-0.5">{reminders.map(item=><li key={item.sourceId} className="kh-interactive-row flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-3 py-2">
-      <Link className="kh-focus-ring min-w-0 basis-full break-words rounded-md text-body font-medium sm:basis-auto sm:flex-1 text-kh-text" href={`/w/${workspaceId}/sources/${item.sourceId}`}>{item.sourceName}</Link>
-      <span className="text-caption text-kh-text-muted">{item.status==="pending"?"Awaiting Apply":item.status==="failed"?"Latest sync failed":item.status==="never"?"Never imported":"Check for folder updates"}{item.lastImportedAt?<> · Last imported <Timestamp value={item.lastImportedAt} variant="relative"/></>:null}</span>
-      <Link className="kh-focus-ring rounded-md text-body-sm text-kh-link" href={item.previewId?`/w/${workspaceId}/sources/imports/${item.previewId}`:`/w/${workspaceId}/sources/${item.sourceId}/update`}>{item.status==="pending"?"Review preview":item.status==="failed"?"Retry import":"Update from folder"}</Link>
-    </li>)}</ul>:null}
   </section>;
 }

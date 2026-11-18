@@ -8,6 +8,7 @@ import { Database } from "lucide-react";
 import type { SourceListItemModel } from "@/server/source-read";
 import { Status, type StatusKind } from "@/components/ui/status";
 import { Timestamp } from "@/components/ui/timestamp";
+import type { FreshnessReminder } from "@/modules/personal/application/knowledge-freshness";
 
 export function sourceTypeLabel(sourceType: string): string {
   if (sourceType === "FOLDER_SYNC") return "Folder sync";
@@ -27,9 +28,12 @@ export function syncStatusKind(status: string): StatusKind {
   return "pending";
 }
 
-export function SourceListRow({ workspaceId, item, limits, showTypeLabel = true }: { workspaceId: string; item: SourceListItemModel; limits?: FolderImportClientLimits; showTypeLabel?: boolean }) {
+export function SourceListRow({ workspaceId, item, freshness, limits, showTypeLabel = true }: { workspaceId: string; item: SourceListItemModel; freshness?: FreshnessReminder; limits?: FolderImportClientLimits; showTypeLabel?: boolean }) {
   const { source, latestRun, latestSuccessfulRun } = item;
   const lastSyncedAt = latestSuccessfulRun?.completedAt ?? (latestRun?.status === "APPLIED" ? latestRun.completedAt : null);
+  const freshnessAction = freshness && freshness.status !== "pending" && !item.pendingPreviewId
+    ? { label: freshness.status === "failed" ? "Retry import" : "Update from folder", href: `/w/${workspaceId}/sources/${source.id}/update` }
+    : null;
   return (
     <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2 px-1">
       {isFolderSyncable(source) ? (
@@ -54,19 +58,22 @@ export function SourceListRow({ workspaceId, item, limits, showTypeLabel = true 
         {source.status === "ARCHIVED" ? <Status kind="archived">Archived</Status> : null}
         {source.sourceType !== "HUB" ? (
           <span className="order-last inline-flex w-full flex-wrap items-center gap-1 text-caption text-kh-text-muted sm:order-none sm:w-auto sm:shrink-0">
-            {latestRun ? <Status kind={syncStatusKind(latestRun.status)}>{syncStatusLabel(latestRun.status)}</Status> : null}
+            {latestRun ? (freshness?.status === "old" ? <Status kind="pending">Stale</Status> : latestRun.status === "APPLIED" && lastSyncedAt ? <Status kind="active">Up to date</Status> : <Status kind={syncStatusKind(latestRun.status)}>{syncStatusLabel(latestRun.status)}</Status>) : null}
             {lastSyncedAt ? (
               <>
-                {latestRun ? <span aria-hidden="true">·</span> : null}
+                {latestRun ? <span aria-hidden="true" className="hidden sm:inline">·</span> : null}
                 <span>Last synced <Timestamp value={lastSyncedAt} variant="relative" /></span>
               </>
             ) : (
               <span>Never synced</span>
             )}
           </span>
-        ) : null}
+        ) : (
+          <span className="order-last inline-flex w-full text-caption text-kh-text-muted sm:order-none sm:w-auto sm:shrink-0">No sync needed</span>
+        )}
       </Link>
       <div className="col-start-3 row-start-1 ml-1 flex min-w-10 justify-center"><SourceShareAction workspaceId={workspaceId} sourceId={source.id} sourceName={source.name} status={source.status} /><SourceLifecycleActions workspaceId={workspaceId} sourceId={source.id} sourceName={source.name} status={source.status} label={`Source actions: ${source.name}`} /></div>
+      {freshnessAction ? <Link className="kh-focus-ring col-start-2 inline-flex min-h-6 w-fit items-center rounded-md pb-2 text-body-sm font-medium text-kh-link hover:underline" href={freshnessAction.href}>{freshnessAction.label}</Link> : null}
       {item.pendingPreviewId ? <Link className="kh-focus-ring col-start-2 w-fit rounded-md pb-2 text-body-sm font-medium text-kh-link hover:underline" href={`/w/${workspaceId}/sources/imports/${item.pendingPreviewId}`}>Awaiting Apply · Review preview</Link> : null}
     </li>
   );

@@ -4,6 +4,7 @@ import { PersonalProfileView } from "@/components/personal/personal-profile-view
 import { identityProviderKind } from "@/server/config";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Insights" };
 
 export default async function ProfilePage({
   params,

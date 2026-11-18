@@ -11,6 +11,7 @@ import { notFound } from "next/navigation";
 import { FirstUseGuidance } from "@/components/knowledge/first-use-guidance";
 import { getHomeOnboardingState } from "@/server/onboarding-state";
 import { unreadHomeNotices } from "@/server/home-notices";
+export const metadata = { title: "Home" };
 export default async function PersonalHomePage({ params }: { params: Promise<{ workspaceId: string }> }) {
   const { workspaceId } = await params; const s = applicationServices(); const { caller } = await s.establishTrustedCaller();
   const slots: { guidance?: ReactNode } = {};

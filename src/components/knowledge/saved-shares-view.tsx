@@ -32,7 +32,7 @@ export function SavedSharesView({ workspaceId,model,filterError,discussionsUnrea
     catch{setError("Could not remove this saved share. Try again.");}
     finally{pending.current=false;setBusy(null);}
   }
-  return <main className="kh-page pb-6">
+  return <div className="kh-page-wide pb-6">
     <SharesHeader workspaceId={workspaceId} active="saved" discussionsUnread={discussionsUnread} description="Keep articles shared with you within reach. Saving a link does not extend its access or add it to your workspace favorites."/>
     {/* Named shares sit above the whole list, so a search, a status or a later page shows only saved shares. */}
     {sharedWithYou.length>0&&!model.query.q&&model.query.status==="all"&&model.query.page===1&&<section aria-label="Shared with you" className="mt-4">
@@ -65,5 +65,5 @@ export function SavedSharesView({ workspaceId,model,filterError,discussionsUnrea
       </div>
     </li>)}</ul>
     {(model.query.page>1||model.hasNext)&&<nav aria-label="Saved share pages" className="mt-4 flex gap-4 text-body-sm"><span className="text-kh-text-muted">Page {model.query.page}</span>{model.query.page>1&&<Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page-1)}>Previous</Link>}{model.hasNext&&<Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page+1)}>Next</Link>}</nav>}
-  </main>;
+  </div>;
 }

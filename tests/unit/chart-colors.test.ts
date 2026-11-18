@@ -11,6 +11,8 @@ const CSS = readFileSync(new URL("../../src/app/globals.css", import.meta.url), 
 const PROFILE_CSS = readFileSync(new URL("../../src/components/personal/profile.module.css", import.meta.url), "utf8");
 
 const TOKENS = ["--kh-chart-1", "--kh-chart-1-hover", "--kh-chart-2", "--kh-chart-3"];
+/** A neutral track is not a series mark, but it lives in the same family. */
+const TRACK = "--kh-chart-track";
 /** The canvas a chart sits on, and the track an unfilled bar shows. */
 const SURFACES = ["--kh-bg", "--kh-bg-subtle"];
 const THEMES = ["light", "dark"] as const;
@@ -43,9 +45,9 @@ describe("the chart tokens", () => {
     for (const name of TOKENS) expect(declared[name], `${name} in ${theme}`).toMatch(/^#[0-9a-f]{6}$/i);
   });
 
-  it("are the same four in both themes, and no others", () => {
+  it("are the same four series tokens plus one track in both themes, and no others", () => {
     for (const theme of THEMES) {
-      expect(Object.keys(properties(theme)).filter((name) => name.startsWith("--kh-chart-")).sort()).toEqual([...TOKENS].sort());
+      expect(Object.keys(properties(theme)).filter((name) => name.startsWith("--kh-chart-")).sort()).toEqual([...TOKENS, TRACK].sort());
     }
   });
 
@@ -67,6 +69,6 @@ describe("the chart tokens", () => {
 describe("Insights", () => {
   it("takes its series colours from the chart tokens and declares none of its own", () => {
     expect(PROFILE_CSS).not.toMatch(/#[0-9a-f]{3,8}\b/i);
-    for (const token of TOKENS) expect(PROFILE_CSS).toContain(`var(${token})`);
+    for (const token of [...TOKENS, TRACK]) expect(PROFILE_CSS).toContain(`var(${token})`);
   });
 });

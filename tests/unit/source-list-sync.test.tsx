@@ -44,7 +44,7 @@ it("groups sources by how they are managed and labels both groups", async () => 
     source("upload", { name: "Uploaded brief", sourceType: "FILE_UPLOAD", ownership: "HUB_MANAGED" }),
   ]);
   const headings = [...container.querySelectorAll("h2")].map((heading) => heading.textContent);
-  expect(headings).toEqual(["Managed in Hub", "Synced folders"]);
+  expect(headings).toEqual(["Managed in Knowledge Hub", "Synced folders"]);
   const sections = [...container.querySelectorAll("section")];
   expect(sections).toHaveLength(2);
   expect(sections[0]?.textContent).toContain("Obsidian Wiki");
@@ -85,7 +85,7 @@ it("puts the group with an attention item first when sorting by attention", asyn
   };
   await render([source("hub", { sourceType: "HUB", ownership: "HUB_MANAGED" }), failed]);
   const headings = [...container.querySelectorAll("h2")].map((heading) => heading.textContent);
-  expect(headings).toEqual(["Synced folders", "Managed in Hub"]);
+  expect(headings).toEqual(["Synced folders", "Managed in Knowledge Hub"]);
 });
 
 it("does not label a list with only one kind of source", async () => {
@@ -235,6 +235,14 @@ it("offers folder reselection instead of retry when the saved folder is unavaila
   await act(async () => container.querySelector<HTMLButtonElement>("li button")!.click());
   expect(container.querySelector('a[aria-label="Choose folder to sync: Source one"]')?.getAttribute("href")).toBe("/w/ws/sources/one/update");
   expect(container.querySelector('button[aria-label^="Retry sync"]')).toBeNull();
+});
+
+it("marks a stale source on its own row instead of a second list", async () => {
+  const freshness = new Map([["one", { sourceId: "one", sourceName: "Source one", status: "old" as const, previewId: null, lastImportedAt: "2026-10-02T00:00:00.000Z" }]]);
+  await act(async () => root.render(<SourceList workspaceId="ws" items={[source("one")]} freshness={freshness} limits={limits} />));
+  expect(container.querySelectorAll("li")).toHaveLength(1);
+  const action = container.querySelector<HTMLAnchorElement>('a[href="/w/ws/sources/one/update"]');
+  expect(action?.textContent).toBe("Update from folder");
 });
 
 it("shows scanning, upload counts, preview preparation, and the required Apply step", async () => {

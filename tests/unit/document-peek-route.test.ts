@@ -118,7 +118,7 @@ it("returns full markdown plus server-derived ownership and scope without cachin
       index: { documents: 1, stale: 0 },
       localGraph: null,
     },
-    breadcrumb: [{ label: "Notes", href: "/w/w1/knowledge/s1" }, { label: "Guide" }],
+    breadcrumb: [{ label: "My Space", href: "/w/w1/home" }, { label: "Notes", href: "/w/w1/knowledge/s1" }, { label: "Guide" }],
     updatedAt: "2026-10-01T12:00:00.000Z",
     status: "ACTIVE",
     sourceStatus: "ACTIVE",
@@ -402,6 +402,7 @@ it("builds the breadcrumb through folders to the document title", async () => {
   injected.getWorkspaceShellModel.mockResolvedValue(personalWriterShell());
   const body = await (await request("d3")).json();
   expect(body.breadcrumb).toEqual([
+    { label: "My Space", href: "/w/w1/home" },
     { label: "Notes", href: "/w/w1/knowledge/s1" },
     { label: "Projects" },
     { label: "Hub" },

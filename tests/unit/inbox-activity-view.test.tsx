@@ -130,6 +130,11 @@ const button = async (label: string) => {
   await act(async () => { [...host.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === label)!.click(); });
   await settle();
 };
+const unreadToggle = async () => {
+  const input = host.querySelector<HTMLInputElement>(`input[type="checkbox"]`)!;
+  await act(async () => { input.click(); });
+  await settle();
+};
 const paneButton = (label: string) => [...pane()!.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === label || item.getAttribute("aria-label") === label);
 const typeIn = async (element: HTMLTextAreaElement, value: string) => {
   await act(async () => {
@@ -485,12 +490,12 @@ it("writes the tabs, the status and the unread toggle to the URL and the request
   expect(new URL(window.location.href).searchParams.get("status")).toBe("resolved");
   expect(inboxGets()).toContain("status=resolved");
 
-  await button("Unread");
+  await unreadToggle();
   expect(new URL(window.location.href).searchParams.get("unread")).toBe("1");
   expect(inboxGets()).toContain("unread=1");
 
   await button("All");
-  await button("Unread");
+  await unreadToggle();
   await choose("all");
   expect(new URL(window.location.href).searchParams.get("kind")).toBeNull();
   expect(new URL(window.location.href).searchParams.get("status")).toBeNull();
@@ -507,7 +512,7 @@ it("reads the tab, status and unread from the URL once on mount", async () => {
   expect(inboxGets()).toContain("unread=1");
   expect(host.querySelector('[role="group"][aria-label="Inbox relationships"] button[aria-pressed="true"]')?.textContent).toBe("Mentions");
   expect(host.querySelector('[role="combobox"]')?.getAttribute("data-value")).toBe("open");
-  expect([...host.querySelectorAll("button")].find(element => element.textContent === "Unread")?.getAttribute("aria-pressed")).toBe("true");
+  expect(host.querySelector<HTMLInputElement>(`input[type="checkbox"]`)?.checked).toBe(true);
   // A filter is active, so the named-share section stays in Shares.
   expect(host.textContent).not.toContain("Shared with you");
 });
@@ -619,7 +624,11 @@ it("shows each empty state, and Clear filters returns to the default view", asyn
   expect(new URL(window.location.href).searchParams.get("kind")).toBeNull();
   expect(inboxGets()).toBe("/api/review-notifications/inbox");
 
-  await button("Unread");
+  // The default empty view keeps the relationship row but not the refinements.
+  expect(host.querySelector(`input[type="checkbox"]`)).toBeNull();
+  await tab("Mentions");
+  await unreadToggle();
+  await tab("All");
   expect(host.textContent).toContain("No unread discussions.");
   expect(host.textContent).toContain("Clear the Unread filter to see everything.");
   // The Unread state keeps its own copy and offers no generic Clear filters action.
@@ -656,7 +665,7 @@ it("in a narrow box the index is a plain list: rows navigate and no pane exists"
   await mount();
   expect(host.textContent).not.toContain("Select a discussion");
   expect(host.textContent).toContain("Every discussion on your shared documents, in discussions you follow, and where someone mentioned you. Opening one marks it read; resolving it is a separate action.");
-  expect(host.querySelector("main")?.classList.contains("kh-page")).toBe(true);
+  expect(host.querySelector("div.kh-page-wide")).not.toBeNull();
   expect(host.textContent).toContain("Shared with you");
   const link = host.querySelector<HTMLAnchorElement>('[aria-label="Inbox discussions"] a')!;
   expect(link.getAttribute("href")).toBe("/w/ws/knowledge/src/doc-t1?thread=t1");

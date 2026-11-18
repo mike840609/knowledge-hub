@@ -26,9 +26,8 @@ export function SharesNavigation({ workspaceId, active, discussionsUnread = 0 }:
 export function SharesHeader({ workspaceId, active, discussionsUnread = 0, description }: { workspaceId: string; active: "mine" | "saved" | "discussions"; discussionsUnread?: number; description: string }) {
   return (
     <>
-      <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" />
+      <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" description={description} />
       <SharesNavigation workspaceId={workspaceId} active={active} discussionsUnread={discussionsUnread} />
-      <p className="mt-3 text-body-sm text-kh-text-muted">{description}</p>
     </>
   );
 }

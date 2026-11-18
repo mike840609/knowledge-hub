@@ -227,7 +227,7 @@ test("c typed into the palette opened from Home stays in the palette", async ({ 
   const before = page.url();
   const field = page.getByRole("combobox", { name: "Search documents and actions" });
   await expect(async () => {
-    await page.getByRole("button", { name: "Search articles and notes" }).click();
+    await page.getByRole("button", { name: "Quick search" }).click();
     await expect(field).toBeVisible({ timeout: 1_000 });
   }).toPass(ROUND_TRIP);
   await page.keyboard.press("c");

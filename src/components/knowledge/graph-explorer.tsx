@@ -30,12 +30,13 @@ export type GraphFilters = {
 };
 
 /** The URL that carries a set of filters, so a graph can be shared, bookmarked and stepped back through. */
-export function graphQuery(filters: GraphFilters): string {
+export function graphQuery(filters: GraphFilters, explicitView = false): string {
   const params = new URLSearchParams();
   if (filters.sourceId) params.set("source", filters.sourceId);
-  if (!filters.orphans) params.set("orphans", "0");
+  params.set("orphans", filters.orphans ? "1" : "0");
   if (filters.unresolved) params.set("unresolved", "1");
   if (filters.view === "list") params.set("view", "list");
+  else if (explicitView) params.set("view", "graph");
   if (filters.focusId) params.set("focus", filters.focusId);
   const query = params.toString();
   return query === "" ? "" : `?${query}`;
@@ -65,6 +66,8 @@ export function GraphExplorer({
   truncated,
   staleDocuments,
   agentContextHref = null,
+  hiddenOrphans = 0,
+  explicitView = false,
 }: {
   workspaceId: string;
   data: GraphViewData;
@@ -75,6 +78,10 @@ export function GraphExplorer({
   staleDocuments: number;
   /** Copy for Agent with the focused document's neighbourhood preselected; null where it is not offered. */
   agentContextHref?: string | null;
+  /** Orphans the page hid on its own, so the toggle can say how many there are. */
+  hiddenOrphans?: number;
+  /** Whether `view` came from the URL, rather than the graph/list default. */
+  explicitView?: boolean;
 }) {
   const { access, confirmed } = useWorkspaceAuthorization();
   const accessConfirmed = confirmed && access.workspace.id === workspaceId;
@@ -99,7 +106,8 @@ export function GraphExplorer({
     });
   const matches = data.nodes.filter(node => matchesQuery(node, query)).length;
   const links = data.edges.length;
-  const hasFilters = Boolean(filters.sourceId || !filters.orphans || filters.unresolved);
+  const shownDocuments = data.nodes.filter(node => node.kind === "DOCUMENT").length;
+  const hasFilters = Boolean(filters.sourceId || (!filters.orphans && hiddenOrphans === 0) || filters.unresolved);
   // No document anywhere in the workspace: the filters and totals describe nothing, so only the way to add one is shown.
   const noDocuments = total.documents === 0;
   const filteredOut = hasFilters && !noDocuments;
@@ -118,7 +126,7 @@ export function GraphExplorer({
           {(["graph", "list"] as const).map((view) => (
             <Link
               key={view}
-              href={`${pathname}${graphQuery({ ...filters, view })}`}
+              href={`${pathname}${graphQuery({ ...filters, view }, view === "graph")}`}
               replace
               scroll={false}
               // A link to the page it is on: never prefetched (see LocalGraph).
@@ -139,7 +147,7 @@ export function GraphExplorer({
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={filters.view === "list" ? "Filter documents" : "Highlight documents"}
+              placeholder="Find a document"
               aria-describedby={findHelpId}
             />
           </div>
@@ -155,23 +163,24 @@ export function GraphExplorer({
               />
             </div>
           ) : null}
-          <Toggle label="Orphans" checked={shown.orphans} onChange={(orphans) => change({ orphans })} />
-          <Toggle label="Unresolved" checked={shown.unresolved} onChange={(unresolved) => change({ unresolved })} />
+          <Toggle label={hiddenOrphans > 0 && !shown.orphans ? `Not linked (${hiddenOrphans})` : "Not linked"} checked={shown.orphans} onChange={(orphans) => change({ orphans })} />
+          <Toggle label="Missing documents" checked={shown.unresolved} onChange={(unresolved) => change({ unresolved })} />
         </div>}
       </div>
+      {filters.view === "graph" && explicitView ? <p className="text-caption text-kh-text-muted sm:hidden">The graph is dense on a phone. Pinch to zoom, or <Link className="kh-focus-ring inline-flex min-h-6 items-center rounded-sm text-kh-link underline underline-offset-2" href={`${pathname}${graphQuery({ ...filters, view: "list" })}`}>Use the list</Link> for a readable list.</p> : null}
       {noDocuments ? null : <>
       <div className="flex min-h-6 items-center justify-between gap-3" aria-label="Graph filter status">
           <p className="text-caption tabular-nums text-kh-text-muted" data-graph-summary>
-            {total.documents} {total.documents === 1 ? "document" : "documents"} · {total.edges} {total.edges === 1 ? "link" : "links"}
+            {hiddenOrphans > 0 ? <>Showing {shownDocuments} of {total.documents} documents · {total.edges} {total.edges === 1 ? "link" : "links"} · {hiddenOrphans} without links hidden</> : <>{total.documents} {total.documents === 1 ? "document" : "documents"} · {total.edges} {total.edges === 1 ? "link" : "links"}</>}
           </p>
         <div className="flex shrink-0 items-center gap-2">
           {agentContextHref ? <Link href={agentContextHref} prefetch={false} aria-label="Copy for Agent with nearby documents" className={buttonClasses({ variant: "ghost", size: "sm" })}>Copy for Agent</Link> : null}
           {query ? <Button variant="ghost" size="sm" onClick={() => setQuery("")}>Clear find</Button> : null}
-          {shown.sourceId || !shown.orphans || shown.unresolved ? <Button variant="ghost" size="sm" onClick={() => change({sourceId:null,orphans:true,unresolved:false,focusId:null})}>Reset</Button> : null}
+          {shown.sourceId || (!shown.orphans && hiddenOrphans === 0) || shown.unresolved ? <Button variant="ghost" size="sm" onClick={() => change({sourceId:null,orphans:true,unresolved:false,focusId:null})}>Reset</Button> : null}
         </div>
       </div>
-      <p id={findHelpId} data-graph-find-help className="text-caption text-kh-text-muted" role="status">{query.trim() ? `${matches} ${matches === 1 ? "match" : "matches"} · ` : ""}{filters.view === "list" ? "Find filters the rows below." : "Find highlights matching nodes; other nodes remain visible."}</p>
-      <details className="text-caption text-kh-text-muted"><summary className="kh-focus-ring inline-flex min-h-6 w-fit cursor-pointer items-center rounded-md">About graph filters</summary><p className="mt-2">Orphans have no links. Unresolved targets have no saved document.</p></details>
+      <p id={findHelpId} data-graph-find-help className="sr-only" role="status">{query.trim() ? `${matches} ${matches === 1 ? "match" : "matches"} · ` : ""}{filters.view === "list" ? "Find filters the rows below." : "Find highlights matching nodes; other nodes remain visible."}</p>
+      <details className="text-caption text-kh-text-muted"><summary className="kh-focus-ring inline-flex min-h-6 w-fit cursor-pointer items-center rounded-md">About graph filters</summary><p className="mt-2">Not linked documents have no links. Missing documents are link targets with no saved document.</p></details>
       </>}
       <LinkIndexNote stale={staleDocuments} />
       {truncated ? (
@@ -197,6 +206,16 @@ export function GraphExplorer({
           <div className="min-h-0 overflow-y-auto">
             <GraphList data={data} query={query} />
           </div>
+        ) : !explicitView ? (
+          <>
+            <div className="h-full overflow-y-auto sm:hidden">
+              <p className="border-b border-kh-border px-3 py-2 text-caption text-kh-text-muted">Showing the list on this screen. <Link className="kh-focus-ring inline-flex min-h-6 items-center rounded-sm text-kh-link underline underline-offset-2" href={`${pathname}${graphQuery({ ...filters, view: "graph" }, true)}`}>Open the graph</Link>.</p>
+              <GraphList data={data} query={query} />
+            </div>
+            <div className="hidden h-full sm:block">
+              <GraphCanvas data={data} focusId={filters.focusId} query={query} ariaLabel={summary} />
+            </div>
+          </>
         ) : data.edges.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center px-6 text-center" data-graph-empty>
             <p className="text-title font-semibold text-kh-text">No links between documents yet</p>

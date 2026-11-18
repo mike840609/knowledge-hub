@@ -4,7 +4,7 @@ import {personalProfileRequest} from "@/server/personal-profile";
 import {profilePeriod} from "@/modules/personal/application/personal-profile-service";
 import {PageHeader} from "@/components/shell/page-header";
 import {buttonClasses} from "@/components/ui/button";
-const titles:Record<string,string>={all:"Knowledge documents",synced:"Synced documents",notes:"Personal notes",favorites:"Favorites",unread:"Unread updates",archived:"Archived documents",added:"Recently added",updated:"Recently updated","recent-archived":"Recently archived"};
+const titles:Record<string,string>={all:"Knowledge documents",synced:"Synced documents",notes:"Personal notes",favorites:"Favorites",unread:"Changed since you last read",archived:"Archived documents",added:"Recently added",updated:"Recently updated","recent-archived":"Recently archived"};
 export const dynamic="force-dynamic";
 export default async function ProfileArticlesPage({params,searchParams}:{params:Promise<{workspaceId:string}>;searchParams:Promise<{filter?:string;days?:string;after?:string}>}){
  const {workspaceId}=await params,q=await searchParams,filter=q.filter??"all";

@@ -1,10 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { CheckCheck, MessageSquareText, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { useInboxUnread } from "@/components/shell/use-inbox-unread";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { filterInboxDiscussions, mergeInboxDiscussions, sortInboxDiscussions, type InboxDiscussionView, type InboxKindFilter, type InboxPage, type InboxStatusFilter } from "@/modules/knowledge/domain/inbox-discussion";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
 import { governanceFailure, governanceRequest } from "@/components/workspaces/governance-error";
@@ -425,7 +426,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
   } />;
   const errorLine = error && <p role="alert" className="text-body-sm text-kh-danger">{error}</p>;
   const list = <>
-    <InboxFilters kind={kind} status={status} unread={unread} sticky={split}
+    <InboxFilters kind={kind} status={status} unread={unread} sticky={split} showRefinements={loading || filtered || discussions.length > 0 || proposals.length > 0 || (defaultView && shared.length > 0)}
       onKindChange={value => applyFilters({ kind: value })}
       onStatusChange={value => applyFilters({ status: value })}
       onUnreadChange={value => applyFilters({ unread: value })} />
@@ -436,6 +437,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
         <MessageSquareText size={20} className="mx-auto mb-2" aria-hidden="true" />
         <p className="text-body font-medium">{empty.title}</p>
         {empty.detail && <p className="mt-1 text-body-sm">{empty.detail}</p>}
+        {!filtered && !unreadOnly && <div className="mt-3 flex justify-center"><Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/knowledge`}>Browse Knowledge</Link></div>}
         {filtered && !unreadOnly && <div className="mt-2 flex justify-center"><Button variant="link" onClick={() => applyFilters(DEFAULT_FILTERS)}>Clear filters</Button></div>}
       </div>
     ) : <ul aria-label="Inbox discussions" className="divide-y divide-kh-border" onKeyDown={step}>
@@ -455,15 +457,19 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
   </>;
 
   // The wrapper is measured; it is the same box in both layouts.
-  return <div ref={ref} className="w-full">{!split ? <main className="kh-page space-y-5 pb-6">
+  // An empty Inbox has nothing for the reading pane: splitting it would print
+  // the same empty state twice across the width. Keep one column until there
+  // is something to read.
+  const nothingToRead = loading || (discussions.length === 0 && proposals.length === 0 && (!defaultView || shared.length === 0) && !selected);
+  return <div ref={ref} className="w-full">{!split || nothingToRead ? <div className="kh-page-wide space-y-5 pb-6">
     {header}
     <p className="text-body-sm text-kh-text-muted">{ABOUT}</p>
     {errorLine}
     {list}
-  </main>
+  </div>
   // Both columns are the window's height and scroll on their own; each opens on a 48px line, as the rail,
   // the explorer and a document do, so the Inbox's header and the document's title share one top edge.
-  : <main className="grid h-dvh w-full grid-cols-[25rem_minmax(0,1fr)]">
+  : <div className="grid h-dvh w-full grid-cols-[25rem_minmax(0,1fr)]">
     <div className="flex min-h-0 flex-col border-r border-kh-border">
       <div className="space-y-2 px-6">{header}{errorLine}</div>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 pb-6">{list}</div>
@@ -477,5 +483,5 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
           <p className="mt-1 max-w-measure text-body-sm">{ABOUT}</p>
         </div>}
     </div>
-  </main>}</div>;
+  </div>}</div>;
 }

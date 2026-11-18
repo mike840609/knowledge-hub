@@ -1,16 +1,18 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, vi, afterEach } from "vitest";
+import { beforeEach, expect, it, vi, afterEach } from "vitest";
 import { ShareManagementView } from "@/components/knowledge/share-management-view";
 import type { ManagedShareLink } from "@/modules/knowledge/domain/share-management";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
-vi.mock("@/components/ui/toast", () => ({ useToast: () => vi.fn() }));
+const toast = vi.hoisted(() => vi.fn());
+vi.mock("@/components/ui/toast", () => ({ useToast: () => toast }));
 vi.mock("@/components/shell/use-workspace-authorization", () => ({ requestWorkspaceAccessCheck: vi.fn() }));
 // The empty state with no documents offers the shell's start actions, which need the Workspace shell.
 vi.mock("@/components/knowledge/workspace-content-actions", () => ({ WorkspaceContentActions: () => null }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 afterEach(() => vi.unstubAllGlobals());
+beforeEach(() => toast.mockReset());
 it("requires confirmation before revoke and disables copying after success", async () => {
   // The list now fetches unread counts on mount; only revoke POSTs are mutations.
   let posts = 0;
@@ -45,7 +47,7 @@ it("selects the full share URL when clipboard writing is denied", async () => {
     await act(async () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(b => b.textContent === "Copy link")!.click());
     const field = host.querySelector<HTMLInputElement>('input[readonly]')!;
     expect(field.value).toBe(`${window.location.origin}/s/token`); expect(document.activeElement).toBe(field);
-    expect(field.selectionEnd).toBe(field.value.length); expect(host.querySelector('[role="alert"]')?.textContent).toContain("copy it manually");
+    expect(field.selectionEnd).toBe(field.value.length); expect(toast).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("copy it manually"), tone: "danger" }));
   } finally { await act(async () => root.unmount()); host.remove(); }
 });
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type Ref, type ReactNode } from "react";
-import { LockKeyhole, Maximize2, Minimize2, MessageSquare, MoreHorizontal, PanelRight, Star } from "lucide-react";
+import { ChevronLeft, LockKeyhole, Maximize2, Minimize2, MessageSquare, MoreHorizontal, PanelRight, Star } from "lucide-react";
 import { toggleFullWidth, useFullWidth } from "./use-full-width";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { ActionMenuItems } from "@/components/actions/action-menu";
@@ -98,6 +98,9 @@ export function DocumentHeader({
 
   // The owner's discussions, when the document has any (`review-entry.tsx`).
   const review = useReviewEntry();
+  // A phone gets one way back, not four truncated crumbs beside the actions.
+  const mobileBack = [...breadcrumb].reverse().find((segment): segment is DocumentBreadcrumbSegment & { href: string } => Boolean(segment.href));
+  const mobileBackHref = mobileBack?.href.replace(/\/knowledge\/[^/]+$/, "/knowledge") ?? null;
   return (
     <>
       {/* The location › title line and its actions stay pinned to the top of the pane on a wide screen while
@@ -106,7 +109,13 @@ export function DocumentHeader({
           document rather than by the header's own height. */}
       <div data-pinned={pinned || undefined} className="z-10 bg-kh-bg lg:sticky lg:top-0">
       <div className="kh-reading-column flex min-h-12 min-w-0 items-center justify-between gap-3 py-2">
-        <DocumentBreadcrumb segments={breadcrumb} />
+        <div className="min-w-0 flex-1">
+          <div className="hidden sm:block"><DocumentBreadcrumb segments={breadcrumb} /></div>
+          {mobileBackHref ? <Link href={mobileBackHref} className="kh-focus-ring inline-flex min-h-8 min-w-0 items-center gap-1 rounded-md text-body text-kh-text-muted sm:hidden">
+            <ChevronLeft size={16} aria-hidden="true" />
+            <span className="truncate">Knowledge</span>
+          </Link> : null}
+        </div>
         {/* Icon-only so the header stays light; each keeps its name as
             aria-label and tooltip. Details draws the same glyph as the
             narrow topbar's copy of this button. */}

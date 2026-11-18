@@ -29,25 +29,40 @@ export default async function WorkspaceGraphPage({
   const sourceParam = firstSearchParam(query?.source);
   const focusParam = firstSearchParam(query?.focus);
 
-  const [shell, graph] = await Promise.all([
+  const orphanParam = firstSearchParam(query?.orphans);
+  const unresolved = firstSearchParam(query?.unresolved) === "1";
+  const ORPHAN_SHELF_DEFAULT_LIMIT = 24;
+  const [shell, graphAll] = await Promise.all([
     getWorkspaceShellModel(workspaceId),
     getWorkspaceGraphModel(workspaceId, {
       sourceId: sourceParam || null,
-      includeOrphans: firstSearchParam(query?.orphans) !== "0",
-      includeUnresolved: firstSearchParam(query?.unresolved) === "1",
+      includeOrphans: true,
+      includeUnresolved: unresolved,
     }),
   ]);
-  if (!shell || !graph) {
+  if (!shell || !graphAll) {
     return <StatusMessage title="Not found or no access" description="This content does not exist or you do not have access to it." />;
   }
+  // Count the shelf even when it is filtered out: the toggle and the summary
+  // must say how many are hidden, whether the default or the reader hid them.
+  const orphanCount = graphAll.nodes.filter((node) => node.kind === "DOCUMENT" && node.inDegree + node.outDegree === 0).length;
+  const hideOrphansByDefault = orphanParam === undefined && orphanCount > ORPHAN_SHELF_DEFAULT_LIMIT;
+  const orphans = orphanParam === "1" || (orphanParam === undefined && !hideOrphansByDefault);
+  const graph = orphans
+    ? graphAll
+    : await getWorkspaceGraphModel(workspaceId, { sourceId: sourceParam || null, includeOrphans: false, includeUnresolved: unresolved });
+  if (!graph) {
+    return <StatusMessage title="Not found or no access" description="This content does not exist or you do not have access to it." />;
+  }
+  const hiddenOrphans = orphans ? 0 : orphanCount;
 
   // Whether an unresolved node offers to make its document is the reader's capability; what happens when it is followed is the create request's.
   const canWrite = shell.access.actions.canWrite === true;
   const data = graphViewFrom(workspaceId, graph, (node) => createHrefForNode(workspaceId, node, canWrite));
   const filters: GraphFilters = {
     sourceId: sourceParam && graph.sources.some((source) => source.id === sourceParam) ? sourceParam : null,
-    orphans: firstSearchParam(query?.orphans) !== "0",
-    unresolved: firstSearchParam(query?.unresolved) === "1",
+    orphans,
+    unresolved,
     view: firstSearchParam(query?.view) === "list" ? "list" : "graph",
     // Only a node that is on screen can be emphasised.
     focusId: focusParam && data.nodes.some((node) => node.id === focusParam) ? focusParam : null,
@@ -55,7 +70,7 @@ export default async function WorkspaceGraphPage({
 
   return (
     <div className="flex h-full min-h-0 flex-col pb-4">
-      <div className="kh-page shrink-0"><PageHeader location={shell.workspace.name} locationHref={`/w/${workspaceId}/knowledge`} title="Graph" /></div>
+      <div className="kh-page-wide shrink-0"><PageHeader location={shell.workspace.name} locationHref={`/w/${workspaceId}/knowledge`} title="Graph" /></div>
       <div className="kh-page-wide mt-3 min-h-0 flex-1">
         <GraphExplorer
           workspaceId={workspaceId}
@@ -65,6 +80,8 @@ export default async function WorkspaceGraphPage({
           total={graph.total}
           truncated={graph.truncated}
           staleDocuments={graph.index.stale}
+          hiddenOrphans={hiddenOrphans}
+          explicitView={firstSearchParam(query?.view) === "list" || firstSearchParam(query?.view) === "graph"}
           // The focus's own neighbourhood, whatever the filters show (neighbourhood spec §5.1).
           agentContextHref={graphFocusContextHref({
             workspaceId,

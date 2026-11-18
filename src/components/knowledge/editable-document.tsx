@@ -461,11 +461,15 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   // The browser tab names the page as it is being written, as Notion's does; the app's name when it goes.
   useEffect(() => {
     const app = document.title;
-    const named = `${displayTitle} · ${app}`;
+    // The server names the tab `<document> · Knowledge Hub`; keep the app
+    // suffix and replace only the document part as the title is edited.
+    const prefix = savedTitle ? `${savedTitle} · ` : "";
+    const suffix = prefix && app.startsWith(prefix) ? app.slice(prefix.length) : app;
+    const named = `${displayTitle} · ${suffix}`;
     document.title = named;
     // Only if the tab is still ours: a page the reader has gone to may have named it already.
     return () => { if (document.title === named) document.title = app; };
-  }, [displayTitle]);
+  }, [displayTitle, savedTitle]);
   // Counted when the Markdown changes, not on every render.
   const words = useMemo(() => countWords(content.markdown), [content.markdown]);
   /** Enter, or ArrowDown on the last line, in the title: on to the start of the content (never a line break in the title). */
@@ -556,7 +560,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   }
   const Article = "article";
   // With the page's actions in the pinned line rather than on a row of its own above the title.
-  const markdownToggle = <Button type="button" variant="ghost" aria-label="Markdown source" aria-pressed={source || failed} data-pressed={source || failed} disabled={!loaded || failed} className="max-sm:px-2 data-[pressed=true]:bg-kh-bg-hover data-[pressed=true]:text-kh-text" onClick={() => {
+  const markdownToggle = <Button type="button" variant="ghost" aria-label="Markdown source" title={!loaded ? "Markdown source is available once the editor loads" : failed ? "Markdown source is unavailable in this recovery state" : source ? "Show the rendered editor" : "Show Markdown source"} aria-pressed={source || failed} data-pressed={source || failed} disabled={!loaded || failed} className="max-sm:px-2 data-[pressed=true]:bg-kh-bg-hover data-[pressed=true]:text-kh-text" onClick={() => {
     flushEditor();
     if (!source) sourceRef.current = true;
     setSource(value => !value);
@@ -634,7 +638,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     contentOwnsTitle={markdownOpensWithHeading(content.markdown)}
     wordCount={words}
     editHint={showEditHint ? "Click anywhere in the text to edit." : undefined}
-    editorActions={<><AutosaveIndicator state={status} attention={attention} /><Button type="button" variant="ghost" aria-label="Rename document" title="Rename document" disabled={!editable || !!recovery || (!ready && !source && !failed)} onClick={focusTitle}><Pencil className="h-4 w-4" aria-hidden="true" /></Button>{markdownToggle}</>}
+    editorActions={<><AutosaveIndicator state={status} attention={attention} /><Button type="button" variant="ghost" aria-label="Rename document" title={!editable ? "This document cannot be renamed" : !ready && !source && !failed ? "Rename is available once the editor loads" : "Rename document"} disabled={!editable || !!recovery || (!ready && !source && !failed)} onClick={focusTitle}><Pencil className="h-4 w-4" aria-hidden="true" /></Button>{markdownToggle}</>}
     titleControl={resolved.source !== "H1" ? <textarea ref={titleInput} name="title" aria-label="Title" value={content.title} disabled={!editable} maxLength={512} rows={1}
       onChange={event => change({ ...queue.current!.current, title: event.target.value })}
       onKeyDown={event => {

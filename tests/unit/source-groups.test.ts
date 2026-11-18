@@ -29,7 +29,7 @@ describe("groupSourceItems", () => {
     ]);
 
     expect(groups.map((group) => group.key)).toEqual(["hub", "synced"]);
-    expect(groups[0]?.label).toBe("Managed in Hub");
+    expect(groups[0]?.label).toBe("Managed in Knowledge Hub");
     expect(groups[0]?.items.map((entry) => entry.source.name)).toEqual(["Notes", "Uploads"]);
     expect(groups[1]?.label).toBe("Synced folders");
     expect(groups[1]?.items.map((entry) => entry.source.name)).toEqual(["Vendor"]);

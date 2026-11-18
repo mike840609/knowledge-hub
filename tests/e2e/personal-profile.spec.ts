@@ -40,7 +40,7 @@ test("personal profile counts, detail links, themes and mobile layout",async({pa
  expect(await detailCount("favorites")).toBe(baseline.favorites+1);
  await expect(page.getByRole("heading",{name:"Favorites",exact:true,level:1})).toBeVisible();await expect(page.getByRole("link",{name:/Dashboard favorite/})).toBeVisible();
  expect(await detailCount("unread")).toBe(baseline.unread+8);
- await expect(page.getByRole("heading",{name:"Unread updates",exact:true,level:1})).toBeVisible();
+ await expect(page.getByRole("heading",{name:"Changed since you last read",exact:true,level:1})).toBeVisible();
  const marked=page.waitForResponse(r=>r.url().endsWith("/read")&&r.request().method()==="POST");
  await page.getByRole("link",{name:/Team guide.*Work Wiki/}).click();expect((await marked).status()).toBe(204);
  const articleHref=page.url();

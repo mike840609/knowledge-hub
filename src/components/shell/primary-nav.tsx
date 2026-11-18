@@ -59,7 +59,7 @@ export function PrimaryNav({
             onClick={onNavigate}
             aria-current={selected ? "page" : undefined}
             aria-label={label ?? name}
-            className={`kh-control flex kh-rail-row items-center rounded-md px-2 kh-rail-text transition kh-focus-ring ${compact ? "relative justify-center" : "gap-2"} ${selected ? "bg-kh-bg-hover font-medium text-kh-text hover:bg-kh-bg-hover" : "text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text"}`}
+            className={`kh-control flex kh-rail-row items-center rounded-md px-2 kh-rail-text transition kh-focus-ring ${compact ? "relative justify-center" : "gap-2"} ${selected ? "bg-kh-bg-hover-strong font-medium text-kh-text hover:bg-kh-bg-hover-strong" : "text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text"}`}
           >
             <Icon size={15} aria-hidden="true" />
             {compact ? null : <span className="min-w-0 flex-1 truncate">{name}</span>}

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Maximize2, Minus, Plus } from "lucide-react";
 import { Tooltip } from "@/components/ui/tooltip";
 import { buttonClasses } from "@/components/ui/button";
-import { adjacency, LABEL_PX, matchesQuery, nodeLabel, selectVisibleLabels, type GraphViewData, type GraphViewNode } from "./graph-model";
+import { adjacency, LABEL_PX, matchesQuery, nodeLabel, selectVisibleLabels, sourceTone, type GraphViewData, type GraphViewNode } from "./graph-model";
 
 type View = { k: number; x: number; y: number };
 const HOME: View = { k: 1, x: 0, y: 0 };
@@ -127,6 +127,8 @@ export function GraphCanvas({
     [emphasised, neighbours],
   );
   const unlinkedCount = useMemo(() => data.nodes.filter((node) => node.kind === "DOCUMENT" && node.inDegree + node.outDegree === 0).length, [data.nodes]);
+  // Stable source order gives each source its own tone; two sources never share one by accident.
+  const sourceNames = useMemo(() => [...new Set(data.nodes.map((node) => node.sourceName).filter((name): name is string => Boolean(name)))].sort(), [data.nodes]);
   const hasUnresolved = useMemo(() => data.nodes.some((node) => node.kind === "UNRESOLVED"), [data.nodes]);
 
   // How many screen pixels one unit of the drawing is, for label size. Measured
@@ -294,8 +296,13 @@ export function GraphCanvas({
             const destination = node.href ?? node.createHref;
             const summary = `${node.title}${unresolved ? (node.createHref ? " (unresolved; click to create it)" : " (unresolved)") : ""}, ${node.inDegree} incoming, ${node.outDegree} outgoing`;
             const accent = !unresolved && (inEmphasis || found);
+            const tone = !unresolved && !accent ? sourceTone(node.sourceName, sourceNames) : undefined;
             const body = (
               <>
+                {/* The drawn dot is small on purpose; the pointer target is not. A
+                    transparent 24px disc keeps every node tappable without making
+                    the drawing heavier. */}
+                <circle cx={node.x} cy={node.y} r={Math.max(node.radius + 6, 16)} fill="transparent" />
                 {isFocus && !unresolved ? <circle cx={node.x} cy={node.y} r={node.radius + 6} className="fill-kh-highlight" /> : null}
                 <circle
                   cx={node.x}
@@ -316,6 +323,7 @@ export function GraphCanvas({
                   className={`transition-colors duration-120 ${
                     unresolved ? "fill-kh-bg stroke-kh-text-muted" : accent ? "fill-kh-primary" : "fill-kh-border-strong"
                   }`}
+                  style={tone ? { fill: tone } : undefined}
                 />
                 {labelSize !== null && visibleLabels.has(node.id) ? (
                   <text
@@ -375,15 +383,17 @@ export function GraphCanvas({
 
       {interactive ? (
         <>
-          <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-3 text-caption text-kh-text-muted">
-            <span className="flex items-center gap-1.5">
-              <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true"><circle cx="4" cy="4" r="3.5" className="fill-kh-border-strong" /></svg>
-              Document
+          <div className="pointer-events-none absolute bottom-14 left-3 flex items-center gap-3 text-caption text-kh-text-muted sm:bottom-3">
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {sourceNames.slice(0, 5).map((name) => <span key={name} className="flex items-center gap-1.5">
+                <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true"><circle cx="4" cy="4" r="3.5" style={{ fill: sourceTone(name, sourceNames) }} /></svg>
+                {name}
+              </span>)}
             </span>
             {hasUnresolved ? (
               <span className="flex items-center gap-1.5">
                 <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true"><circle cx="4" cy="4" r="3" strokeDasharray="2 1.5" strokeWidth="1.25" className="fill-kh-bg stroke-kh-text-muted" /></svg>
-                Unresolved
+                Missing document
               </span>
             ) : null}
             <span className="hidden text-kh-text-muted sm:inline">Scroll to zoom · drag to pan</span>

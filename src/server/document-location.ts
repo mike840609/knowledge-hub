@@ -9,7 +9,10 @@ export function documentLocation(
   tree: KnowledgeTreeItem[],
   documentId: string,
 ): DocumentBreadcrumbSegment[] {
-  const segments: DocumentBreadcrumbSegment[] = [{ label: sourceName, href: `/w/${workspaceId}/knowledge/${sourceId}` }];
+  const segments: DocumentBreadcrumbSegment[] = [
+    { label: "My Space", href: `/w/${workspaceId}/home` },
+    { label: sourceName, href: `/w/${workspaceId}/knowledge/${sourceId}` },
+  ];
   const byId = new Map(tree.map((item) => [item.id, item]));
   const node = tree.find((item) => item.type === "document" && item.documentId === documentId);
   if (!node) return segments;

@@ -55,6 +55,7 @@
   --kh-syntax-type: #0a6a7d;
   --kh-syntax-variable: #a3283f;
   --kh-syntax-meta: #6e5a00;
+  --kh-chart-track: #e4e7ec;
   --kh-chart-1: #617591;
   --kh-chart-1-hover: #526681;
   --kh-chart-2: #82758c;
@@ -111,6 +112,7 @@
   --kh-syntax-type: #6fd3e0;
   --kh-syntax-variable: #f5989f;
   --kh-syntax-meta: #dcc66e;
+  --kh-chart-track: #33363d;
   --kh-chart-1: #7b8da7;
   --kh-chart-1-hover: #91a2ba;
   --kh-chart-2: #988aa3;
@@ -773,6 +775,10 @@ input[type="search"]::-webkit-search-cancel-button:hover {
    coarse-pointer rule below still lifts it to 40px; a group header keeps its own caption type. */
 :root { --kh-rail-row-height: 32px; }
 :root[data-density="compact"] { --kh-rail-row-height: 28px; }
+/* The document index is a scanning surface, not a rail: compact trims its
+   row padding too, so the density preference changes more than half a pixel. */
+:root[data-density="compact"] .kh-index-row > th,
+:root[data-density="compact"] .kh-index-row > td { padding-top: 6px; padding-bottom: 6px; }
 .kh-rail-row { min-height: var(--kh-rail-row-height); }
 .kh-rail-text {
   font-size: theme("fontSize.body[0]");

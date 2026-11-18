@@ -9,7 +9,7 @@ export function PersonalStatsSummary({workspaceId,counts}:{workspaceId:string;co
     {name:"Knowledge documents",count:counts.articles,href:`${base}/articles?filter=all`},
     {name:"Synced folders",count:counts.folders,href:`${base}/sync?filter=folders`},
     {name:"Favorites",count:counts.favorites,href:`${base}/articles?filter=favorites`},
-    {name:"Unread updates",count:counts.unread,href:`${base}/articles?filter=unread`},
+    {name:"Changed since you last read",count:counts.unread,href:`${base}/articles?filter=unread`},
   ];
   return <section aria-label="Personal statistics" className={`${styles.summary} px-3`}>
     <div className={styles.summaryStats}>

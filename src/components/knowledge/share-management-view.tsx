@@ -102,9 +102,9 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
   }
   async function copy(item: ManagedShareLink) {
     if (await writeLinkToClipboard(sharePath(item))) { toast({ message: "Link copied." }); setError(null); }
-    else { setDetails(item.id); setManualCopy({ id: item.id }); setError({ code: "COPY_FAILED", message: "Clipboard unavailable. The link is selected; copy it manually." }); }
+    else { setDetails(item.id); setManualCopy({ id: item.id }); toast({ message: "Clipboard unavailable. The link is selected; copy it manually.", tone: "danger" }); }
   }
-  return <main className="kh-page pb-6">
+  return <div className="kh-page-wide pb-6">
     <SharesHeader workspaceId={workspaceId} active="mine" discussionsUnread={discussionsUnread} description="Manage links to your documents and folders. An active link opens the latest saved content: for anyone holding it, or, for a link to specific people, only for them after signing in." />
     <form ref={filterForm} action={`/w/${workspaceId}/shares`} method="get" className="mt-4 flex flex-wrap items-center gap-2" aria-label="Filter shares">
       <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-auto">
@@ -121,7 +121,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
     <GovernanceError error={error} />
     {!filterError && model.items.length === 0 ? <EmptyState icon={Share2} illustration={!model.query.q && model.query.page === 1 && (model.query.status === "all" || (model.query.status === "active" && !hasDocuments)) ? <Illustration kind="shares" /> : undefined} title={!model.query.q && model.query.page === 1 && model.query.status === "active" ? "No active share links." : filtered ? "No shares match these filters." : "No share links yet."} description={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? "Clear the filters to see links with other titles or statuses." : hasDocuments ? "Open a document or folder and choose Share to create a link." : "Links you share to your documents and folders appear here."} action={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/shares?status=all`}>Show all shares</Link> : hasDocuments ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/knowledge`}>Browse documents</Link> : <WorkspaceContentActions workspaceId={workspaceId} />} /> : null}
     {model.items.length > 0 ? <p role="status" className="mt-3 text-caption text-kh-text-muted">{model.items.length} {model.items.length === 1 ? "share" : "shares"}{model.query.page > 1 || model.hasNext ? " on this page" : ""}</p> : null}
-    {model.items.length > 0 ? <div aria-hidden="true" className="mt-4 hidden grid-cols-[minmax(0,1fr)_6rem_7rem_4rem_6rem] items-center gap-3 border-b border-kh-border px-3 py-2 text-caption text-kh-text-muted md:grid"><span>Shared item / link</span><span>Status</span><span>Expires</span><span className="text-right">Views</span><span /></div> : null}
+    {model.items.length > 0 ? <div aria-hidden="true" className="mt-4 hidden grid-cols-[minmax(0,1fr)_6rem_7rem_4rem_6rem] items-center gap-3 border-b border-kh-border px-3 py-2 text-caption text-kh-text-muted md:grid"><span>Shared item / link</span><span>Status</span><span>Expires</span><span className="text-right">Views</span><span>Link</span></div> : null}
     <ul aria-label="Share links" onKeyDown={navigateListRows} className="mt-4 space-y-2 md:mt-0 md:space-y-0">
       {model.items.map(item => {
         const status = revoked.has(item.id) ? "revoked" : item.status;
@@ -134,11 +134,11 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
         const notice = item.kind !== "DOCUMENT"
           ? unreadByLink.get(item.id)
           : firstLinkByDocument.get(item.documentId) === item.id ? unreadByDocument.get(item.documentId) : undefined;
-        return <li key={item.id} className="group rounded-md border border-kh-border bg-kh-bg p-3 hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover md:rounded-none md:border-x-0 md:border-t-0 md:py-0.5">
+        return <li key={item.id} className="group rounded-md border border-kh-border bg-kh-bg p-3 hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover md:rounded-none md:border-x-0 md:border-t-0 md:py-1.5">
           <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 md:grid-cols-[minmax(0,1fr)_6rem_7rem_4rem_6rem] md:gap-y-0">
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
-                <Link data-list-row className="kh-focus-ring flex min-w-0 flex-1 items-center gap-1.5 rounded-md text-body font-medium text-kh-text hover:text-kh-link" href={item.kind !== "DOCUMENT" ? `/w/${workspaceId}/knowledge/${item.sourceId}` : `/w/${workspaceId}/knowledge/${item.sourceId}/${item.documentId}?includeArchived=true`}>
+                <Link data-list-row className="kh-focus-ring flex min-h-6 min-w-0 flex-1 items-center gap-1.5 rounded-md text-body font-medium text-kh-text hover:text-kh-link" href={item.kind !== "DOCUMENT" ? `/w/${workspaceId}/knowledge/${item.sourceId}` : `/w/${workspaceId}/knowledge/${item.sourceId}/${item.documentId}?includeArchived=true`}>
                   {source ? <><Database size={15} aria-hidden="true" className="shrink-0 text-kh-text-muted" /><span className="sr-only">Source </span></> : folder ? <><Folder size={15} aria-hidden="true" className="shrink-0 text-kh-text-muted" /><span className="sr-only">Folder </span></> : null}
                   <span className="min-w-0 truncate">{item.title}</span>
                 </Link>
@@ -177,5 +177,5 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
     </ul>
     <ConfirmDialog open={!!confirmedItem} onOpenChange={open => { if (!open) setConfirming(null); }} title="Revoke share link?" description={<>Revoke “{confirmedItem?.label ?? "Untitled link"}” for {confirmedItem?.kind === "FOLDER" ? "folder " : confirmedItem?.kind === "SOURCE" ? "source " : ""}{confirmedItem?.title}? Anyone holding this link will lose access. This cannot be undone.</>} cancelLabel="Keep" confirmLabel="Confirm revoke" onConfirm={() => { if (confirming) void revoke(confirming); }} />
     {model.query.page > 1 || model.hasNext ? <nav aria-label="Share pages" className="mt-4 flex items-center gap-4 text-body"><span className="text-kh-text-muted">Page {model.query.page}</span>{model.query.page > 1 ? <Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page - 1)}>Previous</Link> : null}{model.hasNext ? <Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page + 1)}>Next</Link> : null}</nav> : null}
-  </main>;
+  </div>;
 }

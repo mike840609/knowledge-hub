@@ -78,7 +78,7 @@ test.describe("the workspace graph", () => {
     // The missing target is hidden until asked for.
     await expect(ghost(page, missing)).toHaveCount(0);
 
-    await page.getByLabel("Unresolved").check();
+    await page.getByLabel("Missing documents").check();
     await expect(page).toHaveURL(/unresolved=1/, ROUND_TRIP);
     await expect(ghost(page, missing)).toHaveAttribute("aria-label", `${missing} (unresolved; click to create it), 1 incoming, 0 outgoing`, ROUND_TRIP);
     await expect(node(page, a)).toHaveAttribute("aria-label", `${a}, 1 incoming, 2 outgoing`, ROUND_TRIP);
@@ -108,7 +108,7 @@ test.describe("the workspace graph", () => {
     const row = page.getByRole("row", { name: new RegExp(a) });
     await expect(row.getByRole("cell").nth(1)).toHaveText("1");
     await expect(row.getByRole("cell").nth(2)).toHaveText("2");
-    await expect(page.getByRole("row", { name: new RegExp(`${missing}.*Unresolved`) })).toBeVisible();
+    await expect(page.getByRole("row", { name: new RegExp(`${missing}.*Missing document`) })).toBeVisible();
 
     // A node is a real link: it opens its document.
     await page.getByRole("link", { name: "Graph", exact: true }).first().click();

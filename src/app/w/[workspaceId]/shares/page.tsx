@@ -7,6 +7,7 @@ import { FollowedDiscussionsView } from "@/components/knowledge/followed-discuss
 import { filterFollowedDiscussions, parseDiscussionFilter } from "@/modules/knowledge/domain/review-follow";
 import { DomainError, ValidationError } from "@/modules/knowledge/domain/errors";
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Shares" };
 export default async function SharesPage({ params, searchParams }: { params: Promise<{ workspaceId: string }>; searchParams: Promise<{ tab?: SearchParamValue;q?: SearchParamValue; status?: SearchParamValue; page?: SearchParamValue }> }) {
   const { workspaceId }=await params, query=await searchParams;
   const s=applicationServices(),{caller}=await s.establishTrustedCaller();

@@ -42,20 +42,19 @@ test("freshness preference persists and reminders link to source actions",async(
  await page.goto(`/w/${ws}/sources`);
  const region=page.getByRole("region",{name:"Knowledge freshness"});
  await region.getByText("Freshness reminder settings", {exact:true}).click();
- // Other full-suite tests may leave pending or old folders in the shared workspace.
- expect(await region.getByRole("link",{name:"Review preview"}).count()).toBeGreaterThan(1);
- const row=(name:string)=>region.getByRole("listitem").filter({has:page.locator(`a[href="/w/${ws}/sources/${sources[name]}"]`)});
- await expect(row("Older folder").getByText("Check for folder updates",{exact:false})).toBeVisible();
- await expect(row("Failed folder").getByText("Latest sync failed",{exact:false})).toBeVisible();
- await expect(row("Never imported folder").getByText("Never imported",{exact:true})).toBeVisible();
+ // Freshness is a state of the source row; there is no second list to duplicate it.
+ const row=(name:string)=>page.getByRole("listitem").filter({has:page.locator(`a[href="/w/${ws}/sources/${sources[name]}"]`)});
+ await expect(row("Older folder").getByRole("link",{name:"Update from folder",exact:true})).toBeVisible();
+ await expect(row("Failed folder").getByText("Failed",{exact:true})).toBeVisible();
+ await expect(row("Never imported folder").getByText("Never synced",{exact:true})).toBeVisible();
  await expect(row("Pending folder").getByRole("link",{name:"Review preview"})).toHaveAttribute("href",`/w/${ws}/sources/imports/${pending}`);
  await expect(row("Failed folder").getByRole("link",{name:"Retry import"})).toHaveAttribute("href",`/w/${ws}/sources/${sources["Failed folder"]}/update`);
  const saved=page.waitForResponse(r=>r.url().endsWith("/personal/freshness")&&r.request().method()==="PUT");
  await chooseOption(region.getByLabel("Freshness threshold"), "30");expect((await saved).ok()).toBe(true);
- await expect(row("Older folder").getByText("Check for folder updates",{exact:false})).toHaveCount(0);
+ await expect(row("Older folder").getByRole("link",{name:"Update from folder",exact:true})).toHaveCount(0);
  await page.reload();await region.getByText("Freshness reminder settings", {exact:true}).click();await expectChosen(region.getByLabel("Freshness threshold"), "30");
  const changed=page.waitForResponse(r=>r.url().endsWith("/personal/freshness")&&r.request().method()==="PUT");await chooseOption(region.getByLabel("Freshness threshold"), "7");expect((await changed).ok()).toBe(true);
- await expect(row("Older folder").getByText("Check for folder updates",{exact:false})).toBeVisible();
+ await expect(row("Older folder").getByRole("link",{name:"Update from folder",exact:true})).toBeVisible();
  await page.goto(`/w/${ws}/home`);
  await expect(page.getByRole("region",{name:"Knowledge freshness"})).toHaveCount(0);
  await expect(page.getByRole("region",{name:"Needs attention",exact:true}).getByRole("link",{name:/sources need attention/})).toHaveAttribute("href",`/w/${ws}/sources`);

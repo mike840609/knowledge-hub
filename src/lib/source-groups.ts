@@ -1,7 +1,7 @@
 import type { SourceListItemModel } from "@/server/source-read";
 
 export const SOURCE_GROUP_LABELS = {
-  hub: "Managed in Hub",
+  hub: "Managed in Knowledge Hub",
   synced: "Synced folders",
 } as const;
 

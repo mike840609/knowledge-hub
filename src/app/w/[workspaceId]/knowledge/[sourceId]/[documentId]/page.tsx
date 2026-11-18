@@ -13,6 +13,21 @@ import { renderedLinksFrom } from "@/components/knowledge/rendered-links";
 import { StatusMessage } from "@/components/ui/status-message";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { extractOutline } from "@/shared/markdown/outline";
+import { applicationServices } from "@/server/composition";
+
+/** The browser tab names the document, not the app: several notes are often open at once. */
+export async function generateMetadata({ params }: { params: Promise<{ workspaceId: string; sourceId: string; documentId: string }> }) {
+  const { workspaceId, sourceId, documentId } = await params;
+  try {
+    const services = applicationServices();
+    const { caller } = await services.establishTrustedCaller();
+    const view = await services.queries.getDocument(caller, documentId);
+    const title = view.workspaceId === workspaceId && view.sourceId === sourceId ? view.currentRevision.title : "Knowledge";
+    return { title };
+  } catch {
+    return { title: "Knowledge" };
+  }
+}
 
 export default async function KnowledgeDocumentPage({
   params,

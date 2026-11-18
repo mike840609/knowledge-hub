@@ -3,6 +3,7 @@ import { applicationServices } from "@/server/composition";
 import { InboxActivityView } from "@/components/knowledge/inbox-activity-view";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Inbox" };
 
 export default async function InboxPage({ params }: { params: Promise<{ workspaceId: string }> }) {
   const { workspaceId } = await params;

@@ -242,9 +242,10 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
               aria-expanded={filterOpen}
               aria-controls={filterOpen ? "tree-filter" : undefined}
               onClick={() => filterOpen ? closeFilter() : setFilterOpen(true)}
-              className={buttonClasses({ variant: "ghost", icon: true, className: "aria-expanded:bg-kh-bg-hover aria-expanded:text-kh-text" })}
+              className={buttonClasses({ variant: "ghost", size: "sm", className: "aria-expanded:bg-kh-bg-hover aria-expanded:text-kh-text" })}
             >
-              <ListFilter size={16} aria-hidden="true" />
+              <ListFilter size={15} aria-hidden="true" />
+              <span className="hidden sm:inline">Filter</span>
             </button>
           </Tooltip>
           <MenuRoot>

@@ -237,7 +237,8 @@ describe("C on Home opens a new note", () => {
   // ellipsis says nothing a button label needs to say.
   it("names the whole visible label of the search field, ⌘K included", () => {
     const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} />);
-    const field = html.slice(html.indexOf("data-home-search"), html.indexOf("Create document"));
+    const fromSearch = html.slice(html.indexOf("data-home-search"));
+    const field = fromSearch.slice(0, fromSearch.indexOf("</button>") + "</button>".length);
     // A label whose name skips the badge reads as a different label to a speech user.
     expect(field).toContain('aria-label="Search articles and notes ⌘K"');
     expect(field).toContain('aria-keyshortcuts="Meta+K Control+K"');

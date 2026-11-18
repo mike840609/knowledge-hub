@@ -13,14 +13,21 @@ describe("documentLocation", () => {
   it("leads from the source through every folder, outermost first, and stops before the document", () => {
     const tree = [folder("f1", "HR", null), folder("f2", "Leave", "f1"), doc("n1", "d1", "f2")];
     expect(documentLocation("w", "s", "Notes", tree, "d1")).toEqual([
+      { label: "My Space", href: "/w/w/home" },
       { label: "Notes", href: "/w/w/knowledge/s" },
       { label: "HR" },
       { label: "Leave" },
     ]);
   });
 
-  it("is just the source for a document at the root or not in the tree", () => {
-    expect(documentLocation("w", "s", "Notes", [doc("n1", "d1", null)], "d1")).toEqual([{ label: "Notes", href: "/w/w/knowledge/s" }]);
-    expect(documentLocation("w", "s", "Notes", [], "missing")).toEqual([{ label: "Notes", href: "/w/w/knowledge/s" }]);
+  it("starts at the workspace and the source for a document at the root or not in the tree", () => {
+    expect(documentLocation("w", "s", "Notes", [doc("n1", "d1", null)], "d1")).toEqual([
+      { label: "My Space", href: "/w/w/home" },
+      { label: "Notes", href: "/w/w/knowledge/s" },
+    ]);
+    expect(documentLocation("w", "s", "Notes", [], "missing")).toEqual([
+      { label: "My Space", href: "/w/w/home" },
+      { label: "Notes", href: "/w/w/knowledge/s" },
+    ]);
   });
 });

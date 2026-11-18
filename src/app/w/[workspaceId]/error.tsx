@@ -12,16 +12,19 @@ import { StatusMessage } from "@/components/ui/status-message";
  * Rendering inside the workspace layout means the shell and the sidebar
  * survive the error, so the reader can navigate away rather than reload.
  */
-export default function WorkspaceError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
+export default function WorkspaceError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const retry = useRouteRetry(reset);
   return (
     <StatusMessage
       title="This page could not be loaded"
-      description="Check your connection and try again. If the problem continues, return to Knowledge and try opening another document."
+      description={<>
+        The server could not load this page. Nothing was changed, so retrying is safe.
+        {error.digest ? <> Reference <code className="rounded-sm bg-kh-bg-subtle px-1 py-0.5 font-mono text-caption text-kh-text-secondary">{error.digest}</code> if you need to report this.</> : null}
+      </>}
       action={<>
-        <Button variant="secondary" size="lg" onClick={retry}>Retry this page</Button>
-        <Link className={buttonClasses({ variant: "ghost", size: "lg" })} href={`/w/${encodeURIComponent(workspaceId)}/knowledge`}>Return to Knowledge</Link>
+        <Button size="lg" onClick={retry}>Retry this page</Button>
+        <Link className={buttonClasses({ variant: "secondary", size: "lg" })} href={`/w/${encodeURIComponent(workspaceId)}/knowledge`}>Return to Knowledge</Link>
       </>}
     />
   );

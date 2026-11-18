@@ -22,18 +22,18 @@ export default async function SourceKnowledgePage({
   const model = await getKnowledgeExplorerModel(workspaceId, sourceId, { includeArchived });
   if (!model) {
     return (
-      <main className="flex min-h-full flex-col justify-center">
+      <div className="flex min-h-full flex-col justify-center">
         <StatusMessage
           title="Not found or no access"
           description="This content does not exist or you do not have access to it."
         />
-      </main>
+      </div>
     );
   }
   const first = findFirstReadableDocument(model.tree);
   if (first) redirect(`/w/${workspaceId}/knowledge/${sourceId}/${first.documentId}${archivedSuffix}`);
   return (
-    <main className="flex min-h-full flex-col justify-center">
+    <div className="flex min-h-full flex-col justify-center">
       <RefreshOnArrival pathname={`/w/${workspaceId}/knowledge/${sourceId}`} />
       <EmptyState
         icon={FileText}
@@ -48,6 +48,6 @@ export default async function SourceKnowledgePage({
           </Link>
         }
       />
-    </main>
+    </div>
   );
 }

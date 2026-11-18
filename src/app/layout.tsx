@@ -6,7 +6,7 @@ import { inter } from "./fonts";
 import { THEME_PRE_PAINT_SCRIPT } from "./theme-script";
 
 export const metadata: Metadata = {
-  title: "Knowledge Hub",
+  title: { default: "Knowledge Hub", template: "%s · Knowledge Hub" },
   description: "A Markdown knowledge workspace for writing, linking, and sharing.",
 };
 

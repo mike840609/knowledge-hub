@@ -16,7 +16,7 @@ it("renders useful empty states and explains incomplete legacy history",()=>{
 });
 it("shows unread updates and how much of each folder has been viewed",()=>{
  const html=renderToStaticMarkup(<PersonalProfileView profile={profile}/>);
- expect(html).toMatch(/href="\/w\/ws\/profile\/articles\?filter=unread&amp;days=7"><span>Unread updates<\/span><strong>12<\/strong>/);
+ expect(html).toMatch(/href="\/w\/ws\/profile\/articles\?filter=unread&amp;days=7"><span>Changed since you last read \(all time\)<\/span><strong[^>]*>12/);
  expect(html).toContain("12 of 48 viewed");expect(html).toContain("0 of 32 viewed");expect(html).toContain("3 of 12 viewed");
  // 110 synced − 92 listed = 18 documents elsewhere; 20 viewed − 15 listed = 5.
  expect(html).toContain("5 of 18 viewed");

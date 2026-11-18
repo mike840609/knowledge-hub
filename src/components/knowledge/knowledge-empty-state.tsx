@@ -33,7 +33,7 @@ export function KnowledgeEmptyState() {
   const first = actions[0];
 
   return (
-    <section className="kh-page pb-6">
+    <section className="kh-page-wide pb-6">
       <PageHeader location={access.workspace.type === "PERSONAL" ? "My Space" : access.workspace.name} locationHref={`/w/${access.workspace.id}/${access.workspace.type === "PERSONAL" ? "home" : "sources"}`} title="Knowledge" />
       <EmptyState
         icon={FileText} illustration={<Illustration kind="start" importFirst={first?.id !== "create.document"} />}

@@ -105,10 +105,23 @@ export function matchesQuery(node: Pick<GraphViewNode, "title">, query: string):
   return needle === "" || node.title.toLowerCase().includes(needle);
 }
 
+/** A source keeps one of the chart tones across reloads, so a graph reads as sources, not one grey cloud. */
+const SOURCE_TONES = ["var(--kh-chart-1)", "var(--kh-chart-2)", "var(--kh-chart-3)", "var(--kh-border-strong)"] as const;
+export function sourceTone(name: string | null | undefined, names?: readonly string[]): string | undefined {
+  if (!name) return undefined;
+  if (names) {
+    const index = names.indexOf(name);
+    if (index >= 0) return SOURCE_TONES[index % SOURCE_TONES.length];
+  }
+  let hash = 0;
+  for (let index = 0; index < name.length; index++) hash = (hash * 31 + name.charCodeAt(index)) | 0;
+  return SOURCE_TONES[Math.abs(hash) % SOURCE_TONES.length];
+}
+
 /** Labels are drawn at this screen size whatever the zoom, so they stay readable and do not swell with the drawing. */
-export const LABEL_PX = 11;
+export const LABEL_PX = 12;
 /** More labels than this stops helping anyone find anything. */
-export const LABEL_LIMIT = 140;
+export const LABEL_LIMIT = 100;
 
 /**
  * How wide a label will be at `px`, without measuring it: a full-width

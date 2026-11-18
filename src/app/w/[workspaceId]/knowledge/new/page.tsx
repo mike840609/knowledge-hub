@@ -6,6 +6,8 @@ import { parseSeedTitle } from "@/server/authoring-input";
 import { findHubFolderLabel, findReadableDocumentHref, getWorkspaceShellModel } from "@/server/knowledge-read";
 import { isUuid } from "@/shared/ids/uuidv7";
 
+export const metadata = { title: "New document" };
+
 /**
  * `?folder=<tree node ID>` makes the new document go inside that folder. It is a navigation input, not
  * proof of anything: a value that is not an ID is ignored, and one that is an ID but names nothing the
@@ -37,7 +39,7 @@ export default async function NewNotePage({
     const query = new URLSearchParams({ compose: "" });
     if (folderId) query.set("folder", folderId);
     if (seedTitle !== null) query.set("title", seedTitle);
-    return <NewNoteStarter workspaceId={workspaceId} folderId={folderId} seedTitle={seedTitle} composeHref={`/w/${workspaceId}/knowledge/new?${query.toString()}`} />;
+    return <NewNoteStarter workspaceId={workspaceId} workspaceName={model.workspace.name} folderId={folderId} seedTitle={seedTitle} composeHref={`/w/${workspaceId}/knowledge/new?${query.toString()}`} />;
   }
   const cancelHref = typeof from === "string" && isUuid(from) ? await findReadableDocumentHref(workspaceId, from) : null;
   return (

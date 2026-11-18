@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { tabClasses, tabListClasses } from "@/components/ui/tab";
 import type { InboxKindFilter, InboxStatusFilter } from "@/modules/knowledge/domain/inbox-discussion";
@@ -32,6 +31,7 @@ export function InboxFilters({
   onStatusChange,
   onUnreadChange,
   sticky = false,
+  showRefinements = true,
 }: {
   kind: InboxKindFilter;
   status: InboxStatusFilter;
@@ -40,6 +40,8 @@ export function InboxFilters({
   onStatusChange: (status: InboxStatusFilter) => void;
   onUnreadChange: (unread: boolean) => void;
   sticky?: boolean;
+  /** The relationship row is navigation; the status and unread refinements are not worth showing over an empty list. */
+  showRefinements?: boolean;
 }) {
   return <div className={`space-y-2 pb-3 ${sticky ? "sticky top-0 z-10 bg-kh-bg" : ""}`}>
     <div role="group" aria-label="Inbox relationships" className={tabListClasses}>
@@ -51,7 +53,7 @@ export function InboxFilters({
         onClick={() => onKindChange(relationship.value)}
       >{relationship.label}</button>)}
     </div>
-    <div className="flex flex-wrap items-center gap-1">
+    {showRefinements ? <div className="flex flex-wrap items-center gap-1">
       <SelectMenu
         id="inbox-status"
         aria-label="Status"
@@ -60,9 +62,10 @@ export function InboxFilters({
         onValueChange={value => onStatusChange(value)}
         options={STATUSES}
       />
-      <Button variant={unread ? "soft" : "ghost"} aria-pressed={unread} onClick={() => onUnreadChange(!unread)}>
-        Unread
-      </Button>
-    </div>
+      <label className="flex h-8 items-center gap-2 rounded-md px-1 text-body-sm text-kh-text-secondary">
+        <input type="checkbox" checked={unread} onChange={() => onUnreadChange(!unread)} />
+        Unread only
+      </label>
+    </div> : null}
   </div>;
 }

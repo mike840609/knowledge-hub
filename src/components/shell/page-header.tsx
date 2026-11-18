@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ChevronRight } from "lucide-react";
 
 /**
  * A page's header is one line, "location › title", with its actions at the
@@ -26,18 +25,14 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header>
-      <div className="flex min-h-12 min-w-0 flex-wrap items-center justify-between gap-x-3">
-        {/* The title holds the 48px line itself, so it sits where every other page has it whether the actions are tall or wrap under it. */}
-        <div className="flex min-h-12 min-w-0 items-center gap-1 text-body">
-          <nav aria-label="Breadcrumb" className="shrink-0 text-kh-text-muted">
-            <Link href={locationHref} className="inline-flex min-h-6 items-center rounded-md hover:text-kh-text hover:underline kh-focus-ring">
-              {location}
-            </Link>
-          </nav>
-          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-kh-text-muted" aria-hidden="true" />
-          <h1 className="min-w-0 truncate font-medium text-kh-text">{title}</h1>
-        </div>
+    <header className="pb-1">
+      <nav aria-label="Breadcrumb" className="flex min-w-0 items-center text-caption text-kh-text-muted">
+        <Link href={locationHref} className="inline-flex min-h-6 min-w-0 items-center rounded-md hover:text-kh-text hover:underline kh-focus-ring">
+          {location}
+        </Link>
+      </nav>
+      <div className="mt-0.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <h1 className="min-w-0 truncate text-display font-semibold tracking-tight text-kh-text">{title}</h1>
         {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
       </div>
       {description ? <p className="mt-1 text-body-sm text-kh-text-muted">{description}</p> : null}

@@ -15,15 +15,16 @@ import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Label } from "@/components/ui/label";
 import { groupSourceItems, showSourceGroupLabels } from "@/lib/source-groups";
+import type { FreshnessReminder } from "@/modules/personal/application/knowledge-freshness";
 
-export function SourceList({ workspaceId, items, limits }: { workspaceId: string; items: SourceListItemModel[]; limits?: FolderImportClientLimits }) {
+export function SourceList({ workspaceId, items, freshness, limits }: { workspaceId: string; items: SourceListItemModel[]; freshness?: ReadonlyMap<string, FreshnessReminder>; limits?: FolderImportClientLimits }) {
   const { access, confirmed } = useWorkspaceAuthorization();
   const accessConfirmed = confirmed && access.workspace.id === workspaceId;
   const canImport = accessConfirmed && access.actions.canImport;
   const [showArchived, setShowArchived] = useState(false);
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [sort, setSort] = useState("attention");
-  const needsAttention = (item: SourceListItemModel) => !!item.pendingPreviewId || item.latestRun?.status === "FAILED";
+  const needsAttention = (item: SourceListItemModel) => !!item.pendingPreviewId || item.latestRun?.status === "FAILED" || freshness?.has(item.source.id) === true;
   const attentionCount = items.filter(needsAttention).length;
   const visible = items.filter(item => (showArchived || item.source.status === "ACTIVE") && (!attentionOnly || needsAttention(item))).sort((a,b) => {
     if (sort === "attention") return Number(needsAttention(b)) - Number(needsAttention(a)) || a.source.name.localeCompare(b.source.name);
@@ -57,7 +58,7 @@ export function SourceList({ workspaceId, items, limits }: { workspaceId: string
   const rows = (groupItems: SourceListItemModel[], showType: (item: SourceListItemModel) => boolean = () => true) => (
     <ul className="-mx-3 flex flex-col gap-1">
       {groupItems.map((item) => (
-        <SourceListRow key={item.source.id} workspaceId={workspaceId} item={item} limits={limits} showTypeLabel={showType(item)} />
+        <SourceListRow key={item.source.id} workspaceId={workspaceId} item={item} freshness={freshness?.get(item.source.id)} limits={limits} showTypeLabel={showType(item)} />
       ))}
     </ul>
   );
