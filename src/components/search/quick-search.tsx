@@ -423,7 +423,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                         <button
                           type="button"
                           onClick={() => choose(row)}
-                          onMouseEnter={() => setActiveIndex(index)}
+                          onMouseEnter={() => { if (!loading || commandFirst) setActiveIndex(index); }}
                           className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left kh-focus-ring ${selected ? "bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`}
                         >
                           <ActionIcon name={action.icon} />
