@@ -6,6 +6,7 @@ import { TextSelection } from "@milkdown/kit/prose/state";
 import { afterEach, expect, it } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { tableActions } from "@/components/knowledge/editor/table-actions";
+import { blockGutter } from "@/components/knowledge/editor/block-gutter";
 
 Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
 Range.prototype.getBoundingClientRect = () => new DOMRect();
@@ -18,12 +19,12 @@ const button = (name: string) => document.querySelector<HTMLButtonElement>(`butt
 const item = (name: string) => [...document.querySelectorAll<HTMLElement>('[role=menu]:not([hidden]) [role^=menuitem]')].find(el => el.textContent === name)!;
 const choose = (grip: string, name: string) => { button(grip).click(); item(name).click(); };
 const rows = (view: EditorView) => { const out: number[] = []; view.state.doc.descendants(node => { if (/^table_(header_)?row$/.test(node.type.name)) out.push(node.childCount); }); return out; };
-async function open() {
+async function open(extraPlugins = [tableActions()]) {
   const root = document.body.appendChild(document.createElement("div"));
   const editor = await createMarkdownEditor({
     root, markdown: "Before\n\n| A | B |\n| - | - |\n| one | two |\n| three | four |\n\nAfter",
     className: "kh-editor", ariaLabel: "Content", editable: true,
-    onUserEdit() {}, onMarkdown() {}, allowImage: () => false, extraPlugins: [tableActions()],
+    onUserEdit() {}, onMarkdown() {}, allowImage: () => false, extraPlugins,
   });
   editors.push(editor);
   const view = editor.action(ctx => ctx.get(editorViewCtx));
@@ -216,4 +217,83 @@ it("deleting the last body row and then the only column leaves a sound document"
   expect(editor.getMarkdown()).toContain("After");
   expect(button("Column 1 actions").hidden).toBe(false);
   expect(button("Row 1 actions").hidden).toBe(false);
+});
+
+const cellIn = (view: EditorView) => {
+  const { $from } = view.state.selection;
+  for (let depth = $from.depth; depth > 0; depth--) {
+    if (/^table_(cell|header)$/.test($from.node(depth).type.name)) return { row: $from.index(depth - 2), column: $from.index(depth - 1), rows: $from.node(depth - 2).childCount };
+  }
+  return null;
+};
+it("Add row appends a row and puts the caret in its first cell", async () => {
+  const { editor, view } = await open();
+  const original = editor.getMarkdown();
+  button("Add row").click();
+  expect(rows(view)).toEqual([2, 2, 2, 2]);
+  expect(cellIn(view)).toEqual({ row: 3, column: 0, rows: 4 });
+  undo(view.state, view.dispatch);
+  expect(editor.getMarkdown()).toBe(original);
+});
+it("Add column appends a column and keeps the caret's row", async () => {
+  const { editor, view } = await open();
+  const original = editor.getMarkdown();
+  button("Add column").click();
+  expect(rows(view)).toEqual([3, 3, 3]);
+  expect(cellIn(view)).toEqual({ row: 1, column: 2, rows: 3 });
+  undo(view.state, view.dispatch);
+  expect(editor.getMarkdown()).toBe(original);
+});
+it("the bars sit below and right of the table, and hide with the grips", async () => {
+  const { editor, view } = await open();
+  let tablePos = 0;
+  view.state.doc.descendants((node, pos) => { if (node.type.name === "table") tablePos = pos; });
+  (view.nodeDOM(tablePos) as HTMLElement).getBoundingClientRect = () => new DOMRect(100, 200, 300, 90);
+  view.dispatch(view.state.tr.setSelection(view.state.selection));
+  const down = button("Add row"), right = button("Add column");
+  expect(down.style.top).toBe("290px");
+  expect(down.style.left).toBe("100px");
+  expect(down.style.width).toBe("300px");
+  expect(right.style.left).toBe("400px");
+  expect(right.style.top).toBe("200px");
+  expect(right.style.height).toBe("90px");
+  editor.setEditable(false);
+  expect(down.hidden).toBe(true);
+  expect(right.hidden).toBe(true);
+});
+it("Alt+F10 in a cell focuses the row grip, not the block gutter", async () => {
+  const { view } = await open([blockGutter(), tableActions()]);
+  const event = new KeyboardEvent("keydown", { key: "F10", altKey: true, bubbles: true, cancelable: true });
+  view.dom.dispatchEvent(event);
+  expect(document.activeElement).toBe(button("Row 2 actions"));
+  expect(document.activeElement).not.toBe(button("Move block"));
+});
+it("Alt+F10 reaches the row grip whichever plugin is registered first", async () => {
+  const { view } = await open([tableActions(), blockGutter()]);
+  view.dom.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", altKey: true, bubbles: true, cancelable: true }));
+  expect(document.activeElement).toBe(button("Row 2 actions"));
+});
+it("Alt+F10 outside a table still reaches the block gutter", async () => {
+  const { view } = await open([blockGutter(), tableActions()]);
+  let before = 0;
+  view.state.doc.descendants((node, pos) => { if (node.isText && node.text === "Before") before = pos; });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, before)));
+  view.dom.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", altKey: true, bubbles: true, cancelable: true }));
+  expect(document.activeElement).not.toBe(button("Row 2 actions"));
+});
+it("Tab order from the row grip is Column grip, Add row, Add column", async () => {
+  await open();
+  const order = [...document.body.querySelectorAll<HTMLButtonElement>("button[aria-label]")].map(b => b.getAttribute("aria-label"));
+  const from = order.indexOf("Row 2 actions");
+  expect(order.slice(from, from + 4)).toEqual(["Row 2 actions", "Column 1 actions", "Add row", "Add column"]);
+});
+it("Escape in a grip or bar returns to the cell with the selection unchanged", async () => {
+  const { view } = await open();
+  const selection = view.state.selection;
+  for (const name of ["Row 2 actions", "Add row", "Add column"]) {
+    button(name).focus();
+    button(name).dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(view.hasFocus()).toBe(true);
+    expect(view.state.selection.eq(selection)).toBe(true);
+  }
 });
