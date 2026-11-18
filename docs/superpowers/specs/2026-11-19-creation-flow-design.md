@@ -33,10 +33,11 @@ decides each and amends the design-language contract. Nothing stored changes.
      keeps both fields through the gaps where neither has focus.
    - **On arrival.** The editor takes the title and body, puts the caret after
      the text in the active field, and autosaves. An active composition in
-     the starter finishes before the page opens the editor.
+     the starter finishes before the page opens the editor. When navigation
+     has already started, the editor keeps the last visible composition text.
    - **On failure.** Both fields remain visible and editable. Retry opens the
-     same draft after creation succeeds. The new-document form is still
-     available from the error message.
+     same draft after creation succeeds. The new-document form can also
+     open it as a separate draft in the current tab.
    - **Separate visits.** Each visit starts a create request. Replaying the
      effect on a mounted starter keeps the same request.
    - **A plain click only.** A modified click (a new tab or window) starts

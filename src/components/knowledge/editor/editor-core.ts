@@ -212,7 +212,7 @@ export type MarkdownEditor = {
    * Replaces the whole document. Emits no `onUserEdit` and no `onMarkdown` — not even for an edit still waiting out its debounce — and clears the undo history.
    * Throws `EditorParseError` when non-empty Markdown comes out as nothing (the open path's rule); the editor then holds that empty document and should be discarded.
    */
-  replaceMarkdown: (markdown: string) => void;
+  replaceMarkdown: (markdown: string, preserveTrailingInput?: boolean) => void;
   setEditable: (editable: boolean) => void;
   /** Focus with the selection where it is. */
   focus: () => void;
@@ -356,11 +356,27 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
 
   return {
     getMarkdown: () => editor.action(getMarkdown()),
-    replaceMarkdown: (markdown) => {
+    replaceMarkdown: (markdown, preserveTrailingInput = false) => {
       editor.action(replaceAll(markdown, true));
       if (!parsedIntact(markdown, editor.action(getMarkdown()))) {
         throw new EditorParseError("The editor produced an empty document from non-empty Markdown.");
       }
+      const suffix = preserveTrailingInput ? markdown.match(/[ \t\n]+$/)?.[0] : undefined;
+      if (!suffix) return;
+      // Markdown parsing drops terminal whitespace, but the starter's writer is still at that caret.
+      editor.action(ctx => {
+        const view = ctx.get(editorViewCtx);
+        const { doc, schema } = view.state;
+        const { $from: end } = Selection.atEnd(doc);
+        const [spaces, ...lines] = suffix.split("\n");
+        const tr = view.state.tr;
+        if (spaces && end.parent.type === schema.nodes.paragraph) {
+          const kept = end.parent.textContent.match(/[ \t]+$/)?.[0].length ?? 0;
+          if (spaces.length > kept) tr.insertText(spaces.slice(kept), end.pos);
+        }
+        for (const line of lines) tr.insert(tr.doc.content.size, schema.nodes.paragraph.create(null, line ? schema.text(line) : null));
+        if (tr.docChanged) view.dispatch(tr.setMeta("addToHistory", false));
+      });
     },
     setEditable: (next) => {
       editable = next;

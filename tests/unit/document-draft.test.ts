@@ -51,6 +51,18 @@ describe("draftStorageKey", () => {
     expect(readDraft(storage, create)).toEqual({ title: "Typed", markdown: "body", baseRevisionId: null });
     expect(readDraft(storage, seeded)).toEqual({ title: "Kubernetes & more", markdown: "notes", baseRevisionId: null });
   });
+
+  it("keeps a failed create draft separate from the regular new document draft", () => {
+    const storage = memoryStorage();
+    const recovery: DraftKey = { ...create, recoveryId: "test-recovery" };
+    const empty = { title: "", markdown: "" };
+    const regular = { title: "Existing draft", markdown: "Regular note", baseRevisionId: null };
+    const recovered = { title: "Failed create", markdown: "Recovered note", baseRevisionId: null };
+    syncDraft(storage, create, regular, empty);
+    syncDraft(storage, recovery, recovered, empty);
+    expect(readDraft(storage, create)).toEqual(regular);
+    expect(readDraft(storage, recovery)).toEqual(recovered);
+  });
 });
 
 describe("syncDraft and readDraft", () => {

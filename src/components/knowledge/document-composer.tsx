@@ -196,11 +196,9 @@ export function DocumentComposer({
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const [draftStatus, setDraftStatus] = useState<DraftStatus>("loading");
   const persistent = useRef<PersistentDraft | null>(null);
-  // A new document started from a broken link's title keeps its draft in the tab, not the account: the
-  // account holds one blank "new" draft per workspace (`draft:new`, the only key the server accepts for it),
-  // and a second document under that key would restore the wrong text or overwrite the blank one's.
-  const seeded = draftKey.kind === "new" && draftKey.title !== undefined;
-  const durableDraft = access.workspace.type === "PERSONAL" && !seeded;
+  // Broken-link seeds and recovered creates keep their own tab drafts. The account has one draft:new per workspace.
+  const separateDraft = draftKey.kind === "new" && (draftKey.title !== undefined || draftKey.recoveryId !== undefined);
+  const durableDraft = access.workspace.type === "PERSONAL" && !separateDraft;
   // Everything waits for hydration; see `use-hydrated` for what a native submit costs.
   const hydrated = useHydrated();
   const [title, setTitle] = useState(initialTitle);

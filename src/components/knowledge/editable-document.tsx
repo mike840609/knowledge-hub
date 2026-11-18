@@ -15,7 +15,7 @@ import { readStored, writeStored } from "@/components/shell/use-persisted-state"
 import { governanceFailure, governanceRequest, GovernanceError, transientSaveFailure } from "@/components/workspaces/governance-error";
 import { DocumentAutosave, type DocumentContent, type SavedRevision } from "@/lib/document-autosave";
 import { mergeText } from "@/lib/merge-text";
-import { takeNewNote } from "./new-note-starter";
+import { hasNewNoteDraft, takeNewNote } from "./new-note-starter";
 import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } from "@/lib/document-draft";
 import { PersistentDraft } from "@/lib/persistent-draft";
 import { caretOnLastLine } from "@/lib/title-keys";
@@ -417,6 +417,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   const conflict = error?.code === "REVISION_CONFLICT";
   const dirty = !!writer?.dirty || pending.current;
   const editable = loaded && authorization.current;
+  const titleHandoffPending = !ready && !source && !failed && hasNewNoteDraft(detail.inspectorData.documentId);
   const status = !loaded ? "loading" : recovery ? "recovery" : error ? "error" : writer?.status === "saving" ? "saving" : dirty ? "pending" : "saved";
   const attention = recovery ? "Recovered changes" : error ? "Not saved" : undefined;
   // The page is the editor: a first visit says so once, then the hint stays out of the way.
@@ -485,7 +486,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     const next = { title: arrived.text || previous.title, markdown: arrived.body || previous.markdown };
     if (next.title !== previous.title || next.markdown !== previous.markdown) change(next);
     if (arrived.body && !source && !failed) {
-      try { editor.current?.replaceMarkdown(next.markdown); }
+      try { editor.current?.replaceMarkdown(next.markdown, true); }
       catch {
         focusDraftMarkdown.current = arrived.entered;
         setFailed(true);
@@ -639,7 +640,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     wordCount={words}
     editHint={showEditHint ? "Click anywhere in the text to edit." : undefined}
     editorActions={<><AutosaveIndicator state={status} attention={attention} /><Button type="button" variant="ghost" aria-label="Rename document" title="Rename document" disabled={!editable || !!recovery || (!ready && !source && !failed)} onClick={focusTitle}><Pencil className="h-4 w-4" aria-hidden="true" /></Button>{markdownToggle}</>}
-    titleControl={resolved.source !== "H1" ? <textarea ref={titleInput} name="title" aria-label="Title" value={content.title} disabled={!editable} maxLength={512} rows={1}
+    titleControl={resolved.source !== "H1" ? <textarea ref={titleInput} name="title" aria-label="Title" value={content.title} disabled={!editable || titleHandoffPending} maxLength={512} rows={1}
       onChange={event => change({ ...queue.current!.current, title: event.target.value })}
       onKeyDown={event => {
         if (event.nativeEvent.isComposing || event.keyCode === 229) return;
