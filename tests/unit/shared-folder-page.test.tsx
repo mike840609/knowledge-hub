@@ -55,6 +55,7 @@ const setup = {
   revisionId: "rev",
   title: "Dev setup",
   markdown: "Install Node. See [[Code review]] and [[Secret plan]] and [the wiki](../elsewhere.md).",
+  metadata: {},
   pageIcon: "🛠",
   sharedByName: "Mike",
   updatedAt: new Date("2026-10-28T00:00:00Z"),
@@ -195,7 +196,7 @@ describe("a Source link's page", () => {
 
 describe("a document link's page", () => {
   it("starts with a skip link to the page's own title", async () => {
-    shared({ kind: "DOCUMENT", revisionId: "rev", title: "Doc", markdown: "Body.", pageIcon: null, sharedByName: "Mike", updatedAt: new Date(), expiresAt: new Date() });
+    shared({ kind: "DOCUMENT", revisionId: "rev", title: "Doc", markdown: "Body.", metadata: {}, pageIcon: null, sharedByName: "Mike", updatedAt: new Date(), expiresAt: new Date() });
     const html = await render();
     expect(html).toContain('<a href="#shared-content:skip" class="kh-skip-link">Skip to content</a>');
     expect(html).toMatch(/<h1[^>]*id="shared-content:skip"[^>]*tabindex="-1"[^>]*>Doc<\/h1>/);
@@ -203,21 +204,21 @@ describe("a document link's page", () => {
   });
 
   it("targets the article when the document's own heading is the title", async () => {
-    shared({ kind: "DOCUMENT", revisionId: "rev", title: "Doc", markdown: "# Own title\n\nBody.", pageIcon: null, sharedByName: "Mike", updatedAt: new Date(), expiresAt: new Date() });
+    shared({ kind: "DOCUMENT", revisionId: "rev", title: "Doc", markdown: "# Own title\n\nBody.", metadata: {}, pageIcon: null, sharedByName: "Mike", updatedAt: new Date(), expiresAt: new Date() });
     const html = await render();
     expect(html).toMatch(/<article[^>]*id="shared-content:skip"[^>]*tabindex="-1"[^>]*data-review-document/);
     expect(html).not.toMatch(/<h1[^>]*id="shared-content:skip"/);
   });
 
   it("does not let a heading named “Shared content” take the skip target's id", async () => {
-    shared({ kind: "DOCUMENT", revisionId: "rev", title: "Doc", markdown: "## Shared content\n\nBody.", pageIcon: null, sharedByName: "Mike", updatedAt: new Date(), expiresAt: new Date() });
+    shared({ kind: "DOCUMENT", revisionId: "rev", title: "Doc", markdown: "## Shared content\n\nBody.", metadata: {}, pageIcon: null, sharedByName: "Mike", updatedAt: new Date(), expiresAt: new Date() });
     const html = await render();
     expect(html.match(/id="shared-content"/g)).toHaveLength(1);
     expect(html).toContain('id="shared-content:skip"');
   });
 
   it("still resolves no links: a [[wikilink]] is its text", async () => {
-    shared({ kind: "DOCUMENT", revisionId: "rev", title: "Doc", markdown: "See [[Code review]].", pageIcon: null, sharedByName: "Mike", updatedAt: new Date(), expiresAt: new Date() });
+    shared({ kind: "DOCUMENT", revisionId: "rev", title: "Doc", markdown: "See [[Code review]].", metadata: {}, pageIcon: null, sharedByName: "Mike", updatedAt: new Date(), expiresAt: new Date() });
     const html = await render();
     expect(fixture.getShared).toHaveBeenCalledWith("tok", undefined);
     expect(html).toContain("<span>Code review</span>");

@@ -20,18 +20,20 @@ vi.mock("next/navigation", () => ({
 }));
 import HubSharePage, { generateMetadata } from "@/app/w/[workspaceId]/shares/[token]/page";
 import { SharedFolderPage } from "@/app/s/[token]/shared-folder-page";
+import { SharedDownloadButton } from "@/components/knowledge/shared-download-button";
+import { SaveShareButton } from "@/components/knowledge/save-share-button";
 
 const inFolder = "0192f3a4-5b6c-7d8e-9f01-23456789abcd";
 const props = (workspaceId = "mine", d?: string) => ({ params: Promise.resolve({ workspaceId, token: "tok" }), searchParams: Promise.resolve(d === undefined ? {} : { d }) });
-const documentView = { kind: "DOCUMENT", revisionId: "rev", title: "Named title", markdown: "Body", pageIcon: null, sharedByName: "Owner", updatedAt: new Date(0), expiresAt: null, audience: "NAMED", linkId: "link-1" };
+const documentView = { kind: "DOCUMENT", revisionId: "rev", title: "Named title", markdown: "Body", metadata: {}, pageIcon: null, sharedByName: "Owner", updatedAt: new Date(0), expiresAt: null, audience: "NAMED", linkId: "link-1" };
 const folderView = { kind: "FOLDER", rootName: "Folder", tree: [], sharedByName: "Owner", expiresAt: null, audience: "NAMED", linkId: "link-2",
   document: { ...documentView, documentId: inFolder, path: [], links: [] } };
 
 /** Every element in a rendered tree, so a test can find the one it asks about. */
 function elements(node: unknown): ReactElement[] {
   if (!isValidElement(node)) return [];
-  const children = (node.props as { children?: unknown }).children;
-  return [node, ...(Array.isArray(children) ? children : [children]).flatMap(elements)];
+  const { children, actions } = node.props as { children?: unknown; actions?: unknown };
+  return [node, ...(Array.isArray(children) ? children : [children]).flatMap(elements), ...elements(actions)];
 }
 
 beforeEach(() => {
@@ -95,5 +97,26 @@ describe("/w/:ws/shares/:token", () => {
     expect(isValidElement(page) && page.type).toBe(SharedFolderPage);
     expect((page as ReactElement).props).toMatchObject({ token: "tok", platformEntry: null, pagePath: "/w/mine/shares/tok", signInHref: `/w/mine/shares/tok?d=${inFolder}` });
     expect(fixture.markEventRead).toHaveBeenCalledWith({ identity: { id: "reader" } }, "shared:link-2");
+  });
+
+  it("offers Download Markdown, and no Save, on a named document", async () => {
+    const page = await HubSharePage(props());
+    const buttons = elements(page).filter((element) => element.type === SharedDownloadButton);
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].props).toEqual({ title: "Named title", markdown: "Body", metadata: {} });
+    expect(elements(page).some((element) => element.type === SaveShareButton)).toBe(false);
+  });
+
+  it("offers Download Markdown, and no Save, on a Hub folder page's document", () => {
+    const page = SharedFolderPage({ token: "tok", shared: folderView as never, platformEntry: null, signInHref: "/" });
+    const buttons = elements(page).filter((element) => element.type === SharedDownloadButton);
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].props).toEqual({ title: "Named title", markdown: "Body", metadata: {} });
+    expect(elements(page).some((element) => element.type === SaveShareButton)).toBe(false);
+  });
+
+  it("offers no Download Markdown on an empty folder", () => {
+    const page = SharedFolderPage({ token: "tok", shared: { ...folderView, document: null } as never, platformEntry: null, signInHref: "/" });
+    expect(elements(page).some((element) => element.type === SharedDownloadButton)).toBe(false);
   });
 });

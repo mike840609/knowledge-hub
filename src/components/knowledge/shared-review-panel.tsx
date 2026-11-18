@@ -17,7 +17,7 @@ import { readStored, removeStored, writeStored } from "@/components/shell/use-pe
 
 type DiscussionResult = { threads: ReviewThreadView[]; revisionId: string; writesEnabled: boolean; callerUserId: string | null };
 /**
- * `brand` and `actions` (the page's own: Save, Open) share the one pinned bar with Comments, so nothing stands between it and the title.
+ * `brand` and `actions` (the page's own: Download, Save, Open; the Hub reader passes Download only) share the one pinned bar with Comments, so nothing stands between it and the title.
  * On a folder link's page `documentId` names the document being read: every request carries it, and what this
  * reader keeps on the device (dismissals, an unsent comment) is kept per document. The bar is `wide` there, spanning
  * the window over the tree as the folder page's own bar does, with `brand` holding the tree, brand and breadcrumb.

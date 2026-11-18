@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { SharedDownloadButton } from "@/components/knowledge/shared-download-button";
 import { SharedReviewPanel } from "@/components/knowledge/shared-review-panel";
 import { SharedReading, SharedSkipLink, SHARED_CONTENT_ID } from "@/components/knowledge/shared-reading";
 import { hubSharePath, sharedDocumentParam } from "@/lib/share-paths";
@@ -66,7 +67,7 @@ export default async function HubSharePage(props: HubSharePageProps) {
   return (
     <div className="kh-share-page min-h-full bg-kh-bg">
       <SharedSkipLink />
-      <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={pagePath}>
+      <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={pagePath} actions={<SharedDownloadButton title={shared.title} markdown={shared.markdown} metadata={shared.metadata} />}>
         <SharedReading document={shared} contentId={SHARED_CONTENT_ID} />
       </SharedReviewPanel>
     </div>

@@ -115,6 +115,7 @@ describe("DocumentShareService.readShared on a source link (source share spec §
     expect(JSON.stringify(view.tree)).not.toContain("body");
     expect(JSON.stringify(view.tree)).not.toContain("markdown");
     expect(view.document).toMatchObject({ documentId: s.welcome.documentId, title: "Welcome", markdown: "Welcome body", revisionId: s.welcome.revisionId, path: [] });
+    expect(view.document?.metadata).toEqual({});
   });
 
   it("opens a requested top-level and deep document, with the folders from the Source root down", async () => {

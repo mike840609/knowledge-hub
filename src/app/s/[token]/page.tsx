@@ -1,4 +1,5 @@
 import { SaveShareButton } from "@/components/knowledge/save-share-button";
+import { SharedDownloadButton } from "@/components/knowledge/shared-download-button";
 import { SharedReviewPanel } from "@/components/knowledge/shared-review-panel";
 import { SharedFooter, SharedReading, SharedSkipLink, SHARED_CONTENT_ID } from "@/components/knowledge/shared-reading";
 import { buttonClasses } from "@/components/ui/button";
@@ -79,10 +80,10 @@ export default async function SharedPage(props: SharedPageProps) {
   return (
     <main className="kh-share-page min-h-screen bg-kh-bg">
       <SharedSkipLink />
-      {/* One pinned bar, then the title: the brand, Comments, Save and Open share a row. Save and Open show one word each (their full names stay for assistive technology), and on a phone only their icons. */}
+      {/* One pinned bar, then the title: the brand, Comments, Download, Save and Open share a row. Download, Save and Open show one word each (their full names stay for assistive technology), and on a phone only their icons. */}
       <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={signInHref(`/s/${token}`)}
         brand={<span className="shrink-0 text-body font-semibold text-kh-text">Knowledge Hub</span>}
-        actions={<><SaveShareButton token={token} /><span aria-hidden="true" className="mx-1 h-4 w-px bg-kh-border max-sm:hidden" /><a href={entry} className={buttonClasses({ variant: "ghost" })}><ExternalLink className="size-4" aria-hidden="true" /><span className="max-sm:sr-only">Open<span className="sr-only"> in Knowledge Hub</span></span></a></>}>
+        actions={<><SharedDownloadButton title={shared.title} markdown={shared.markdown} metadata={shared.metadata} /><SaveShareButton token={token} /><span aria-hidden="true" className="mx-1 h-4 w-px bg-kh-border max-sm:hidden" /><a href={entry} className={buttonClasses({ variant: "ghost" })}><ExternalLink className="size-4" aria-hidden="true" /><span className="max-sm:sr-only">Open<span className="sr-only"> in Knowledge Hub</span></span></a></>}>
         <SharedReading document={shared} contentId={SHARED_CONTENT_ID} />
       </SharedReviewPanel>
       <SharedFooter platformEntry={entry} />

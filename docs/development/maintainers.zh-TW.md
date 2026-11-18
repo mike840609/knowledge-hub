@@ -77,6 +77,7 @@ make test-mermaid-assumptions
 | 資料夾分享 | [規格](../../docs/superpowers/specs/2026-10-29-folder-share-link-design.md) | [計畫](../../docs/superpowers/plans/2026-10-29-folder-share-link.md) | 以單一可到期、可撤銷的連結分享個人空間資料夾的即時內容：閱讀頁旁有目錄樹，資料夾內的連結可跟隨，其餘顯示為文字；評論、儲存與擁有者收件匣的行為與文件連結相同。 |
 | 來源分享 | [規格](../../docs/superpowers/specs/2026-11-05-source-share-link-design.md) | [計畫](../../docs/superpowers/plans/2026-11-05-source-share-link.md) | 分享個人空間中單一來源的即時文件樹，不公開來源設定、歷史或資產。 |
 | 指定人員分享 | [規格](../../docs/superpowers/specs/2026-11-03-named-recipient-share-design.md) | — | 具名對象的分享連結：只有擁有者列出的已登入人員能開啟，在 Hub 內閱讀而非 `/s/:token`，永不過期，授權範圍不超過一般連結。 |
+| 分享頁下載 | [規格](../../docs/superpowers/specs/2026-11-17-shared-download-markdown-design.md) | [計畫](../../docs/superpowers/plans/2026-11-17-shared-download-markdown.md) | 每個分享頁都能下載 Markdown：在瀏覽器內以連結的目前版本產生，與一般匯出的內容逐位元組相同，因此連結現在也會提供該版本的 frontmatter。 |
 | 追蹤中的討論 | [規格](../../docs/superpowers/specs/2026-10-23-followed-discussions-tab-design.md) | [計畫](../../docs/superpowers/plans/2026-10-23-followed-discussions-tab.md) | Shares → Discussions 列出讀者追蹤的討論；沒有有效連結時仍可取消自己的追蹤。 |
 | 閱讀頁 callout | [規格](../../docs/superpowers/specs/2026-10-12-reader-callouts-design.md) | — | `> [!NOTE]` 與 GitHub 另外四種類型在閱讀頁和分享頁顯示成 callout；儲存的 Markdown 不變。 |
 | 閱讀頁 HTML 子集 | [規格](../../docs/superpowers/specs/2026-10-12-reader-html-subset-design.md) | — | 閱讀頁和分享頁認得七個不帶屬性的 HTML 標籤；其餘照原樣顯示成文字，使用者寫的 HTML 一律不直接輸出。 |

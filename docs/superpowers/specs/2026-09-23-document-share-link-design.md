@@ -168,7 +168,7 @@ Always resolve `current_revision`. After each owner save creates a revision, the
 - No caching: §6.4 `Cache-Control: no-store` forces re-read on refresh.
 - No live push (§2).
 - **Cost:** every future addition becomes visible to link holders. The dialog explicitly explains this (§4).
-- **No history exposure:** show only current title/Markdown, not revision list, metadata, `createdBy`, source name, or tree location.
+- **No history exposure:** show only current title/Markdown, not revision list, `createdBy`, source name, or tree location. The current revision's metadata (frontmatter) is served since 2026-11-17, for the shared download (`2026-11-17-shared-download-markdown-design.md`).
 
 ### 5.4 Revocation
 
@@ -195,7 +195,7 @@ GET /s/:token (server component, outside /w/ layout)
        ├─ Increment view count (§7.2), separate transaction; log failure only (A5)
        │    (2026-10-29: not for `/s/:token/open`, which judges the link with
        │    `recordView: false` and passes through; the page itself was the read)
-       └─ Return { title, markdown, revisionId, sharedByName, updatedAt, expiresAt }
+       └─ Return { title, markdown, metadata, revisionId, sharedByName, updatedAt, expiresAt }  (metadata since 2026-11-17, §5.3)
   → Any error → uniform page (§6.3), HTTP 404
 ```
 

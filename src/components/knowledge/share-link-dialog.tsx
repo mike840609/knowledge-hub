@@ -195,12 +195,12 @@ export function ShareLinkDialog({
           <Dialog.Title className="text-title font-semibold">{isSource ? (sourceName ? `Share source ${sourceName}` : "Share source") : isFolder ? (folderName ? `Share folder ${folderName}` : "Share folder") : "Share link"}</Dialog.Title>
           <Dialog.Description className="mt-1 text-body text-kh-text-muted">
             {isSource
-              ? named ? "Only the people you pick can open this source, and only after signing in. It never expires." : "Anyone with this link can read every document in this source, including any you add later. They will see every change you make from now on, but they cannot edit anything or see anything else in My Space."
+              ? named ? "Only the people you pick can open this source, and only after signing in. It never expires." : "Anyone with this link can read and download every document in this source, frontmatter included, and any you add later. They will see every change you make from now on, but they cannot edit anything or see anything else in My Space."
               : named
               ? `Only the people you pick can open this ${isFolder ? "folder" : "document"}, and only after signing in. It never expires. Remove a person, or revoke the link, to end their access.`
               : isFolder
-              ? "Anyone with this link can read every document in this folder and its subfolders without signing in, including any you add later. They will see every change you make from now on, but they cannot edit anything or see anything else in My Space. Share only what you are happy to see forwarded."
-              : "Anyone with this link can read this document without signing in. They will see every change you make from now on, but they cannot edit it or see anything else in My Space. Share only what you are happy to see forwarded."}
+              ? "Anyone with this link can read and download every document in this folder and its subfolders, frontmatter included, without signing in, and any you add later. They will see every change you make from now on, but they cannot edit anything or see anything else in My Space. Share only what you are happy to see forwarded."
+              : "Anyone with this link can read and download this document, frontmatter included, without signing in. They will see every change you make from now on, but they cannot edit it or see anything else in My Space. Share only what you are happy to see forwarded."}
             {!named && reviewCapability.read && <> Anyone with a valid link can read existing comments.{reviewCapability.write ? " Signing in is required to add comments and replies." : " Adding comments is currently disabled."}</>}
           </Dialog.Description>
 
