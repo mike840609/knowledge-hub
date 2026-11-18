@@ -11,7 +11,7 @@ import { customInputRulesKey } from "@milkdown/kit/prose";
 import { Fragment, type Mark, type Node as ProseNode } from "@milkdown/kit/prose/model";
 import { ReplaceStep } from "@milkdown/kit/prose/transform";
 import { $inputRule, $prose, $useKeymap } from "@milkdown/kit/utils";
-import { blockKind, canTurnInto, duplicateBlock, moveBlock, siblingBlocks, turnBlockInto, type BlockKind } from "./block-actions";
+import { blockKind, canTurnInto, deleteBlock, duplicateBlock, moveBlock, selectedBlockPos, siblingBlocks, turnBlockInto, type BlockKind } from "./block-actions";
 import { blockRange } from "./block-range";
 import { flipNearestDetails } from "./details-toggle";
 import { findWikiLinkTrigger } from "./link-suggestions";
@@ -153,7 +153,8 @@ const topBlockPos = (state: EditorState): number | null => {
 /** The block a writer's own action (duplicate, move) is about: a list item is its own block. */
 const actionBlockPos = (state: EditorState): number | null => {
   const { selection } = state;
-  if (selection instanceof NodeSelection && selection.$from.depth === 0) return selection.from;
+  const chosen = selectedBlockPos(state);
+  if (chosen !== null) return chosen;
   const { $from } = selection;
   for (let depth = $from.depth; depth >= 1; depth--) {
     if ($from.node(depth).type.name === "list_item") return $from.before(depth);
@@ -189,13 +190,14 @@ function listItemDepth(state: EditorState): number | null {
 function toggleList(target: "ordered" | "bullet" | "task") {
   return (state: EditorState, dispatch?: (tr: Transaction) => void, view?: EditorView) => {
     if (!view?.editable || !(state.selection instanceof TextSelection || state.selection instanceof NodeSelection)) return false;
-    // A whole block chosen with Escape (a heading, a list, a quote) is turned into the list as the
-    // block menu turns it: there is no caret to keep. A list of that kind already toggles off, into
+    // A whole block chosen with Escape (a heading, a list, a quote, a list item) is turned into the list
+    // as the block menu turns it: there is no caret to keep. A list of that kind already toggles off, into
     // its paragraphs.
-    if (state.selection instanceof NodeSelection && state.selection.$from.depth === 0) {
+    const chosen = selectedBlockPos(state);
+    if (state.selection instanceof NodeSelection && chosen !== null) {
       const into = blockKind(state.selection.node) === target ? "paragraph" : target;
       if (!canTurnInto(state.selection.node, into)) return false;
-      return dispatch ? turnBlockInto(view, state.selection.from, into) : true;
+      return dispatch ? turnBlockInto(view, chosen, into) : true;
     }
     const { nodes } = state.schema;
     const kind = listKindAt(state);
@@ -522,10 +524,11 @@ const escapeSelection = $prose(
             tr = view.state.tr.setSelection(NodeSelection.create(doc, selection.$from.before()));
           } else if (selection instanceof NodeSelection && selection.node.type.name === "code_block") {
             tr = view.state.tr.setSelection(Selection.near(doc.resolve(selection.from + 1), 1));
-          } else if (selection instanceof NodeSelection && selection.$from.depth === 0) {
+          } else if (selection instanceof NodeSelection && (selection.$from.depth === 0 || selection.node.type.name === "list_item")) {
             tr = view.state.tr.setSelection(Selection.near(doc.resolve(Math.min(selection.from + 1, doc.content.size)), 1));
           } else {
-            const pos = topBlockPos(view.state);
+            // The innermost list item the caret is in is the block; elsewhere the top-level block is.
+            const pos = itemPos(view.state) ?? topBlockPos(view.state);
             if (pos === null || !doc.nodeAt(pos)) return false;
             tr = view.state.tr.setSelection(NodeSelection.create(doc, pos));
           }
@@ -537,4 +540,56 @@ const escapeSelection = $prose(
     }),
 );
 
-export const notionKeys: MilkdownPlugin[] = [todoInputRule, markEnd, ...typography, notionKeymap, blockRange, escapeSelection, tabStaysInText, topLeadsToTitle].flat();
+/** The innermost list item the selection is in, as a position, or null. */
+function itemPos(state: EditorState): number | null {
+  const depth = listItemDepth(state);
+  return depth === null ? null : state.selection.$from.before(depth);
+}
+
+/** A list item chosen with Escape, as a position (not an item the caret merely sits in). */
+const chosenItemPos = (state: EditorState): number | null =>
+  state.selection instanceof NodeSelection && state.selection.node.type.name === "list_item" ? state.selection.from : null;
+
+/**
+ * A list item chosen with Escape is one block. Backspace and Delete take that item alone, whatever
+ * is nested under it (a plain delete would leave an empty list behind), and a typed character
+ * replaces the item's first paragraph, keeping the item's attributes (a to-do stays a to-do) and
+ * its nested children. Composition is the editor's own: only the plain keys and text input are claimed.
+ */
+const chosenItemEdits = $prose(
+  () =>
+    new Plugin({
+      key: new PluginKey("khChosenItemEdits"),
+      props: {
+        // Tab with an item chosen leaves the editor, as with any chosen block. The list's own Tab would sink
+        // the item, so the event is claimed here, before any keymap, and left unprevented for the browser.
+        handleDOMEvents: {
+          keydown(view, event) {
+            return event.key === "Tab" && !event.metaKey && !event.ctrlKey && !event.altKey && view.editable && chosenItemPos(view.state) !== null;
+          },
+        },
+        handleKeyDown(view, event) {
+          if ((event.key !== "Backspace" && event.key !== "Delete") || composing(event) || !view.editable) return false;
+          const pos = chosenItemPos(view.state);
+          if (pos === null) return false;
+          event.preventDefault();
+          return deleteBlock(view, pos);
+        },
+        handleTextInput(view, from, to, text) {
+          if (!view.editable) return false;
+          const pos = chosenItemPos(view.state);
+          if (pos === null || from !== view.state.selection.from || to !== view.state.selection.to) return false;
+          const item = view.state.doc.nodeAt(pos);
+          const first = item?.firstChild;
+          if (!item || !first || first.type.name !== "paragraph") return false;
+          const start = pos + 2;
+          const tr = view.state.tr.replaceWith(start, start + first.content.size, view.state.schema.text(text));
+          tr.setSelection(TextSelection.create(tr.doc, start + text.length));
+          view.dispatch(tr.scrollIntoView());
+          return true;
+        },
+      },
+    }),
+);
+
+export const notionKeys: MilkdownPlugin[] = [todoInputRule, markEnd, ...typography, notionKeymap, blockRange, escapeSelection, chosenItemEdits, tabStaysInText, topLeadsToTitle].flat();

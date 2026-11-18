@@ -32,12 +32,11 @@ function press(view: EditorView, key: string, init: KeyboardEventInit = {}) {
 }
 const md = (editor: MarkdownEditor) => editor.getMarkdown();
 const inRange = (view: EditorView) => [...view.dom.querySelectorAll(".kh-block-in-range")].map(node => node.textContent);
-/** The text caret in block `index`, then Escape: the block chosen as a node. */
+/** Block `index` chosen as a node, as its grip does (Escape in a list chooses the item; the range starts from top-level blocks). */
 function choose(view: EditorView, index: number) {
   let pos = 0;
   for (let at = 0; at < index; at++) pos += view.state.doc.child(at).nodeSize;
-  view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(pos + 1))));
-  press(view, "Escape");
+  view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)));
   expect(view.state.selection).toBeInstanceOf(NodeSelection);
 }
 const shift = (view: EditorView, key: string) => press(view, key, { shiftKey: true });

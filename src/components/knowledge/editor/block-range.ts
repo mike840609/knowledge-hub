@@ -3,7 +3,7 @@ import { Mark, type Node as ProseNode } from "@milkdown/kit/prose/model";
 import { NodeSelection, Plugin, PluginKey, Selection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
-import { blockKind, topLevelBlocks, turnBlockInto, type BlockKind, type EditorBlock } from "./block-actions";
+import { blockKind, selectedBlockPos, topLevelBlocks, turnBlockInto, type BlockKind, type EditorBlock } from "./block-actions";
 
 /**
  * Several top-level blocks chosen at once (2026-11-20 multi-block spec). A block chosen with Escape is a node
@@ -47,8 +47,7 @@ function sameBlocks(before: ProseNode, after: ProseNode): boolean {
 }
 
 /** The anchor block, when it is chosen as a node (a block taken with Escape). */
-const chosenBlock = (state: EditorState): number | null =>
-  state.selection instanceof NodeSelection && state.selection.$from.depth === 0 ? state.selection.from : null;
+const chosenBlock = (state: EditorState): number | null => selectedBlockPos(state);
 
 /** Mod-Alt-0…8 and Mod-Shift-7/8/9, as the single-block keys name them. */
 const BY_DIGIT: Record<string, BlockKind> = { "0": "paragraph", "1": "h1", "2": "h2", "3": "h3", "4": "task", "5": "bullet", "6": "ordered", "7": "toggle", "8": "code" };
