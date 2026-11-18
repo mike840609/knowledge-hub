@@ -58,6 +58,23 @@ test.describe("one block is one block", () => {
     expect(await exported(page, documentId)).toMatch(/Before\n\n- one\n- three\n\nAfter/);
   });
 
+  test("keyboard block actions delete only the chosen list items and undo restores them", async ({ page }) => {
+    const { surface } = await openNote(page, "- Alpha\n- Beta\n- Gamma\n");
+    await chooseBlock(page, "Beta", surface);
+    await page.keyboard.press("Shift+ArrowDown");
+    await expect(surface.locator("li.kh-block-in-range")).toHaveText(["Beta", "Gamma"]);
+    await page.keyboard.press("Alt+F10");
+    await expect(page.getByRole("button", { name: "Add block below" })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "Move block" })).toBeFocused();
+    await page.keyboard.press("Enter");
+    const menu = page.getByRole("menu", { name: "Block actions, 2 blocks" });
+    await menu.getByRole("menuitem", { name: "Delete", exact: true }).press("Enter");
+    await expect(surface.locator("li")).toHaveText(["Alpha"]);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(surface.locator("li")).toHaveText(["Alpha", "Beta", "Gamma"]);
+  });
+
   test("the grip's Duplicate copies a two-block range", async ({ page }) => {
     const { surface, documentId } = await openNote(page, "Alpha\n\nBeta\n\nGamma\n");
     await chooseBlock(page, "Alpha", surface);
