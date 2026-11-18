@@ -146,7 +146,7 @@ it("one undo after typing right after a cross-item turn keeps the turn", async (
 it.each([
   ["a paragraph before the list", "P\n\n- one\n- two", "P", "one", "## P\n\n## one\n\n- two"],
   ["a paragraph after the list", "- one\n- two\n\nP", "two", "P", "- one\n\n## two\n\n## P"],
-])("Mod-Alt-2 across %s turns both blocks whichever end is the anchor", async (_name, source, firstText, lastText, expected) => {
+])("Mod-Alt-2 across %s turns both blocks from either side of the list", async (_name, source, firstText, lastText, expected) => {
   const { editor, view } = await open(source);
   let first = -1;
   let last = -1;

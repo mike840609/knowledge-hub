@@ -111,9 +111,11 @@ Nothing stored changes.
 
 - **A bullet ↔ to-do change splits the list.** Both list shortcuts, the grip, the toolbar and the `/` list
   turn the item through the same split: the converted item becomes a one-item list of its own, and the
-  items after it become a second list of the original kind. The writer separates the lists with a blank
-  line and marks the tail with `*` (`- [ ] one`, blank line, `* two`). This round-trips byte-identically,
-  but it replaces the older in-place change (one list, only the item's `checked` toggled).
+  items before and after it stay in lists of the original kind. The writer separates adjacent lists with a
+  blank line and alternates the marker (`-` / `*`) so they re-read as two lists: converting the first item
+  gives `- [ ] one`, blank line, `* two`; converting the middle of three gives `- alpha`, blank line,
+  `* [ ] beta`, blank line, `- gamma`. This round-trips byte-identically, but it replaces the older
+  in-place change (one list, only the item's `checked` toggled).
 - **An item with a nested list keeps it under `/`.** Decision 2 says a choice made with `/query` alone replaces
   the item. Some choices would drop the item's nested list: Text, a heading, Quote and Code (Turn into's leaf kinds),
   and Divider, Table, Diagram, Toggle and Callout. For these, the `/` list puts the block below the item and its
@@ -138,8 +140,9 @@ Nothing stored changes.
   left `0`–`3` to Milkdown. On an item's first line Milkdown's keys set that line to a heading, which an item cannot
   start with, so they did nothing while the grip turned the item; decision 7's parity test found it. With the caret on
   an item's first line these four keys now call the grip's turn, and the key is claimed even where the turn is refused
-  (an item with a nested list), where Milkdown's did nothing either. A selection that touches several items turns all
-  of them, as the toolbar does. Anywhere else they stay Milkdown's: a loose
+  (an item with a nested list), where Milkdown's did nothing either. A selection that touches several blocks, at
+  least one of them an item, turns all of them as the toolbar does; it is claimed even where the turn is refused,
+  matching the toolbar's disabled entries. Anywhere else they stay Milkdown's: with a single caret block, a loose
   item's later paragraph or a code block in an item still turns in place, and a paragraph in a quote still becomes a
   heading in the quote. Inside a quote, a callout or a toggle's body the keys turn the caret's item within its
   container, and so does the toolbar's Turn into: a selection in an item there touches that item (the container
