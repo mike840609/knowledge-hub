@@ -78,6 +78,35 @@ function menuHrefs() { return [...(menu()?.querySelectorAll("a") ?? [])].map(lin
 const href = (id: number) => `/w/w/knowledge/a/d${id}`;
 const recent = ["a:d1", "a:d2", "a:d3", "a:d4", "a:d5", "a:d6"];
 
+function desktopViewport() {
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(min-width: 1280px)", addEventListener() {}, removeEventListener() {} }));
+}
+
+it("shows a short list of Favorites before the tree with access to every favorite", async () => {
+  desktopViewport();
+  shortcuts.current.favorites = recent;
+  await mount();
+  const favorites = document.querySelector('section[aria-label="Favorites"]');
+  expect([...favorites?.querySelectorAll("a") ?? []].map(link => link.getAttribute("href"))).toEqual([href(1), href(2), href(3), href(4)]);
+  await click(favorites?.querySelector('button[aria-label="View all favorite documents"]') ?? null);
+  expect(menuHrefs()).toEqual([href(1), href(2), href(3), href(4), href(5), href(6)]);
+});
+
+it("restores the desktop Recent disclosure after remounting the sidebar", async () => {
+  desktopViewport();
+  shortcuts.current.recent = recent;
+  await mount();
+  const disclosure = () => document.querySelector('section[aria-label="Recent"] button[aria-expanded]');
+  expect(disclosure()?.getAttribute("aria-expanded")).toBe("false");
+  await click(disclosure());
+  expect(disclosure()?.getAttribute("aria-expanded")).toBe("true");
+  expect(document.querySelector('section[aria-label="Recent"] a')?.getAttribute("href")).toBe(href(1));
+  await cleanup();
+  desktopViewport();
+  await mount();
+  expect(disclosure()?.getAttribute("aria-expanded")).toBe("true");
+});
+
 it("keeps recents out of the tree and makes every eligible recent reachable from the clock", async () => {
   shortcuts.current.recent = recent;
   sources[0].ownership = "SOURCE_MANAGED";

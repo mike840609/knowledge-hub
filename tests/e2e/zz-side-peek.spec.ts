@@ -19,12 +19,12 @@ async function apiDocument(page: Page, workspaceId: string, title: string, markd
   return (await response.json()) as { documentId: string; sourceId: string };
 }
 
-async function setUp(page: Page) {
+async function setUp(page: Page, mainParagraphs = 0) {
   const workspaceId = await mySpace(page);
   const mainTitle = unique("Peek Main");
   const peekTitle = unique("Peek Target");
   const thirdTitle = unique("Peek Third");
-  const main = await apiDocument(page, workspaceId, mainTitle, `Body of ${mainTitle}.`);
+  const main = await apiDocument(page, workspaceId, mainTitle, `Body of ${mainTitle}.\n\n${"More main document content.\n\n".repeat(mainParagraphs)}`);
   await apiDocument(page, workspaceId, peekTitle, `See [[${thirdTitle}]].`);
   await apiDocument(page, workspaceId, thirdTitle, `Body of ${thirdTitle}.`);
   await openKnowledge(page, workspaceId);
@@ -48,6 +48,35 @@ test("right-click row opens the split with the peeked title, main unchanged", as
   await expect(mainContent).toContainText(mainTitle);
   await expect(mainContent).not.toContainText(peekTitle);
   expect(page.url()).toBe(reading);
+});
+
+test("the direct preview preserves reader scroll and returns focus to its button", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { peekTitle, reading } = await setUp(page, 75);
+  await page.mouse.move(0, 0);
+  const main = page.getByRole("region", { name: "Document content", exact: true }).first();
+  await main.evaluate(node => { node.scrollTop = 400; });
+  await expect.poll(() => main.evaluate(node => node.scrollTop)).toBe(400);
+  const target = row(page, peekTitle);
+  const button = target.getByRole("button", { name: `Open in side peek: ${peekTitle}` });
+  const opacity = () => button.evaluate(node => getComputedStyle(node.parentElement!.parentElement!).opacity);
+  await expect.poll(opacity).toBe("0");
+  await target.hover();
+  await expect.poll(opacity).toBe("1");
+  await page.mouse.move(0, 0);
+  await target.focus();
+  await expect.poll(opacity).toBe("1");
+  await button.focus();
+  await page.keyboard.press("Enter");
+
+  const preview = page.getByTestId("side-peek");
+  await expect(preview.getByRole("button", { name: "Close preview" })).toBeFocused(ROUND_TRIP);
+  await expect(preview).toContainText(peekTitle, ROUND_TRIP);
+  await page.keyboard.press("Escape");
+  await expect(preview).toHaveCount(0, ROUND_TRIP);
+  await expect(button).toBeFocused();
+  expect(page.url()).toBe(reading);
+  expect(await main.evaluate(node => node.scrollTop)).toBe(400);
 });
 
 test("a wikilink click in the peek changes the peek, main and URL unchanged", async ({

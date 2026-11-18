@@ -3,6 +3,7 @@ import { act, createElement, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KnowledgeTree } from "@/components/knowledge/knowledge-tree";
+import { PEEK_REQUEST_EVENT, type PeekRequest } from "@/components/knowledge/peek-request";
 import type { Action } from "@/components/actions/action-registry";
 import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledge-query-service";
 
@@ -82,6 +83,26 @@ function press(target: HTMLElement, key: string, init: Partial<KeyboardEventInit
 }
 
 describe("a key on the row in focus", () => {
+  it("offers a separate preview action with its button as the focus origin", () => {
+    render({ documentActions: () => [{
+      id: "document.open-side-peek", label: "Open in side peek", group: "document", icon: "side-peek", keywords: [], surfaces: ["row"],
+      effect: { kind: "side-peek", documentId: "d:A", sourceId: "s1" },
+    }] });
+    const row = rowFor("A");
+    act(() => row.focus());
+    const preview = row.querySelector<HTMLButtonElement>('button[aria-label="Open in side peek: A"]');
+    expect(preview).not.toBeNull();
+    let opened: PeekRequest | undefined;
+    const listener = (event: Event) => { opened = (event as CustomEvent<PeekRequest>).detail; };
+    window.addEventListener(PEEK_REQUEST_EVENT, listener, { once: true });
+    try {
+      act(() => preview?.click());
+      expect(opened).toEqual({ documentId: "d:A", sourceId: "s1", opener: preview });
+    } finally {
+      window.removeEventListener(PEEK_REQUEST_EVENT, listener);
+    }
+  });
+
   it.each(["A", "F"])("does not intercept action letters on row %s", (label) => {
     const { onRunAction } = render();
     for (const key of ["f", "m", "c", "d", "r", "/"]) {

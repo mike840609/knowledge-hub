@@ -56,7 +56,7 @@ test('reader and composer keep their column and expose commands during long scro
   const centre = async (locator: ReturnType<Page['locator']>) => { const box = (await locator.boundingBox())!; return box.y + box.height / 2; };
   const line = await centre(breadcrumb);
   expect(Math.abs(await centre(page.getByText('Knowledge Hub', { exact: true }).filter({ visible: true })) - line)).toBeLessThanOrEqual(1);
-  expect(Math.abs(await centre(explorer.getByRole('button', { name: 'Favorite documents', exact: true })) - line)).toBeLessThanOrEqual(1);
+  expect(Math.abs(await centre(explorer.getByRole('button', { name: 'Filter documents and sources', exact: true })) - line)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: info.outputPath('reader-navigation-expanded.png') });
   // Scrolling pins the breadcrumb line — location › title, and its actions — to the top of the reading column.
   const regionBox = (await region.boundingBox())!;
@@ -309,24 +309,17 @@ test('long explorer reveals the selected document after portal layout settles', 
     await expect(row).toHaveAttribute('aria-current', 'page');
     await expect(row).toBeInViewport();
   } finally { releaseFavorites(); }
-  const favoriteDocuments = page.getByRole('button', { name: 'Favorite documents', exact: true });
-  await favoriteDocuments.click();
-  const favoriteItems = page.getByRole('menu', { name: 'Favorite documents', exact: true }).getByRole('menuitem');
-  await expect(favoriteItems).toHaveCount(4);
-  await page.keyboard.press('Escape');
+  const favoritesSection = page.getByRole('region', { name: 'Favorites', exact: true });
+  await expect(favoritesSection.getByRole('link')).toHaveCount(4);
   await expect(row).toBeInViewport();
   expect(await page.getByRole('region', { name: 'Document content', exact: true }).evaluate(el => el.scrollTop)).toBe(0);
-  // Opening or closing Favorites or Recent is the reader's own layout change: the explorer stays where they
-  // left it rather than scrolling back to the document being read.
   const scroller = page.getByRole('navigation', { name: 'Document tree', exact: true });
   await scroller.evaluate(el => { el.scrollTop = 0; });
   await expect(row).not.toBeInViewport();
-  for (const name of ['Favorite documents', 'Recent documents']) {
-    const toggle = page.getByRole('button', { name, exact: true });
-    for (let i = 0; i < 2; i++) {
-      await toggle.click();
-      await expect(toggle).toHaveAttribute('aria-expanded', i === 0 ? 'true' : 'false');
-      expect(await scroller.evaluate(el => el.scrollTop)).toBe(0);
-    }
+  const toggle = page.getByRole('region', { name: 'Recent', exact: true }).getByRole('button', { name: 'Recent', exact: true });
+  for (let i = 0; i < 2; i++) {
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', i === 0 ? 'true' : 'false');
+    expect(await scroller.evaluate(el => el.scrollTop)).toBe(0);
   }
 });

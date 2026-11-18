@@ -50,33 +50,26 @@ test("a page icon follows the document to Home, the palette, the explorer and se
   expect(await searchOption.textContent()).toContain("📌");
   await page.keyboard.press("Escape");
 
-  // Recent is an on-demand menu; visiting articles must not add a shifting list above the tree.
+  // The wide explorer shows Recent when its disclosure is opened.
   const otherTitle = unique("Icon parity other");
   const other = await createNote(page, workspaceId, otherTitle);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(other.href);
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(otherTitle, ROUND_TRIP);
   const explorer = page.getByRole("complementary", { name: "Knowledge explorer", exact: true });
-  await expect(explorer.getByRole("region", { name: "Recent documents", exact: true })).toHaveCount(0);
-  const clock = explorer.getByRole("button", { name: "Recent documents", exact: true });
-  await clock.focus();
+  const recents = explorer.getByRole("region", { name: "Recent", exact: true });
+  const disclosure = recents.getByRole("button", { name: "Recent", exact: true });
+  await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+  await disclosure.focus();
   await page.keyboard.press("Enter");
-  const recentMenu = page.getByRole("menu");
-  const explorerRow = recentMenu.getByRole("menuitem").filter({ hasText: title });
+  const explorerRow = recents.getByRole("link", { name: title, exact: true });
   await expect(explorerRow).toBeVisible(ROUND_TRIP);
   expect(await explorerRow.textContent()).toContain("📌");
   await explorerRow.click();
   await expect(page).toHaveURL(note.href, ROUND_TRIP);
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(title, ROUND_TRIP);
-  await expect(recentMenu).toBeHidden();
-  await expect(explorer.getByRole("region", { name: "Recent documents", exact: true })).toHaveCount(0);
-
-  // Reopening reflects the new history, and Escape returns focus to the clock.
-  await clock.click();
-  await expect(recentMenu.getByRole("menuitem").filter({ hasText: otherTitle })).toBeVisible(ROUND_TRIP);
-  await page.keyboard.press("Escape");
-  await expect(recentMenu).toBeHidden();
-  await expect(clock).toBeFocused();
+  await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+  await expect(recents.getByRole("link", { name: otherTitle, exact: true })).toBeVisible(ROUND_TRIP);
 
   // The same menu remains reachable in the narrower desktop drawer.
   await page.setViewportSize({ width: 1100, height: 800 });
@@ -92,6 +85,7 @@ test("a page icon follows the document to Home, the palette, the explorer and se
   });
   expect(fits).toBe(true);
   await drawerClock.click();
+  const recentMenu = page.getByRole("menu");
   await expect(recentMenu.getByRole("menuitem").filter({ hasText: otherTitle })).toBeVisible(ROUND_TRIP);
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");

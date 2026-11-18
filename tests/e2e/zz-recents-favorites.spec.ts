@@ -205,10 +205,10 @@ test.describe("the palette, before anything is typed", () => {
 const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
 const OBSIDIAN_SOURCE = "0199f100-0000-7000-8000-000000000101";
 
-const favoritesButton = (page: Page) => page.getByRole("button", { name: "Favorite documents", exact: true });
+const favoritesButton = (page: Page) => page.getByRole("button", { name: "View all favorite documents", exact: true });
 
 test.describe("the sidebar's Favorites", () => {
-  test("lists every favorite from the toolbar in newest-first order", async ({ page }) => {
+  test("shows four favorites and opens every favorite in newest-first order", async ({ page }) => {
     const stamp = unique("Fav");
     const workspaceId = await mySpace(page);
     const titles = Array.from({ length: 10 }, (_, index) => `${stamp} Note ${String(index + 1).padStart(2, "0")}`);
@@ -221,6 +221,8 @@ test.describe("the sidebar's Favorites", () => {
       await page.getByRole("button", { name: `Add to favorites: ${title}`, exact: true }).click();
       await expect(page.getByRole("button", { name: `Remove from favorites: ${title}`, exact: true })).toBeAttached(ROUND_TRIP);
     }
+    const visibleFavorites = page.getByRole("region", { name: "Favorites", exact: true }).getByRole("link");
+    await expect(visibleFavorites).toHaveText([...titles].reverse().slice(0, 4));
     await expect(favorites).toHaveAttribute("aria-expanded", "false");
     await favorites.click();
     const mine = page.getByRole("menu").getByRole("menuitem", { name: stamp });
@@ -244,10 +246,9 @@ test.describe("the sidebar's Favorites", () => {
     await expect(favorites).toBeFocused();
   });
 
-  test("keeps the toolbar star available when there are no favorites", async ({ page }) => {
+  test("shows an empty Favorites section when there are no favorites", async ({ page }) => {
     // Team favorites are local to this browser context.
     await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
-    await favoritesButton(page).click();
-    await expect(page.getByRole("menu").getByText("No favorite documents")).toBeVisible(ROUND_TRIP);
+    await expect(page.getByRole("region", { name: "Favorites", exact: true }).getByText("No favorite documents")).toBeVisible(ROUND_TRIP);
   });
 });

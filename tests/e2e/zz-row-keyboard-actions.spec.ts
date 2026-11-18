@@ -81,9 +81,8 @@ test("F is unbound; the menu favorites the row", async ({ page }) => {
   await page.keyboard.press("f");
   await row(page, a).click({ button: "right" });
   await page.getByRole("menuitem", { name: "Add to favorites", exact: true }).click();
-  await page.getByRole("button", { name: "Favorite documents", exact: true }).click();
-  await expect(page.getByRole("menuitem", { name: new RegExp(a) })).toBeVisible(ROUND_TRIP);
-  await page.keyboard.press("Escape");
+  const favorites = page.getByRole("region", { name: "Favorites", exact: true });
+  await expect(favorites.getByRole("link", { name: a, exact: true })).toBeVisible(ROUND_TRIP);
   await row(page, a).click({ button: "right" });
   await expect(page.getByRole("menuitem", { name: "Remove from favorites" })).toBeVisible();
 });
@@ -253,9 +252,9 @@ test("closing a row menu does not enable F", async ({ page }) => {
   await expect(page.getByRole("menu")).toHaveCount(0);
   await page.keyboard.press("f");
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page.getByRole("button", { name: "Favorite documents", exact: true }).click();
-  await expect(page.getByRole("menuitem", { name: new RegExp(b) })).toHaveCount(0);
-  await expect(page.getByRole("menuitem", { name: new RegExp(a) })).toHaveCount(0);
+  const favorites = page.getByRole("region", { name: "Favorites", exact: true });
+  await expect(favorites.getByRole("link", { name: b, exact: true })).toHaveCount(0);
+  await expect(favorites.getByRole("link", { name: a, exact: true })).toHaveCount(0);
 });
 
 /** What a row key would have done to the page: left it, opened another dialog, or favourited the row. */
