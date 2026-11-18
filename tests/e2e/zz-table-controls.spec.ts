@@ -116,9 +116,40 @@ test.describe("table edge controls", () => {
     const grip = (await colGrip.boundingBox())!;
     const overlaps = bar.x < after.x + after.width && bar.x + bar.width > after.x && bar.y < after.y + after.height && bar.y + bar.height > after.y;
     expect(overlaps).toBe(false);
+    // A low handle straddling the top border: half in the table's own margin, half over the header.
     expect(grip.x).toBeGreaterThanOrEqual(table.x);
-    expect(grip.y).toBeGreaterThanOrEqual(table.y);
     expect(grip.x + grip.width).toBeLessThanOrEqual(table.x + table.width);
-    expect(grip.y + grip.height).toBeLessThanOrEqual(table.y + table.height);
+    expect(grip.height).toBeLessThanOrEqual(12);
+    expect(grip.y).toBeLessThan(table.y);
+    expect(grip.y + grip.height).toBeGreaterThan(table.y);
+    expect(grip.y).toBeGreaterThanOrEqual(table.y - 6 - 1);
+  });
+
+  test("the column grip leaves a centred header's text clickable", async ({ page }) => {
+    const heading = "Quarterly revenue figures";
+    const { surface } = await openNote(page, `| ${heading} | Other |\n| :-: | --- |\n| one | two |\n`);
+    const header = surface.locator("th").first();
+    await header.click();
+    await expect(page.getByRole("button", { name: "Column 1 actions" })).toBeVisible();
+    const result = await header.evaluate(th => {
+      const bad: string[] = [];
+      let checked = 0;
+      const walker = document.createTreeWalker(th, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const text = node as Text;
+        for (let i = 0; i < text.length; i++) {
+          const range = document.createRange();
+          range.setStart(text, i); range.setEnd(text, i + 1);
+          const rect = range.getBoundingClientRect();
+          if (rect.width === 0 || rect.height === 0) continue;
+          checked++;
+          const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+          if (!hit || !th.contains(hit)) bad.push(`${i}:${text.data[i]}:${hit?.className ?? "none"}`);
+        }
+      }
+      return { bad, checked };
+    });
+    expect(result.checked).toBeGreaterThanOrEqual(heading.replace(/ /g, "").length);
+    expect(result.bad).toEqual([]);
   });
 });

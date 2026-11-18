@@ -1,5 +1,5 @@
 import { closeHistory } from "@milkdown/kit/prose/history";
-import { Plugin, Selection, type Command, type EditorState } from "@milkdown/kit/prose/state";
+import { Plugin, Selection, type Command, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { addColumnAfter, addColumnBefore, addRowAfter, addRowBefore, deleteColumn, deleteRow, isInTable } from "@milkdown/kit/prose/tables";
 import type { EditorView } from "@milkdown/kit/prose/view";
@@ -52,16 +52,25 @@ function setColumnAlignment(view: EditorView, cellPos: number, alignment: string
       pos += cell.nodeSize;
     }
   });
-  if (transaction.docChanged) view.dispatch(closeHistory(transaction));
+  if (transaction.docChanged) { view.dispatch(closeHistory(transaction)); settle(view); }
 }
 
-/** The first ancestor that scrolls sideways, if any: a grip whose cell is scrolled out of it must not float over the page. */
-function scrollRegion(element: HTMLElement): HTMLElement | null {
-  for (let node = element.parentElement; node; node = node.parentElement) {
-    const overflow = getComputedStyle(node).overflowX;
-    if (overflow === "auto" || overflow === "scroll" || overflow === "hidden") return node;
-  }
-  return null;
+/** Ends the history event an action just made, so text typed right after it is its own undo step. */
+function settle(view: EditorView): void {
+  view.dispatch(closeHistory(view.state.tr));
+}
+
+/** A column the table just gained starts with Markdown's default alignment, not the schema's "left". */
+function clearColumnAlignment(transaction: Transaction, tablePos: number, column: number): void {
+  const table = transaction.doc.nodeAt(tablePos);
+  if (!table || table.type.name !== "table") return;
+  table.forEach((row, offset) => {
+    if (column >= row.childCount) return;
+    let pos = tablePos + 1 + offset + 1;
+    for (let index = 0; index < column; index++) pos += row.child(index).nodeSize;
+    const cell = row.child(column);
+    if (cell.attrs.alignment != null) transaction.setNodeMarkup(pos, undefined, { ...cell.attrs, alignment: null });
+  });
 }
 
 const outside = (rect: DOMRect, region: DOMRect) =>
@@ -113,14 +122,18 @@ export function tableActions() {
       }
 
       /** Runs `command` with the caret in the target cell, as one undo step. */
-      function run(command: Command, cellPos: number) {
+      function run(command: Command, cellPos: number, newColumn?: number) {
         if (!view.editable) return;
         const cell = locateCell(view.state.doc, cellPos);
         if (!cell) return;
         const select = view.state.tr.setSelection(Selection.near(view.state.doc.resolve(cellPos + 1)));
         view.dispatch(closeHistory(select));
-        command(view.state, transaction => view.dispatch(closeHistory(transaction).scrollIntoView()));
+        command(view.state, transaction => {
+          if (newColumn !== undefined) clearColumnAlignment(transaction, cell.tablePos, newColumn);
+          view.dispatch(closeHistory(transaction).scrollIntoView());
+        });
         hovered = null;
+        settle(view);
       }
 
       /** The cell of `row` (default: the last) at `column` (default: the last), as a position inside the table. */
@@ -138,22 +151,23 @@ export function tableActions() {
         if (!target || !view.editable) return;
         run(addRowAfter, cellPosAt(target.table, target.tablePos, target.table.childCount - 1, 0));
         const table = view.state.doc.nodeAt(target.tablePos);
-        if (table) view.dispatch(view.state.tr.setSelection(Selection.near(view.state.doc.resolve(cellPosAt(table, target.tablePos, table.childCount - 1, 0) + 1))));
+        if (table) { view.dispatch(view.state.tr.setSelection(Selection.near(view.state.doc.resolve(cellPosAt(table, target.tablePos, table.childCount - 1, 0) + 1)))); settle(view); }
         view.focus(); position();
       }
       function addColumn() {
         const target = targetCell();
         if (!target || !view.editable) return;
         const row = target.row;
-        run(addColumnAfter, cellPosAt(target.table, target.tablePos, row));
+        run(addColumnAfter, cellPosAt(target.table, target.tablePos, row), target.table.firstChild?.childCount ?? 0);
         const table = view.state.doc.nodeAt(target.tablePos);
-        if (table) view.dispatch(view.state.tr.setSelection(Selection.near(view.state.doc.resolve(cellPosAt(table, target.tablePos, row) + 1))));
+        if (table) { view.dispatch(view.state.tr.setSelection(Selection.near(view.state.doc.resolve(cellPosAt(table, target.tablePos, row) + 1)))); settle(view); }
         view.focus(); position();
       }
 
-      function menuItem(label: string, onRun: () => void, role: "menuitem" | "menuitemradio" = "menuitem", checked?: boolean) {
+      function menuItem(label: string, onRun: () => void, role: "menuitem" | "menuitemradio" = "menuitem", checked?: boolean, disabled = false) {
         const button = document.createElement("button");
         button.type = "button"; button.setAttribute("role", role); button.textContent = label;
+        if (disabled) { button.disabled = true; button.setAttribute("aria-disabled", "true"); }
         if (role === "menuitemradio") button.setAttribute("aria-checked", String(checked === true));
         button.addEventListener("mousedown", event => { if (event.button === 0) event.preventDefault(); });
         button.addEventListener("click", () => { closeMenu(); onRun(); view.focus(); position(); });
@@ -178,23 +192,32 @@ export function tableActions() {
         if (kind === "row") {
           menu.setAttribute("aria-label", `Row ${target.row + 1} actions`);
           if (target.row > 0) items.push(menuItem("Insert row above", () => run(addRowBefore, at)));
-          items.push(menuItem("Insert row below", () => run(addRowAfter, at)), rule(), menuItem("Delete row", () => run(deleteRow, at)));
+          items.push(menuItem("Insert row below", () => run(addRowAfter, at)), rule(), menuItem("Delete row", () => run(deleteRow, at), "menuitem", undefined, target.table.childCount <= 1));
         } else {
           menu.setAttribute("aria-label", `Column ${target.column + 1} actions`);
           const current = columnAlignment(target);
-          items.push(menuItem("Insert column left", () => run(addColumnBefore, at)), menuItem("Insert column right", () => run(addColumnAfter, at)), rule());
+          items.push(menuItem("Insert column left", () => run(addColumnBefore, at, target.column)), menuItem("Insert column right", () => run(addColumnAfter, at, target.column + 1)), rule());
           for (const [value, label] of [["", "Default"], ["left", "Left"], ["center", "Center"], ["right", "Right"]]) {
             items.push(menuItem(label, () => setColumnAlignment(view, at, value || null), "menuitemradio", current === value));
           }
-          items.push(rule(), menuItem("Delete column", () => run(deleteColumn, at)));
+          items.push(rule(), menuItem("Delete column", () => run(deleteColumn, at), "menuitem", undefined, (target.table.firstChild?.childCount ?? 0) <= 1));
         }
         menu.replaceChildren(...items);
         menu.hidden = false;
         menuGrip = grip; grip.setAttribute("aria-expanded", "true");
-        const rect = grip.getBoundingClientRect();
-        menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8))}px`;
-        menu.style.top = `${rect.bottom + 4}px`;
-        (menu.querySelector("[role^=menuitem]") as HTMLElement | null)?.focus();
+        placeMenu();
+        menu.querySelector<HTMLElement>("[role^=menuitem]:not(:disabled)")?.focus();
+      }
+
+      /** Under its grip, kept inside the viewport; above the grip when there is no room below. */
+      function placeMenu() {
+        if (!menuGrip) return;
+        const rect = menuGrip.getBoundingClientRect();
+        const width = menu.offsetWidth, height = menu.offsetHeight;
+        menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
+        const below = rect.bottom + 4;
+        const top = below + height <= window.innerHeight - 8 ? below : rect.top - 4 - height;
+        menu.style.top = `${Math.max(8, top)}px`;
       }
 
       function toggle(grip: HTMLButtonElement, kind: "row" | "column") {
@@ -228,7 +251,7 @@ export function tableActions() {
         });
       }
       const onMenuKey = (event: KeyboardEvent) => {
-        const entries = [...menu.querySelectorAll<HTMLElement>("[role^=menuitem]")];
+        const entries = [...menu.querySelectorAll<HTMLElement>("[role^=menuitem]:not(:disabled)")];
         const index = entries.indexOf(document.activeElement as HTMLElement);
         if (event.key === "Escape") { event.preventDefault(); closeMenu(); view.focus(); position(); }
         else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -245,7 +268,12 @@ export function tableActions() {
 
       function position() {
         if (destroyed) return;
-        const target = view.editable ? targetCell() : null;
+        const hideAll = () => {
+          for (const control of controls) control.hidden = true;
+          if (!menu.hidden) { const hadFocus = menu.contains(document.activeElement); closeMenu(); if (hadFocus && view.editable) view.focus(); }
+        };
+        if (!view.editable) { hideAll(); return; }
+        const target = targetCell();
         const tableDom = target ? view.nodeDOM(target.tablePos) as HTMLElement | null : null;
         const active = document.activeElement;
         const controlsFocused = inControls(active);
@@ -258,29 +286,53 @@ export function tableActions() {
         }
         rowGrip.setAttribute("aria-label", `Row ${target.row + 1} actions`);
         colGrip.setAttribute("aria-label", `Column ${target.column + 1} actions`);
-        const region = scrollRegion(tableDom)?.getBoundingClientRect() ?? null;
+        // What the reader can see: the document pane (it clips what hangs outside it) within the viewport.
+        const pane = tableDom.closest(".kh-document-pane")?.getBoundingClientRect();
+        const bounds = {
+          left: Math.max(0, pane?.left ?? 0), top: Math.max(0, pane?.top ?? 0),
+          right: Math.min(window.innerWidth, pane?.right ?? window.innerWidth), bottom: Math.min(window.innerHeight, pane?.bottom ?? window.innerHeight),
+        };
+        const boundsRect = new DOMRect(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
         const rowDom = view.nodeDOM(target.tablePos + 1 + rowOffset(target)) as HTMLElement | null;
         const headerPos = target.tablePos + 2 + columnOffset(target);
         const headerDom = view.nodeDOM(headerPos) as HTMLElement | null;
+        const tableRect = tableDom.getBoundingClientRect();
         const rowRect = (rowDom ?? tableDom).getBoundingClientRect();
         const headerRect = (headerDom ?? tableDom).getBoundingClientRect();
         const editorRect = view.dom.getBoundingClientRect();
-        rowGrip.hidden = !!region && outside(rowRect, region);
-        colGrip.hidden = !!region && outside(headerRect, region);
-        rowGrip.style.left = `${editorRect.left + (56 - 24) / 2}px`;
-        rowGrip.style.top = `${rowRect.top + rowRect.height / 2 - 12}px`;
-        colGrip.style.left = `${headerRect.left + headerRect.width / 2 - 12}px`;
-        colGrip.style.top = `${headerRect.top}px`;
-        // The bars span the table's visible box, in the strip directly below and directly right of it.
-        const tableRect = tableDom.getBoundingClientRect();
-        const clip = region ?? tableRect;
-        const left = Math.max(tableRect.left, clip.left), right = Math.min(tableRect.right, clip.right);
-        const top = Math.max(tableRect.top, clip.top), bottom = Math.min(tableRect.bottom, clip.bottom);
-        const gone = !!region && outside(tableRect, region);
+        const gutterWidth = Number.parseFloat(getComputedStyle(view.dom).paddingLeft) || 56;
+        const gone = outside(tableRect, boundsRect);
+        // The table's own scrolling box clips a column scrolled sideways; the pane and viewport clip the rest.
+        const clip = {
+          left: Math.max(tableRect.left, bounds.left), right: Math.min(tableRect.right, bounds.right),
+          top: Math.max(tableRect.top, bounds.top), bottom: Math.min(tableRect.bottom, bounds.bottom),
+        };
+        // Row grip: level with its row in the editor's gutter, but never up in the block gutter's buttons (24px, at the table's top).
+        const rowLeft = Math.max(editorRect.left + (gutterWidth - 24) / 2, bounds.left + 4);
+        const rowTop = Math.max(rowRect.top + rowRect.height / 2 - 12, tableRect.top + 24 + 4);
+        rowGrip.hidden = gone || rowRect.bottom < clip.top || rowRect.top > clip.bottom || rowTop < bounds.top || rowTop + 24 > bounds.bottom;
+        rowGrip.style.left = `${rowLeft}px`;
+        rowGrip.style.top = `${rowTop}px`;
+        // Column grip: a low handle across the table's top border, half of it in the table's own top margin, which holds no text.
+        const colCentre = headerRect.left + headerRect.width / 2;
+        const colTop = tableRect.top - 6;
+        colGrip.hidden = gone || colCentre < clip.left || colCentre > clip.right || tableRect.top < bounds.top || tableRect.top + 6 > bounds.bottom;
+        colGrip.style.left = `${colCentre - 12}px`;
+        colGrip.style.top = `${colTop}px`;
+        // The bars span the table's visible box, in the strip directly below and directly right of it, kept inside the pane.
+        const barLeft = clip.left, barWidth = Math.max(0, clip.right - clip.left);
+        const barTop = clip.top, barHeight = Math.max(0, clip.bottom - clip.top);
         addRowBar.hidden = gone; addColumnBar.hidden = gone;
-        addRowBar.style.left = `${left}px`; addRowBar.style.top = `${bottom}px`; addRowBar.style.width = `${Math.max(0, right - left)}px`;
-        addColumnBar.style.left = `${right}px`; addColumnBar.style.top = `${top}px`; addColumnBar.style.height = `${Math.max(0, bottom - top)}px`;
-        if (!menu.hidden && menuGrip && menuGrip.hidden) closeMenu();
+        addRowBar.style.left = `${barLeft}px`;
+        addRowBar.style.top = `${Math.min(clip.bottom, bounds.bottom - 12)}px`;
+        addRowBar.style.width = `${barWidth}px`;
+        addColumnBar.style.left = `${Math.min(clip.right, bounds.right - 12)}px`;
+        addColumnBar.style.top = `${barTop}px`;
+        addColumnBar.style.height = `${barHeight}px`;
+        if (!menu.hidden && menuGrip) {
+          if (menuGrip.hidden) { const hadFocus = menu.contains(document.activeElement); closeMenu(); if (hadFocus) view.focus(); }
+          else placeMenu();
+        }
       }
       function rowOffset(target: CellLocation) {
         let offset = 0;
@@ -296,8 +348,13 @@ export function tableActions() {
 
       const onPointerMove = (event: PointerEvent) => {
         pointerInside = true;
-        const cell = (event.target as HTMLElement | null)?.closest?.("td, th");
-        if (!cell || !view.dom.contains(cell)) return;
+        const hit = event.target as HTMLElement | null;
+        const cell = hit?.closest?.("td, th");
+        if (!cell || !view.dom.contains(cell)) {
+          // Over another block (not the editor's own gutter, which lies between a row and its grip), the pointer has left the table.
+          if (hovered !== null && menu.hidden && hit && hit !== view.dom && view.dom.contains(hit) && !hit.closest?.(".kh-markdown-table")) { hovered = null; position(); }
+          return;
+        }
         let pos: number;
         try { pos = view.posAtDOM(cell, 0); } catch { return; }
         const located = locateCell(view.state.doc, pos);
@@ -307,7 +364,7 @@ export function tableActions() {
       };
       const onPointerLeave = (event: PointerEvent) => {
         const to = event.relatedTarget as Node | null;
-        if (inControls(to)) return;
+        if (inControls(to) || (to as Element | null)?.closest?.(".kh-block-gutter")) return;
         pointerInside = false;
         if (menu.hidden) { hovered = null; position(); }
       };
@@ -320,7 +377,7 @@ export function tableActions() {
       view.dom.addEventListener("focusout", onFocus);
       window.addEventListener("scroll", position, true);
       window.addEventListener("resize", position);
-      focusRowGrip = () => { position(); if (rowGrip.hidden) return false; rowGrip.focus(); return document.activeElement === rowGrip; };
+      focusRowGrip = () => { hovered = null; position(); if (rowGrip.hidden) return false; rowGrip.focus(); return document.activeElement === rowGrip; };
       position();
       return {
         update(updated: EditorView, previous: EditorState) {
