@@ -4,7 +4,9 @@ import { $prose } from "@milkdown/kit/utils";
 import { isInTable } from "@milkdown/kit/prose/tables";
 import { HeadingSlugger } from "@/shared/markdown/heading-slug";
 import { openBlockList } from "./slash-commands";
-import { blockKind, canTurnInto, headingText, deleteBlock, duplicateBlock, insertBlockBelow, moveBlock, siblingBlocks, topLevelBlocks, turnBlockInto, type BlockKind } from "./block-actions";
+import { blockKind, canTurnInto, headingText, deleteBlock, dispatchBlockAction, duplicateBlock, insertBlockBelow, moveBlock, siblingBlocks, topLevelBlocks, turnBlockInto, type BlockKind, type EditorBlock } from "./block-actions";
+import { keepRange, rangeBlocks, setBlockRange } from "./block-range";
+import { deleteBlocks, duplicateBlocks, moveBlocks, sequenceOf, turnBlocks } from "./block-sequence";
 
 export function icon(kind: "plus" | "grip"): SVGSVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -40,23 +42,27 @@ export function headingSlugAt(view: EditorView, pos: number): string | null {
 }
 
 export function blockGutter() {
-  const dragKey = new PluginKey<number | null>("khDraggedBlock");
+  // The blocks being dragged: one, or every block of the range (2026-11-21 block-unit spec, decision 6).
+  const dragKey = new PluginKey<number[] | null>("khDraggedBlock");
   let focusControls: (() => boolean) | undefined;
-  return $prose(() => new Plugin<number | null>({
+  return $prose(() => new Plugin<number[] | null>({
     key: dragKey,
     state: {
       init: () => null,
       apply(transaction, previous) {
-        const position = transaction.getMeta(dragKey) as number | null | undefined;
-        return position !== undefined ? position : transaction.docChanged ? null : previous;
+        const positions = transaction.getMeta(dragKey) as number[] | null | undefined;
+        return positions !== undefined ? positions : transaction.docChanged ? null : previous;
       },
     },
     props: {
       decorations(state) {
-        const pos = dragKey.getState(state);
-        if (pos == null) return null;
-        const node = state.doc.nodeAt(pos);
-        return node ? DecorationSet.create(state.doc, [Decoration.node(pos, pos + node.nodeSize, { class: "kh-block-drag-source" })]) : null;
+        const positions = dragKey.getState(state);
+        if (!positions) return null;
+        const decorations = positions.flatMap((pos) => {
+          const node = state.doc.nodeAt(pos);
+          return node ? [Decoration.node(pos, pos + node.nodeSize, { class: "kh-block-drag-source" })] : [];
+        });
+        return decorations.length ? DecorationSet.create(state.doc, decorations) : null;
       },
       attributes: { class: "kh-editor-blocks", "aria-keyshortcuts": "Alt+F10", "aria-description": "Press Alt+F10 for block actions." },
       handleKeyDown(view, event) {
@@ -94,6 +100,13 @@ export function blockGutter() {
       const blocksNow = () => active === null ? topLevelBlocks(view.state.doc) : siblingBlocks(view.state.doc, active);
       const activeIndex = () => blocksNow().findIndex((block) => block.pos === active);
       const activeNode = () => (active === null ? null : view.state.doc.nodeAt(active));
+      /**
+       * The range's blocks when the controls' block is one of them: the menu and drag then act on the range
+       * (2026-11-21 block-unit spec, decision 5). Otherwise null, and they act on that block alone.
+       */
+      const groupNow = () => { const blocks = rangeBlocks(view.state); return blocks && blocks.some((block) => block.pos === active) ? blocks : null; };
+      /** The sequence holding the block at `pos`, when it is a block of one (a whole list taken as one node is not). */
+      const sequenceAt = (pos: number) => { const sequence = sequenceOf(view.state.doc, pos); return sequence.some((block) => block.pos === pos) ? sequence : null; };
       function menuButton(label: string, run: () => void): HTMLButtonElement {
         const button = document.createElement("button");
         button.type = "button"; button.setAttribute("role", "menuitem"); button.textContent = label;
@@ -108,26 +121,42 @@ export function blockGutter() {
       function renderMain(): HTMLElement {
         menuMode = "main";
         menu.replaceChildren();
-        menu.setAttribute("aria-label", "Block actions");
+        const group = groupNow();
+        menu.setAttribute("aria-label", group ? `Block actions, ${group.length} blocks` : "Block actions");
         const turn = menuButton("Turn into", () => { renderTurn(); position(); focusFirst(); });
         turn.setAttribute("aria-haspopup", "menu"); turn.setAttribute("aria-expanded", "false");
         const duplicate = menuButton("Duplicate", () => {
-          if (active === null || !duplicateBlock(view, active)) return;
-          live.textContent = "Block duplicated";
+          const blocks = groupNow();
+          if (blocks) {
+            const { state } = view;
+            const { tr, copies } = duplicateBlocks(state, blocks);
+            // The copies become the range, in its direction.
+            keepRange(view, state, tr, copies);
+            view.focus();
+            live.textContent = `${blocks.length} blocks duplicated`;
+          } else {
+            if (active === null || !duplicateBlock(view, active)) return;
+            live.textContent = "Block duplicated";
+          }
           closeMenu();
         });
         const remove = menuButton("Delete", () => {
-          if (active === null || !deleteBlock(view, active)) return;
-          live.textContent = "Block deleted";
+          const blocks = groupNow();
+          if (blocks) {
+            setBlockRange(view, deleteBlocks(view.state, blocks), null);
+            view.focus();
+            live.textContent = `${blocks.length} blocks deleted`;
+          } else {
+            if (active === null || !deleteBlock(view, active)) return;
+            live.textContent = "Block deleted";
+          }
           closeMenu();
         });
         const up = menuButton("Move up", () => moveBy(-1));
         const down = menuButton("Move down", () => moveBy(1));
-        const blocks = blocksNow();
-        const index = activeIndex();
-        up.disabled = index <= 0;
-        down.disabled = index < 0 || index === blocks.length - 1;
-        const heading = activeNode()?.type.name === "heading" ? menuButton("Copy link to heading", () => {
+        up.disabled = !canMove(-1);
+        down.disabled = !canMove(1);
+        const heading = !group && activeNode()?.type.name === "heading" ? menuButton("Copy link to heading", () => {
           const slug = active === null ? null : headingSlugAt(view, active);
           closeMenu();
           if (slug === null) return;
@@ -144,19 +173,37 @@ export function blockGutter() {
       function renderTurn(): void {
         menuMode = "turn";
         menu.replaceChildren();
-        menu.setAttribute("aria-label", "Turn block into");
+        const group = groupNow();
+        menu.setAttribute("aria-label", group ? `Turn ${group.length} blocks into` : "Turn block into");
         const node = activeNode();
-        const current = node ? blockKind(node) : null;
+        const current = group ? null : node ? blockKind(node) : null;
         const back = menuButton("Back", () => { const first = renderMain(); position(); first.focus(); });
         back.setAttribute("aria-label", "Back to block actions");
         menu.append(back, separator());
         for (const [kind, label] of turnOptions) {
           const button = menuButton(label, () => {
-            if (active === null || !turnBlockInto(view, active, kind)) return;
-            live.textContent = `Block turned into ${label.toLowerCase()}`;
+            const blocks = groupNow();
+            if (blocks) {
+              // One transaction for every block, one undo step; the range ends, as the turn keys end it.
+              const tr = turnBlocks(view.state, blocks, kind);
+              if (!tr) return;
+              setBlockRange(view, tr, null);
+              view.focus();
+              live.textContent = `${blocks.length} blocks turned into ${label.toLowerCase()}`;
+            } else {
+              if (active === null || !turnBlockInto(view, active, kind)) return;
+              live.textContent = `Block turned into ${label.toLowerCase()}`;
+            }
             closeMenu();
           });
-          button.disabled = !node || !canTurnInto(node, kind);
+          if (group) {
+            // Enabled only where every block can take it; a block already of that kind takes it as it is.
+            const already = group.every((block) => blockKind(block.node) === kind);
+            button.disabled = already || !group.every((block) => blockKind(block.node) === kind || canTurnInto(block.node, kind));
+            if (already) button.setAttribute("aria-current", "true");
+          } else {
+            button.disabled = !node || !canTurnInto(node, kind);
+          }
           if (kind === current) button.setAttribute("aria-current", "true");
           menu.append(button);
         }
@@ -169,7 +216,8 @@ export function blockGutter() {
       const live = document.createElement("div"); live.className = "sr-only"; live.setAttribute("aria-live", "polite");
       document.body.append(toolbar, menu, line, live);
       let active: number | null = null;
-      let dragging: { from: number; doc: typeof view.state.doc } | null = null;
+      // `sequence` is null for a block that is no block of a sequence (a whole list taken as one node): it moves among its siblings.
+      let dragging: { blocks: EditorBlock[]; sequence: EditorBlock[] | null; doc: typeof view.state.doc } | null = null;
       let dropAt: number | null = null;
       let frame = 0;
       let pointerY = 0;
@@ -272,8 +320,43 @@ export function blockGutter() {
       add.addEventListener("mousedown", event => { if (event.button === 0) event.preventDefault(); });
       // As Notion's +: the new line holds a visible "/" with its list open; dismissing it with only the "/" takes it back.
       add.addEventListener("click", () => { if (active !== null && insertBlockBelow(view, active)) openBlockList(view); });
-      function moveBy(direction: number) {
+      /**
+       * Moves the run `blocks` of `sequence` to `toIndex` of the sequence without them, as the keys do (2026-11-21
+       * block-unit spec): a paragraph passes one item, and an item at its list's end leaves the list. A range stays
+       * chosen over its new places; a single block keeps the caret in its text, as before.
+       */
+      function moveRun(blocks: EditorBlock[], toIndex: number) {
+        const { state } = view;
+        const { tr, moved } = moveBlocks(state, blocks, toIndex);
+        if (blocks.length > 1) { keepRange(view, state, tr, moved); view.focus(); }
+        else dispatchBlockAction(view, tr, moved[0].pos + 1);
+      }
+      /** The run that Move up/down would carry, and where, when the controls' block is a block of a sequence. */
+      function moveTarget(direction: -1 | 1) {
+        if (active === null) return null;
+        const sequence = sequenceAt(active);
+        if (!sequence) return null;
+        const blocks = groupNow() ?? sequence.filter((block) => block.pos === active);
+        const toIndex = sequence.findIndex((block) => block.pos === blocks[0].pos) + direction;
+        return { blocks, toIndex, possible: toIndex >= 0 && toIndex <= sequence.length - blocks.length };
+      }
+      function canMove(direction: -1 | 1): boolean {
+        const target = moveTarget(direction);
+        if (target) return target.possible;
+        const blocks = blocksNow();
+        const index = activeIndex();
+        return index >= 0 && index + direction >= 0 && index + direction < blocks.length;
+      }
+      function moveBy(direction: -1 | 1) {
         if (active === null) return;
+        const target = moveTarget(direction);
+        if (target) {
+          if (!target.possible) return;
+          closeMenu();
+          moveRun(target.blocks, target.toIndex);
+          live.textContent = target.blocks.length > 1 ? `${target.blocks.length} blocks moved` : direction < 0 ? "Block moved up" : "Block moved down";
+          return;
+        }
         const blocks = siblingBlocks(view.state.doc, active);
         const index = blocks.findIndex(block => block.pos === active);
         if (index < 0 || index + direction < 0 || index + direction >= blocks.length) return;
@@ -281,6 +364,11 @@ export function blockGutter() {
         closeMenu();
         if (moveBlock(view, active, before)) live.textContent = direction < 0 ? "Block moved up" : "Block moved down";
       }
+      // The grip of a block outside the range ends the range; its menu and drag act on that block alone (decision 5).
+      grip.addEventListener("mousedown", () => {
+        const range = rangeBlocks(view.state);
+        if (range && !range.some((block) => block.pos === active)) setBlockRange(view, view.state.tr, null, false);
+      });
       grip.addEventListener("click", () => {
         if (!menu.hidden) { closeMenu(); return; }
         renderMain();
@@ -310,10 +398,14 @@ export function blockGutter() {
       const outside = (event: PointerEvent) => { if (event.target instanceof Node && !toolbar.contains(event.target) && !menu.contains(event.target)) closeMenu(); };
       grip.addEventListener("dragstart", event => {
         if (!view.editable || active === null || !event.dataTransfer) { event.preventDefault(); return; }
-        closeMenu(); dragging = { from: active, doc: view.state.doc };
+        const node = view.state.doc.nodeAt(active);
+        if (!node) { event.preventDefault(); return; }
+        // Inside the range the grip drags the range, every block of it tinted (decision 6).
+        const blocks = groupNow() ?? [{ pos: active, node }];
+        closeMenu(); dragging = { blocks, sequence: sequenceAt(active), doc: view.state.doc };
         event.dataTransfer.effectAllowed = "move";
         event.dataTransfer.setData("application/x-kh-editor-block", String(active));
-        view.dispatch(view.state.tr.setMeta(dragKey, active));
+        view.dispatch(view.state.tr.setMeta(dragKey, blocks.map((block) => block.pos)));
         const element = blockElement(active);
         if (element) {
           event.dataTransfer.setDragImage(element, 0, 0);
@@ -325,14 +417,15 @@ export function blockGutter() {
         const rect = dom.getBoundingClientRect();
         if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) { dropAt = null; line.hidden = true; return; }
         event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-        const blocks = siblingBlocks(view.state.doc, dragging.from);
+        // The drop line stands at a boundary of the sequence (or, for a block of none, of its siblings): `dropAt` is its index.
+        const blocks = dragging.sequence ?? siblingBlocks(view.state.doc, dragging.blocks[0].pos);
         const last = blocks[blocks.length - 1];
-        let target = last ? last.pos + last.node.nodeSize : view.state.doc.content.size;
+        let target = blocks.length;
         let y = last ? (blockElement(last.pos)?.getBoundingClientRect().bottom ?? 0) : 0;
-        for (const block of blocks) {
+        for (const [index, block] of blocks.entries()) {
           const box = blockElement(block.pos)?.getBoundingClientRect();
           if (!box) continue;
-          if (event.clientY < (box.top + box.bottom) / 2) { target = block.pos; y = box.top; break; }
+          if (event.clientY < (box.top + box.bottom) / 2) { target = index; y = box.top; break; }
         }
         dropAt = target;
         const gutterWidth = Number.parseFloat(getComputedStyle(dom).paddingLeft) || 56;
@@ -346,7 +439,20 @@ export function blockGutter() {
         const rect = dom.getBoundingClientRect();
         const target = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom ? dropAt : null;
         event.preventDefault(); event.stopPropagation(); cancelDrag();
-        if (target !== null && view.state.doc === source.doc && moveBlock(view, source.from, target)) live.textContent = "Block moved";
+        if (target === null || view.state.doc !== source.doc) return;
+        if (source.sequence) {
+          // Dropped at the sequence's boundary `target`: the place in the sequence without the dragged run, if it moves at all.
+          const count = source.blocks.length;
+          const first = source.sequence.findIndex((block) => block.pos === source.blocks[0].pos);
+          if (target >= first && target <= first + count) return;
+          moveRun(source.blocks, target > first ? target - count : target);
+          live.textContent = count > 1 ? `${count} blocks moved` : "Block moved";
+          return;
+        }
+        const siblings = siblingBlocks(view.state.doc, source.blocks[0].pos);
+        const last = siblings[siblings.length - 1];
+        const before = target < siblings.length ? siblings[target].pos : last ? last.pos + last.node.nodeSize : view.state.doc.content.size;
+        if (moveBlock(view, source.blocks[0].pos, before)) live.textContent = "Block moved";
       };
       const dragLeave = (event: DragEvent) => { if (!event.relatedTarget) { dropAt = null; line.hidden = true; } };
       dom.addEventListener("mousemove", hover); dom.addEventListener("mouseleave", leave); toolbar.addEventListener("mouseleave", leave);

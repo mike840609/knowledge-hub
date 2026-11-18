@@ -15,7 +15,8 @@ import { deleteBlocks, duplicateBlocks, moveBlocks, sequenceOf, turnBlocks } fro
  * Delete, duplicate, move and turn-into then act on the whole range, each one undo step (`block-sequence.ts`);
  * typing is ignored, so a stray key never replaces one block of several.
  */
-type Range = { anchor: number; head: number };
+export type BlockRange = { anchor: number; head: number };
+type Range = BlockRange;
 const key = new PluginKey<Range | null>("khBlockRange");
 // A dead key (an accent waiting for its letter) starts a composition on some platforms before any keyCode says so.
 const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -61,10 +62,35 @@ function setRange(view: EditorView, tr: Transaction, range: Range | null, scroll
   view.dispatch(closeHistory(view.state.tr));
 }
 
+/** Dispatches `tr` as one undo step, with `range` (null ends it) as the range afterwards. The grip menu and drag use it. */
+export function setBlockRange(view: EditorView, tr: Transaction, range: BlockRange | null, scroll = true): void {
+  setRange(view, tr, range, scroll);
+}
+
+/** The range's blocks, when it holds two or more; else null. */
+export function rangeBlocks(state: EditorState): EditorBlock[] | null {
+  const range = key.getState(state);
+  if (!range) return null;
+  const blocks = blocksIn(state.doc, range);
+  return blocks.length > 1 ? blocks : null;
+}
+
 /** The range again over the blocks' new places, in its direction: the anchor's block stays the anchor. */
 function relocated(range: Range, blocks: EditorBlock[], placed: EditorBlock[]): Range {
   const at = (pos: number) => placed[blocks.findIndex((block) => block.pos === pos)].pos;
   return { anchor: at(range.anchor), head: at(range.head) };
+}
+
+/**
+ * Dispatches a duplicate or move of the whole range (`tr`, from `state`), keeping the range over `placed`, the blocks'
+ * new places, in its direction: the anchor's block is chosen again. Shared by the keys, the grip menu and drag.
+ */
+export function keepRange(view: EditorView, state: EditorState, tr: Transaction, placed: EditorBlock[]): void {
+  const range = key.getState(state);
+  if (!range) { setRange(view, tr, null); return; }
+  const next = relocated(range, blocksIn(state.doc, range), placed);
+  tr.setSelection(NodeSelection.create(tr.doc, next.anchor));
+  setRange(view, tr, next);
 }
 
 /** The span a range covers, from its first block's start to its last block's end (copy takes it as one slice). */
@@ -177,9 +203,7 @@ export const blockRange = $prose(
             event.preventDefault();
             const { tr, copies } = duplicateBlocks(state, blocks);
             // The copies keep the range's direction: the copy of the anchor block is the anchor.
-            const copied = relocated(range, blocks, copies);
-            tr.setSelection(NodeSelection.create(tr.doc, copied.anchor));
-            setRange(view, tr, copied);
+            keepRange(view, state, tr, copies);
             return true;
           }
           if ((event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey && moveKey) {
@@ -189,9 +213,7 @@ export const blockRange = $prose(
             const toIndex = all.findIndex((block) => block.pos === blocks[0].pos) + (event.key === "ArrowUp" ? -1 : 1);
             if (toIndex < 0 || toIndex > all.length - blocks.length) return true;
             const { tr, moved } = moveBlocks(state, blocks, toIndex);
-            const next = relocated(range, blocks, moved);
-            tr.setSelection(NodeSelection.create(tr.doc, next.anchor));
-            setRange(view, tr, next);
+            keepRange(view, state, tr, moved);
             return true;
           }
           // Ctrl+Alt is also AltGr on Windows: there only the character decides (AltGr+7 is `{` on a German keyboard, not a

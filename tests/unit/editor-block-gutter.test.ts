@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { editorViewCtx } from "@milkdown/kit/core";
-import { TextSelection } from "@milkdown/kit/prose/state";
+import { undo } from "@milkdown/kit/prose/history";
+import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import { afterEach, expect, it } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { blockGutter } from "@/components/knowledge/editor/block-gutter";
@@ -410,4 +411,135 @@ it("removes the whole list when its only item is deleted among other blocks", as
   button("Move block").click();
   menuItem("Delete").click();
   expect(editor.getMarkdown().trim()).toBe("Before\n\nAfter");
+});
+
+// 2026-11-21 block-unit spec, decisions 5 and 6: the grip of a block inside the range acts on the range.
+const shiftKey = (view: import("@milkdown/kit/prose/view").EditorView, key: string) => view.dom.dispatchEvent(new KeyboardEvent("keydown", { key, shiftKey: true, bubbles: true, cancelable: true }));
+/** `Two`, `Three` chosen as a range whose anchor is `Three`, so the controls stand at `Three`. */
+function rangeTwoThree(view: import("@milkdown/kit/prose/view").EditorView, index = 2) {
+  let pos = 0;
+  for (let at = 0; at < index; at++) pos += view.state.doc.child(at).nodeSize;
+  view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)));
+  shiftKey(view, "ArrowUp");
+  expect([...view.dom.querySelectorAll(".kh-block-in-range")].length).toBe(2);
+}
+const live = () => [...document.querySelectorAll<HTMLElement>('[aria-live="polite"]')].map(region => region.textContent);
+async function openRange() {
+  const opened = await openWith("One\n\nTwo\n\nThree", false);
+  rangeTwoThree(opened.view);
+  reveal(opened.view);
+  return opened;
+}
+
+it("Duplicate acts on the range", async () => {
+  const { editor, view } = await openRange();
+  button("Move block").click();
+  menuItem("Duplicate").click();
+  expect(editor.getMarkdown()).toBe("One\n\nTwo\n\nThree\n\nTwo\n\nThree\n");
+  expect(live()).toContain("2 blocks duplicated");
+  // The copies become the range.
+  expect([...view.dom.querySelectorAll(".kh-block-in-range")].map(node => node.textContent)).toEqual(["Two", "Three"]);
+  // In its direction: the copy of `Three`, the anchor, is the block chosen.
+  expect(view.state.selection).toBeInstanceOf(NodeSelection);
+  expect((view.state.selection as NodeSelection).node.textContent).toBe("Three");
+  expect(view.state.selection.from).toBe([0, 1, 2, 3].reduce((size, at) => size + view.state.doc.child(at).nodeSize, 0));
+});
+
+it("the menu names the count", async () => {
+  await openRange();
+  button("Move block").click();
+  expect(document.querySelector<HTMLElement>('[role="menu"]')!.getAttribute("aria-label")).toBe("Block actions, 2 blocks");
+});
+
+it("Delete, Move up, Turn into Heading 2 act on the range", async () => {
+  const { editor, view } = await openRange();
+  const original = editor.getMarkdown();
+  const restore = () => { undo(view.state, view.dispatch); expect(editor.getMarkdown()).toBe(original); rangeTwoThree(view); };
+  button("Move block").click();
+  menuItem("Delete").click();
+  expect(editor.getMarkdown()).toBe("One\n");
+  expect(live()).toContain("2 blocks deleted");
+  restore();
+  button("Move block").click();
+  menuItem("Move up").click();
+  expect(editor.getMarkdown()).toBe("Two\n\nThree\n\nOne\n");
+  expect(live()).toContain("2 blocks moved");
+  expect([...view.dom.querySelectorAll(".kh-block-in-range")].map(node => node.textContent)).toEqual(["Two", "Three"]);
+  restore();
+  button("Move block").click();
+  menuItem("Turn into").click();
+  menuItem("Heading 2").click();
+  expect(editor.getMarkdown()).toBe("One\n\n## Two\n\n## Three\n");
+  expect(live()).toContain("2 blocks turned into heading 2");
+  restore();
+});
+
+it("Turn into is disabled when one block cannot take it", async () => {
+  const { view } = await openWith("| a | b |\n| --- | --- |\n| 1 | 2 |\n\nPara", false);
+  // The anchor is the paragraph, which alone could become a toggle.
+  rangeTwoThree(view, 1);
+  reveal(view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  expect(menuItem("Toggle").disabled).toBe(true);
+});
+
+it("no Copy link to heading on a range", async () => {
+  const { view } = await openWith("One\n\n## Two\n\n## Three", false);
+  rangeTwoThree(view);
+  reveal(view);
+  button("Move block").click();
+  expect(menuItem("Copy link to heading")).toBeUndefined();
+  expect(menuItem("Duplicate")).toBeDefined();
+});
+
+it("opening the menu keeps the range", async () => {
+  const { view } = await openRange();
+  button("Move block").dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+  button("Move block").click();
+  expect(document.querySelector<HTMLElement>(".kh-block-move-menu")!.hidden).toBe(false);
+  expect([...view.dom.querySelectorAll(".kh-block-in-range")].map(node => node.textContent)).toEqual(["Two", "Three"]);
+});
+
+it("the grip of a block outside the range ends it", async () => {
+  const { editor, view } = await openRange();
+  view.dom.dispatchEvent(new MouseEvent("mousemove", { clientX: 25, clientY: 60, bubbles: true }));
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+  button("Move block").dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+  expect(view.dom.querySelectorAll(".kh-block-in-range").length).toBe(0);
+  button("Move block").click();
+  expect(document.querySelector<HTMLElement>('[role="menu"]')!.getAttribute("aria-label")).toBe("Block actions");
+  menuItem("Duplicate").click();
+  expect(editor.getMarkdown()).toBe("One\n\nOne\n\nTwo\n\nThree\n");
+});
+
+it("dragging a grip inside the range moves the range", async () => {
+  const { editor, view } = await openRange();
+  drag("dragstart", button("Move block"));
+  expect([...view.dom.querySelectorAll(".kh-block-drag-source")].map(node => node.textContent)).toEqual(["Two", "Three"]);
+  drag("dragover", view.dom, 50);
+  drag("drop", view.dom, 50);
+  expect(editor.getMarkdown()).toBe("Two\n\nThree\n\nOne\n");
+  expect(view.dom.querySelector(".kh-block-drag-source")).toBeNull();
+  expect(live()).toContain("2 blocks moved");
+});
+
+// Controller ruling: the menu and a single block's drag move by the sequence rule, as the keys do.
+it("Move down on a paragraph above a list passes one item, not the whole list", async () => {
+  const { editor, view } = await openWith("Para\n\n- a\n- b\n", false);
+  caretAfter(view, "Para");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Move down").click();
+  expect(editor.getMarkdown()).toBe("- a\n\nPara\n\n- b\n");
+});
+
+it("Move down on a list's last item takes it out of the list", async () => {
+  const { editor, view } = await openWith("- a\n- b\n\nPara\n", false);
+  caretAfter(view, "b");
+  reveal(view);
+  button("Move block").click();
+  expect(menuItem("Move down").disabled).toBe(false);
+  menuItem("Move down").click();
+  expect(editor.getMarkdown()).toBe("- a\n\nPara\n\n- b\n");
 });
