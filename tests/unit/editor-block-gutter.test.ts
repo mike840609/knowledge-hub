@@ -694,11 +694,11 @@ it("gutterFits measures against the nearest clipping ancestor", async () => {
 });
 
 it.each([
-  ["- A\n- B\n- C\n", false, "- A\n- C\n"],
-  ["- A\n- B\n- C\n", true, "- A\n"],
-  ["- Outer\n  - A\n  - B\n  - C\n", false, "- Outer\n  - A\n  - C\n"],
-  ["- Outer\n  - A\n  - B\n  - C\n", true, "- Outer\n  - A\n"],
-] as const)("Alt+F10 targets the chosen item or range in %s (range %s)", async (markdown, range, remaining) => {
+  ["a flat list, one item", "- A\n- B\n- C\n", false, "- A\n- C\n"],
+  ["a flat list, a range", "- A\n- B\n- C\n", true, "- A\n"],
+  ["a nested list, one item", "- Outer\n  - A\n  - B\n  - C\n", false, "- Outer\n  - A\n  - C\n"],
+  ["a nested list, a range", "- Outer\n  - A\n  - B\n  - C\n", true, "- Outer\n  - A\n"],
+] as const)("Alt+F10 targets the chosen item or range in %s (range %s)", async (_name, markdown, range, remaining) => {
   const { editor, view } = await openWith(markdown, false);
   caretAfter(view, "B");
   view.dom.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));

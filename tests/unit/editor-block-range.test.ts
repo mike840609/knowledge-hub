@@ -800,3 +800,37 @@ it("copies a mixed range with both partial lists and the block between them", as
     ["OL", "6", "B"], ["P", null, "Middle"], ["OL", "3", "C"],
   ]);
 });
+
+/** Puts `data` on a paste event and sends it to the editor. */
+function pasteClipboard(view: EditorView, data: Map<string, string>) {
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "clipboardData", { value: { getData: (type: string) => data.get(type) ?? "", types: [...data.keys()], files: [] } });
+  view.dom.dispatchEvent(event);
+  return event;
+}
+
+it.each(["copy", "cut"] as const)("%s of one item pasted into a list makes a sibling, not a nested list", async action => {
+  const markdown = "- A\n- B\n- C\n";
+  const source = await open(markdown);
+  escapeOn(source.view, "B");
+  const { data } = clipEvent(source.view, action);
+  const target = await open(markdown);
+  let end = 0;
+  target.view.state.doc.descendants((node, pos) => { if (node.isText && node.text === "C") end = pos + 1; });
+  target.view.dispatch(target.view.state.tr.setSelection(TextSelection.create(target.view.state.doc, end)));
+  pasteClipboard(target.view, data);
+  expect(md(target.editor)).toBe("- A\n- B\n- C\n- B\n");
+  if (action === "cut") expect(md(source.editor)).toBe("- A\n- C\n");
+});
+
+it("pasting a copied ordered item into an ordered list renumbers it after the target", async () => {
+  const source = await open("3. A\n4. B\n5. C\n");
+  escapeOn(source.view, "B");
+  const { data } = clipEvent(source.view, "copy");
+  const target = await open("3. A\n4. B\n5. C\n");
+  let end = 0;
+  target.view.state.doc.descendants((node, pos) => { if (node.isText && node.text === "C") end = pos + 1; });
+  target.view.dispatch(target.view.state.tr.setSelection(TextSelection.create(target.view.state.doc, end)));
+  pasteClipboard(target.view, data);
+  expect(md(target.editor)).toBe("3. A\n4. B\n5. C\n6. B\n");
+});

@@ -107,7 +107,7 @@ function clipboardSlice(doc: ProseNode, blocks: EditorBlock[]): Slice {
     const list = $item.parent;
     const first = $item.index();
     const count = Math.min(list.childCount - first, blocks.length - at);
-    const attrs = list.type.name === "ordered_list" ? { ...list.attrs, order: list.attrs.order + first } : list.attrs;
+    const attrs = list.type.name === "ordered_list" ? { ...list.attrs, order: Number(list.attrs.order ?? 1) + first } : list.attrs;
     const items: ProseNode[] = [];
     for (let index = first; index < first + count; index++) items.push(list.child(index));
     nodes.push(list.type.create(attrs, Fragment.fromArray(items), list.marks));
@@ -115,6 +115,9 @@ function clipboardSlice(doc: ProseNode, blocks: EditorBlock[]): Slice {
   }
   return new Slice(Fragment.fromArray(nodes), 0, 0);
 }
+
+/** Copy marks its list wrappers, so a paste back into a list can put their items beside the target item. */
+const COPIED_LIST = "data-kh-copied-list";
 
 /** Copy the chosen blocks, including the list wrapper a list-item node selection leaves out. */
 function clip(view: EditorView, event: ClipboardEvent, cut: boolean): boolean {
@@ -129,12 +132,36 @@ function clip(view: EditorView, event: ClipboardEvent, cut: boolean): boolean {
     if (!(selection instanceof NodeSelection) || selection.node.type.name !== "list_item" || selectedBlockPos(state) === null) return false;
     blocks = [{ pos: selection.from, node: selection.node }];
   }
+  if (!blocks.length) return false;
   const { dom, text } = view.serializeForClipboard(clipboardSlice(state.doc, blocks));
+  for (const child of Array.from(dom.children)) {
+    if (child.tagName === "OL" || child.tagName === "UL") child.setAttribute(COPIED_LIST, "");
+  }
   event.preventDefault();
   event.clipboardData.clearData();
   event.clipboardData.setData("text/html", dom.innerHTML);
   event.clipboardData.setData("text/plain", text);
   if (cut) setRange(view, deleteBlocks(view.state, blocks), null);
+  return true;
+}
+
+/**
+ * Our own copied items, pasted into a list of their kind, become siblings of the target item: the wrapper
+ * that lets them paste at the top level would otherwise nest them one level down. A whole list copied by
+ * a text selection carries no marker and keeps nesting.
+ */
+function pasteCopiedList(view: EditorView, event: ClipboardEvent, slice: Slice): boolean {
+  if (!view.editable || !(event.clipboardData?.getData("text/html") ?? "").includes(COPIED_LIST)) return false;
+  const { $from } = view.state.selection;
+  let depth = -1;
+  for (let at = $from.depth; at >= 1; at--) if ($from.node(at).type.name === "list_item") { depth = at; break; }
+  if (depth < 1) return false;
+  const list = slice.content.childCount === 1 ? slice.content.firstChild : null;
+  if (!list || list.type !== $from.node(depth - 1).type) return false;
+  const items: ProseNode[] = [];
+  list.forEach((item) => items.push(item));
+  if (!items.length) return false;
+  view.dispatch(view.state.tr.replaceSelection(new Slice(Fragment.fromArray(items), 0, 0)).scrollIntoView());
   return true;
 }
 
@@ -170,11 +197,14 @@ export const blockRange = $prose(
           return Boolean(range && blocksIn(view.state.doc, range).length > 1);
         },
         // Paste would replace the anchor block alone, as typing would: with a range it is refused.
-        handlePaste(view, event) {
+        handlePaste(view, event, slice) {
+          if (!view.editable) return false;
           const range = key.getState(view.state);
-          if (!view.editable || !range || blocksIn(view.state.doc, range).length < 2) return false;
-          event.preventDefault();
-          return true;
+          if (range && blocksIn(view.state.doc, range).length >= 2) {
+            event.preventDefault();
+            return true;
+          }
+          return pasteCopiedList(view, event as ClipboardEvent, slice);
         },
         handleDOMEvents: {
           copy: (view, event) => clip(view, event as ClipboardEvent, false),
