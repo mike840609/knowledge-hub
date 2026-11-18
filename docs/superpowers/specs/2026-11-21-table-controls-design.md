@@ -95,6 +95,9 @@ Nothing stored changes: GFM tables, alignment in the delimiter row.
   follows its grip and flips above it when there is no room below.
 - A column added from a menu or a bar starts with Markdown's default
   alignment, and typing right after an action is a separate undo step.
+- Deleting the header row promotes the first body row to the header. GFM gives
+  every table one header row, so the former empty header row left the column
+  actions with no cells to read.
 
 ## Verification
 

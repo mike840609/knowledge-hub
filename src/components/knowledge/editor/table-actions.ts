@@ -1,6 +1,6 @@
 import { closeHistory } from "@milkdown/kit/prose/history";
 import { Plugin, Selection, type Command, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
-import type { Node as ProseNode } from "@milkdown/kit/prose/model";
+import { Fragment, type Node as ProseNode } from "@milkdown/kit/prose/model";
 import { addColumnAfter, addColumnBefore, addRowAfter, addRowBefore, deleteColumn, deleteRow, isInTable } from "@milkdown/kit/prose/tables";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
@@ -32,6 +32,16 @@ function locateCell(doc: ProseNode, pos: number): CellLocation | null {
 /** The column's alignment, as the first (header) row carries it: "" for Markdown's default. */
 function columnAlignment(cell: CellLocation): string {
   return String(cell.table.firstChild?.maybeChild(cell.column)?.attrs.alignment ?? "");
+}
+
+/**
+ * How many columns the table has. Rows can disagree for a moment — a header row emptied by a deletion, or a
+ * table loaded with uneven rows — and the menu must keep offering the actions the table still allows.
+ */
+function columnCount(table: ProseNode): number {
+  let count = 0;
+  table.forEach((row) => { count = Math.max(count, row.childCount); });
+  return count;
 }
 
 /**
@@ -130,6 +140,16 @@ export function tableActions() {
         view.dispatch(closeHistory(select));
         command(view.state, transaction => {
           if (newColumn !== undefined) clearColumnAlignment(transaction, cell.tablePos, newColumn);
+          if (command === deleteRow || command === deleteColumn) {
+            // Map a surviving cell through the deletion. Mapping the deleted cell itself can
+            // land in another column or even in the paragraph following the table.
+            let { row, column } = cell;
+            if (command === deleteRow) row += row + 1 < cell.table.childCount ? 1 : -1;
+            else column += column + 1 < cell.table.child(row).childCount ? 1 : -1;
+            const neighbor = cellPosAt(cell.table, cell.tablePos, row, column) + 1;
+            const mapped = transaction.doc.resolve(transaction.mapping.map(neighbor));
+            transaction.setSelection(Selection.near(mapped));
+          }
           view.dispatch(closeHistory(transaction).scrollIntoView());
         });
         hovered = null;
@@ -157,11 +177,37 @@ export function tableActions() {
       function addColumn() {
         const target = targetCell();
         if (!target || !view.editable) return;
-        const row = target.row;
-        run(addColumnAfter, cellPosAt(target.table, target.tablePos, row), target.table.firstChild?.childCount ?? 0);
+        // The bar adds a column at the end; the writer stays in the row their caret was in, even when the
+        // pointer (which is what showed the bar) is over another row.
+        const caret = locateCell(view.state.doc, view.state.selection.$from.pos);
+        const row = caret?.tablePos === target.tablePos ? caret.row : target.row;
+        run(addColumnAfter, cellPosAt(target.table, target.tablePos, row), columnCount(target.table));
         const table = view.state.doc.nodeAt(target.tablePos);
         if (table) { view.dispatch(view.state.tr.setSelection(Selection.near(view.state.doc.resolve(cellPosAt(table, target.tablePos, row) + 1)))); settle(view); }
         view.focus(); position();
+      }
+
+      /**
+       * Delete the header row as GFM can: a table always has one, so the first body row becomes the header
+       * instead of leaving a header row with no cells (which no column action could then act on).
+       */
+      function deleteHeaderRow(target: CellLocation) {
+        if (!view.editable || target.table.childCount < 2) return;
+        const { table, tablePos } = target;
+        const header = table.firstChild!;
+        const headerCell = view.state.schema.nodes.table_header;
+        const cells: ProseNode[] = [];
+        table.child(1).forEach((cell) => cells.push(headerCell.create(cell.attrs, cell.content, cell.marks)));
+        const rows: ProseNode[] = [header.type.create(header.attrs, Fragment.fromArray(cells))];
+        for (let index = 2; index < table.childCount; index++) rows.push(table.child(index));
+        const next = table.type.create(table.attrs, Fragment.fromArray(rows));
+        const tr = view.state.tr.replaceWith(tablePos, tablePos + table.nodeSize, next);
+        // The promoted row holds the column the writer was acting on.
+        const column = Math.min(target.column, next.firstChild!.childCount - 1);
+        tr.setSelection(Selection.near(tr.doc.resolve(cellPosAt(next, tablePos, 0, column) + 1)));
+        view.dispatch(closeHistory(tr).scrollIntoView());
+        hovered = null;
+        settle(view);
       }
 
       function menuItem(label: string, onRun: () => void, role: "menuitem" | "menuitemradio" = "menuitem", checked?: boolean, disabled = false) {
@@ -192,7 +238,7 @@ export function tableActions() {
         if (kind === "row") {
           menu.setAttribute("aria-label", `Row ${target.row + 1} actions`);
           if (target.row > 0) items.push(menuItem("Insert row above", () => run(addRowBefore, at)));
-          items.push(menuItem("Insert row below", () => run(addRowAfter, at)), rule(), menuItem("Delete row", () => run(deleteRow, at), "menuitem", undefined, target.table.childCount <= 1));
+          items.push(menuItem("Insert row below", () => run(addRowAfter, at)), rule(), menuItem("Delete row", () => target.row === 0 ? deleteHeaderRow(target) : run(deleteRow, at), "menuitem", undefined, target.table.childCount <= 1));
         } else {
           menu.setAttribute("aria-label", `Column ${target.column + 1} actions`);
           const current = columnAlignment(target);
@@ -200,7 +246,7 @@ export function tableActions() {
           for (const [value, label] of [["", "Default"], ["left", "Left"], ["center", "Center"], ["right", "Right"]]) {
             items.push(menuItem(label, () => setColumnAlignment(view, at, value || null), "menuitemradio", current === value));
           }
-          items.push(rule(), menuItem("Delete column", () => run(deleteColumn, at), "menuitem", undefined, (target.table.firstChild?.childCount ?? 0) <= 1));
+          items.push(rule(), menuItem("Delete column", () => run(deleteColumn, at), "menuitem", undefined, columnCount(target.table) <= 1));
         }
         menu.replaceChildren(...items);
         menu.hidden = false;
@@ -294,11 +340,10 @@ export function tableActions() {
         };
         const boundsRect = new DOMRect(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
         const rowDom = view.nodeDOM(target.tablePos + 1 + rowOffset(target)) as HTMLElement | null;
-        const headerPos = target.tablePos + 2 + columnOffset(target);
-        const headerDom = view.nodeDOM(headerPos) as HTMLElement | null;
+        const cellDom = view.nodeDOM(target.cellPos) as HTMLElement | null;
         const tableRect = tableDom.getBoundingClientRect();
         const rowRect = (rowDom ?? tableDom).getBoundingClientRect();
-        const headerRect = (headerDom ?? tableDom).getBoundingClientRect();
+        const cellRect = (cellDom ?? tableDom).getBoundingClientRect();
         const editorRect = view.dom.getBoundingClientRect();
         const gutterWidth = Number.parseFloat(getComputedStyle(view.dom).paddingLeft) || 56;
         const gone = outside(tableRect, boundsRect);
@@ -314,7 +359,7 @@ export function tableActions() {
         rowGrip.style.left = `${rowLeft}px`;
         rowGrip.style.top = `${rowTop}px`;
         // Column grip: a low handle across the table's top border, half of it in the table's own top margin, which holds no text.
-        const colCentre = headerRect.left + headerRect.width / 2;
+        const colCentre = cellRect.left + cellRect.width / 2;
         const colTop = tableRect.top - 6;
         colGrip.hidden = gone || colCentre < clip.left || colCentre > clip.right || tableRect.top < bounds.top || tableRect.top + 6 > bounds.bottom;
         colGrip.style.left = `${colCentre - 12}px`;
@@ -322,11 +367,16 @@ export function tableActions() {
         // The bars span the table's visible box, in the strip directly below and directly right of it, kept inside the pane.
         const barLeft = clip.left, barWidth = Math.max(0, clip.right - clip.left);
         const barTop = clip.top, barHeight = Math.max(0, clip.bottom - clip.top);
-        addRowBar.hidden = gone; addColumnBar.hidden = gone;
+        const roomBelow = bounds.bottom - tableRect.bottom;
+        const roomRight = bounds.right - tableRect.right;
+        addRowBar.hidden = gone || roomBelow <= 0;
+        addColumnBar.hidden = gone || roomRight <= 0;
         addRowBar.style.left = `${barLeft}px`;
-        addRowBar.style.top = `${Math.min(clip.bottom, bounds.bottom - 12)}px`;
+        addRowBar.style.top = `${tableRect.bottom}px`;
+        addRowBar.style.maxHeight = `${Math.max(0, roomBelow)}px`;
         addRowBar.style.width = `${barWidth}px`;
-        addColumnBar.style.left = `${Math.min(clip.right, bounds.right - 12)}px`;
+        addColumnBar.style.left = `${tableRect.right}px`;
+        addColumnBar.style.maxWidth = `${Math.max(0, roomRight)}px`;
         addColumnBar.style.top = `${barTop}px`;
         addColumnBar.style.height = `${barHeight}px`;
         if (!menu.hidden && menuGrip) {
@@ -337,12 +387,6 @@ export function tableActions() {
       function rowOffset(target: CellLocation) {
         let offset = 0;
         for (let index = 0; index < target.row; index++) offset += target.table.child(index).nodeSize;
-        return offset;
-      }
-      function columnOffset(target: CellLocation) {
-        const header = target.table.firstChild;
-        let offset = 0;
-        for (let index = 0; index < target.column && header; index++) offset += header.child(index).nodeSize;
         return offset;
       }
 

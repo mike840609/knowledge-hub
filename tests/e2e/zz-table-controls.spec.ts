@@ -85,6 +85,8 @@ test.describe("table edge controls", () => {
   test("Alt+F10 from a cell focuses the row grip", async ({ page }) => {
     const { surface } = await openNote(page, SMALL);
     await surface.locator("tbody td").first().click();
+    // ProseMirror reads the browser-moved caret a task later; the key must not race that.
+    await page.waitForTimeout(150);
     await page.keyboard.press("Alt+F10");
     await expect(page.getByRole("button", { name: "Row 2 actions" })).toBeFocused();
   });

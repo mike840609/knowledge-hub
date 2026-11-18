@@ -153,7 +153,7 @@ it("the column grip is a low handle straddling the table's top border", async ()
   let tablePos = 0;
   view.state.doc.descendants((node, pos) => { if (node.type.name === "table") tablePos = pos; });
   (view.nodeDOM(tablePos) as HTMLElement).getBoundingClientRect = () => new DOMRect(100, 200, 300, 90);
-  view.dom.querySelector("th")!.getBoundingClientRect = () => new DOMRect(100, 201, 80, 30);
+  view.dom.querySelector("td")!.getBoundingClientRect = () => new DOMRect(100, 201, 80, 30);
   view.dispatch(view.state.tr.setSelection(view.state.selection));
   expect(button("Column 1 actions").style.top).toBe("194px");
   expect(button("Column 1 actions").style.left).toBe("128px");
@@ -176,6 +176,21 @@ it("Delete row on the header row leaves a valid table, one undo restores it", as
   expect(undo(view.state, view.dispatch)).toBe(true);
   expect(editor.getMarkdown()).toBe(original);
   expect(types()).toEqual(before);
+});
+it("Delete column stays available after the header row is deleted", async () => {
+  const { editor, view } = await open();
+  let a = 0;
+  view.state.doc.descendants((node, pos) => { if (node.isText && node.text === "A") a = pos; });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, a)));
+  choose("Row 1 actions", "Delete row");
+  // GFM always has a header row: deleting it promotes the first body row instead of leaving an empty one.
+  expect(rows(view)).toEqual([2, 2]);
+  button("Column 1 actions").click();
+  const remove = item("Delete column") as HTMLButtonElement;
+  expect(remove.disabled).toBe(false);
+  remove.click();
+  expect(rows(view)).toEqual([1, 1]);
+  expect(editor.getMarkdown()).toContain("Before");
 });
 it("opens a menu with ArrowDown on a grip and closes it with Escape", async () => {
   await open();
@@ -230,6 +245,23 @@ const cellIn = (view: EditorView) => {
   }
   return null;
 };
+it.each([
+  ["four", "Row 3 actions", "Delete row", "two"],
+  ["two", "Row 2 actions", "Delete row", "four"],
+  ["two", "Column 2 actions", "Delete column", "one"],
+  ["one", "Column 1 actions", "Delete column", "two"],
+  ["B", "Row 1 actions", "Delete row", "two"],
+])("deleting from %s with %s keeps the caret in the adjacent surviving cell", async (text, grip, action, remaining) => {
+  const { root, editor, view } = await open();
+  const original = editor.getMarkdown();
+  const target = [...root.querySelectorAll("td, th")].find(cell => cell.textContent === text)!;
+  target.dispatchEvent(new Event("pointermove", { bubbles: true }));
+  choose(grip, action);
+  expect(view.state.selection.$from.parent.textContent).toBe(remaining);
+  expect(undo(view.state, view.dispatch)).toBe(true);
+  expect(editor.getMarkdown()).toBe(original);
+});
+
 it("Add row appends a row and puts the caret in its first cell", async () => {
   const { editor, view } = await open();
   const original = editor.getMarkdown();
@@ -247,6 +279,13 @@ it("Add column appends a column and keeps the caret's row", async () => {
   expect(cellIn(view)).toEqual({ row: 1, column: 2, rows: 3 });
   undo(view.state, view.dispatch);
   expect(editor.getMarkdown()).toBe(original);
+});
+it("Add column keeps the caret's row when the pointer is over another row", async () => {
+  const { view } = await open();
+  const hovered = [...document.querySelectorAll("td")].find(td => td.textContent === "four")!;
+  hovered.dispatchEvent(new Event("pointermove", { bubbles: true }));
+  button("Add column").click();
+  expect(cellIn(view)).toEqual({ row: 1, column: 2, rows: 3 });
 });
 it("the bars sit below and right of the table, and hide with the grips", async () => {
   const { editor, view } = await open();
@@ -302,13 +341,13 @@ it("Escape in a grip or bar returns to the cell with the selection unchanged", a
   }
 });
 
-/** Mocked layout for the editor's table, its rows and header cell: jsdom has none. */
-function layout(root: HTMLElement, view: EditorView, rects: { table: DOMRect; row0?: DOMRect; th?: DOMRect; pane?: DOMRect; editor?: DOMRect }) {
+/** Mocked layout for the editor's table, its rows and first column: jsdom has none. */
+function layout(root: HTMLElement, view: EditorView, rects: { table: DOMRect; row0?: DOMRect; firstColumn?: DOMRect; pane?: DOMRect; editor?: DOMRect }) {
   let tablePos = 0;
   view.state.doc.descendants((node, pos) => { if (node.type.name === "table") tablePos = pos; });
   (view.nodeDOM(tablePos) as HTMLElement).getBoundingClientRect = () => rects.table;
   if (rects.row0) root.querySelectorAll("tr").forEach((tr, index) => { tr.getBoundingClientRect = () => new DOMRect(rects.row0!.x, rects.row0!.y + index * rects.row0!.height, rects.row0!.width, rects.row0!.height); });
-  if (rects.th) root.querySelector("th")!.getBoundingClientRect = () => rects.th!;
+  if (rects.firstColumn) root.querySelectorAll("tr > :first-child").forEach(cell => { cell.getBoundingClientRect = () => rects.firstColumn!; });
   if (rects.pane) { root.classList.add("kh-document-pane"); root.getBoundingClientRect = () => rects.pane!; }
   if (rects.editor) view.dom.getBoundingClientRect = () => rects.editor!;
   view.dispatch(view.state.tr.setSelection(view.state.selection));
@@ -347,15 +386,32 @@ it("the pointer leaving into the block gutter keeps the hovered cell", async () 
 it("the controls are clamped to the document pane and the gutter width is read from the editor", async () => {
   const { root, view } = await open();
   view.dom.style.paddingLeft = "40px";
-  layout(root, view, { table: new DOMRect(100, 200, 700, 90), th: new DOMRect(100, 201, 80, 30), pane: new DOMRect(50, 100, 600, 400), editor: new DOMRect(80, 100, 600, 400) });
+  layout(root, view, { table: new DOMRect(100, 200, 700, 90), firstColumn: new DOMRect(100, 201, 80, 30), pane: new DOMRect(50, 100, 600, 400), editor: new DOMRect(80, 100, 600, 400) });
   // (40 - 24) / 2 = 8 from the editor's left edge, 88; the pane's own edge plus 4 is 54.
   expect(at("Row 2 actions").left).toBe(88);
   view.dom.getBoundingClientRect = () => new DOMRect(20, 100, 600, 400);
   view.dispatch(view.state.tr.setSelection(view.state.selection));
   expect(at("Row 2 actions").left).toBe(54);
-  // The table runs past the pane's right edge (650): the right bar and the bottom bar stay inside it.
-  expect(parseFloat(button("Add column").style.left)).toBe(650 - 12);
+  expect(button("Add column").hidden).toBe(true);
+  expect(button("Add row").hidden).toBe(false);
   expect(parseFloat(button("Add row").style.left) + parseFloat(button("Add row").style.width)).toBe(650);
+});
+it("keeps the add bars outside the table as its edges scroll through the pane", async () => {
+  const { root, view } = await open();
+  const pane = new DOMRect(50, 100, 600, 400);
+  layout(root, view, { table: new DOMRect(100, 420, 300, 90), pane });
+  expect(button("Add row").hidden).toBe(true);
+  expect(button("Add column").hidden).toBe(false);
+  layout(root, view, { table: new DOMRect(345, 405, 300, 90), pane });
+  expect(at("Add row").top).toBe(495);
+  expect(button("Add row").style.maxHeight).toBe("5px");
+  expect(at("Add column").left).toBe(645);
+  expect(button("Add column").style.maxWidth).toBe("5px");
+  layout(root, view, { table: new DOMRect(100, 200, 300, 90), pane });
+  expect(button("Add row").hidden).toBe(false);
+  expect(at("Add row").top).toBe(290);
+  expect(button("Add column").hidden).toBe(false);
+  expect(at("Add column").left).toBe(400);
 });
 it("hides every control, and an open menu, when the table leaves the pane", async () => {
   const { root, view } = await open();
@@ -368,10 +424,10 @@ it("hides every control, and an open menu, when the table leaves the pane", asyn
 });
 it("hides the column grip and its menu when its column leaves the table's visible box", async () => {
   const { root, view } = await open();
-  layout(root, view, { table: new DOMRect(100, 200, 300, 90), row0: new DOMRect(100, 200, 300, 36), th: new DOMRect(100, 201, 80, 30) });
+  layout(root, view, { table: new DOMRect(100, 200, 300, 90), row0: new DOMRect(100, 200, 300, 36), firstColumn: new DOMRect(100, 201, 80, 30) });
   button("Column 1 actions").click();
   expect(document.querySelector("[role=menu]:not([hidden])")).not.toBeNull();
-  layout(root, view, { table: new DOMRect(100, 200, 300, 90), row0: new DOMRect(100, 200, 300, 36), th: new DOMRect(-300, 201, 80, 30) });
+  layout(root, view, { table: new DOMRect(100, 200, 300, 90), row0: new DOMRect(100, 200, 300, 36), firstColumn: new DOMRect(-300, 201, 80, 30) });
   expect(button("Column 1 actions").hidden).toBe(true);
   expect(button("Row 2 actions").hidden).toBe(false);
   expect(document.querySelector("[role=menu]:not([hidden])")).toBeNull();
