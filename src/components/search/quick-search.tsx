@@ -355,10 +355,10 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                   setActiveIndex(0);
                 }}
                 onKeyDown={(event) => {
-                  if (event.key === "ArrowDown" && rows.length) {
+                  if (event.key === "ArrowDown" && activeRow) {
                     event.preventDefault();
                     setActiveIndex((index) => Math.min(index + 1, rows.length - 1));
-                  } else if (event.key === "ArrowUp" && rows.length) {
+                  } else if (event.key === "ArrowUp" && activeRow) {
                     event.preventDefault();
                     setActiveIndex((index) => Math.max(index - 1, 0));
                   } else if (event.key === "Enter") {
