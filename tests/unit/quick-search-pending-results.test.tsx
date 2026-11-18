@@ -2,13 +2,14 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import type { Action } from "@/components/actions/action-registry";
 
 /**
  * ⌘K while the next search is in flight. The palette used to blank its results on every keystroke and show a
  * skeleton until the answer came. It now keeps the previous answer on screen, dimmed — but those documents
  * answer the previous query, so they must not be choosable: Enter, a click or Tab may not reach one.
  */
-const navigation = vi.hoisted(() => ({ push: vi.fn() }));
+const navigation = vi.hoisted(() => ({ push: vi.fn(), matches: [] as Action[] }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: navigation.push }),
   usePathname: () => "/w/ws-1/home",
@@ -23,11 +24,11 @@ vi.mock("@/components/knowledge/use-document-shortcuts", () => ({
   documentShortcutKey: (sourceId: string, documentId: string) => `${sourceId}:${documentId}`,
   useDocumentShortcuts: () => ({ shortcuts: { recent: [], favorites: [] }, update: () => {}, ready: true }),
 }));
-// Actions are not what is under test; with none, every row in the list is a document.
+// Most cases isolate documents. One case introduces approximate action matches.
 vi.mock("@/components/actions/action-registry", () => ({
   actionsFor: () => [],
-  matchActions: () => [],
-  actionGroupLabels: {},
+  matchActions: () => navigation.matches,
+  actionGroupLabels: { navigate: "Go to" },
 }));
 vi.mock("@/components/actions/action-menu", () => ({ useActionRunner: () => () => {} }));
 
@@ -44,6 +45,7 @@ let container: HTMLDivElement;
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   navigation.push.mockClear();
+  navigation.matches = [];
   pending = new Map();
   vi.stubGlobal("fetch", vi.fn((url: string) => {
     const q = new URL(url, "http://localhost").searchParams.get("q") ?? "";
@@ -167,4 +169,32 @@ it("forgets the previous answer once the text is cleared", async () => {
 
   expect(stale()).toBeNull();
   expect(document.body.textContent).not.toContain("Probe A");
+});
+
+
+it("does not shift the default document when arrowing before an approximate query resolves", async () => {
+  navigation.matches = [{
+    id: "navigate.home",
+    label: "Go to My Space home",
+    keywords: ["recent"],
+    group: "navigate",
+    icon: "home",
+    surfaces: ["palette"],
+    effect: { kind: "navigate", href: "/w/ws-1/home" },
+  }, {
+    id: "navigate.shares",
+    label: "Manage shares",
+    keywords: ["recent links"],
+    group: "navigate",
+    icon: "share",
+    surfaces: ["palette"],
+    effect: { kind: "navigate", href: "/w/ws-1/shares" },
+  }];
+  const input = await openPalette();
+  await type(input, "rec");
+  await act(async () => {
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+  });
+  await answer("rec", [hit("doc-a", "Recent A"), hit("doc-b", "Recent B")]);
+  expect(document.querySelector('[role="option"][aria-selected="true"]')?.textContent).toContain("Recent A");
 });
