@@ -599,7 +599,8 @@ it('a mid-line same-kind item in a numbered list takes no stale label', async ()
   key(view.dom, 'Enter');
   const list = view.state.doc.child(0);
   expect(list.childCount).toBe(4);
-  expect(list.child(2).attrs.label).not.toBe(list.child(1).attrs.label);
+  expect(list.child(1).attrs.label).toBe('2.');
+  expect(list.child(2).attrs.label).toBe('3.');
 });
 
 // An item whose first line is empty and which holds more is not written `- <br />`: the indented lines after a lone
@@ -613,4 +614,12 @@ it.each(['- a\n- p\n  - n\n- c', '1. a\n2. p\n   1. n\n3. c', '- [ ] a\n- [x] p\
   const checked: unknown[] = []; doc.descendants(node => { if (node.type.name === 'list_item') checked.push(node.attrs.checked); });
   const before: unknown[] = []; view.state.doc.descendants(node => { if (node.type.name === 'list_item') before.push(node.attrs.checked); });
   expect(checked).toEqual(before);
+});
+
+// A loose item's empty first line is left as `<br />`: a blank line after a bare `-` would end the item there.
+it.each(['- a\n- p\n\n  second\n- c', '- a\n- p\n\n  second\n\n  - n\n- c', '- a\n- p\n\n  - n\n- c'])('a loose item with an empty first line reads back as the same tree: %j', async (source) => {
+  const { editor, view } = await open(source);
+  inItem(view, 1, '');
+  const { doc } = await saved(editor);
+  expect(doc.toString()).toBe(view.state.doc.toString());
 });

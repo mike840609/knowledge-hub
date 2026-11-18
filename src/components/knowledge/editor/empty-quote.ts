@@ -28,7 +28,9 @@ export function configureEmptyQuoteStringify(ctx: Ctx): void {
       paragraph: (node: Paragraph, parent, state, info) => {
         const line = node.children.length === 1 ? node.children[0] : null;
         // A to-do keeps `[ ] <br />`: after its box the tag is inline, not an HTML block, so the nested list reads back.
-        if (parent?.type === "listItem" && parent.checked == null && parent.children.length > 1 && parent.children[0] === node && line?.type === "html" && line.value === "<br />") return "";
+        // A loose item keeps it too: the blank line after a bare `-` would end the item, and there the blank line
+        // already ends the HTML block, so what follows reads back inside the item.
+        if (parent?.type === "listItem" && parent.checked == null && !parent.spread && parent.children.length > 1 && parent.children[0] === node && line?.type === "html" && line.value === "<br />") return "";
         return (previous.handlers?.paragraph ?? defaultHandlers.paragraph)(node, parent, state, info);
       },
     },
