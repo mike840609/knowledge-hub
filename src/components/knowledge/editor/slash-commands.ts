@@ -92,12 +92,13 @@ function detectInline(state: EditorState): Trigger | null {
   return { ...at, from, query: match[1].toLowerCase(), inline: true };
 }
 /**
- * What `+` does after inserting an empty paragraph, as Notion's does: writes a visible "/" there, so the list opens
- * through the same path a typed "/" takes and what is typed next is that "/"'s query. Only where the list is installed.
+ * What `+` does after inserting an empty paragraph or an empty list item, as Notion's does: writes a visible "/" there,
+ * so the list opens through the same path a typed "/" takes and what is typed next is that "/"'s query (list commands
+ * spec, decision 4). Only where the list is installed.
  */
 export function openBlockList(view: EditorView): boolean {
   const { $from, empty } = view.state.selection;
-  if (!view.editable || !key.get(view.state) || !empty || $from.depth !== 1 || $from.parent.type.name !== "paragraph" || $from.parent.content.size) return false;
+  if (!view.editable || !key.get(view.state) || !empty || !line(view.state) || $from.parent.content.size) return false;
   view.dispatch(view.state.tr.insertText("/").setMeta(OPEN, true));
   return true;
 }
