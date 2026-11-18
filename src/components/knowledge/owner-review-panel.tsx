@@ -203,7 +203,8 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     <div className="kh-review-document" data-review-ready={result || error ? "" : undefined} data-review-open={open ? "" : undefined} data-review-inline={inline ? "" : undefined}>
       <div ref={readingRef} className="kh-review-reading">
         {children}
-        {canComment && (!prepareComment || !!selection.hint) && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={() => { selection.capture(); changeOpen(true); }} />}
+        {/* The editor owns the selection toolbar, including its optional Comment action. */}
+        {canComment && !prepareComment && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={() => { selection.capture(); changeOpen(true); }} />}
         {canComment && <ReviewBlockComment readingRef={readingRef} markdown={markdown} chosen={selection.chosen} onChoose={(anchor, element) => {
           holdAt(element);
           // What is selected inside this paragraph is the comment's passage; without a selection

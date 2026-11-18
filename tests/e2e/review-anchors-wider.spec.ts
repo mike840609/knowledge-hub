@@ -134,6 +134,7 @@ test("a selection that cannot take a comment says why, where the button would ha
 test("the owner starts a discussion on their own document, and a reader of its link answers it", async ({ page, request }) => {
   const doc = await createReviewDocument(request, "The owner's own passage here.\n\nPress <kbd>Ctrl</kbd> too.");
   await page.setViewportSize({ width: 1440, height: 900 });
+  await page.clock.install();
   await page.goto(doc.href);
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
@@ -141,10 +142,15 @@ test("the owner starts a discussion on their own document, and a reader of its l
   await expect(page.getByRole("button", { name: /^(Show|Hide) comments/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Comment on selection" })).toHaveCount(0);
 
-  // What cannot take a comment says so beside the selection, where the control would be.
+  // Even after the reader's delayed hint would appear, formatting stays usable in the editor.
   await selectText(page, "p", "too");
-  await expect(page.getByRole("status").filter({ hasText: "This passage cannot take a comment." })).toBeVisible();
+  const toolbar = page.getByRole("toolbar", { name: "Formatting" });
+  await expect(toolbar).toBeVisible();
+  await page.clock.runFor(600);
+  await expect(page.locator(".kh-selection-bubble")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Comment on selection" })).toHaveCount(0);
+  await toolbar.getByRole("button", { name: "Bold", exact: true }).click();
+  await expect(page.locator("[data-review-document] strong").filter({ hasText: "too" })).toBeVisible();
 
   await selectText(page, "p", "own passage");
   const posted = page.waitForResponse(response => response.url().endsWith(`/api/documents/${doc.documentId}/review-threads`) && response.request().method() === "POST");
