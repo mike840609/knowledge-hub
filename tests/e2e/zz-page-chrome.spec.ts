@@ -48,7 +48,15 @@ test.describe("page chrome", () => {
     await expect.poll(() => breadcrumb.getByText(nearest, { exact: true }).evaluate(fits)).toBe(true);
     await expect(breadcrumb.getByText(title, { exact: true })).toBeVisible();
     await expect.poll(() => breadcrumb.getByText(title, { exact: true }).evaluate(fits)).toBe(false);
-    await expect(page.getByRole("button", { name: "Share link…" }).getByText("Share", { exact: true })).toBeVisible();
+    // Share is the same icon button as Comments and Details: no label, and the same box.
+    const share = page.getByRole("button", { name: "Share link…" });
+    await expect(share).toBeVisible();
+    await expect(share.getByText("Share", { exact: true })).toHaveCount(0);
+    const details = page.getByRole("button", { name: "Details", exact: true });
+    const shareBox = await share.boundingBox();
+    const detailsBox = await details.boundingBox();
+    expect(shareBox?.width).toBe(detailsBox?.width);
+    expect(shareBox?.height).toBe(detailsBox?.height);
   });
 
   test("Comments opens the empty document discussion panel", async ({ page }) => {

@@ -110,10 +110,9 @@ export function DocumentHeader({
                 type="button"
                 onClick={onShareClick}
                 aria-label="Share link…"
-                className={buttonClasses({ variant: "ghost", icon: true, className: "sm:w-auto sm:gap-1.5 sm:px-2" })}
+                className={buttonClasses({ variant: "ghost", icon: true })}
               >
                 <ActionIcon name="share" className="h-4 w-4" />
-                <span className="hidden text-body sm:inline">Share</span>
               </button>
             </Tooltip>
           ) : null}
