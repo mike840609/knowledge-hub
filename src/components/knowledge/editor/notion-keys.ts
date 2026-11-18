@@ -398,19 +398,24 @@ function turnChosenInto(target: BlockKind) {
 function turnItemInto(target: BlockKind) {
   return (state: EditorState, dispatch?: (tr: Transaction) => void, view?: EditorView) => {
     if (!view?.editable || !(state.selection instanceof TextSelection) || rangeBlocks(state) !== null) return false;
-    const depth = listItemDepth(state);
-    const { $from } = state.selection;
-    if (depth === null || $from.parent.type.name !== "paragraph" || $from.parent !== $from.node(depth).firstChild) return false;
-    // The same selection may touch more than one item (the audit's cross-list case): then every block turns,
-    // as it does from the toolbar, so the two entry points cannot disagree (decision 7).
+    // A selection that touches several blocks turns every block the toolbar would turn, whichever end is
+    // the anchor and even when it starts on a later line. Only a single caret block keeps the first-line rule.
     const blocks = blocksTouched(state);
-    if (blocks.length > 1) {
+    if (blocks.length > 1 && blocks.some((block) => block.node.type.name === "list_item")) {
       if (dispatch) {
         const tr = turnBlocks(state, blocks, target);
-        if (tr) dispatch(tr.scrollIntoView() as never);
+        if (tr) {
+          // One undo step, and typing after it is its own step, as every other turn entry point does.
+          view.dispatch(closeHistory(tr).scrollIntoView());
+          view.dispatch(closeHistory(view.state.tr));
+          view.focus();
+        }
       }
       return true;
     }
+    const depth = listItemDepth(state);
+    const { $from } = state.selection;
+    if (depth === null || $from.parent.type.name !== "paragraph" || $from.parent !== $from.node(depth).firstChild) return false;
     if (dispatch) turnBlockInto(view, $from.before(depth), target);
     return true;
   };

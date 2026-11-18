@@ -109,6 +109,11 @@ Nothing stored changes.
 
 ## Deviations
 
+- **A bullet ↔ to-do change splits the list.** Both list shortcuts, the grip, the toolbar and the `/` list
+  turn the item through the same split: the converted item becomes a one-item list of its own, and the
+  items after it become a second list of the original kind. The writer separates the lists with a blank
+  line and marks the tail with `*` (`- [ ] one`, blank line, `* two`). This round-trips byte-identically,
+  but it replaces the older in-place change (one list, only the item's `checked` toggled).
 - **An item with a nested list keeps it under `/`.** Decision 2 says a choice made with `/query` alone replaces
   the item. Some choices would drop the item's nested list: Text, a heading, Quote and Code (Turn into's leaf kinds),
   and Divider, Table, Diagram, Toggle and Callout. For these, the `/` list puts the block below the item and its

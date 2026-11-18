@@ -717,8 +717,11 @@ describe("Turn into on the selection toolbar", () => {
     expect(editor.getMarkdown()).toBe("same text\n\n## same **text**\n");
   });
 
-  it("keeps the words after a wikilink selected when Code expands its spelling", async () => {
-    const editor = await open("- see [[Target]] here\n");
+  it.each([
+    ["a wikilink", "- see [[Target]] here\n"],
+    ["an aliased wikilink", "- see [[Target|alias]] here\n"],
+  ])("keeps the words after %s selected when Code expands its spelling", async (_name, markdown) => {
+    const editor = await open(markdown);
     mountToolbar(editor);
     selectText(editor, "here");
     openTurnMenu();

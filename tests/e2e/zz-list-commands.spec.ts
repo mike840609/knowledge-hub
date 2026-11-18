@@ -46,8 +46,11 @@ async function caretAtEnd(page: Page, surface: Locator, text: string) {
     return !!selection?.isCollapsed && node?.textContent === expected && selection.focusOffset === expected.length
       && !!node.parentElement?.closest(".ProseMirror");
   }, text)).toBe(true);
-  // ProseMirror reads a browser-moved caret a task later; a key sent before that acts on the old selection.
-  await page.waitForTimeout(150);
+  // ProseMirror reads a browser-moved caret on a later task: flush that read before the caller's key.
+  await page.evaluate(() => {
+    document.dispatchEvent(new Event("selectionchange"));
+    return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  });
 }
 
 async function selectItemText(page: Page, surface: Locator, text: string) {

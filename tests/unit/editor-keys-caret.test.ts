@@ -111,6 +111,54 @@ it("Mod-Alt-2 across two list items turns both, as the toolbar does", async () =
   expect(md(editor)).toBe("- one\n- two\n- three");
 });
 
+it("one undo after a cross-item turn keeps typing made before it", async () => {
+  const { editor, view } = await open("- one\n- two");
+  caretAfter(view, "two");
+  type(view, "!");
+  let first = -1;
+  let second = -1;
+  view.state.doc.descendants((node, pos) => {
+    if (node.isText && node.text === "one") first = pos;
+    if (node.isText && node.text === "two!") second = pos;
+  });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, first, second + 4)));
+  press(view, "2", { ctrlKey: true, altKey: true });
+  expect(md(editor)).toBe("## one\n\n## two!");
+  press(view, "z", { ctrlKey: true });
+  expect(md(editor)).toBe("- one\n- two!");
+});
+
+it("one undo after typing right after a cross-item turn keeps the turn", async () => {
+  const { editor, view } = await open("- one\n- two\n- three");
+  let first = -1;
+  let second = -1;
+  view.state.doc.descendants((node, pos) => {
+    if (node.isText && node.text === "one") first = pos;
+    if (node.isText && node.text === "two") second = pos;
+  });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, first, second + 3)));
+  press(view, "2", { ctrlKey: true, altKey: true });
+  type(view, "Z");
+  press(view, "z", { ctrlKey: true });
+  expect(md(editor)).toBe("## one\n\n## two\n\n- three");
+});
+
+it.each([
+  ["a paragraph before the list", "P\n\n- one\n- two", "P", "one", "## P\n\n## one\n\n- two"],
+  ["a paragraph after the list", "- one\n- two\n\nP", "two", "P", "- one\n\n## two\n\n## P"],
+])("Mod-Alt-2 across %s turns both blocks whichever end is the anchor", async (_name, source, firstText, lastText, expected) => {
+  const { editor, view } = await open(source);
+  let first = -1;
+  let last = -1;
+  view.state.doc.descendants((node, pos) => {
+    if (node.isText && node.text === firstText) first = pos;
+    if (node.isText && node.text === lastText) last = pos + lastText.length;
+  });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, first, last)));
+  expect(press(view, "2", { ctrlKey: true, altKey: true }).defaultPrevented).toBe(true);
+  expect(md(editor)).toBe(expected);
+});
+
 /** The caret after the first occurrence of `text`. */
 function caretAfter(view: EditorView, text: string) {
   let at = -1;

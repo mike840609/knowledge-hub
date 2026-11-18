@@ -259,7 +259,8 @@ export function turnBlocks(state: EditorState, blocks: EditorBlock[], into: Bloc
  * Each end is in a chain of blocks, outermost first: its top-level block, then each list item around it. The sequence
  * is the deepest one both ends are in, so a selection inside one item is that item, not its list, and one that runs from
  * a nested item out to its parent's sibling is the two top-level items. An end at the very start of a later textblock
- * touches none of its text, and does not take that block.
+ * touches none of its text, and does not take that block. Select all (which has no position inside a block) touches
+ * every top-level block in the document's sequence.
  */
 export function blocksTouched(state: EditorState): EditorBlock[] {
   const { doc, selection } = state;
