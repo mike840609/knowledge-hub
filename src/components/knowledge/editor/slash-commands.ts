@@ -7,7 +7,7 @@ import { $prose } from "@milkdown/kit/utils";
 import { CalendarDays, Code, Heading1, Heading2, Heading3, Info, Link2, List, ListCollapse, ListOrdered, ListTodo, Minus, Network, Quote, Table, Type, type LucideIcon } from "lucide-react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { dispatchBlockAction } from "./block-actions";
+import { blockKind, canTurnInto, dispatchBlockAction, insertAfterListItem, replaceListItem, turnInto, type BlockKind } from "./block-actions";
 import { insertDetailsSkeleton } from "./details-toggle";
 import { keepsAsText } from "./wiki-link";
 
@@ -33,8 +33,15 @@ const commands = [
   { id: "link", label: "Page link", hint: "Another page in this workspace", words: "link to page document wiki 連結 頁面", aliases: ["page"], group: "Links", Icon: Link2 },
 ] as const;
 type Command = typeof commands[number];
-/** `pos`: the paragraph's position; `from`: its "/"; `inline`: the "/" follows text on the line (keys spec, decision 7). */
-type Trigger = { pos: number; from: number; query: string; inline: boolean };
+/** The block kind a command turns a block into, where it is one Turn into also offers. */
+export const COMMAND_KIND: Partial<Record<Command["id"], BlockKind>> = {
+  text: "paragraph", h1: "h1", h2: "h2", h3: "h3", bullet: "bullet", ordered: "ordered", task: "task", quote: "quote", code: "code", toggle: "toggle", callout: "callout",
+};
+/**
+ * `pos`: the paragraph's position; `from`: its "/"; `inline`: the "/" follows text on the line (keys spec, decision 7);
+ * `item`: the list item whose first paragraph this is, or null for a top-level paragraph (list commands spec, decision 1).
+ */
+type Trigger = { pos: number; from: number; query: string; inline: boolean; item: number | null };
 /**
  * `added`: the paragraph whose "/" `+` wrote (spec decision 15, deviation), held while its list is open there.
  * Dismissing that list with the "/" alone on the line takes the "/" back; anything typed after it stays.
@@ -44,13 +51,26 @@ const OPEN = "khOpenBlockList";
 const key = new PluginKey<State>("khSlashCommands");
 let sequence = 0;
 
+/**
+ * Where a "/" may open the list: a top-level paragraph, or a list item's first paragraph, quoted or not (list commands
+ * spec, decision 1). The paragraph's position and its item's, or null.
+ */
+function line(state: EditorState): { pos: number; item: number | null } | null {
+  const { $from } = state.selection;
+  if ($from.parent.type.name !== "paragraph") return null;
+  if ($from.depth === 1) return { pos: $from.before(1), item: null };
+  if ($from.node(-1).type.name === "list_item" && $from.index(-1) === 0) return { pos: $from.before(), item: $from.before(-1) };
+  return null;
+}
+
 function detect(state: EditorState): Trigger | null {
   const { $from, empty } = state.selection;
-  if (!empty || $from.depth !== 1 || $from.parent.type.name !== "paragraph" || $from.parentOffset !== $from.parent.content.size) return null;
+  const at = empty ? line(state) : null;
+  if (!at || $from.parentOffset !== $from.parent.content.size) return null;
   if ($from.parent.childCount !== 1 || !$from.parent.firstChild?.isText || $from.parent.firstChild.marks.length) return null;
   const match = /^\/([^/\n]{0,40})$/.exec($from.parent.textContent);
   // A colon query belongs to the emoji list; both menus must not claim the same line.
-  return match && !match[1].includes(":") ? { pos: $from.before(1), from: $from.start(), query: match[1].toLowerCase().trim(), inline: false } : null;
+  return match && !match[1].includes(":") ? { ...at, from: $from.start(), query: match[1].toLowerCase().trim(), inline: false } : null;
 }
 /**
  * A "/" after a space later in a line opens the list too, as Notion's does; the chosen block goes below
@@ -59,7 +79,8 @@ function detect(state: EditorState): Trigger | null {
  */
 function detectInline(state: EditorState): Trigger | null {
   const { $from, empty } = state.selection;
-  if (!empty || $from.depth !== 1 || $from.parent.type.name !== "paragraph") return null;
+  const at = empty ? line(state) : null;
+  if (!at) return null;
   // Inline code and link text are where a "/" is a path or an address, not a command; other marks are not in its way.
   if ((state.storedMarks ?? $from.marks()).some(keepsAsText)) return null;
   // Marks do not matter to a "/" (after **bold** is as good a place as after plain words), and an inline node
@@ -68,7 +89,7 @@ function detectInline(state: EditorState): Trigger | null {
   if (!match) return null;
   const from = $from.pos - match[1].length - 1;
   if (from === $from.start() || !matchingCommands(match[1]).length) return null;
-  return { pos: $from.before(1), from, query: match[1].toLowerCase(), inline: true };
+  return { ...at, from, query: match[1].toLowerCase(), inline: true };
 }
 /**
  * What `+` does after inserting an empty paragraph, as Notion's does: writes a visible "/" there, so the list opens
@@ -150,10 +171,11 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
       // Text, not a block: today's date goes where the "/query" was (ISO, the way a Markdown note dates a line).
       const date = todayIso();
       const caretAt = view.state.selection.from;
-      if (trigger.inline) dispatchBlockAction(view, view.state.tr.insertText(date, trigger.from, caretAt), trigger.from + date.length);
+      if (trigger.inline || trigger.item !== null) dispatchBlockAction(view, view.state.tr.insertText(date, trigger.from, caretAt), trigger.from + date.length);
       else dispatchBlockAction(view, view.state.tr.replaceWith(trigger.pos, trigger.pos + current.nodeSize, nodes.paragraph.create(null, view.state.schema.text(date))), trigger.pos + 1 + date.length);
       return;
     }
+    if (trigger.item !== null) { chooseInItem(view, command, trigger, trigger.item); return; }
     if (trigger.inline) {
       const caretAt = view.state.selection.from;
       if (command.id === "link") {
@@ -183,6 +205,44 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
     dispatchBlockAction(view, view.state.tr.replaceWith(trigger.pos, trigger.pos + current.nodeSize, node), trigger.pos + caret);
   }
 
+  /**
+   * A choice in a list item (list commands spec, decisions 2 and 3), one transaction: the "/query" goes, then the item
+   * turns (with "/query" alone on its line) or the block goes below it, at its level. A page link writes inline.
+   */
+  function chooseInItem(view: EditorView, command: Command, trigger: Trigger, itemPos: number) {
+    const caretAt = view.state.selection.from;
+    if (command.id === "link") {
+      dispatchBlockAction(view, view.state.tr.insertText("[[", trigger.from, caretAt), trigger.from + 2);
+      return;
+    }
+    const tr = view.state.tr.delete(trigger.from, caretAt);
+    const item = tr.doc.nodeAt(itemPos)!;
+    const kind = COMMAND_KIND[command.id];
+    const [made, offset] = blockFor(view, command);
+    // In an item a divider stands alone: the caret goes on to what follows it.
+    const nodes = command.id === "divider" ? [view.state.schema.nodes.hr.create()] : Array.isArray(made) ? made : [made];
+    const caret = command.id === "divider" ? nodes[0].nodeSize : offset;
+    if (!trigger.inline) {
+      // The item's own kind keeps it as it is; another list kind or a leaf turns it as Turn into does.
+      if (kind && kind === blockKind(item)) { dispatchBlockAction(view, tr, trigger.from); return; }
+      if (kind && canTurnInto(item, kind)) {
+        const turned = turnInto(tr, itemPos, kind);
+        if (turned !== null) { dispatchBlockAction(view, tr, turned); return; }
+      }
+      // A block Turn into does not make from an item (a divider, a table, a diagram, a toggle or a callout) replaces it,
+      // where that drops nothing: an item with a nested list keeps it, and the block goes below instead.
+      if (item.childCount === 1) {
+        dispatchBlockAction(view, tr, replaceListItem(tr, itemPos, nodes) + caret);
+        return;
+      }
+    }
+    // A list kind adds one item: after this one if it is the same kind (a sibling), else in a list of its own.
+    const list = nodes[0].type.name === "bullet_list" || nodes[0].type.name === "ordered_list";
+    const at = insertAfterListItem(tr, itemPos, list ? [nodes[0].firstChild!] : nodes);
+    // From a sibling item or a new list the caret finds the item's line; any other block gives its own offset.
+    dispatchBlockAction(view, tr, at + (list ? 1 : caret));
+  }
+
   /** The block a command makes, with the caret's offset from the block's start. */
   function blockFor(view: EditorView, command: Command): [ProseNode | ProseNode[], number] {
     const { nodes } = view.state.schema;
@@ -209,6 +269,10 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
         nodes.table_header_row.create(null, [header(), header()]),
         nodes.table_row.create(null, [cell(), cell()]),
       ]);
+    }
+    if (command.id === "toggle") {
+      node = nodes.details.create({ open: true }, [nodes.details_summary.create(), nodes.details_body.create(null, paragraph)]);
+      caret = 2;
     }
     if (command.id === "callout") {
       // The marker must stand alone on the quote's first line (remark-callouts), so the body is its own paragraph.
