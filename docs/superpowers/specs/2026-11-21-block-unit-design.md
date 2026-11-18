@@ -145,6 +145,22 @@ editor, and the wikilink rule holds.
   children as blocks; the Hub's `details` body is one Markdown region.
 - **Tab or Shift-Tab indenting selected items** (decision 2).
 
+## Deviations / amendments
+
+Recorded during implementation:
+
+- **A single block moves past its neighbour in its sequence (R2).** A chosen
+  block, and a single block moved by the grip menu or by drag, passes one
+  block of its sequence: an item passes one item, not a whole list. This
+  amends decision 1's "act on the item by 2026-11-17 decision 2's rules" for
+  moves; the rest of that rule (duplicate, turn) stands.
+- **Ordered numbering after a range operation (R1).** The run holding the
+  list's original first item keeps the list's attributes. The remainder of a
+  split keeps its numbers. A run that left its list starts at 1.
+- **Turn into on a range.** An entry is enabled when every block is already
+  that kind or `canTurnInto` holds for it, and disabled when every block
+  already is that kind.
+
 ## Verification
 
 - `tests/unit/editor-block-range.test.ts` (extended) and

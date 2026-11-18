@@ -875,9 +875,14 @@ column makes the room in its own left padding where its margin does not
 the pane still has less than 56px left of the text — a pane under 60rem, as at a
 narrower window or beside the open Details panel — the pane clips the part that
 does not fit and the controls are kept inside the pane, over the text's first
-characters while they show. The gutter is where the
-pointer shows the controls; in the text it does nothing, so selecting prose is
-as it was.
+characters while they show. The pointer anywhere on a block's line — the
+gutter or the text column, at the block's height — shows that block's controls,
+still drawn in the gutter, never over the text (block-unit spec, decision 7);
+clicks and text selection in the text are as they were. Typing hides them until
+the pointer moves again, and a mouse button held for a text selection keeps them
+hidden. Where the pane gives the gutter less than 56px and the controls would
+cover text, the gutter alone shows them, so reading text never brings up a
+cover.
 
 The controls are two `size-6` icon buttons in muted text with the shared focus
 ring: one adds a block below (a new sibling item on a list) and, at the top
@@ -890,11 +895,18 @@ content — a several-item list into one heading, a quote with several paragraph
 into one code block — is disabled rather than performed lossily; converting one
 list item splits the list around it (2026-11-17, below). Duplicate inserts the
 copy immediately below; Delete removes the block and leaves one empty paragraph
-when it was the document's only one. `Alt+F10` in the editor moves focus to the controls (with the caret in a table cell, to that table's controls, below), and
+when it was the document's only one. The grip of a block inside a range (below)
+acts on the range: its menu is named for it (`Block actions, 3 blocks`), Turn
+into, Duplicate, Delete and Move act on every block of it as one undo step, a
+Turn into entry is enabled only when every block can take it, Copy link to
+heading is not offered, opening the menu keeps the range, and the live region
+reports the result (`3 blocks duplicated`). The grip of a block outside the
+range ends it and acts on its own block. `Alt+F10` in the editor moves focus to the controls (with the caret in a table cell, to that table's controls, below), and
 the editor says so (`aria-keyshortcuts`); Escape closes the menu, or returns
 from Turn into to the block menu, and finally goes back to the text. While a
 block is dragged it is tinted `kh-bg-selected` and a 2px `--kh-primary` line
-marks where it will land. On a device with no hover the controls follow the
+marks where it will land; a grip inside a range drags the range, every block of
+it tinted. On a device with no hover the controls follow the
 block the caret is in.
 
 The `/` list takes what the `[[` list takes — the `lg` radius, a border, the
@@ -926,11 +938,16 @@ back.
 
 **A block can be chosen from the keyboard** (editor Notion-parity spec,
 decisions 6-8; `editor/notion-keys.ts`). Escape in the text, with no menu open,
-selects the current top-level block as a node selection, drawn `kh-bg-selected`
-at the `sm` radius with no outline (`.kh-editor > .ProseMirror-selectednode`);
-Escape again returns to the text. The pointer's controls, the block menu,
-`Mod-d` and `Mod-Shift-ArrowUp/Down` resolve the nearest list item instead, so a
-list item is its own block for those actions (2026-11-17, below). The block menu, the `[[` and `/` lists and the
+selects the current block as a node selection, drawn `kh-bg-selected` at the
+`sm` radius with no outline (`.ProseMirror-selectednode`): in a list item's text
+that is the innermost item, with whatever is nested under it, and elsewhere the
+top-level block (block-unit spec, decision 1). Escape again returns to the text.
+A list item is its own block for every input — Escape, the pointer's controls,
+the block menu, drag, `Mod-d` and `Mod-Shift-ArrowUp/Down`. Shift-ArrowDown/Up
+widens a chosen block into a range, a run of blocks in one sequence (the
+top-level blocks that are not lists and the items of top-level lists; a nested
+item's sequence is its own list), each drawn with the same fill
+(`.kh-block-in-range`). The block menu, the `[[` and `/` lists and the
 toolbar's link field take Escape first. A selected block is the current block
 for `Mod-Shift-ArrowUp/Down` (move) and `Mod-d` (duplicate), which run the same
 commands as the menu's Move and Duplicate. No colour, radius or elevation token
@@ -1960,7 +1977,8 @@ seven gaps left after the 22-decision pass of 2026-11-15:
   drop content (`canTurnInto`). Delete removes the item and keeps the list, and
   removes the list itself when it was the only item. Escape still selects the
   top-level block, as the 2026-11-15 decision 7 says, and the list keys still
-  act on that selection.
+  act on that selection. (Amended 2026-11-21: Escape selects the item too, see
+  Block unit.)
 - (Amended 2026-11-21: in the column menu, see Table controls.) The table actions carry a **Column alignment** select (default, left, center,
   right). It writes GFM's delimiter row; the reader already renders it. A
   header-row toggle is not offered: GFM requires a header row, so there is no
@@ -2024,3 +2042,13 @@ heading's block menu gains "Copy link to heading".
 
 The room below the text is a plain `padding-bottom` in `globals.css`. No
 colour, radius, elevation or type token was added.
+
+### Block unit (2026-11-21)
+
+`2026-11-21-block-unit-design.md` makes a list item one block for every input:
+Escape selects it, a range runs through items and top-level blocks of one
+sequence, the grip menu and drag act on the range, and the pointer anywhere on
+a block's line shows its controls (§10, "Block controls and the `/` list"). A
+chosen item and the items of a range take the chosen block's fill
+(`kh-bg-selected`, `sm` radius). No colour, radius, elevation or motion token
+was added.

@@ -48,9 +48,11 @@ level, as it does for one block), the existing single-block rules apply.
 
 ## Out of scope, recorded
 
-(Planned in `2026-11-21-block-unit-design.md`, decisions 3-6: list items in a
-range, the grip menu and drag on a range, and one undo step for every turn; not
-yet implemented.)
+(Amended by `2026-11-21-block-unit-design.md`, decisions 3-6: list items in a
+range, the grip menu and drag on a range, and one undo step for every turn. It
+also amends decisions 1 and 2 above: the range is a run in one sequence, not of
+top-level blocks only, and turning into a heading, quote, code block or callout
+is one undo step too.)
 
 - A filterable block menu on `Mod-/`: that key is the Markdown source toggle on
   the document page (`editable-document.tsx`), and a second meaning would break

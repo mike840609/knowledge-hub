@@ -332,12 +332,15 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-editor .kh-wikilink.ProseMirror-selectednode {
     @apply rounded-sm bg-kh-bg-selected;
   }
-  /* A block chosen with Escape (editor Notion-parity spec, decision 7): one top-level node, drawn like any selection. */
-  .kh-editor > .ProseMirror-selectednode {
+  /* A block chosen with Escape (editor Notion-parity spec, decision 7): a top-level node, or a list item
+     (block-unit spec, decision 1), drawn like any selection. */
+  .kh-editor > .ProseMirror-selectednode,
+  .kh-editor li.ProseMirror-selectednode {
     @apply rounded-sm bg-kh-bg-selected outline-none;
   }
-  /* The blocks a Shift-Arrow widened a chosen block to (multi-block spec): the same selection fill. */
-  .kh-editor > .kh-block-in-range {
+  /* The blocks a Shift-Arrow widened a chosen block to (multi-block spec; items too, block-unit spec): the same fill. */
+  .kh-editor > .kh-block-in-range,
+  .kh-editor li.kh-block-in-range {
     @apply rounded-sm bg-kh-bg-selected;
   }
   .kh-editor img:not([data-diagram]) {
