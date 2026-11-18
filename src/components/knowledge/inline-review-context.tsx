@@ -7,5 +7,6 @@ export type CaptureReviewAnchor = (markdown: string) => ReviewAnchor | null;
 export type PreparedReviewComment = { anchor: ReviewAnchor; markdown: string; save: () => Promise<string> };
 export const InlineReviewContext = createContext<{
   available: boolean;
+  blockAvailable?: boolean;
   request: (capture: CaptureReviewAnchor) => void;
 } | null>(null);

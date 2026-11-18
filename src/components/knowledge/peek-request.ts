@@ -8,6 +8,7 @@ export const PEEK_REQUEST_EVENT = "kh:request-peek";
 export type PeekRequest = {
   documentId: string;
   sourceId: string;
+  opener?: HTMLElement;
 };
 
 export function requestPeek(request: PeekRequest): void {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { bufferTyping, isBuffering, isNewNoteHref, plainClick, setTyped, takeTyped } from "@/components/knowledge/typing-ahead";
+import { bufferTyping, finishTyping, isBuffering, isNewNoteHref, plainClick, takeTyped } from "@/components/knowledge/typing-ahead";
 
 // 2026-11-19 creation-flow spec, decision 3: keys typed while a new note is being made.
 const press = (key: string, init: KeyboardEventInit = {}, target: EventTarget = document.body) => {
@@ -11,12 +11,11 @@ const press = (key: string, init: KeyboardEventInit = {}, target: EventTarget = 
 afterEach(() => { takeTyped(); document.body.innerHTML = ""; });
 
 describe("typing ahead of a new note", () => {
-  it("stops keeping keys at Enter in the title field: what follows is not the title", () => {
-    bufferTyping("Plan");
-    setTyped("Plan", true);
+  it("keeps writing in the body after Enter in the title field", () => {
+    bufferTyping({ text: "Plan", entered: true });
     for (const key of "body") press(key);
-    expect(isBuffering()).toBe(false);
-    expect(takeTyped()).toEqual({ text: "Plan", entered: true });
+    expect(isBuffering()).toBe(true);
+    expect(takeTyped()).toEqual({ text: "Plan", entered: true, body: "body" });
   });
 
   it("forgets what was kept when nothing takes it within ten seconds", () => {
@@ -26,7 +25,7 @@ describe("typing ahead of a new note", () => {
       press("a"); press("b");
       vi.advanceTimersByTime(10_001);
       expect(isBuffering()).toBe(false);
-      expect(takeTyped()).toEqual({ text: "", entered: false });
+      expect(takeTyped()).toEqual({ text: "", entered: false, body: "" });
     } finally { vi.useRealTimers(); }
   });
 
@@ -43,7 +42,7 @@ describe("typing ahead of a new note", () => {
     bufferTyping();
     for (const key of " Plan x") press(key);
     expect(press("Backspace").defaultPrevented).toBe(true);
-    expect(takeTyped()).toEqual({ text: "Plan ", entered: false });
+    expect(takeTyped()).toEqual({ text: "Plan ", entered: false, body: "" });
   });
 
   it("leaves keys with a modifier, and keys typed into a field, alone", () => {
@@ -54,18 +53,18 @@ describe("typing ahead of a new note", () => {
     expect(takeTyped().text).toBe("");
   });
 
-  it("stops at Enter, which moves on to the body", () => {
-    bufferTyping("Ti");
-    press("t"); press("Enter"); press("x");
-    expect(takeTyped()).toEqual({ text: "Tit", entered: true });
+  it("handles spaces, line breaks and corrections in the body while the route loads", () => {
+    bufferTyping({ text: "Ti" });
+    press("t"); press("Enter"); press(" "); press("x"); press("Backspace"); press("y"); press("Enter"); press("z");
+    expect(takeTyped()).toEqual({ text: "Tit", entered: true, body: " y\nz" });
   });
 
-  it("takes what the title field holds once it has the keys, and nothing after being taken", () => {
-    bufferTyping();
-    setTyped("From the field", true);
-    expect(takeTyped()).toEqual({ text: "From the field", entered: true });
-    press("z");
-    expect(takeTyped()).toEqual({ text: "", entered: false });
+  it("clears only the buffer that belongs to the arriving note", () => {
+    const first = bufferTyping({ text: "First note", entered: true });
+    bufferTyping({ text: "Second not" });
+    finishTyping(first);
+    press("e");
+    expect(takeTyped()).toEqual({ text: "Second note", entered: false, body: "" });
   });
 
   it("takes focus from a field as it starts (the closing palette), but leaves the starter's own title focused", () => {
@@ -75,7 +74,7 @@ describe("typing ahead of a new note", () => {
     expect(document.activeElement).not.toBe(field);
     takeTyped();
     field.focus();
-    bufferTyping("Pl", true);
+    bufferTyping({ text: "Pl", keepFocus: true });
     expect(document.activeElement).toBe(field);
   });
 

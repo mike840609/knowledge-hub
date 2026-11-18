@@ -138,9 +138,13 @@ test("the owner starts a discussion on their own document, and a reader of its l
   await page.goto(doc.href);
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
-  // A document nobody has said anything about offers nothing until something is selected.
-  await expect(page.getByRole("button", { name: /^(Show|Hide) comments/ })).toHaveCount(0);
+  // A document nobody has said anything about still offers its open discussion panel, with nothing to comment on until something is selected.
+  const comments = page.getByRole("button", { name: /^Show comments, 0 comments, 0 open/ });
+  await expect(comments).toBeVisible();
   await expect(page.getByRole("button", { name: "Comment on selection" })).toHaveCount(0);
+  await comments.click();
+  await expect(page.getByText(/No comments yet/)).toBeVisible();
+  await page.getByRole("button", { name: /^Hide comments, 0 comments, 0 open/ }).click();
 
   // Even after the reader's delayed hint would appear, formatting stays usable in the editor.
   await selectText(page, "p", "too");
@@ -160,9 +164,10 @@ test("the owner starts a discussion on their own document, and a reader of its l
   await expect(page.getByRole("button", { name: /^Hide comments, 1 comments, 1 open/ })).toBeVisible();
   await expect(page.locator("[data-review-marker]")).toHaveCount(1);
 
-  // What the owner said themselves does not await them: on coming back the rail is shut.
+  // What the owner said themselves does not await them: on coming back the rail is shut, and the
+  // header still has their control once the discussions have loaded again.
   await page.reload();
-  await expect(page.getByRole("button", { name: /^Show comments, 1 comments, 1 open/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Show comments, 1 comments, 1 open/ })).toBeVisible({ timeout: 15_000 });
 
   // It is the document's, not a link's: every link reads it, by the owner's name, and may answer.
   await page.goto(`${phase3Origin("viewer")}${doc.links[1].path}`);

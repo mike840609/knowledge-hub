@@ -225,22 +225,22 @@ export class MariaDbTreeRepository implements TreeRepository {
     for (let start = 0; start < documentIds.length; start += DOCUMENT_ID_CHUNK) {
       const batch = documentIds.slice(start, start + DOCUMENT_ID_CHUNK);
       const rows = await this.connection.query<DbRow[]>(
-        `WITH RECURSIVE chains (root, id, parent_id, source_id, node_type, status, depth) AS (
-           SELECT n.document_id, n.id, n.parent_id, n.source_id, n.node_type, n.status, 0
+        `WITH RECURSIVE chains (root, id, parent_id, source_id, node_type, status, name, depth) AS (
+           SELECT n.document_id, n.id, n.parent_id, n.source_id, n.node_type, n.status, n.name, 0
            FROM knowledge_tree_nodes n
            WHERE n.document_id IN (${placeholders(batch.length)}) AND n.source_id = ?
            UNION ALL
-           SELECT chains.root, parent.id, parent.parent_id, parent.source_id, parent.node_type, parent.status, chains.depth + 1
+           SELECT chains.root, parent.id, parent.parent_id, parent.source_id, parent.node_type, parent.status, parent.name, chains.depth + 1
            FROM knowledge_tree_nodes parent JOIN chains ON parent.id = chains.parent_id
            WHERE parent.source_id = ? AND chains.depth < ?
          )
-         SELECT root, id, parent_id, source_id, node_type, status FROM chains ORDER BY root, depth`,
+         SELECT root, id, parent_id, source_id, node_type, status, name FROM chains ORDER BY root, depth`,
         [...batch, sourceId, sourceId, MAX_TREE_CHAIN_LENGTH - 1],
       );
       for (const row of rows) {
         const root = String(row.root);
         const chain = chains.get(root) ?? [];
-        chain.push({ id: String(row.id), sourceId: String(row.source_id), parentId: row.parent_id === null ? null : String(row.parent_id), nodeType: String(row.node_type) as TreeChainNode["nodeType"], status: String(row.status) as TreeChainNode["status"] });
+        chain.push({ name: row.name == null ? null : String(row.name), id: String(row.id), sourceId: String(row.source_id), parentId: row.parent_id === null ? null : String(row.parent_id), nodeType: String(row.node_type) as TreeChainNode["nodeType"], status: String(row.status) as TreeChainNode["status"] });
         chains.set(root, chain);
       }
     }

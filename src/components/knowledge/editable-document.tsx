@@ -15,7 +15,7 @@ import { readStored, writeStored } from "@/components/shell/use-persisted-state"
 import { governanceFailure, governanceRequest, GovernanceError, transientSaveFailure } from "@/components/workspaces/governance-error";
 import { DocumentAutosave, type DocumentContent, type SavedRevision } from "@/lib/document-autosave";
 import { mergeText } from "@/lib/merge-text";
-import { takeNewNote } from "./new-note-starter";
+import { hasNewNoteDraft, takeNewNote } from "./new-note-starter";
 import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } from "@/lib/document-draft";
 import { PersistentDraft } from "@/lib/persistent-draft";
 import { caretOnLastLine } from "@/lib/title-keys";
@@ -417,6 +417,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   const conflict = error?.code === "REVISION_CONFLICT";
   const dirty = !!writer?.dirty || pending.current;
   const editable = loaded && authorization.current;
+  const titleHandoffPending = !ready && !source && !failed && hasNewNoteDraft(detail.inspectorData.documentId);
   const status = !loaded ? "loading" : recovery ? "recovery" : error ? "error" : writer?.status === "saving" ? "saving" : dirty ? "pending" : "saved";
   const attention = recovery ? "Recovered changes" : error ? "Not saved" : undefined;
   // The page is the editor: a first visit says so once, then the hint stays out of the way.
@@ -476,38 +477,42 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
       textarea?.setSelectionRange(0, 0);
     } else editor.current?.focusStart();
   }
-  // Arriving from a new note (`/knowledge/new` created it): the title is where to start typing, with
-  // "Untitled" selected so the first keystroke replaces it.
-  // What was typed while the note was being made is the title, with the caret after it.
-  // Enter typed then: the caret goes to the body once the editor is ready (the effect below).
-  const bodyWhenReady = useRef(false);
-  useEffect(() => {
-    if (!editable) return;
+  const focusDraftMarkdown = useRef(false);
+  useLayoutEffect(() => {
+    if (!editable || (!ready && !source && !failed)) return;
     const arrived = takeNewNote(detail.inspectorData.documentId);
-    const input = titleInput.current;
     if (arrived === null) return;
-    if (arrived.title) {
-      change({ ...queue.current!.current, title: arrived.title });
-      // Set now, not on the next render, so the caret can go after it before another key lands.
-      if (input) input.value = arrived.title;
+    const previous = queue.current!.current;
+    const next = { title: arrived.text || previous.title, markdown: arrived.body || previous.markdown };
+    if (next.title !== previous.title || next.markdown !== previous.markdown) change(next);
+    if (arrived.body && !source && !failed) {
+      try { editor.current?.replaceMarkdown(next.markdown, true); }
+      catch {
+        focusDraftMarkdown.current = arrived.entered;
+        setFailed(true);
+      }
     }
-    // Enter after the title: on to the body, as Enter in the title does. The rendered editor mounts
-    // after this (its `onReady` is later still), so the caret goes there once it is ready.
     if (arrived.entered) {
-      if (ready || source || failed) leaveTitle();
-      else bodyWhenReady.current = true;
+      if (source || failed) focusDraftMarkdown.current = true;
+      else if (!focusDraftMarkdown.current) editor.current?.focusEnd(false);
       return;
     }
+    const input = titleInput.current;
     if (!input) return;
+    // Update before focusing, so the selection is in the handed-over value in this frame.
+    if (arrived.text) input.value = arrived.text;
     input.focus();
-    if (arrived.title) input.setSelectionRange(arrived.title.length, arrived.title.length);
+    if (arrived.text) input.setSelectionRange(arrived.text.length, arrived.text.length);
     else if (input.value === "Untitled") input.select();
-  }, [editable]);
-  useEffect(() => {
-    if ((!ready && !source && !failed) || !bodyWhenReady.current) return;
-    bodyWhenReady.current = false;
-    leaveTitle();
-  }, [ready, source, failed]);
+  }, [editable, ready, source, failed]);
+  useLayoutEffect(() => {
+    const input = sourceTextarea.current;
+    if (!input || !focusDraftMarkdown.current) return;
+    focusDraftMarkdown.current = false;
+    input.value = queue.current!.current.markdown;
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }, [ready, source, failed, content.markdown]);
   // ArrowUp on the content's first line, or Backspace in its empty first paragraph, leads to the title,
   // at its end (keys spec, decision 3). The editor fires `kh:editor-exit-top` (notion-keys' EXIT_TOP; the
   // editor is loaded lazily, so the name is spelled here rather than imported) and goes on only if claimed.
@@ -556,13 +561,13 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
   }
   const Article = "article";
   // With the page's actions in the pinned line rather than on a row of its own above the title.
-  const markdownToggle = <Button type="button" variant="ghost" aria-label="Markdown source" aria-pressed={source || failed} data-pressed={source || failed} disabled={!loaded || failed} className="max-sm:px-2 data-[pressed=true]:bg-kh-bg-hover data-[pressed=true]:text-kh-text" onClick={() => {
+  const markdownToggle = <Button type="button" variant="ghost" aria-label="Markdown source" title="Markdown source" aria-pressed={source || failed} data-pressed={source || failed} disabled={!loaded || failed} className="px-2 data-[pressed=true]:bg-kh-bg-hover data-[pressed=true]:text-kh-text" onClick={() => {
     flushEditor();
     if (!source) sourceRef.current = true;
     setSource(value => !value);
   }}>
-    <FileCode2 className="h-4 w-4 sm:hidden" aria-hidden="true" />
-    <span className="max-sm:sr-only">Markdown source</span>
+    <FileCode2 className="h-4 w-4 2xl:hidden" aria-hidden="true" />
+    <span className="max-2xl:sr-only">Markdown source</span>
   </Button>;
   const article = <>
     {recovery && <p role="status" className="mb-3 text-body-sm">
@@ -635,7 +640,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     wordCount={words}
     editHint={showEditHint ? "Click anywhere in the text to edit." : undefined}
     editorActions={<><AutosaveIndicator state={status} attention={attention} /><Button type="button" variant="ghost" aria-label="Rename document" title="Rename document" disabled={!editable || !!recovery || (!ready && !source && !failed)} onClick={focusTitle}><Pencil className="h-4 w-4" aria-hidden="true" /></Button>{markdownToggle}</>}
-    titleControl={resolved.source !== "H1" ? <textarea ref={titleInput} name="title" aria-label="Title" value={content.title} disabled={!editable} maxLength={512} rows={1}
+    titleControl={resolved.source !== "H1" ? <textarea ref={titleInput} name="title" aria-label="Title" value={content.title} disabled={!editable || titleHandoffPending} maxLength={512} rows={1}
       onChange={event => change({ ...queue.current!.current, title: event.target.value })}
       onKeyDown={event => {
         if (event.nativeEvent.isComposing || event.keyCode === 229) return;

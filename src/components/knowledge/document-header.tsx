@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useState, type Ref, type ReactNode } from "react";
-import { LockKeyhole, Maximize2, Minimize2, MessageSquare, MoreHorizontal, PanelRight, Star } from "lucide-react";
+import { LockKeyhole, MessageSquare, MoreHorizontal, PanelRight } from "lucide-react";
 import { toggleFullWidth, useFullWidth } from "./use-full-width";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { ActionMenuItems } from "@/components/actions/action-menu";
 import type { Action } from "@/components/actions/action-registry";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
-import { MenuContent, MenuRoot, MenuTrigger } from "@/components/ui/menu";
+import { MenuCheckboxItem, MenuContent, MenuRoot, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { Tooltip } from "@/components/ui/tooltip";
 import { formatDateTime, formatRelativeTime } from "@/lib/format-date";
 import { useDisplayTimeZone } from "@/components/ui/timestamp";
@@ -37,8 +37,6 @@ export function DocumentHeader({
   wordCount,
   showFullWidth = true,
   readOnlyReason,
-  favorite,
-  onToggleFavorite,
   actions,
   onRunAction,
   beforeTitle,
@@ -52,12 +50,9 @@ export function DocumentHeader({
   editHint?: ReactNode;
   /** Words on the page, shown beside when it was updated, once the edit hint has gone (both on one line would wrap a phone-width header, and the layout must not move when the hint goes); omitted where it is not counted. */
   wordCount?: number;
-  /** The Full width button; a header drawn beside another document page (the side peek) leaves it to that page. */
+  /** The Full width setting; a header drawn beside another document page (the side peek) leaves it to that page. */
   showFullWidth?: boolean;
   readOnlyReason?: ReactNode;
-  /** Whether this page is in the reader's favorites; absent where favoriting is not offered. */
-  favorite?: boolean;
-  onToggleFavorite?: () => void;
   /** The page's own actions, from the one registry. Already narrowed to what this surface shows. */
   actions?: readonly Action[];
   onRunAction?: (action: Action) => void;
@@ -96,8 +91,8 @@ export function DocumentHeader({
   const elapsed = now === null ? null : Math.max(0, now - new Date(updatedAt).getTime());
   const relative = elapsed === null ? formatDateTime(updatedAt, zone) : formatRelativeTime(elapsed);
 
-  // The owner's discussions, when the document has any (`review-entry.tsx`).
   const review = useReviewEntry();
+  const hasActions = !!actions?.length && !!onRunAction;
   return (
     <>
       {/* The location › title line and its actions stay pinned to the top of the pane on a wide screen while
@@ -105,25 +100,10 @@ export function DocumentHeader({
           explorer's first rows, so the three columns share one top edge. It sits outside <header> so that sticky is bounded by the whole
           document rather than by the header's own height. */}
       <div data-pinned={pinned || undefined} className="z-10 bg-kh-bg lg:sticky lg:top-0">
-      <div className="kh-reading-column flex min-h-12 min-w-0 items-center justify-between gap-3 py-2">
+      <div className="kh-reading-column kh-document-toolbar flex min-h-12 min-w-0 items-center justify-between gap-1 py-2 sm:gap-3">
         <DocumentBreadcrumb segments={breadcrumb} />
-        {/* Icon-only so the header stays light; each keeps its name as
-            aria-label and tooltip. Details draws the same glyph as the
-            narrow topbar's copy of this button. */}
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           {editorActions}
-          {showFullWidth ? <Tooltip label="Full width">
-            <button
-              type="button"
-              onClick={toggleFullWidth}
-              aria-label="Full width"
-              aria-pressed={fullWidth}
-              data-pressed={fullWidth}
-              className={buttonClasses({ variant: "ghost", icon: true, className: "hidden data-[pressed=true]:bg-kh-bg-hover data-[pressed=true]:text-kh-text sm:inline-flex" })}
-            >
-              {fullWidth ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}
-            </button>
-          </Tooltip> : null}
           {onShareClick ? (
             <Tooltip label="Share link…">
               <button
@@ -138,8 +118,8 @@ export function DocumentHeader({
           ) : null}
           {/* What is done to the document comes first; then the two that open something on the right,
               together and nearest to it: the discussions, and Details. */}
-          {review?.entry && (review.entry.count > 0 || review.entry.open) ? (
-            <Tooltip label={review.entry.open ? "Hide comments" : `Comments · ${review.entry.awaiting} open, ${review.entry.count} total`}>
+          {review?.entry ? (
+            <Tooltip label={review.entry.open ? "Hide comments" : review.entry.count === 0 ? "Comments · No comments yet" : `Comments · ${review.entry.awaiting} open, ${review.entry.count} total`}>
               <button
                 ref={review.buttonRef}
                 type="button"
@@ -148,7 +128,7 @@ export function DocumentHeader({
                 aria-controls="owner-document-discussions"
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={review.entry.toggle}
-                className={buttonClasses({ variant: "ghost" })}
+                className={buttonClasses({ variant: "ghost", icon: review.entry.awaiting === 0 && review.entry.unread === 0 })}
               >
                 <MessageSquare className="h-4 w-4" aria-hidden="true" />
                 {/* The number is what awaits an answer, which is what the list opens on; none, and it is the glyph alone. */}
@@ -170,26 +150,17 @@ export function DocumentHeader({
             </button>
           </Tooltip>
           ) : null}
-          {onToggleFavorite ? (
-            <Tooltip label={favorite ? "Remove from favorites" : "Add to favorites"}>
-              <button
-                type="button"
-                onClick={onToggleFavorite}
-                aria-label={favorite ? "Remove from favorites" : "Add to favorites"}
-                aria-pressed={favorite}
-                className={buttonClasses({ variant: "ghost", icon: true, className: favorite ? "text-kh-selected-text" : "" })}
-              >
-                <Star className="h-4 w-4" fill={favorite ? "currentColor" : "none"} aria-hidden="true" />
-              </button>
-            </Tooltip>
-          ) : null}
-          {actions && actions.length > 0 && onRunAction ? (
+          {hasActions || showFullWidth ? (
             <MenuRoot>
-              <MenuTrigger aria-label="Document actions" className={buttonClasses({ variant: "ghost", icon: true })}>
+              <MenuTrigger aria-label="Document actions" className={buttonClasses({ variant: "ghost", icon: true, className: hasActions ? "" : "hidden sm:inline-flex" })}>
                 <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
               </MenuTrigger>
               <MenuContent align="end" className="w-56">
-                <ActionMenuItems actions={actions} onRun={onRunAction} />
+                {hasActions ? <ActionMenuItems actions={actions} onRun={onRunAction} /> : null}
+                {showFullWidth ? <>
+                  {hasActions ? <MenuSeparator className="hidden sm:block" /> : null}
+                  <MenuCheckboxItem className="hidden sm:flex" checked={fullWidth} onCheckedChange={toggleFullWidth}>Full width</MenuCheckboxItem>
+                </> : null}
               </MenuContent>
             </MenuRoot>
           ) : null}

@@ -72,9 +72,30 @@ export async function getSearchPageModel(workspaceId: string, input: SearchPageI
     });
     if (input.scope === "workspace" && input.q.trim()) await recordOnboardingStep(services.personalPreferences, caller, workspaceId, "search");
     if (!result.hits.length) return { ...base, ...(!result.tooLong ? await emptyState() : {}), result, timedOut: false };
-    const locations=await services.unitOfWork.read(r=>r.entries.findByDocumentIds(result.hits.map(hit=>hit.documentId)));
-    const paths=new Map(locations.map(e=>[e.documentId,e.sourcePath]));
-    return { ...base, result:{...result,hits:result.hits.map(hit=>({...hit,sourcePath:paths.get(hit.documentId)}))}, timedOut: false };
+    const grouped = new Map<string, string[]>();
+    for (const hit of result.hits) {
+      const ids = grouped.get(hit.sourceId) ?? [];
+      ids.push(hit.documentId);
+      grouped.set(hit.sourceId, ids);
+    }
+    const { locations, folders } = await services.unitOfWork.read(async ({ entries, tree }) => {
+      const locations = await entries.findByDocumentIds(result.hits.map(hit => hit.documentId));
+      const imported = new Set(locations.map(entry => entry.documentId));
+      const folders = new Map<string, string>();
+      for (const [sourceId, ids] of grouped) {
+        const chains = await tree.listChainsByDocumentIds(ids.filter(id => !imported.has(id)), sourceId);
+        for (const [id, chain] of chains) {
+          const path = chain.filter(node => node.nodeType === "FOLDER" && (input.includeArchived || node.status === "ACTIVE"))
+            .reverse().map(node => node.name).filter(Boolean).join(" › ");
+          if (path) folders.set(id, path);
+        }
+      }
+      return { locations, folders };
+    });
+    const paths = new Map(locations.map(entry => [entry.documentId, entry.sourcePath]));
+    return { ...base, result: { ...result, hits: result.hits.map(hit => ({
+      ...hit, sourcePath: paths.get(hit.documentId), folderPath: folders.get(hit.documentId),
+    })) }, timedOut: false };
   } catch (error) {
     if (error instanceof ValidationError) return { ...base, result: null, timedOut: false, filterError: error.message };
     if (error instanceof SearchTimeoutError) return { ...base, result: null, timedOut: true };

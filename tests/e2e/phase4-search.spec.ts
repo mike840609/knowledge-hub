@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures/test";
+import { personalWorkspaceId } from "./fixtures/my-space";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURES / BROWSER_FIXTURE_IDS.
 const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
@@ -126,4 +127,46 @@ test("without JavaScript the search form keeps its button and submits as a GET",
   } finally {
     await context.close();
   }
+});
+
+
+test("quick search opens a matching document by keyboard and labels copies by folder", async ({ page }) => {
+  const workspaceId = await personalWorkspaceId(page);
+  const base = `/w/${workspaceId}`;
+  const api = `/api/workspaces/${workspaceId}`;
+  const stamp = Date.now();
+  const title = `Roadmap ${stamp}`;
+  const folderNames = [`Design handbook ${stamp}`, `Engineering handbook ${stamp}`] as const;
+  const notes: string[] = [];
+  for (const name of folderNames) {
+    const folder = await page.request.post(`${api}/folders`, { data: { name, parentId: null } });
+    expect(folder.ok()).toBe(true);
+    const { treeNodeId } = await folder.json();
+    const response = await page.request.post(`${api}/documents`, {
+      data: { title, parentId: treeNodeId, markdown: "Planning notes." },
+    });
+    expect(response.ok()).toBe(true);
+    const { sourceId, documentId } = await response.json();
+    notes.push(`${base}/knowledge/${sourceId}/${documentId}`);
+  }
+
+  await page.goto(notes[0]);
+  await page.getByRole("button", { name: "Search ⌘K" }).click();
+  const palette = page.getByRole("dialog", { name: "Search and actions" });
+  await palette.getByRole("combobox").fill(title);
+  const design = palette.getByRole("option").filter({ hasText: folderNames[0] });
+  const engineering = palette.getByRole("option").filter({ hasText: folderNames[1] });
+  const roundTrip = { timeout: 15_000 };
+  await expect(design).toBeVisible(roundTrip);
+  await expect(engineering).toBeVisible(roundTrip);
+  await expect(palette.getByRole("option", { selected: true })).toContainText("handbook");
+  if (await engineering.getAttribute("aria-selected") !== "true") await page.keyboard.press("ArrowDown");
+  await expect(engineering).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(new RegExp(notes[1] + "$"), roundTrip);
+
+  await page.goto(`${base}/search?q=${encodeURIComponent(title)}`);
+  const rows = page.locator("[data-search-result]");
+  await expect(rows.filter({ hasText: "Design handbook" })).toBeVisible(roundTrip);
+  await expect(rows.filter({ hasText: "Engineering handbook" })).toBeVisible(roundTrip);
 });

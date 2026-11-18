@@ -154,6 +154,24 @@ it("Backspace at the start of a top-level list's first item makes it a paragraph
   expect(md(lone)).toBe("only");
 });
 
+it("continues a handed-over Markdown body in its last paragraph", async () => {
+  const { editor, view } = await open();
+  editor.replaceMarkdown("Visit [[Plan]]\n\nWrite ", true);
+  editor.focusEnd(false);
+  type(view, "more");
+  expect(view.state.doc.childCount).toBe(2);
+  expect(view.state.doc.lastChild?.textContent).toBe("Write more");
+  expect(editor.getMarkdown()).toContain("[[Plan]]");
+});
+
+it("continues in a new paragraph after a handed-over return", async () => {
+  const { editor, view } = await open();
+  editor.replaceMarkdown("First line\n", true);
+  editor.focusEnd(false);
+  type(view, "Next line");
+  expect(editor.getMarkdown()).toBe("First line\n\nNext line\n");
+});
+
 it("focusEnd adds an empty paragraph after the last block, once", async () => {
   const { editor, view } = await open("# Title\n\n* a");
   editor.focusEnd();

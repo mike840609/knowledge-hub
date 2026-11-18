@@ -147,15 +147,12 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     }
   }, [documentId, entryRef, selection.clear]);
   const count = result?.threads.length ?? 0;
-  // The key is there when the header's control is: with discussions to open, or open ones to close.
   const toggle = useCallback(() => changeOpen(!open), [changeOpen, open]);
   const awaiting = result?.threads.filter(thread => thread.status === "OPEN").length ?? 0;
-  // Only where there is something for the header to offer: discussions to open. On a document with
-  // none this would be a control that opens an empty panel, on every document. A selection is
-  // offered its comment beside it (`ReviewSelectionBubble`), not here.
+  const canStartDiscussion = !!result?.writesEnabled && !readOnly;
   useEffect(() => {
-    publish?.(count > 0 || open || unreadCount > 0 ? { count, awaiting, unread: unreadCount, open, toggle } : null);
-  }, [publish, count, awaiting, unreadCount, open, toggle]);
+    publish?.(canStartDiscussion || count > 0 || open || unreadCount > 0 ? { count, awaiting, unread: unreadCount, open, toggle } : null);
+  }, [publish, canStartDiscussion, count, awaiting, unreadCount, open, toggle]);
   useEffect(() => () => publish?.(null), [publish]);
   const requestComment = useCallback((capture: CaptureReviewAnchor) => {
     if (!canRequest || !prepareComment) return;
@@ -167,7 +164,8 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
       void savePrepared(comment, version);
     } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not select this passage."); }
   }, [canRequest, prepareComment, selection.choose, changeOpen, savePrepared]);
-  const reviewContext = useMemo(() => prepareComment ? { available: canRequestSelection, request: requestComment } : null, [prepareComment, canRequestSelection, requestComment]);
+  const canRequestBlock = canRequest && !selection.chosen;
+  const reviewContext = useMemo(() => prepareComment ? { available: canRequestSelection, blockAvailable: canRequestBlock, request: requestComment } : null, [prepareComment, canRequestSelection, canRequestBlock, requestComment]);
   const cancelComment = () => {
     const anchor = selection.chosen;
     const snapshot = prepared?.markdown ?? markdown;
@@ -252,12 +250,13 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
             {refreshing && result && <p role="status" className="mt-3 text-caption text-kh-text-muted">Updating…</p>}
             {selection.refusal && <p role="status" className="mt-3 text-body-sm">{selection.refusal}</p>}
             {revisionChanged && !prepared && <p role="status" className="mt-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage.</p>}
-            {canComment && !selection.chosen && <div className="mt-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={() => { if (!inline) { focusArticleAfterClose.current = true; changeOpen(false); return; } if (prepareComment) requestComment(() => selection.capture()); else selection.capture(); }} ><MessageSquarePlus className="size-4" aria-hidden="true" />{inline ? "Comment on selected text" : "Close comments and select text"}</Button>{inline && !selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
+            {canComment && !selection.chosen && (count > 0 || selection.ready || !inline) && <div className="mt-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={() => { if (!inline) { focusArticleAfterClose.current = true; changeOpen(false); return; } if (prepareComment) requestComment(() => selection.capture()); else selection.capture(); }} ><MessageSquarePlus className="size-4" aria-hidden="true" />{inline ? "Comment on selected text" : "Close comments and select text"}</Button>{inline && !selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
           </div>
           {composer && !draft && <div className="mt-3">{composer}</div>}
           {result && <div className="mt-3"><ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={prepared?.markdown ?? (revisionChanged || contentPending ? undefined : markdown)} activeThreadId={activeThreadId} onActivate={setActiveThreadId} unreadThreadIds={unreadThreadIds}
             focusAnchor={revisionChanged || contentPending ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }}
             threads={result.threads} writesEnabled={result.writesEnabled && !readOnly} canResolve={!readOnly}
+            emptyHint={canStartDiscussion ? "Select text or use a block’s comment action to start a discussion." : undefined}
             mentionScope={mentionScope} reply={async (threadId, body, idempotencyKey, mentions, mentionLinkId) => { await reviewRequest(`${base}/${threadId}/replies`, { body, idempotencyKey, ...(mentions.length ? { mentions, mentionLinkId } : {}) }); if (unreadThreadIds.has(threadId)) void markRead(threadId); await load(); onChanged?.(threadId); }}
             author={{
               edit: async (threadId, commentId, body) => { await reviewRequest(`${base}/${threadId}/comments/${commentId}/body`, { body }); await load(); onChanged?.(threadId); },

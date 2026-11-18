@@ -472,7 +472,7 @@ export function DocumentDetailClient({
   // Share, Details and the row-only openings already have their own doors in
   // this header; the overflow is for what would otherwise be buried in the tree.
   const headerHidden = useMemo<ReadonlySet<ActionId>>(
-    () => new Set<ActionId>(["document.favorite", "document.share", "document.open-side-peek", "document.open-new-tab"]),
+    () => new Set<ActionId>(["document.share", "document.open-side-peek", "document.open-new-tab"]),
     [],
   );
   const available = actionsFor("row", {
@@ -541,8 +541,6 @@ export function DocumentDetailClient({
             readOnly={readOnly}
             syncHref={syncHref}
             contentOwnsTitle={contentOwnsTitle}
-            favorite={favorite}
-            onToggleFavorite={toggleFavorite}
             actions={headerActions}
             onRunAction={runAction}
             beforeTitle={<PageIconPicker documentId={inspectorData.documentId} icon={pageIcon ?? null} editable={canEditPage} />}

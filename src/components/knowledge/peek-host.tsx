@@ -25,6 +25,7 @@ export function PeekHost({ children }: { children: ReactNode }) {
   const [leaving, setLeaving] = useState(false);
   const opener = useRef<HTMLElement | null>(null);
   const lastFocus = useRef<HTMLElement | null>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
   const close = useCallback(() => {
     setRequest(null);
     setExpanding(null);
@@ -39,8 +40,12 @@ export function PeekHost({ children }: { children: ReactNode }) {
     const target = opener.current?.isConnected
       ? opener.current
       : contentRef.current?.querySelector<HTMLElement>('[role="region"][aria-label="Document content"]');
-    target?.focus();
+    target?.focus({ preventScroll: true });
   }, [close]);
+
+  useEffect(() => {
+    if (isWide && request?.opener) paneRef.current?.querySelector<HTMLButtonElement>('[aria-label="Close preview"]')?.focus({ preventScroll: true });
+  }, [isWide, request]);
 
   const contentRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -59,11 +64,12 @@ export function PeekHost({ children }: { children: ReactNode }) {
     const open = (event: Event) => {
       const detail = (event as CustomEvent<Partial<PeekRequest>>).detail;
       if (typeof detail?.documentId === "string" && typeof detail?.sourceId === "string") {
-        setRequest({ documentId: detail.documentId, sourceId: detail.sourceId });
+        const trigger = detail.opener instanceof HTMLElement ? detail.opener : undefined;
+        setRequest({ documentId: detail.documentId, sourceId: detail.sourceId, opener: trigger });
         setLeaving(false);
         // The row the menu was opened on is what Close returns to. The menu still holds focus here, and
         // gives it back only after its own exit, so the row is the last focus outside menus and the peek.
-        opener.current = lastFocus.current;
+        opener.current = trigger ?? lastFocus.current;
       }
     };
     const track = (event: FocusEvent) => {
@@ -84,6 +90,7 @@ export function PeekHost({ children }: { children: ReactNode }) {
         <div ref={contentRef} className="contents">{children}</div>
         {request && isWide ? (
           <div
+            ref={paneRef}
             data-testid="side-peek"
             className={`kh-peek-pane min-h-0 min-w-0 flex-1 border-l border-kh-border ${expanding ? "kh-peek-expanding" : leaving ? "kh-peek-leaving" : ""}`}
             onAnimationEnd={(event) => {

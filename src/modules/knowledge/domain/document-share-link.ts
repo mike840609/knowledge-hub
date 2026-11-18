@@ -148,6 +148,7 @@ export function evaluateShareLinkValidity(
 
 /** One tree node on the path from a document up to the root, as the repository reads it. */
 export type TreeChainNode = {
+  name?: string | null;
   id: string;
   sourceId: string;
   parentId: string | null;

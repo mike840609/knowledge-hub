@@ -24,12 +24,12 @@ export default async function NewNotePage({
   searchParams,
 }: {
   params: Promise<{ workspaceId: string }>;
-  searchParams: Promise<{ folder?: string | string[]; title?: string | string[]; from?: string | string[]; compose?: string | string[] }>;
+  searchParams: Promise<{ folder?: string | string[]; title?: string | string[]; from?: string | string[]; compose?: string | string[]; recovery?: string | string[] }>;
 }) {
   const { workspaceId } = await params;
   const model = await getWorkspaceShellModel(workspaceId);
   if (!model?.access.actions.canWrite) notFound();
-  const { folder, title, from, compose } = await searchParams;
+  const { folder, title, from, compose, recovery } = await searchParams;
   const folderId = typeof folder === "string" && isUuid(folder) ? folder : null;
   const folderLabel = folderId ? await findHubFolderLabel(workspaceId, folderId) : null;
   const seedTitle = parseSeedTitle(title);
@@ -37,7 +37,7 @@ export default async function NewNotePage({
     const query = new URLSearchParams({ compose: "" });
     if (folderId) query.set("folder", folderId);
     if (seedTitle !== null) query.set("title", seedTitle);
-    return <NewNoteStarter workspaceId={workspaceId} folderId={folderId} seedTitle={seedTitle} composeHref={`/w/${workspaceId}/knowledge/new?${query.toString()}`} />;
+    return <NewNoteStarter workspaceId={workspaceId} userId={model.identityId} folderId={folderId} seedTitle={seedTitle} composeHref={`/w/${workspaceId}/knowledge/new?${query.toString()}`} />;
   }
   const cancelHref = typeof from === "string" && isUuid(from) ? await findReadableDocumentHref(workspaceId, from) : null;
   return (
@@ -49,6 +49,7 @@ export default async function NewNotePage({
       folder={folderId ? { id: folderId, label: folderLabel } : null}
       seedTitle={seedTitle}
       cancelHref={cancelHref}
+      recoveryId={typeof recovery === "string" && isUuid(recovery) ? recovery : undefined}
     />
   );
 }

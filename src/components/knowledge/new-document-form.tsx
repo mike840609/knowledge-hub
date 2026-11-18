@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { refreshOnArrival } from "@/components/shell/refresh-on-arrival";
 import { GovernanceError, governanceFailure, governanceRequest, type GovernanceFailure } from "@/components/workspaces/governance-error";
-import { browserDraftStorage, clearDraft } from "@/lib/document-draft";
+import { browserDraftStorage, clearDraft, type DraftKey } from "@/lib/document-draft";
 import { DocumentComposer } from "./document-composer";
 
 type Created = { documentId: string; sourceId: string };
@@ -19,6 +19,7 @@ export function NewDocumentForm({
   folder = null,
   seedTitle = null,
   cancelHref = null,
+  recoveryId,
 }: {
   workspaceId: string;
   workspaceName: string;
@@ -32,6 +33,8 @@ export function NewDocumentForm({
   seedTitle?: string | null;
   /** Where Cancel goes instead of the list: the document whose link this is for. Already checked by the page. */
   cancelHref?: string | null;
+  /** A failed automatic create opens its own browser draft. */
+  recoveryId?: string;
 }) {
   const router = useRouter();
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -41,6 +44,7 @@ export function NewDocumentForm({
 
   if (!access.actions.canWrite) return null;
   const listHref = `/w/${workspaceId}/knowledge`;
+  const draftKey: DraftKey = { kind: "new", userId, workspaceId, title: seedTitle ?? undefined, recoveryId };
 
   async function create(body: unknown): Promise<string> {
     const created = await governanceRequest<Created>(`/api/workspaces/${workspaceId}/documents`, "POST", { ...(body as object), ...(folder ? { parentId: folder.id } : {}) });
@@ -64,7 +68,7 @@ export function NewDocumentForm({
       // The composer's own draft is for the form the upload just bypassed;
       // the label offers upload "instead", so leaving it behind would offer
       // to restore a stale draft next time this workspace's /new is opened.
-      clearDraft(browserDraftStorage(), { kind: "new", userId, workspaceId });
+      clearDraft(browserDraftStorage(), draftKey);
       refreshOnArrival(href);
       router.push(href);
     } catch (failure) {
@@ -76,8 +80,9 @@ export function NewDocumentForm({
 
   return (
     <DocumentComposer
+      key={recoveryId}
       workspaceId={workspaceId}
-      draftKey={seedTitle === null ? { kind: "new", userId, workspaceId } : { kind: "new", userId, workspaceId, title: seedTitle }}
+      draftKey={draftKey}
       standIn={standIn}
       location={[{ label: "Documents", href: listHref }, ...(folder?.label ? [{ label: folder.label }] : [])]}
       untitledLabel="New document"

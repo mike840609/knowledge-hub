@@ -227,7 +227,8 @@ describe("action registry — palette matching", () => {
   });
 
   it("groups what it matched, dropping the groups that matched nothing", () => {
-    const sections = groupActions(matchActions(actions, "onboarding"));
+    expect(matchActions(actions, "onboarding")).toEqual([]);
+    const sections = groupActions(matchActions(actions, "copy link"));
     expect(sections.map((section) => section.group)).toEqual(["document"]);
   });
 

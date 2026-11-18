@@ -13,7 +13,7 @@ const rect = { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 } as DO
 Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
 Range.prototype.getBoundingClientRect = () => rect;
 const opened: MarkdownEditor[] = [];
-afterEach(async () => { for (const editor of opened.splice(0)) await editor.destroy(); document.body.innerHTML = ""; });
+afterEach(async () => { for (const editor of opened.splice(0)) await editor.destroy(); document.body.innerHTML = ""; localStorage.clear(); });
 async function open(markdown = "") {
   const root = document.body.appendChild(document.createElement("div"));
   const slash = slashCommands(); const changed = vi.fn();
@@ -203,6 +203,24 @@ async function plusLine(markdown = 'Opening line.') {
   return opened;
 }
 const optionLabels = () => [...menu().querySelectorAll('[role="option"]')].map(row => row.textContent);
+
+it("remembers four distinct slash picks across editors and keeps aliases ranked for a query", async () => {
+  for (const query of ["quote", "code", "h2", "ul", "todo", "code"]) {
+    const { view } = await open();
+    view.dispatch(view.state.tr.insertText(`/${query}`));
+    key(view.dom, "Enter");
+  }
+  const { view } = await open();
+  view.dispatch(view.state.tr.insertText("/"));
+  expect(menu().querySelector("[data-slash-group]")?.textContent).toBe("Recent");
+  expect(optionLabels().slice(0, 4)).toEqual([
+    "CodeA fenced code block", "To-do listTasks with checkboxes", "Bulleted listUnordered items", "Heading 2Section heading",
+  ]);
+  expect(new Set(optionLabels()).size).toBe(16);
+  view.dispatch(view.state.tr.insertText("h2"));
+  expect(menu().querySelector('[data-slash-group="Recent"]')).toBeNull();
+  expect(optionLabels()).toEqual(["Heading 2Section heading"]);
+});
 
 it('opens with a visible "/" on the new line, filters by what is typed, and picks a block', async () => {
   const { editor, view } = await plusLine();
