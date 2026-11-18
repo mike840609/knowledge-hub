@@ -30,16 +30,17 @@ Nothing stored changes: GFM tables, alignment in the delimiter row.
 ## Decisions
 
 1. **No table control covers anything outside its table.** Every control is
-   drawn inside the table's box, in the editor's left gutter beside a row, or
-   in the strip just right of or just below the table. Neither strip holds
-   text. The acceptance test: with the caret in a cell, every character of the
+   drawn inside the table's box, in the editor's left gutter beside a row,
+   in the strip just above the table, in its own margin, or in the strip just
+   right of or just below the table. None of these strips holds text. The acceptance test: with the caret in a cell, every character of the
    paragraph above the table is still the element under its own centre point.
 2. **A row grip and a column grip follow the cell.** The grips belong to the
    row and the column of the cell under the pointer. With the pointer off the
    table, they belong to the cell the caret is in.
    - **Row grip:** a `size-6` icon button in the left gutter, level with the
      row.
-   - **Column grip:** a small handle centred on the column's top border.
+   - **Column grip:** a low handle (`h-3 w-6`) centred on the column's top border,
+     half in the strip above the table.
    - Both use the block gutter's grip glyph and muted colour. Both hide while
      their cell is scrolled out of the table's scrolling region
      (`.kh-markdown-table` scrolls sideways).
@@ -80,6 +81,20 @@ Nothing stored changes: GFM tables, alignment in the delimiter row.
 - Selecting several cells, rows or columns from a grip, with colour or
   background for them. Markdown has no cell colour.
 - A header-row or header-column toggle: no Markdown state (2026-11-17 decision 3).
+
+## Deviations (2026-11-21, implementation)
+
+- The column grip is a low handle straddling the top border into the table's
+  own margin, not a grip centred on it: a full-height grip covered the header
+  text and took its clicks.
+- The row grip stays visible while its row is on screen; only a scrolled-out
+  column's grip hides (decision 2's "their cell" is read per grip axis). The
+  header row's grip sits just below the block gutter's buttons.
+- The bars carry a `+` glyph, as the decisions say.
+- Every control is clipped to the document pane and the viewport, and a menu
+  follows its grip and flips above it when there is no room below.
+- A column added from a menu or a bar starts with Markdown's default
+  alignment, and typing right after an action is a separate undo step.
 
 ## Verification
 

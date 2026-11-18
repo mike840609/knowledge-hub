@@ -981,12 +981,16 @@ In the rendered editor a table's controls sit on the table, never over the text
 around it (`2026-11-21-table-controls-design.md`, which amends the floating bar
 of the 2026-11-17 notion-gaps pass). With the pointer on a cell, or else the
 caret in one, a `size-6` **row grip** hangs in the editor's left gutter level
-with that row and a **column grip** sits inside the table, its top on the top
-border, centred over that column. Both are drawn on `document.body`, `fixed`,
-like the block controls, with the block gutter's grip glyph, muted, `rounded-md`
-and the shared focus ring; the column grip hides while its column is scrolled out of
-the table's region, and the row grip stays while its row is on screen. A grip opens a menu built like the block menu (same surface,
-rows and Escape): **Insert row above** (not on the header row), **Insert row
+with that row (never up in the block gutter's buttons, so the header row's
+grip sits just below them) and a **column grip**, a low `h-3 w-6` handle,
+straddles the table's top border, centred over that column, half in the
+table's own top margin, which holds no text. Both are drawn on `document.body`,
+`fixed`, like the block controls, with the block gutter's grip glyph, muted,
+`rounded-md` and the shared focus ring. All the controls are clipped to the
+document pane and the viewport; the column grip also hides while its column is
+scrolled out of the table's box, and the row grip stays while its row is on
+screen. A grip opens a menu built like the block menu (same surface, rows and
+Escape), kept under its grip and inside the viewport: **Insert row above** (not on the header row), **Insert row
 below**, a rule, **Delete row**; and **Insert column left**, **Insert column
 right**, **Align** as four radio rows (Default, Left, Center, Right, the current
 one checked), a rule, **Delete column**. Two thin **`+` bars**, the block
@@ -1957,7 +1961,7 @@ seven gaps left after the 22-decision pass of 2026-11-15:
   removes the list itself when it was the only item. Escape still selects the
   top-level block, as the 2026-11-15 decision 7 says, and the list keys still
   act on that selection.
-- The table actions carry a **Column alignment** select (default, left, center,
+- (Amended 2026-11-21: in the column menu, see Table controls.) The table actions carry a **Column alignment** select (default, left, center,
   right). It writes GFM's delimiter row; the reader already renders it. A
   header-row toggle is not offered: GFM requires a header row, so there is no
   Markdown state for "no header".
