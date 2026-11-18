@@ -441,7 +441,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 
   /* The toolbar over a selection. Milkdown's tooltip sets `left`/`top` and `data-show`. */
   .kh-selection-toolbar {
-    /* Wraps rather than overflow a phone: the row below it is `flex-wrap`, as `.kh-table-actions` is. */
+    /* Wraps rather than overflow a phone: the row below it is `flex-wrap`. */
     max-width: calc(100vw - 16px);
     @apply absolute z-20 flex items-center rounded-lg border border-kh-border bg-kh-bg-raised p-1 shadow-popover;
     /* Overlays enter and leave (design language §9). The tooltip only toggles `data-show` —
@@ -650,7 +650,6 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-slash-menu:not([hidden]),
 .kh-emoji-menu:not([hidden]),
 .kh-block-move-menu:not([hidden]),
-.kh-table-actions:not([hidden]) { animation: kh-pop-in theme("transitionDuration.120") theme("transitionTimingFunction.out"); }
 .kh-block-gutter:not([hidden]),
 .kh-selection-bubble { animation: kh-fade-in theme("transitionDuration.120") theme("transitionTimingFunction.out"); }
 .kh-tree-drop-line:not([hidden]),
@@ -1144,12 +1143,12 @@ input[type="search"]::-webkit-search-cancel-button:hover {
    that, the pane clips what does not fit. */
 .kh-editor-blocks { padding-left: 3.5rem; margin-left: -3.5rem; }
 .kh-block-gutter { position: fixed; z-index: 30; display: flex; gap: 2px; }
-.kh-table-actions { position: fixed; z-index: 31; display: flex; gap: 4px; padding: 3px; max-width: calc(100vw - 16px); flex-wrap: wrap; border: 1px solid var(--kh-table-border); border-radius: 6px; color: var(--kh-text-secondary); background: var(--kh-bg-raised); box-shadow: var(--kh-shadow-popover); }
-.kh-table-actions select { @apply h-6 rounded-sm border border-kh-border bg-kh-bg px-1 text-caption text-kh-text-muted outline-none focus-visible:ring-2 focus-visible:ring-kh-focus; }
-.kh-table-actions[hidden] { display: none; }
-.kh-table-actions button { padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
-.kh-table-actions button:hover { color: var(--kh-text); background: var(--kh-bg-hover); }
-.kh-table-actions button:focus-visible { outline: 2px solid var(--kh-focus); outline-offset: -2px; }
+.kh-table-grip, .kh-table-col-grip { position: fixed; z-index: 31; }
+.kh-table-grip[hidden], .kh-table-col-grip[hidden] { display: none; }
+.kh-table-grip, .kh-table-col-grip {
+  @apply flex size-6 items-center justify-center rounded-md border border-kh-border bg-kh-bg-raised text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text kh-focus-ring;
+}
+.kh-table-col-grip svg { transform: rotate(90deg); }
 .kh-block-gutter[hidden], .kh-block-move-menu[hidden], .kh-slash-menu[hidden] { display: none; }
 .kh-block-gutter button {
   @apply flex size-6 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text kh-focus-ring;
@@ -1174,7 +1173,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-slash-option[aria-selected="true"] { @apply bg-kh-bg-selected text-kh-selected-text; }
 .kh-tree-drop-line, .kh-block-drop-line { position: fixed; z-index: 50; height: 2px; background: var(--kh-primary); pointer-events: none; }
 .kh-block-is-dragging { cursor: grabbing; }
-@media print { .kh-block-gutter, .kh-block-move-menu, .kh-slash-menu, .kh-block-drop-line, .kh-tree-drop-line, .kh-table-actions { display: none; } }
+@media print { .kh-block-gutter, .kh-block-move-menu, .kh-slash-menu, .kh-block-drop-line, .kh-tree-drop-line, .kh-table-grip, .kh-table-col-grip { display: none; } }
 
 /* The whole block stays marked while it moves, nested content included. */
 .kh-editor .kh-block-drag-source {

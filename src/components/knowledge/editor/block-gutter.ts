@@ -5,7 +5,7 @@ import { HeadingSlugger } from "@/shared/markdown/heading-slug";
 import { openBlockList } from "./slash-commands";
 import { blockKind, canTurnInto, headingText, deleteBlock, duplicateBlock, insertBlockBelow, moveBlock, siblingBlocks, topLevelBlocks, turnBlockInto, type BlockKind } from "./block-actions";
 
-function icon(kind: "plus" | "grip"): SVGSVGElement {
+export function icon(kind: "plus" | "grip"): SVGSVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("width", "16"); svg.setAttribute("height", "16"); svg.setAttribute("aria-hidden", "true");
   if (kind === "plus") {
