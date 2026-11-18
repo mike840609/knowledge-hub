@@ -37,6 +37,8 @@ type QuickHit = {
   title: string;
   sourceName: string;
   folderPath?: string;
+  /** The synced file's path, where it has no Hub tree folder. */
+  sourcePath?: string | null;
   snippet: string;
   snippetClipped?: { start: boolean; end: boolean };
   pageIcon?: string | null;
@@ -292,7 +294,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
 
   // A document, whether it was searched for or remembered: what it is called, and where it is (and, for a
   // search, the line that matched).
-  const location = (hit: QuickHit) => [hit.sourceName, hit.folderPath].filter(Boolean).join(" › ");
+  const location = (hit: QuickHit) => [hit.sourceName, hit.folderPath ?? hit.sourcePath].filter(Boolean).join(" › ");
   const documentRow = (hit: QuickHit, index: number) => (
     <button type="button" onClick={() => choose({ kind: "hit", hit })} onMouseEnter={() => setActiveIndex(index)} className={`w-full rounded-md px-3 py-2 text-left kh-focus-ring ${index === activeIndex ? "bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`}>
       <span className="flex min-w-0 items-center gap-2">

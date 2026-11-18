@@ -192,7 +192,11 @@ test.describe("blocks in the rendered editor", () => {
     const filler = Array.from({ length: 32 }, (_, index) => `Earlier paragraph ${index + 1}.`);
     const url = await createNote(page, workspaceId, unique("Block link"), [...filler, target, "The later paragraph."].join("\n\n"));
     const surface = await openEditor(page, url);
-    await surface.getByText(target, { exact: true }).click();
+    // The first click activates the page's editor; wait until the target is the visible paragraph before
+    // asking the block menu about it, so a click lost to the editor's replacement cannot select block one.
+    const targetText = surface.getByText(target, { exact: true });
+    await targetText.click();
+    await expect(targetText).toBeInViewport();
     await page.keyboard.press("Alt+F10");
     await page.getByRole("button", { name: "Move block" }).click();
     await page.getByRole("menuitem", { name: "Copy link to block" }).click();

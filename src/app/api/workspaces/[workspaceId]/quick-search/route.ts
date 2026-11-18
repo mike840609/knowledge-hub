@@ -20,6 +20,7 @@ export async function GET(request: Request, context: { params: Promise<{ workspa
       pageIcon: hit.pageIcon,
       sourceName: hit.sourceName,
       folderPath: hit.folderPath,
+      sourcePath: hit.sourcePath,
       snippet: hit.snippet,
       snippetClipped: hit.snippetClipped,
     })) ?? [],
