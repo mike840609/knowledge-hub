@@ -22,6 +22,7 @@ import { carryTitle, resolveAuthoredTitle } from "@/lib/authored-title";
 import { matchesInitial } from "@/lib/composer-output";
 import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } from "@/lib/document-draft";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
+import { MARKDOWN_SOURCE_FIELD } from "./markdown-source";
 import { MAX_MARKDOWN_BYTES, markdownBytes } from "@/lib/markdown-limits";
 import { downloadMarkdown } from "@/lib/download-markdown";
 import { buildRecoveryMarkdown } from "@/lib/recovery-markdown";
@@ -67,7 +68,9 @@ const ARRIVAL_GRACE_MS = 3_000;
 
 function fitHeight(textarea: HTMLTextAreaElement) {
   textarea.style.height = "auto";
-  textarea.style.height = `${textarea.scrollHeight}px`;
+  // `scrollHeight` includes padding but not the border; adding the border keeps the last line
+  // from sitting under it.
+  textarea.style.height = `${textarea.scrollHeight + textarea.offsetHeight - textarea.clientHeight}px`;
 }
 
 export type ComposerSubmit = { title: string; markdown: string; expectedRevisionId: string | null };
@@ -779,8 +782,11 @@ export function DocumentComposer({
             value={markdown}
             disabled={!interactive || !sourceReady}
             hidden={showing !== "source"}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
             onChange={(event) => applyMarkdown(event.target.value)}
-            className="min-h-[12rem] w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-reading text-kh-text outline-none placeholder:text-kh-text-muted"
+            className={MARKDOWN_SOURCE_FIELD}
           />
         </div>
       </form>
