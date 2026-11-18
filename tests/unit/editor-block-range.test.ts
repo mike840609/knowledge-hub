@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 import { editorViewCtx } from "@milkdown/kit/core";
-import { redo, undo } from "@milkdown/kit/prose/history";
+import { closeHistory, redo, undo } from "@milkdown/kit/prose/history";
 import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { afterEach, expect, it } from "vitest";
+import { moveBlocks, sequenceOf } from "@/components/knowledge/editor/block-sequence";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
+import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
+import { LINK_MARKDOWN_FIXTURES } from "../fixtures/link-markdown";
 
 // docs/superpowers/specs/2026-11-20-multi-block-selection-design.md, through the rendered editor.
 const rect = { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 } as DOMRect;
@@ -47,8 +50,9 @@ it("Shift-ArrowDown and Shift-ArrowUp widen and narrow a block chosen with Escap
   expect(inRange(view)).toEqual([]);
   shift(view, "ArrowDown");
   expect(inRange(view)).toEqual(["one", "two"]);
+  // A list item is a block of the sequence: the range crosses into the list one item at a time.
   shift(view, "ArrowDown");
-  expect(inRange(view)).toEqual(["one", "two", "a" + "b"]);
+  expect(inRange(view)).toEqual(["one", "two", "a"]);
   shift(view, "ArrowUp");
   expect(inRange(view)).toEqual(["one", "two"]);
   shift(view, "ArrowUp");
@@ -69,7 +73,8 @@ it("Backspace and Delete remove every block of the range, and the caret lands be
   expect(view.state.selection).toBeInstanceOf(TextSelection);
   expect(inRange(view)).toEqual([]);
   const second = await open();
-  choose(second.view, 3);
+  escapeOn(second.view, "a");
+  shift(second.view, "ArrowDown");
   shift(second.view, "ArrowDown");
   press(second.view, "Delete");
   expect(md(second.editor)).toBe("# Title\n\none\n\ntwo\n");
@@ -104,6 +109,10 @@ it("Mod-Shift-Arrow moves the whole range past its neighbour, and the range goes
   expect(inRange(view)).toEqual(["one", "two"]);
   press(view, "ArrowDown", { ctrlKey: true, shiftKey: true });
   press(view, "ArrowDown", { ctrlKey: true, shiftKey: true });
+  // The neighbour below is now an item: the range passes `a` alone, and the list goes on after it.
+  expect(md(editor)).toBe("# Title\n\n- a\n\none\n\ntwo\n\n- b\n\nfour\n");
+  expect(inRange(view)).toEqual(["one", "two"]);
+  press(view, "ArrowDown", { ctrlKey: true, shiftKey: true });
   expect(md(editor)).toBe("# Title\n\n- a\n- b\n\none\n\ntwo\n\nfour\n");
   expect(inRange(view)).toEqual(["one", "two"]);
   // At the end there is nothing to pass.
@@ -118,9 +127,10 @@ it("Mod-Alt-digit turns every block of the range, and the same kind again turns 
   shift(view, "ArrowDown");
   press(view, "5", { ctrlKey: true, altKey: true });
   expect(md(editor)).toBe("# Title\n\n- one\n- two\n\n* a\n* b\n\nfour\n");
-  // Two bulleted lists chosen turn back, an item to a paragraph.
-  choose(view, 1);
-  shift(view, "ArrowDown");
+  // Every item of two bulleted lists chosen turns back, an item to a paragraph.
+  escapeOn(view, "one");
+  for (let step = 0; step < 3; step++) shift(view, "ArrowDown");
+  expect(inRange(view)).toEqual(["one", "two", "a", "b"]);
   press(view, "5", { ctrlKey: true, altKey: true });
   expect(md(editor)).toBe("# Title\n\none\n\ntwo\n\na\n\nb\n\nfour\n");
   const second = await open();
@@ -293,7 +303,8 @@ it("Backspace and Delete with a modifier take the whole range, never the anchor 
 it("a heading nested in a quote or a list keeps the range when Mod-d renumbers it", async () => {
   for (const markdown of ["> # Q\n\none\n\nfour\n", "- # L\n\none\n\nfour\n"]) {
     const { view } = await open(markdown);
-    choose(view, 0);
+    // Escape in the list's heading chooses its item; in the quote, the quote.
+    escapeOn(view, markdown.startsWith(">") ? "Q" : "L");
     shift(view, "ArrowDown");
     press(view, "d", { ctrlKey: true });
     expect(inRange(view).length).toBe(2);
@@ -329,4 +340,177 @@ it("AltGr and a dead key are text, not turn keys or a way to replace a block", a
   press(second.view, "Dead");
   expect(inRange(second.view)).toEqual([]);
   expect(md(second.editor)).toBe(DOC);
+});
+
+// docs/superpowers/specs/2026-11-21-block-unit-design.md, decisions 3 and 4: a range is a run of blocks in one sequence,
+// where a list item is a block, and every range operation is one undo step.
+const LISTED = "Para\n\n- a\n- b\n- c\n\nAfter\n";
+/** The caret in the first textblock that reads `text`, then Escape: the block (or the innermost item) it is in is chosen. */
+function escapeOn(view: EditorView, text: string) {
+  let at = -1;
+  view.state.doc.descendants((node, pos) => {
+    if (at < 0 && node.isTextblock && node.textContent === text) at = pos + 1;
+    return at < 0;
+  });
+  expect(at).toBeGreaterThan(0);
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
+  expect(press(view, "Escape").defaultPrevented).toBe(true);
+  expect(view.state.selection).toBeInstanceOf(NodeSelection);
+}
+const live = (view: EditorView) => view.dom.parentElement!.querySelector('[aria-live="polite"]')?.textContent;
+const mod = (view: EditorView, key: string, init: KeyboardEventInit = {}) => press(view, key, { ctrlKey: true, ...init });
+
+it("Shift-ArrowDown crosses into a list", async () => {
+  const { view } = await open(LISTED);
+  escapeOn(view, "Para");
+  shift(view, "ArrowDown");
+  shift(view, "ArrowDown");
+  expect(inRange(view)).toEqual(["Para", "a", "b"]);
+  expect(live(view)).toBe("3 blocks selected");
+});
+
+it("delete covers a whole list", async () => {
+  const { editor, view } = await open(LISTED);
+  escapeOn(view, "a");
+  for (let step = 0; step < 3; step++) shift(view, "ArrowDown");
+  expect(inRange(view)).toEqual(["a", "b", "c", "After"]);
+  press(view, "Backspace");
+  expect(md(editor)).toBe("Para\n");
+  expect(view.state.doc.childCount).toBe(1);
+  undo(view.state, view.dispatch);
+  expect(md(editor)).toBe(LISTED);
+});
+
+it("duplicate after an item joins its list", async () => {
+  const { editor, view } = await open(LISTED);
+  escapeOn(view, "a");
+  shift(view, "ArrowDown");
+  mod(view, "d");
+  expect(md(editor)).toBe("Para\n\n- a\n- b\n- a\n- b\n- c\n\nAfter\n");
+  expect(inRange(view)).toEqual(["a", "b"]);
+  const list = view.state.doc.child(1);
+  // The copies are the third and fourth items.
+  const third = 1 + view.state.doc.child(0).nodeSize + list.child(0).nodeSize + list.child(1).nodeSize;
+  expect(view.state.selection.from).toBe(third);
+  expect((view.state.selection as NodeSelection).node.type.name).toBe("list_item");
+  undo(view.state, view.dispatch);
+  expect(md(editor)).toBe(LISTED);
+});
+
+it("move down out of a list", async () => {
+  const { editor, view } = await open(LISTED);
+  escapeOn(view, "c");
+  shift(view, "ArrowUp");
+  expect(inRange(view)).toEqual(["b", "c"]);
+  mod(view, "ArrowDown", { shiftKey: true });
+  expect(md(editor)).toBe("Para\n\n- a\n\nAfter\n\n- b\n- c\n");
+  expect(inRange(view)).toEqual(["b", "c"]);
+  mod(view, "ArrowUp", { shiftKey: true });
+  expect(md(editor)).toBe(LISTED);
+  expect(inRange(view)).toEqual(["b", "c"]);
+  // The range kept its direction: the anchor is still `c`, so Shift-ArrowUp widens upward.
+  shift(view, "ArrowUp");
+  expect(inRange(view)).toEqual(["a", "b", "c"]);
+});
+
+it("ordered numbers after a move", async () => {
+  const markdown = "1. a\n2. b\n3. c\n\nP\n";
+  const { editor, view } = await open(markdown);
+  // One block up in the sequence `a, b, c, P` puts `P` between `b` and `c`: the list splits, and the part after it
+  // keeps its numbers (2026-11-17), through `order` on the second list.
+  const sequence = sequenceOf(view.state.doc, 0);
+  expect(sequence.map(block => block.node.textContent)).toEqual(["a", "b", "c", "P"]);
+  const { tr, moved } = moveBlocks(view.state, [sequence[3]], 2);
+  view.dispatch(closeHistory(tr));
+  expect(md(editor)).toBe("1. a\n2. b\n\nP\n\n3. c\n");
+  expect(view.state.doc.child(2).type.name).toBe("ordered_list");
+  expect(view.state.doc.child(2).attrs.order).toBe(3);
+  expect(moved.map(block => view.state.doc.nodeAt(block.pos)?.textContent)).toEqual(["P"]);
+  undo(view.state, view.dispatch);
+  expect(md(editor)).toBe(markdown);
+  expect(view.state.doc.childCount).toBe(2);
+});
+
+it("turn a mixed range to H2 is one undo step", async () => {
+  const { editor, view } = await open(LISTED);
+  escapeOn(view, "Para");
+  shift(view, "ArrowDown");
+  shift(view, "ArrowDown");
+  press(view, "2", { ctrlKey: true, altKey: true });
+  expect(md(editor)).toBe("## Para\n\n## a\n\n## b\n\n- c\n\nAfter\n");
+  undo(view.state, view.dispatch);
+  expect(md(editor)).toBe(LISTED);
+});
+
+it("a mixed range turned into a list becomes one list", async () => {
+  const { editor, view } = await open(LISTED);
+  escapeOn(view, "Para");
+  shift(view, "ArrowDown");
+  press(view, "5", { ctrlKey: true, altKey: true });
+  expect(md(editor)).toBe("- Para\n- a\n- b\n- c\n\nAfter\n");
+  undo(view.state, view.dispatch);
+  expect(md(editor)).toBe(LISTED);
+});
+
+it("nested sequence stops at its list's ends", async () => {
+  const markdown = "- a\n  - n1\n  - n2\n- c\n";
+  const { editor, view } = await open(markdown);
+  escapeOn(view, "n2");
+  expect(shift(view, "ArrowDown").defaultPrevented).toBe(true);
+  expect(inRange(view)).toEqual([]);
+  expect((view.state.selection as NodeSelection).node.textContent).toBe("n2");
+  shift(view, "ArrowUp");
+  expect(inRange(view)).toEqual(["n1", "n2"]);
+  expect(shift(view, "ArrowUp").defaultPrevented).toBe(true);
+  expect(inRange(view)).toEqual(["n1", "n2"]);
+  // Deleting the whole nested run leaves its parent item, with its words, and no empty list.
+  press(view, "Backspace");
+  expect(md(editor)).toBe("- a\n- c\n");
+});
+
+it("copy of a mixed range", async () => {
+  const { editor, view } = await open(LISTED);
+  escapeOn(view, "Para");
+  shift(view, "ArrowDown");
+  shift(view, "ArrowDown");
+  const { data } = clipEvent(view, "copy");
+  const text = data.get("text/plain") ?? "";
+  expect([...text.matchAll(/Para|\ba\b|\bb\b/g)].map(match => match[0])).toEqual(["Para", "a", "b"]);
+  expect(text).not.toContain("c");
+  expect(md(editor)).toBe(LISTED);
+  const cut = clipEvent(view, "cut");
+  expect(cut.event.defaultPrevented).toBe(true);
+  expect(md(editor)).toBe("- c\n\nAfter\n");
+});
+
+const links = (markdown: string) => extractDocumentLinks(markdown).map(({ kind, target, fragment, display }) => JSON.stringify({ kind, target, fragment, display })).sort();
+
+it("a duplicated mixed range keeps its wikilinks as links", async () => {
+  // The fixture's first wikilink sentence, a block before a list whose first item is a wikilink.
+  const sentence = LINK_MARKDOWN_FIXTURES.find(fixture => fixture.name === "a wikilink in a sentence")!;
+  const { editor, view } = await open(`${sentence.markdown}\n- [[Target]]\n- b\n`);
+  const target = JSON.stringify({ kind: "WIKI", target: "Target", fragment: null, display: null });
+  const before = [...sentence.links.map(link => JSON.stringify(link)), target].sort();
+  expect(links(md(editor))).toEqual(before);
+  escapeOn(view, "b");
+  shift(view, "ArrowUp");
+  shift(view, "ArrowUp");
+  expect(inRange(view)).toHaveLength(3);
+  mod(view, "d");
+  // Every link twice: the copies wrote them again, and none became text.
+  expect(links(md(editor))).toEqual([...before, ...before].sort());
+  let wikiNodes = 0;
+  view.state.doc.descendants(node => { if (node.type.name === "wiki_link") wikiNodes++; });
+  expect(wikiNodes).toBe(4);
+  expect(md(editor)).toBe(`${sentence.markdown}\n- [[Target]]\n- b\n\n${sentence.markdown}\n- [[Target]]\n- b\n`);
+});
+
+it("deleting every item of the only list leaves one empty paragraph, not an empty list", async () => {
+  const { editor, view } = await open("- a\n- b\n");
+  escapeOn(view, "a");
+  shift(view, "ArrowDown");
+  press(view, "Backspace");
+  expect(view.state.doc.childCount).toBe(1);
+  expect(view.state.doc.firstChild!.type.name).toBe("paragraph");
+  expect(md(editor).trim()).toBe("");
 });

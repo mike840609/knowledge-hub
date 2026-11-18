@@ -3,15 +3,17 @@ import { Mark, type Node as ProseNode } from "@milkdown/kit/prose/model";
 import { NodeSelection, Plugin, PluginKey, Selection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
-import { blockKind, selectedBlockPos, topLevelBlocks, turnBlockInto, type BlockKind, type EditorBlock } from "./block-actions";
+import { blockKind, selectedBlockPos, type BlockKind, type EditorBlock } from "./block-actions";
+import { deleteBlocks, duplicateBlocks, moveBlocks, sequenceOf, turnBlocks } from "./block-sequence";
 
 /**
- * Several top-level blocks chosen at once (2026-11-20 multi-block spec). A block chosen with Escape is a node
- * selection; Shift-ArrowDown/Up then widens it to the blocks around it. The selection ProseMirror holds stays
+ * Several blocks chosen at once (2026-11-20 multi-block spec). A block chosen with Escape is a node selection;
+ * Shift-ArrowDown/Up then widens it to the blocks around it in its sequence (2026-11-21 block-unit spec, decision 3:
+ * a list item is a block, and a nested item's sequence is its own list). The selection ProseMirror holds stays
  * that one node, at the block the range began at (`anchor`); the rest of the range is this plugin's state, drawn
  * with a decoration, and ends the moment the selection or the document changes by any other way.
- * Delete, duplicate, move and turn-into then act on the whole range; typing is ignored, so a stray key never
- * replaces one block of several.
+ * Delete, duplicate, move and turn-into then act on the whole range, each one undo step (`block-sequence.ts`);
+ * typing is ignored, so a stray key never replaces one block of several.
  */
 type Range = { anchor: number; head: number };
 const key = new PluginKey<Range | null>("khBlockRange");
@@ -22,7 +24,7 @@ const composing = (event: KeyboardEvent) => event.isComposing || event.keyCode =
 const blocksIn = (doc: ProseNode, range: Range): EditorBlock[] => {
   const low = Math.min(range.anchor, range.head);
   const high = Math.max(range.anchor, range.head);
-  return topLevelBlocks(doc).filter((block) => block.pos >= low && block.pos <= high);
+  return sequenceOf(doc, range.anchor).filter((block) => block.pos >= low && block.pos <= high);
 };
 
 /**
@@ -59,13 +61,16 @@ function setRange(view: EditorView, tr: Transaction, range: Range | null, scroll
   view.dispatch(closeHistory(view.state.tr));
 }
 
-/** The blocks of the range taken out; one empty paragraph stays if that was everything. */
-function removeRange(view: EditorView, from: number, to: number) {
-  const { state } = view;
-  const whole = from === 0 && to === state.doc.content.size;
-  const tr = whole ? state.tr.replaceWith(from, to, state.schema.nodes.paragraph.create()) : state.tr.delete(from, to);
-  tr.setSelection(Selection.near(tr.doc.resolve(Math.min(from + (whole ? 1 : 0), tr.doc.content.size)), -1));
-  setRange(view, tr, null);
+/** The range again over the blocks' new places, in its direction: the anchor's block stays the anchor. */
+function relocated(range: Range, blocks: EditorBlock[], placed: EditorBlock[]): Range {
+  const at = (pos: number) => placed[blocks.findIndex((block) => block.pos === pos)].pos;
+  return { anchor: at(range.anchor), head: at(range.head) };
+}
+
+/** The span a range covers, from its first block's start to its last block's end (copy takes it as one slice). */
+function span(blocks: EditorBlock[]) {
+  const last = blocks[blocks.length - 1];
+  return { from: blocks[0].pos, to: last.pos + last.node.nodeSize };
 }
 
 /** Copy and cut of the whole range: the selection ProseMirror holds is the anchor block alone, which would take one of several. */
@@ -74,15 +79,13 @@ function clip(view: EditorView, event: ClipboardEvent, cut: boolean): boolean {
   if (!view.editable || !range || !event.clipboardData) return false;
   const blocks = blocksIn(view.state.doc, range);
   if (blocks.length < 2) return false;
-  const from = blocks[0].pos;
-  const last = blocks[blocks.length - 1];
-  const to = last.pos + last.node.nodeSize;
+  const { from, to } = span(blocks);
   const { dom, text } = view.serializeForClipboard(view.state.doc.slice(from, to));
   event.preventDefault();
   event.clipboardData.clearData();
   event.clipboardData.setData("text/html", dom.innerHTML);
   event.clipboardData.setData("text/plain", text);
-  if (cut) removeRange(view, from, to);
+  if (cut) setRange(view, deleteBlocks(view.state, blocks), null);
   return true;
 }
 
@@ -103,7 +106,7 @@ export const blockRange = $prose(
       },
       appendTransaction(transactions, _old, state) {
         const range = key.getState(state);
-        if (!range || chosenBlock(state) === range.anchor || !transactions.some((transaction) => transaction.docChanged) || state.doc.resolve(range.anchor).depth !== 0 || !state.doc.nodeAt(range.anchor)) return null;
+        if (!range || chosenBlock(state) === range.anchor || !transactions.some((transaction) => transaction.docChanged) || !sequenceOf(state.doc, range.anchor).some((block) => block.pos === range.anchor)) return null;
         return state.tr.setSelection(NodeSelection.create(state.doc, range.anchor)).setMeta(key, range).setMeta("addToHistory", false);
       },
       props: {
@@ -147,10 +150,13 @@ export const blockRange = $prose(
           const moveKey = event.key === "ArrowDown" || event.key === "ArrowUp";
           // Widen, or narrow: Shift-Arrow moves the far end of the range by one block.
           if (plain && event.shiftKey && moveKey) {
-            const blocks = topLevelBlocks(state.doc);
+            const blocks = sequenceOf(state.doc, anchor);
             const at = blocks.findIndex((block) => block.pos === (range?.head ?? anchor));
+            // A whole list chosen as one node is no block of a sequence: it has no range to widen.
+            if (at < 0) return false;
             const next = at + (event.key === "ArrowDown" ? 1 : -1);
-            if (at < 0 || next < 0 || next >= blocks.length) { event.preventDefault(); return true; }
+            // A sequence's ends stop it: a nested item's range never leaves its own list.
+            if (next < 0 || next >= blocks.length) { event.preventDefault(); return true; }
             event.preventDefault();
             const head = blocks[next].pos;
             setRange(view, state.tr, head === anchor ? null : { anchor, head }, false);
@@ -160,39 +166,32 @@ export const blockRange = $prose(
           if (!range) return false;
           const blocks = blocksIn(state.doc, range);
           if (blocks.length < 2) return false;
-          const from = blocks[0].pos;
-          const last = blocks[blocks.length - 1];
-          const to = last.pos + last.node.nodeSize;
           // Backspace and Delete with Shift, Ctrl, Alt or Cmd (a word, a line) take the range, as the plain keys do: none of them
           // may take the anchor block alone. Ctrl-H is Backspace on a Mac (elsewhere it is the browser's history).
           if (event.key === "Backspace" || event.key === "Delete" || (isMac() && event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === "h")) {
             event.preventDefault();
-            removeRange(view, from, to);
+            setRange(view, deleteBlocks(state, blocks), null);
             return true;
           }
           if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key === "d") {
             event.preventDefault();
-            const tr = state.tr.insert(to, blocks.map((block) => block.node));
+            const { tr, copies } = duplicateBlocks(state, blocks);
             // The copies keep the range's direction: the copy of the anchor block is the anchor.
-            const copied = { anchor: to + (anchor - from), head: to + (range.head - from) };
+            const copied = relocated(range, blocks, copies);
             tr.setSelection(NodeSelection.create(tr.doc, copied.anchor));
             setRange(view, tr, copied);
             return true;
           }
           if ((event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey && moveKey) {
             event.preventDefault();
-            const all = topLevelBlocks(state.doc);
-            const index = all.findIndex((block) => block.pos === from);
-            const up = event.key === "ArrowUp";
-            const neighbour = up ? all[index - 1] : all[index + blocks.length];
-            if (!neighbour) return true;
-            const size = neighbour.node.nodeSize;
-            const tr = state.tr.delete(neighbour.pos, neighbour.pos + size);
-            // Up: the one above goes below the range. Down: the one below goes above it.
-            tr.insert(up ? to - size : from, neighbour.node);
-            const shift = up ? -size : size;
-            tr.setSelection(NodeSelection.create(tr.doc, anchor + shift));
-            setRange(view, tr, { anchor: anchor + shift, head: range.head + shift });
+            const all = sequenceOf(state.doc, anchor);
+            // The place in the sequence without the range: one before it, or one after its next neighbour.
+            const toIndex = all.findIndex((block) => block.pos === blocks[0].pos) + (event.key === "ArrowUp" ? -1 : 1);
+            if (toIndex < 0 || toIndex > all.length - blocks.length) return true;
+            const { tr, moved } = moveBlocks(state, blocks, toIndex);
+            const next = relocated(range, blocks, moved);
+            tr.setSelection(NodeSelection.create(tr.doc, next.anchor));
+            setRange(view, tr, next);
             return true;
           }
           // Ctrl+Alt is also AltGr on Windows: there only the character decides (AltGr+7 is `{` on a German keyboard, not a
@@ -204,18 +203,9 @@ export const blockRange = $prose(
             event.preventDefault();
             // The same kind on every block toggles it off; bottom first, so a block's position holds until it is done.
             const into = blocks.every((block) => blockKind(block.node) === wanted) ? "paragraph" : wanted;
-            const { nodes } = state.schema;
-            // Lines made lists become one list, an item each, not a list apiece.
-            if ((into === "bullet" || into === "ordered" || into === "task") && blocks.every((block) => block.node.type === nodes.paragraph || block.node.type === nodes.heading)) {
-              const ordered = into === "ordered";
-              const items = blocks.map((block) => nodes.list_item.create({ listType: ordered ? "ordered" : "bullet", label: ordered ? "1." : "-", ...(into === "task" ? { checked: false } : {}) }, nodes.paragraph.create(null, block.node.content)));
-              const list = (ordered ? nodes.ordered_list : nodes.bullet_list).create(ordered ? { order: 1 } : null, items);
-              const tr = state.tr.replaceWith(from, to, list);
-              tr.setSelection(Selection.near(tr.doc.resolve(from + 1)));
-              setRange(view, tr, null);
-              return true;
-            }
-            for (const block of [...blocks].reverse()) turnBlockInto(view, block.pos, into);
+            // One transaction for every block; lines and items made one list kind become one list.
+            const tr = turnBlocks(state, blocks, into);
+            if (tr) setRange(view, tr, null);
             return true;
           }
           // A character, with Shift or Option or AltGr as much as without, or Enter, would replace one block of several;
