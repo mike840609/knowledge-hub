@@ -843,12 +843,14 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           editorView.dom.addEventListener("focus", showOnFocus);
           linkRow.addEventListener("focusout", hideOnLinkBoxBlur);
           turnMenu.addEventListener("focusout", hideOnLinkBoxBlur);
+          setTurnLabel(editorView);
 
           return {
             update: (view, prevState) => {
               syncCard(view, !prevState || (prevState.doc.eq(view.state.doc) && !prevState.selection.eq(view.state.selection)));
               commentGroup.hidden = !comment?.available();
-              setTurnLabel(view);
+              // A caret shows no toolbar: the label waits for a selection (every caret move is an update).
+              if (!view.state.selection.empty) setTurnLabel(view);
               turnButton.disabled = !view.editable;
               // The menu is for the blocks it opened over: another selection, or another document, closes it.
               if (!turnMenu.hidden && prevState && (!prevState.doc.eq(view.state.doc) || !prevState.selection.eq(view.state.selection))) closeTurnMenu();

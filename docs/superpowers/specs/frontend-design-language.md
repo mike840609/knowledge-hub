@@ -942,12 +942,14 @@ next item; a Table keeps the caret in its first cell. The grip menu, the
 toolbar's Turn into, the `/` list and the turn keys (`Mod-Alt-0`…`8`, where
 `0`–`3` turn an item from its first line and are otherwise Milkdown's own, and
 `Mod-Shift-7`/`8`/`9`) end in the same turn and give the same result for the
-same item of a list (`tests/unit/editor-turn-parity.test.ts`). Two places
-differ. The `/` list on an item with a nested list puts the block below, as
-above. And an item inside a quote, a callout or a toggle's body: there
-`Mod-Alt-0`…`3` still turn the caret's item, inside its container, while the
-toolbar acts on the container as a whole and, in a toggle's body, disables
-every entry; no parity is claimed there.
+same item of a top-level list (`tests/unit/editor-turn-parity.test.ts`). Two
+places differ. The `/` list on an item with a nested list puts the block below,
+as above. And an item inside a quote, a callout or a toggle's body: there
+`Mod-Alt-0`…`3` and the toolbar turn the item, inside its container, while the
+grip reaches only the container; no parity is claimed there. A block that ends
+up inside a list item (a nested item turned, or a block below one) makes that
+item loose, so it is saved with blank lines between its children and reads
+back as written.
 
 `+` writes a visible `/` on the line it adds and opens the same list there,
 through the path a typed `/` takes: what is typed next is that `/`'s query, in
@@ -988,9 +990,11 @@ disabled where `canTurnInto` refuses it for a block the selection touches, or
 where every touched block already is that kind, so a list item leaves its list
 by Text; a click on a disabled entry does nothing and leaves the toolbar and the
 menu open. Turn into acts on the blocks the selection touches as the block-unit
-spec defines them (an item, not its list; a quote or a callout as a whole, so a
-selection in one paragraph of a quote turns the whole quote; inside a toggle's
-body every entry is disabled), as one undo step, through the grip menu's own
+spec defines them (an item, not its list, wherever the list is, a quote, a
+callout or a toggle's body included; for a paragraph in a quote or a callout,
+the container as a whole, so a selection in one paragraph of a quote turns the
+whole quote; for a paragraph in a toggle's body, nothing: every entry is
+disabled), as one undo step, through the grip menu's own
 turn, and the same text stays selected afterwards. A vertical rule
 (`bg-kh-border`) follows, then Bold, Italic, Strikethrough, Inline code, Link
 and Clear formatting, each a `ghost` `sm` button that reads `aria-pressed` when
@@ -2102,7 +2106,8 @@ was added.
 list item as on a line, and gives the selection toolbar one Turn into menu in
 place of its heading, list and Toggle buttons (§10, "Block controls and the `/`
 list" and "The selection toolbar and the link card"). The toolbar now acts on
-block-unit blocks: a selection inside a quote turns the whole quote, where the
-old buttons changed only the paragraph, and inside a toggle's body no entry is
-enabled. While the toolbar's menu is open the block and table controls step
+block-unit blocks: a selection in a quote's paragraph turns the whole quote,
+where the old buttons changed only the paragraph, and in a toggle body's
+paragraph no entry is enabled; a selection in a list item turns that item,
+inside a container or not. While the toolbar's menu is open the block and table controls step
 aside. No colour, radius, elevation or motion token was added.

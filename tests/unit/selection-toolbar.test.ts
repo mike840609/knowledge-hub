@@ -1147,6 +1147,19 @@ describe("Turn into on the toolbar, inside a container", () => {
     expect(editor.getMarkdown()).toBe("one\n\ntwo\n");
   });
 
+  // Whole-branch review, I2: the container rule is for its paragraphs. A list item is a block of its own wherever its
+  // list is, so a selection in an item in a quote turns that item, inside the quote.
+  it("turns only the item from a selection in a list item inside a quote", async () => {
+    const editor = await open("> - a\n> - b\n");
+    mountToolbar(editor);
+    selectText(editor, "b");
+    expect(turnButton().textContent).toBe("Bulleted list");
+    openTurnMenu();
+    for (const label of ["Text", "Heading 1", "Numbered list", "Quote", "Code"]) expect(entry(label).disabled, label).toBe(false);
+    entry("Text").click();
+    expect(editor.getMarkdown()).toBe("> - a\n>\n> b\n");
+  });
+
   it("offers nothing inside a toggle's body", async () => {
     const editor = await open("<details>\n<summary>Title</summary>\n\nbody words\n\n</details>\n");
     mountToolbar(editor);

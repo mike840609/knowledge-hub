@@ -134,8 +134,18 @@ Nothing stored changes.
   (an item with a nested list), where Milkdown's did nothing either. Anywhere else they stay Milkdown's: a loose
   item's later paragraph or a code block in an item still turns in place, and a paragraph in a quote still becomes a
   heading in the quote. Inside a quote, a callout or a toggle's body the keys turn the caret's item within its
-  container, while the toolbar's Turn into acts on the container as a whole (and in a toggle's body disables every
-  entry); decision 7's parity does not hold there and is not claimed.
+  container, and so does the toolbar's Turn into: a selection in an item there touches that item (the container
+  rule, the whole quote or callout, and every entry disabled in a toggle's body, is for the container's paragraphs,
+  not its items). The grip, whose blocks are the top-level ones and the items of top-level lists, reaches only the
+  container there, so decision 7's parity test covers items of top-level lists only.
+- **A block put inside a list item makes that item loose.** A nested item that a choice turns (decision 2), a block
+  that goes below a nested item (decision 3), and the grip's Turn into on a nested item all leave a block as a child
+  of the parent item. A tight item writes its children without blank lines between them, and there a `---` turned
+  the line above it into a setext heading, a toggle read back as raw HTML in a paragraph, a table as pipe text, and a
+  paragraph after the nested list joined its last item. The split that puts the block there sets the parent item's
+  `spread` in the same transaction, so it is written with blank lines between its children and reads back as the
+  same tree (`tests/unit/editor-slash-commands.test.ts`, "reads back as the same tree"). A split that leaves only
+  lists in the item changes nothing.
 - **The block and table controls step aside while the toolbar's Turn into menu is open.** The toolbar lives inside
   the document pane, whose `contain: layout` makes a stacking context, so no `z-index` of its own lifts it over the
   controls drawn on the body at 30, and at 1440 × 900 its menu hangs over the gutter's column. The browser run found

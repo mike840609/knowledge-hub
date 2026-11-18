@@ -8,7 +8,7 @@ import { CalendarDays, Code, Heading1, Heading2, Heading3, Info, Link2, List, Li
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { blockKind, canTurnInto, dispatchBlockAction, insertAfterListItem, replaceListItem, turnInto, type BlockKind } from "./block-actions";
-import { insertDetailsSkeleton } from "./details-toggle";
+import { detailsSkeleton, insertDetailsSkeleton } from "./details-toggle";
 import { keepsAsText } from "./wiki-link";
 
 // `aliases` match by prefix (what a Notion hand types: /h2, /todo, /ul); label and `words` match anywhere.
@@ -273,7 +273,7 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
       ]);
     }
     if (command.id === "toggle") {
-      node = nodes.details.create({ open: true }, [nodes.details_summary.create(), nodes.details_body.create(null, paragraph)]);
+      node = detailsSkeleton(view.state.schema);
       caret = 2;
     }
     if (command.id === "callout") {

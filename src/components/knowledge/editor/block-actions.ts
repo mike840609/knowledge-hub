@@ -256,8 +256,17 @@ function splitListAt(tr: Transaction, itemPos: number, nodes: ProseNode[], repla
     pieces.push(list.type.create(after, Fragment.fromArray(items.slice(rest))));
   }
   tr.replaceWith(listPos, listPos + list.nodeSize, pieces);
+  // In a list item (a nested list split), the nodes become the item's children. A tight item is written without blank
+  // lines between them, and a `---`, a toggle, a table or a paragraph there then reads back as something else (a setext
+  // heading, raw HTML, pipe text, the nested list's last item). The item goes loose instead, which reads back as itself.
+  const $list = tr.doc.resolve(listPos);
+  const parent = $list.parent;
+  if (parent.type.name === "list_item" && !parent.attrs.spread && nodes.some((node) => !LIST_NODES.has(node.type.name))) {
+    tr.setNodeMarkup($list.before(), undefined, { ...parent.attrs, spread: true });
+  }
   return listPos + (cut > 0 ? pieces[0].nodeSize : 0);
 }
+const LIST_NODES = new Set(["bullet_list", "ordered_list"]);
 
 /**
  * Puts `nodes` in the place of the list item at `itemPos` of `tr.doc`, splitting its list around them, and returns the

@@ -75,8 +75,11 @@ const pick = (role: string, label: string) => {
 };
 
 type Kind = { id: string; label: string; alias: string; keys: { key: string; init: KeyboardEventInit & { keyCode: number } }[] };
-// Mod is Ctrl here (jsdom is not a Mac). Quote has no turn key; Mod-Alt-2 is Milkdown's own Heading 2.
+// Mod is Ctrl here (jsdom is not a Mac). Quote has no turn key; Mod-Alt-0…3 turn an item from its first line.
 const KINDS: Kind[] = [
+  { id: "paragraph", label: "Text", alias: "p", keys: [{ key: "0", init: { ctrlKey: true, altKey: true, keyCode: 48 } }] },
+  { id: "h1", label: "Heading 1", alias: "h1", keys: [{ key: "1", init: { ctrlKey: true, altKey: true, keyCode: 49 } }] },
+  { id: "h3", label: "Heading 3", alias: "h3", keys: [{ key: "3", init: { ctrlKey: true, altKey: true, keyCode: 51 } }] },
   { id: "quote", label: "Quote", alias: "quote", keys: [] },
   { id: "h2", label: "Heading 2", alias: "h2", keys: [{ key: "2", init: { ctrlKey: true, altKey: true, keyCode: 50 } }] },
   { id: "ordered", label: "Numbered list", alias: "number", keys: [{ key: "6", init: { ctrlKey: true, altKey: true, keyCode: 54 } }, { key: "&", init: { ctrlKey: true, shiftKey: true, keyCode: 55 } }] },
@@ -146,6 +149,9 @@ const CASES = [
 ];
 // What each kind gives on either case, as top-level node types.
 const SHAPES: Record<string, string[]> = {
+  paragraph: ["bullet_list", "paragraph", "bullet_list"],
+  h1: ["bullet_list", "heading1", "bullet_list"],
+  h3: ["bullet_list", "heading3", "bullet_list"],
   quote: ["bullet_list", "blockquote", "bullet_list"],
   h2: ["bullet_list", "heading2", "bullet_list"],
   ordered: ["bullet_list", "ordered_list", "bullet_list"],

@@ -7,6 +7,7 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 import type { Blockquote } from "mdast";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { afterEach, expect, it, vi } from "vitest";
+import { turnBlockInto } from "@/components/knowledge/editor/block-actions";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { matchingCommands, openBlockList, slashCommands } from "@/components/knowledge/editor/slash-commands";
 import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
@@ -616,10 +617,72 @@ it.each(['- a\n- p\n  - n\n- c', '1. a\n2. p\n   1. n\n3. c', '- [ ] a\n- [x] p\
   expect(checked).toEqual(before);
 });
 
+// Whole-branch review, I1: only an empty first line followed by a nested list is written as a bare `-`. Followed by a
+// paragraph, the bare `-` and the blank line after it would end the item, and the paragraph would leave the list.
+it('an emptied parent item whose nested item became text reads back as the same tree', async () => {
+  const { editor, view } = await open('- a\n- p\n  - n\n- c');
+  inItem(view, 1, '');
+  inItem(view, 2, '');
+  view.dispatch(view.state.tr.insertText('/p'));
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('x'));
+  const { markdown, doc } = await saved(editor);
+  expectSameTree(markdown, doc, view.state.doc);
+});
+
+it('a tight item with an empty first line and a paragraph after it keeps the paragraph in the item', async () => {
+  const { editor, view } = await open('- a\n- p\n\n  x\n- c');
+  inItem(view, 1, '');
+  const pos = itemPositions(view.state.doc)[1];
+  view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...view.state.doc.nodeAt(pos)!.attrs, spread: false }));
+  const { markdown, doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(['bullet_list']);
+  expect(childTypes(doc.child(0).child(1))).toEqual(['paragraph', 'paragraph']);
+  expect(doc.child(0).child(1).lastChild!.textContent, markdown).toBe('x');
+});
+
 // A loose item's empty first line is left as `<br />`: a blank line after a bare `-` would end the item there.
 it.each(['- a\n- p\n\n  second\n- c', '- a\n- p\n\n  second\n\n  - n\n- c', '- a\n- p\n\n  - n\n- c'])('a loose item with an empty first line reads back as the same tree: %j', async (source) => {
   const { editor, view } = await open(source);
   inItem(view, 1, '');
   const { doc } = await saved(editor);
   expect(doc.toString()).toBe(view.state.doc.toString());
+});
+
+// Whole-branch review, C1: a block that `/` puts inside a parent item (a nested item turned, or a block below the last
+// nested item) must read back as the same tree. Written tight, `---` under the item's line made it a setext heading, a
+// toggle became raw HTML in a paragraph, a table pipe text, and a paragraph after the nested list joined its last item.
+/** `doc.eq`, attributes and all; the reopened document is carried into the first editor's schema to be compared. */
+function expectSameTree(markdown: string, reopened: ProseNode, current: ProseNode) {
+  const carried = current.type.schema.nodeFromJSON(reopened.toJSON());
+  expect(carried.eq(current), `${markdown}\n---\n${JSON.stringify(reopened.toJSON())}\n---\n${JSON.stringify(current.toJSON())}`).toBe(true);
+}
+const IN_PARENT = [['p', 'text'], ['h1', 'h1'], ['h2', 'h2'], ['h3', 'h3'], ['quote', 'quote'], ['code', 'code'], ['mermaid', 'diagram'], ['toggle', 'toggle'], ['callout', 'callout'], ['hr', 'divider'], ['table', 'table']];
+it.each(IN_PARENT.flatMap(([query, name]) => [
+  [name, 'alone in the only nested item', '- a\n  - n\n- c', 1, '', `/${query}`],
+  [name, 'alone in the last nested item', '- a\n  - n1\n  - n2\n- c', 2, '', `/${query}`],
+  [name, 'mid-line in the last nested item', '- a\n  - n1\n  - n2\n- c', 2, 'n2', ` /${query}`],
+] as const))('%s chosen %s reads back as the same tree', async (_name, _where, source, n, text, typed) => {
+  const { editor, view } = await typedInItem(source, n, text, typed);
+  expect(menu().hidden).toBe(false);
+  key(view.dom, 'Enter');
+  expect(menu().hidden).toBe(true);
+  view.dispatch(view.state.tr.insertText('x'));
+  if (text) {
+    // The space before a mid-line `/` stays on the line, as at the top level, and Markdown keeps no line's trailing
+    // space; it goes here so the comparison is of the tree alone.
+    let end = -1;
+    view.state.doc.descendants((node, pos) => { if (node.isText && node.text === `${text} `) end = pos + node.nodeSize; return end < 0; });
+    expect(end).toBeGreaterThan(0);
+    view.dispatch(view.state.tr.delete(end - 1, end));
+  }
+  const { markdown, doc } = await saved(editor);
+  expectSameTree(markdown, doc, view.state.doc);
+});
+
+it("the grip's Turn into Text on a parent item's last nested item reads back as the same tree", async () => {
+  const { editor, view } = await open('- a\n  - n1\n  - n2\n- c');
+  turnBlockInto(view, itemPositions(view.state.doc)[2], 'paragraph');
+  const { markdown, doc } = await saved(editor);
+  expectSameTree(markdown, doc, view.state.doc);
 });
