@@ -99,6 +99,7 @@ export function tableActions() {
       const addColumnBar = document.createElement("button");
       for (const [bar, label] of [[addRowBar, "Add row"], [addColumnBar, "Add column"]] as const) {
         bar.type = "button"; bar.className = "kh-table-add"; bar.hidden = true; bar.setAttribute("aria-label", label); bar.title = label;
+        bar.appendChild(icon("plus"));
       }
       const controls = [rowGrip, colGrip, addRowBar, addColumnBar];
       document.body.append(rowGrip, colGrip, addRowBar, addColumnBar, menu);

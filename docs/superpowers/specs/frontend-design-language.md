@@ -890,7 +890,7 @@ content — a several-item list into one heading, a quote with several paragraph
 into one code block — is disabled rather than performed lossily; converting one
 list item splits the list around it (2026-11-17, below). Duplicate inserts the
 copy immediately below; Delete removes the block and leaves one empty paragraph
-when it was the document's only one. `Alt+F10` in the editor moves focus to the controls, and
+when it was the document's only one. `Alt+F10` in the editor moves focus to the controls (with the caret in a table cell, to that table's controls, below), and
 the editor says so (`aria-keyshortcuts`); Escape closes the menu, or returns
 from Turn into to the block menu, and finally goes back to the text. While a
 block is dragged it is tinted `kh-bg-selected` and a 2px `--kh-primary` line
@@ -974,6 +974,30 @@ Both rewrite the document through the rendered editor and are held to the
 wikilink rule (`tests/unit/editor-block-actions.test.ts` moves every case in
 `tests/fixtures/link-markdown.ts`; `tests/e2e/zz-editor-blocks.spec.ts` moves a
 linked paragraph, saves, and reads the backlink).
+
+### Table controls (2026-11-21)
+
+In the rendered editor a table's controls sit on the table, never over the text
+around it (`2026-11-21-table-controls-design.md`, which amends the floating bar
+of the 2026-11-17 notion-gaps pass). With the pointer on a cell, or else the
+caret in one, a `size-6` **row grip** hangs in the editor's left gutter level
+with that row and a **column grip** sits inside the table, its top on the top
+border, centred over that column. Both are drawn on `document.body`, `fixed`,
+like the block controls, with the block gutter's grip glyph, muted, `rounded-md`
+and the shared focus ring; a grip hides while its cell is scrolled out of
+the table's region. A grip opens a menu built like the block menu (same surface,
+rows and Escape): **Insert row above** (not on the header row), **Insert row
+below**, a rule, **Delete row**; and **Insert column left**, **Insert column
+right**, **Align** as four radio rows (Default, Left, Center, Right, the current
+one checked), a rule, **Delete column**. Two thin **`+` bars**, the block
+gutter's plus glyph centred and muted, run in the strip just below and just
+right of the table and add a row or a column at the end; neither strip holds
+text. Each control is a named button (`Row 3 actions`, `Column 2 actions`,
+`Add row`, `Add column`). `Alt+F10` with the caret in a table cell moves focus
+to the row grip, then Tab reaches the column grip and the two bars; Escape in
+a grip or menu returns to the cell, and the block gutter is reached by Escape
+(table selected) then `Alt+F10`. Delete table is the block menu's Delete. No
+colour, radius, elevation or motion token was added; nothing here is printed.
 
 ## 11. Navigation state
 

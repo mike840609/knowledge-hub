@@ -321,10 +321,11 @@ test("slash blocks render while editing and survive save and reopen", async ({ p
   await page.keyboard.type("Ready");
   await expect(surface.locator("table th")).toHaveText(["Task", "Status"]);
   await expect(surface.locator("table tr").nth(1).locator("td")).toHaveText(["Rendering", "Ready"]);
-  await expect(page.getByRole("group", { name: "Table actions" })).toBeVisible();
-  await page.getByRole("button", { name: "Add row below" }).click();
+  await page.getByRole("button", { name: /^Row \d+ actions$/ }).click();
+  await page.getByRole("menuitem", { name: "Insert row below" }).click();
   await expect(surface.locator("table tr")).toHaveCount(3);
-  await page.getByRole("button", { name: "Add column right" }).click();
+  await page.getByRole("button", { name: /^Column \d+ actions$/ }).click();
+  await page.getByRole("menuitem", { name: "Insert column right" }).click();
   await expect(surface.locator("table tr")).toHaveCount(3);
   await expect(surface.locator("table tr").first().locator("th")).toHaveCount(3);
   await expect(surface.locator("table tr").last().locator("td")).toHaveCount(3);

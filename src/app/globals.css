@@ -1146,7 +1146,8 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-table-grip, .kh-table-col-grip { position: fixed; z-index: 31; }
 .kh-table-grip[hidden], .kh-table-col-grip[hidden], .kh-table-add[hidden] { display: none; }
 /* The + bars fill the strip directly below and directly right of the table: nothing outside the table is covered. */
-.kh-table-add { position: fixed; z-index: 31; width: 0.75rem; height: 0.75rem; padding: 0; border: 1px solid var(--kh-border); @apply rounded-md hover:bg-kh-bg-hover kh-focus-ring; }
+.kh-table-add { position: fixed; z-index: 31; width: 0.75rem; height: 0.75rem; padding: 0; border: 1px solid var(--kh-border); @apply flex items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text kh-focus-ring; }
+.kh-table-add svg { width: 100%; height: 100%; }
 .kh-table-grip, .kh-table-col-grip {
   @apply flex size-6 items-center justify-center rounded-md border border-kh-border bg-kh-bg-raised text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text kh-focus-ring;
 }
