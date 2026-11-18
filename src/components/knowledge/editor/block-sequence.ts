@@ -1,5 +1,5 @@
 import type { Node as ProseNode, NodeType } from "@milkdown/kit/prose/model";
-import { NodeSelection, Selection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
+import { AllSelection, NodeSelection, Selection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
 import { blockKind, canTurnInto, turnInto, type BlockKind, type EditorBlock } from "./block-actions";
 
 /**
@@ -60,7 +60,7 @@ function readRegion(doc: ProseNode, sequence: EditorBlock[], lo: number, hi: num
   const read = (node: ProseNode, pos: number) => {
     if (!isList(node)) { entries.push({ node, pos, key: null, number: null, first: false, join: false }); return; }
     lists.set(pos, { type: node.type, attrs: node.attrs, pos, end: pos + node.nodeSize });
-    const order = Number(node.attrs.order) || 1;
+    const order = Number(node.attrs.order ?? 1);
     node.forEach((item, offset, index) => entries.push({ node: item, pos: pos + 1 + offset, key: pos, number: order + index, first: index === 0, join: false }));
   };
   if (nested) read($first.parent, from);
@@ -263,6 +263,8 @@ export function turnBlocks(state: EditorState, blocks: EditorBlock[], into: Bloc
  */
 export function blocksTouched(state: EditorState): EditorBlock[] {
   const { doc, selection } = state;
+  // Select all holds no position inside a block: every top-level block of the document is touched.
+  if (selection instanceof AllSelection) return sequenceOf(doc, 0);
   const { $from } = selection;
   let { $to } = selection;
   if (!selection.empty && $to.parentOffset === 0 && $to.pos > $from.end()) $to = doc.resolve(Math.max($from.pos, Selection.near(doc.resolve($to.pos - 1), -1).from));

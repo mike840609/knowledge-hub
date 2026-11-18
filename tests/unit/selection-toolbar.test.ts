@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { editorViewCtx } from "@milkdown/kit/core";
-import { TextSelection } from "@milkdown/kit/prose/state";
+import { AllSelection, TextSelection } from "@milkdown/kit/prose/state";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -491,6 +491,25 @@ describe("Turn into on the selection toolbar", () => {
     expect(editor.getMarkdown()).toBe("P\n\n- a\n- b\n");
   });
 
+  it("turns the whole document after Select all, instead of disabling every entry", async () => {
+    const editor = await open("Alpha\n\nBeta\n");
+    mountToolbar(editor);
+    const view = viewOf(editor);
+    view.dom.focus();
+    key(view.dom, { key: "a", ctrlKey: true, code: "KeyA" });
+    key(view.dom, { key: "a", ctrlKey: true, code: "KeyA" });
+    expect(view.state.selection).toBeInstanceOf(AllSelection);
+    expect(turnButton().textContent).toBe("Text");
+    openTurnMenu();
+    expect(entry("Bulleted list").disabled).toBe(false);
+    entry("Bulleted list").click();
+    expect(editor.getMarkdown()).toBe("- Alpha\n- Beta\n");
+    // The whole document stays selected, so the next turn or mark acts on all of it.
+    const { state } = viewOf(editor);
+    expect(state.selection.from).toBe(0);
+    expect(state.selection.to).toBe(state.doc.content.size);
+  });
+
   it("enables Numbered list in a bulleted item, and turns only that item", async () => {
     const editor = await open("- a\n- b\n- c\n");
     mountToolbar(editor);
@@ -696,6 +715,15 @@ describe("Turn into on the selection toolbar", () => {
     // The bold lands in the heading, not the first paragraph.
     button("Bold").click();
     expect(editor.getMarkdown()).toBe("same text\n\n## same **text**\n");
+  });
+
+  it("keeps the words after a wikilink selected when Code expands its spelling", async () => {
+    const editor = await open("- see [[Target]] here\n");
+    mountToolbar(editor);
+    selectText(editor, "here");
+    openTurnMenu();
+    entry("Code").click();
+    expect(selectedText(editor)).toBe("here");
   });
 
   it("keeps a [[wikilink]] as a link through a toolbar turn", async () => {

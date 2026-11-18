@@ -46,6 +46,14 @@ async function caretAtEnd(page: Page, surface: Locator, text: string) {
     return !!selection?.isCollapsed && node?.textContent === expected && selection.focusOffset === expected.length
       && !!node.parentElement?.closest(".ProseMirror");
   }, text)).toBe(true);
+  // ProseMirror reads a browser-moved caret a task later; a key sent before that acts on the old selection.
+  await page.waitForTimeout(150);
+}
+
+async function selectItemText(page: Page, surface: Locator, text: string) {
+  await caretAtEnd(page, surface, text);
+  for (let index = 0; index < text.length; index++) await page.keyboard.press("Shift+ArrowLeft");
+  await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe(text);
 }
 
 test.describe("list commands", () => {
@@ -72,9 +80,10 @@ test.describe("list commands", () => {
 
   test("/quo in an item makes a quote", async ({ page }) => {
     const { surface, documentId } = await openNote(page, "- alpha\n- beta\n- gamma\n");
+    // Clear the item one key at a time: a text selection made with Shift+Home can reach into the item above
+    // (the browser's line start differs from the editor's), which would delete more than this test means to.
     await caretAtEnd(page, surface, "beta");
-    await page.keyboard.press("Shift+Home");
-    await page.keyboard.press("Backspace");
+    for (let index = 0; index < "beta".length; index++) await page.keyboard.press("Backspace");
     await page.keyboard.type("/quo");
     const list = page.getByRole("listbox");
     await expect(list.getByRole("option")).toHaveCount(1);
@@ -87,8 +96,7 @@ test.describe("list commands", () => {
 
   test("Numbered list from the toolbar in a bulleted item", async ({ page }) => {
     const { surface, documentId } = await openNote(page, "- alpha\n- beta\n- gamma\n\nOne\n\nTwo\n\nThree\n\nFour\n\nFive\n\nSix\n\nSeven\n");
-    await caretAtEnd(page, surface, "beta");
-    await page.keyboard.press("Shift+Home");
+    await selectItemText(page, surface, "beta");
     await expect(toolbar(page)).toBeVisible();
     const turn = toolbar(page).getByRole("button", { name: "Turn into, Bulleted list" });
     await turn.click();

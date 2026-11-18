@@ -192,6 +192,15 @@ function listFrom(node: ProseNode, target: BlockKind, schema: EditorView["state"
 
 type LeafKind = "paragraph" | "h1" | "h2" | "h3" | "quote" | "code";
 
+/** Text written into a code block, up to an inline-content offset in its source. */
+export function codeText(node: ProseNode, end = node.content.size): string {
+  return node.textBetween(0, end, "\n", (leaf) => {
+    if (leaf.type.name === "wiki_link") return String(leaf.attrs.raw ?? "");
+    if (leaf.type.name === "hardbreak") return "\n";
+    return String(leaf.attrs.alt ?? "");
+  });
+}
+
 function leafFrom(node: ProseNode, target: LeafKind, schema: EditorView["state"]["schema"]): ProseNode {
   const inline = inlineContent(node, schema);
   switch (target) {
@@ -204,9 +213,7 @@ function leafFrom(node: ProseNode, target: LeafKind, schema: EditorView["state"]
     case "quote":
       return schema.nodes.blockquote.create(null, schema.nodes.paragraph.create(null, inline));
     case "code": {
-      // `textContent` drops a hard break entirely; a code block must keep the
-      // line the writer sees. `leafText` supplies the newline for hard breaks.
-      const text = node.type.name === "code_block" ? node.textContent : node.textBetween(0, node.content.size, "\n", (leaf) => leaf.type.name === "wiki_link" ? String(leaf.attrs.raw ?? "") : leaf.type.name === "hardbreak" ? "\n" : String(leaf.attrs.alt ?? ""));
+      const text = codeText(node);
       return schema.nodes.code_block.create(null, text ? schema.text(text) : undefined);
     }
   }
@@ -252,7 +259,7 @@ function splitListAt(tr: Transaction, itemPos: number, nodes: ProseNode[], repla
   if (cut > 0) pieces.push(list.type.create(list.attrs, Fragment.fromArray(items.slice(0, cut))));
   pieces.push(...nodes);
   if (rest < items.length) {
-    const after = list.type.name === "ordered_list" ? { ...list.attrs, order: (Number(list.attrs.order) || 1) + rest } : list.attrs;
+    const after = list.type.name === "ordered_list" ? { ...list.attrs, order: Number(list.attrs.order ?? 1) + rest } : list.attrs;
     pieces.push(list.type.create(after, Fragment.fromArray(items.slice(rest))));
   }
   tr.replaceWith(listPos, listPos + list.nodeSize, pieces);
@@ -294,7 +301,7 @@ export function insertAfterListItem(tr: Transaction, itemPos: number, nodes: Pro
   if (only?.type.name === "list_item" && blockKind(only) === blockKind(item)) {
     const at = itemPos + item.nodeSize;
     // The new item's own label, not the one it follows: the writer numbers a list's items again from its start.
-    const label = item.attrs.listType === "ordered" ? `${(Number(tr.doc.resolve(itemPos).parent.attrs.order) || 1) + tr.doc.resolve(itemPos).index() + 1}.` : "-";
+    const label = item.attrs.listType === "ordered" ? `${Number(tr.doc.resolve(itemPos).parent.attrs.order ?? 1) + tr.doc.resolve(itemPos).index() + 1}.` : "-";
     tr.insert(at, item.type.create({ ...item.attrs, label, checked: item.attrs.checked == null ? null : false }, only.content));
     return at;
   }

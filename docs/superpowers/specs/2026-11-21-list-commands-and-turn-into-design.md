@@ -103,6 +103,8 @@ Nothing stored changes.
    the same text stays selected, so a mark can follow.
 7. **Every entry point gives the same result.** The toolbar, the grip menu,
    the `/` list and the turn keys call the same function for the same blocks.
+   Changing between a bulleted item and a to-do with either list shortcut splits the list around
+   the converted item, as the grip does. Pressing the shortcut for the current kind still lifts it.
    A test turns the same item through each and compares the saved Markdown.
 
 ## Deviations
@@ -131,7 +133,8 @@ Nothing stored changes.
   left `0`–`3` to Milkdown. On an item's first line Milkdown's keys set that line to a heading, which an item cannot
   start with, so they did nothing while the grip turned the item; decision 7's parity test found it. With the caret on
   an item's first line these four keys now call the grip's turn, and the key is claimed even where the turn is refused
-  (an item with a nested list), where Milkdown's did nothing either. Anywhere else they stay Milkdown's: a loose
+  (an item with a nested list), where Milkdown's did nothing either. A selection that touches several items turns all
+  of them, as the toolbar does. Anywhere else they stay Milkdown's: a loose
   item's later paragraph or a code block in an item still turns in place, and a paragraph in a quote still becomes a
   heading in the quote. Inside a quote, a callout or a toggle's body the keys turn the caret's item within its
   container, and so does the toolbar's Turn into: a selection in an item there touches that item (the container

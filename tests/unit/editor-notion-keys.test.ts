@@ -281,12 +281,12 @@ it("the [] rule reads its links back", async () => {
   expect(edges(editor.getMarkdown())).toEqual(wanted);
 });
 
-it("Mod-Shift-9 on a bulleted item makes it a to-do in the same list", async () => {
+it("Mod-Shift-9 on a bulleted item turns just that item into a to-do list", async () => {
   const { editor, view } = await open("- one\n- two");
   caretAt(view, 4);
   mod(view, "(", { shiftKey: true });
-  expect(names(view)).toEqual(["bullet_list"]);
-  expect(editor.getMarkdown().trim()).toBe("- [ ] one\n- two");
+  expect(names(view)).toEqual(["bullet_list", "bullet_list"]);
+  expect(editor.getMarkdown().trim()).toBe("- [ ] one\n\n* two");
 });
 
 it("Mod-Shift-8 keeps the caret where it was", async () => {

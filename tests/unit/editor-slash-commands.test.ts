@@ -408,6 +408,15 @@ it('an ordered list split by a turned item goes on with its numbers', async () =
   expect(doc.child(2).attrs.order).toBe(3);
 });
 
+it('resumes a zero-based list with its original number after an inline command', async () => {
+  const { editor, view } = await typedInItem('0. alpha\n1. beta', 0, undefined, ' /code');
+  key(view.dom, 'Enter');
+  const { doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(['ordered_list', 'code_block', 'ordered_list']);
+  expect(doc.child(0).attrs.order).toBe(0);
+  expect(doc.child(2).attrs.order).toBe(1);
+});
+
 it('page link stays inline in the item', async () => {
   const { view } = await typedInItem('- a\n- b\n- c', 1, '', '/page');
   key(view.dom, 'Enter');

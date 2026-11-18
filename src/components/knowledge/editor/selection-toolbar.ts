@@ -11,13 +11,13 @@ import {
 import { toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
 import { posToDOMRect } from "@milkdown/kit/prose";
 import { closeHistory } from "@milkdown/kit/prose/history";
-import { NodeSelection, Plugin, PluginKey, TextSelection, type Transaction } from "@milkdown/kit/prose/state";
+import { AllSelection, NodeSelection, Plugin, PluginKey, TextSelection, type Transaction } from "@milkdown/kit/prose/state";
 import { $prose } from "@milkdown/kit/utils";
 import type { Mark, Node as ProseNode } from "@milkdown/kit/prose/model";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { buttonClasses } from "@/components/ui/button";
 import { fieldClasses } from "@/components/ui/field";
-import { blockKind, type BlockKind, type EditorBlock } from "./block-actions";
+import { blockKind, codeText, type BlockKind, type EditorBlock } from "./block-actions";
 import { TURN_OPTIONS, turnEntry } from "./block-gutter";
 import { blocksTouched, turnBlocks } from "./block-sequence";
 import { parseDocumentHref } from "@/modules/knowledge/domain/document-links";
@@ -68,7 +68,7 @@ function mapThroughTurn(before: ProseNode, after: ProseNode, pos: number): numbe
   while (head < old.length && head < now.length && old[head].node.eq(now[head].node)) head++;
   let tail = 0;
   while (tail < old.length - head && tail < now.length - head && old[old.length - 1 - tail].node.eq(now[now.length - 1 - tail].node)) tail++;
-  const same = (a: ProseNode, b: ProseNode | undefined) => b !== undefined && a.textContent === b.textContent;
+  const same = (a: ProseNode, b: ProseNode | undefined) => b !== undefined && (b.type.name === "code_block" ? codeText(a) : a.textContent) === b.textContent;
   let target: number;
   if (index < head) target = index;
   else if (index >= old.length - tail) target = index + now.length - old.length;
@@ -90,6 +90,7 @@ function mapThroughTurn(before: ProseNode, after: ProseNode, pos: number): numbe
   const from = old[index];
   const to = now[target];
   const offset = pos - from.pos - 1;
+  if (to.node.type.name === "code_block") return to.pos + 1 + Math.min(codeText(from.node, offset).length, to.node.content.size);
   const lost = from.node.content.size - to.node.content.size;
   // Words kept after a dropped marker (`[!NOTE]` and its break, in one line) keep their place among themselves.
   const shifted = !same(from.node, to.node) && lost > 0 && from.node.textContent.endsWith(to.node.textContent) ? offset - lost : offset;
@@ -107,7 +108,9 @@ function turnSelection(view: EditorView, kind: BlockKind): boolean {
   const tr: Transaction | null = turnBlocks(state, blocks, kind);
   if (!tr) return false;
   const { anchor, head } = state.selection;
-  tr.setSelection(TextSelection.create(tr.doc, mapThroughTurn(state.doc, tr.doc, anchor), mapThroughTurn(state.doc, tr.doc, head)));
+  tr.setSelection(state.selection instanceof AllSelection
+    ? new AllSelection(tr.doc)
+    : TextSelection.create(tr.doc, mapThroughTurn(state.doc, tr.doc, anchor), mapThroughTurn(state.doc, tr.doc, head)));
   view.dispatch(closeHistory(tr).scrollIntoView());
   // Typing straight after starts an undo step of its own, as after the grip's turn.
   view.dispatch(closeHistory(view.state.tr));

@@ -96,6 +96,21 @@ it.each([
   expect(md(editor)).toBe("- a\n- b\n- c");
 });
 
+it("Mod-Alt-2 across two list items turns both, as the toolbar does", async () => {
+  const { editor, view } = await open("- one\n- two\n- three");
+  let first = -1;
+  let second = -1;
+  view.state.doc.descendants((node, pos) => {
+    if (node.isText && node.text === "one") first = pos;
+    if (node.isText && node.text === "two") second = pos;
+  });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, first, second + 3)));
+  expect(press(view, "2", { ctrlKey: true, altKey: true }).defaultPrevented).toBe(true);
+  expect(md(editor)).toBe("## one\n\n## two\n\n- three");
+  press(view, "z", { ctrlKey: true });
+  expect(md(editor)).toBe("- one\n- two\n- three");
+});
+
 /** The caret after the first occurrence of `text`. */
 function caretAfter(view: EditorView, text: string) {
   let at = -1;

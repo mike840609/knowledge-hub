@@ -82,6 +82,7 @@ const KINDS: Kind[] = [
   { id: "h3", label: "Heading 3", alias: "h3", keys: [{ key: "3", init: { ctrlKey: true, altKey: true, keyCode: 51 } }] },
   { id: "quote", label: "Quote", alias: "quote", keys: [] },
   { id: "h2", label: "Heading 2", alias: "h2", keys: [{ key: "2", init: { ctrlKey: true, altKey: true, keyCode: 50 } }] },
+  { id: "task", label: "To-do list", alias: "todo", keys: [{ key: "4", init: { ctrlKey: true, altKey: true, keyCode: 52 } }, { key: "(", init: { ctrlKey: true, shiftKey: true, keyCode: 57 } }] },
   { id: "ordered", label: "Numbered list", alias: "number", keys: [{ key: "6", init: { ctrlKey: true, altKey: true, keyCode: 54 } }, { key: "&", init: { ctrlKey: true, shiftKey: true, keyCode: 55 } }] },
   { id: "code", label: "Code", alias: "code", keys: [{ key: "8", init: { ctrlKey: true, altKey: true, keyCode: 56 } }] },
 ];
@@ -154,6 +155,7 @@ const SHAPES: Record<string, string[]> = {
   h3: ["bullet_list", "heading3", "bullet_list"],
   quote: ["bullet_list", "blockquote", "bullet_list"],
   h2: ["bullet_list", "heading2", "bullet_list"],
+  task: ["bullet_list", "task_list", "bullet_list"],
   ordered: ["bullet_list", "ordered_list", "bullet_list"],
   code: ["bullet_list", "code_block", "bullet_list"],
 };

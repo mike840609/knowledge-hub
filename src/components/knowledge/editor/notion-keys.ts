@@ -9,12 +9,12 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 import { toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
 import { addRowAfter, goToNextCell, isInTable } from "@milkdown/kit/prose/tables";
 import { customInputRulesKey } from "@milkdown/kit/prose";
-import { Fragment, type Mark, type Node as ProseNode } from "@milkdown/kit/prose/model";
+import type { Mark, Node as ProseNode } from "@milkdown/kit/prose/model";
 import { ReplaceStep } from "@milkdown/kit/prose/transform";
 import { $inputRule, $prose, $useKeymap } from "@milkdown/kit/utils";
-import { blockKind, canTurnInto, deleteBlock, duplicateBlock, isBlockItem, moveBlock, selectedBlockPos, siblingBlocks, turnBlockInto, type BlockKind } from "./block-actions";
+import { blockKind, canTurnInto, deleteBlock, duplicateBlock, isBlockItem, moveBlock, selectedBlockPos, siblingBlocks, turnBlockInto, turnInto, type BlockKind } from "./block-actions";
 import { blockRange, rangeBlocks } from "./block-range";
-import { moveBlocks, sequenceOf } from "./block-sequence";
+import { blocksTouched, moveBlocks, sequenceOf, turnBlocks } from "./block-sequence";
 import { flipNearestDetails } from "./details-toggle";
 import { findWikiLinkTrigger } from "./link-suggestions";
 
@@ -186,8 +186,7 @@ function listItemDepth(state: EditorState): number | null {
  * A list of the given kind, or the item lifted back to a paragraph when it already is one. Only the
  * caret's item changes and the caret stays where it was, in one transaction (one undo step). An item
  * in a list of the other kind is cut out of it: the items before and after stay in their list, and the
- * item, with whatever is nested under it, becomes a list of its own. Bullet and to-do share a list, so
- * switching between them is only the item's `checked`.
+ * item, with whatever is nested under it, becomes a list of its own.
  */
 function toggleList(target: "ordered" | "bullet" | "task") {
   return (state: EditorState, dispatch?: (tr: Transaction) => void, view?: EditorView) => {
@@ -204,36 +203,16 @@ function toggleList(target: "ordered" | "bullet" | "task") {
     const { nodes } = state.schema;
     const kind = listKindAt(state);
     if (kind === target) return liftListItem(nodes.list_item)(state, dispatch);
-    const checked = target === "task" ? false : null;
     const depth = listItemDepth(state);
     if (depth === null) return wrapParagraph(state, target, dispatch);
     const { $from, $to } = state.selection;
-    if ($to.pos > $from.end(depth)) return false; // several items selected: nothing here is meant for that
-    const item = $from.node(depth);
-    const itemPos = $from.before(depth);
-    if ((kind === "ordered") === (target === "ordered")) {
-      if (dispatch) dispatch(state.tr.setNodeMarkup(itemPos, undefined, { ...item.attrs, checked }).scrollIntoView());
-      return true;
-    }
+    if ($to.pos > $from.end(depth)) return false;
     if (!dispatch) return true;
-    const list = $from.node(depth - 1);
-    const listPos = $from.before(depth - 1);
-    const index = $from.index(depth - 1);
-    const items: ProseNode[] = [];
-    list.forEach((child) => items.push(child));
-    const ordered = target === "ordered";
-    const own = (ordered ? nodes.ordered_list : nodes.bullet_list).create(null, item.type.create({ ...item.attrs, checked, listType: ordered ? "ordered" : "bullet", label: ordered ? "1." : "•" }, item.content, item.marks));
-    const pieces: ProseNode[] = [];
-    if (index > 0) pieces.push(list.copy(Fragment.from(items.slice(0, index))));
-    pieces.push(own);
-    if (index < items.length - 1) {
-      // An ordered list that goes on after the item goes on from its number.
-      const after = list.type === nodes.ordered_list ? { ...list.attrs, order: (list.attrs.order ?? 1) + index + 1 } : list.attrs;
-      pieces.push(list.type.create(after, Fragment.from(items.slice(index + 1))));
-    }
-    const tr = state.tr.replaceWith(listPos, listPos + list.nodeSize, pieces);
-    // The item now sits one list wrapper in, after the list of the items that came before it.
-    const shift = listPos + (index > 0 ? pieces[0].nodeSize : 0) + 1 - itemPos;
+    const itemPos = $from.before(depth);
+    const tr = state.tr;
+    const turnedItemPos = turnInto(tr, itemPos, target);
+    if (turnedItemPos === null) return false;
+    const shift = turnedItemPos - itemPos;
     tr.setSelection(state.selection instanceof NodeSelection
       ? NodeSelection.create(tr.doc, $from.pos + shift)
       : TextSelection.create(tr.doc, $from.pos + shift, $to.pos + shift));
@@ -417,11 +396,21 @@ function turnChosenInto(target: BlockKind) {
  * Milkdown's.
  */
 function turnItemInto(target: BlockKind) {
-  return (state: EditorState, dispatch?: unknown, view?: EditorView) => {
-    if (!view?.editable || !(state.selection instanceof TextSelection)) return false;
+  return (state: EditorState, dispatch?: (tr: Transaction) => void, view?: EditorView) => {
+    if (!view?.editable || !(state.selection instanceof TextSelection) || rangeBlocks(state) !== null) return false;
     const depth = listItemDepth(state);
     const { $from } = state.selection;
     if (depth === null || $from.parent.type.name !== "paragraph" || $from.parent !== $from.node(depth).firstChild) return false;
+    // The same selection may touch more than one item (the audit's cross-list case): then every block turns,
+    // as it does from the toolbar, so the two entry points cannot disagree (decision 7).
+    const blocks = blocksTouched(state);
+    if (blocks.length > 1) {
+      if (dispatch) {
+        const tr = turnBlocks(state, blocks, target);
+        if (tr) dispatch(tr.scrollIntoView() as never);
+      }
+      return true;
+    }
     if (dispatch) turnBlockInto(view, $from.before(depth), target);
     return true;
   };
