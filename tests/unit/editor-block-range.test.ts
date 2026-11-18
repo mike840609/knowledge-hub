@@ -514,3 +514,105 @@ it("deleting every item of the only list leaves one empty paragraph, not an empt
   expect(view.state.doc.firstChild!.type.name).toBe("paragraph");
   expect(md(editor).trim()).toBe("");
 });
+
+// Fix round 1: numbering, mixed lists, single chosen blocks, joins and refusals.
+const listNodes = (view: EditorView) => { const names: string[] = []; view.state.doc.forEach(node => { if (node.type.name.endsWith("_list")) names.push(node.type.name); }); return names; };
+
+it("a range turned out of an ordered list leaves the rest its numbers", async () => {
+  const { editor, view } = await open("1. a\n2. b\n3. c\n4. d\n");
+  escapeOn(view, "a");
+  shift(view, "ArrowDown");
+  press(view, "5", { ctrlKey: true, altKey: true });
+  expect(md(editor)).toBe("- a\n- b\n\n3. c\n4. d\n");
+  undo(view.state, view.dispatch);
+  expect(md(editor)).toBe("1. a\n2. b\n3. c\n4. d\n");
+  const second = await open("P\n\n1. a\n2. b\n3. c\n");
+  escapeOn(second.view, "P");
+  shift(second.view, "ArrowDown");
+  press(second.view, "5", { ctrlKey: true, altKey: true });
+  expect(md(second.editor)).toBe("- P\n- a\n\n2. b\n3. c\n");
+});
+
+it("moving a range inside a list of task and plain items keeps one list", async () => {
+  const { editor, view } = await open("- [ ] t\n- b\n- c\n");
+  escapeOn(view, "c");
+  shift(view, "ArrowUp");
+  mod(view, "ArrowUp", { shiftKey: true });
+  expect(md(editor)).toBe("- b\n- c\n- [ ] t\n");
+  expect(listNodes(view)).toEqual(["bullet_list"]);
+  const second = await open("- a\n- [x] t\n- [ ] u\n- z\n");
+  escapeOn(second.view, "t");
+  shift(second.view, "ArrowDown");
+  mod(second.view, "ArrowUp", { shiftKey: true });
+  expect(md(second.editor)).toBe("- [x] t\n- [ ] u\n- a\n- z\n");
+  expect(listNodes(second.view)).toEqual(["bullet_list"]);
+});
+
+it("a paragraph chosen alone moves one block in its sequence, into a list and out", async () => {
+  const markdown = "- a\n- b\n- c\n\nP\n";
+  const { editor, view } = await open(markdown);
+  escapeOn(view, "P");
+  mod(view, "ArrowUp", { shiftKey: true });
+  expect(md(editor)).toBe("- a\n- b\n\nP\n\n- c\n");
+  expect((view.state.selection as NodeSelection).node.textContent).toBe("P");
+  undo(view.state, view.dispatch);
+  expect(md(editor)).toBe(markdown);
+});
+
+it("the last item chosen alone moves down out of its list", async () => {
+  const markdown = "- a\n- b\n- c\n\nP\n";
+  const { editor, view } = await open(markdown);
+  escapeOn(view, "c");
+  mod(view, "ArrowDown", { shiftKey: true });
+  expect(md(editor)).toBe("- a\n- b\n\nP\n\n- c\n");
+  expect((view.state.selection as NodeSelection).node.type.name).toBe("list_item");
+  undo(view.state, view.dispatch);
+  expect(md(editor)).toBe(markdown);
+});
+
+it("two lists that were side by side before a move stay two", async () => {
+  const markdown = "- a\n- b\n\n* c\n* d\n\nP\n";
+  for (const key of ["ArrowUp", "ArrowDown"]) {
+    const { editor, view } = await open(markdown);
+    escapeOn(view, "b");
+    shift(view, "ArrowDown");
+    mod(view, key, { shiftKey: true });
+    expect(listNodes(view)).toEqual(["bullet_list", "bullet_list"]);
+    undo(view.state, view.dispatch);
+    expect(md(editor)).toBe(markdown);
+  }
+});
+
+it("a turn that joins a list takes that list's start and looseness", async () => {
+  const { editor, view } = await open("P\n\n5. a\n6. b\n");
+  escapeOn(view, "P");
+  shift(view, "ArrowDown");
+  press(view, "6", { ctrlKey: true, altKey: true });
+  expect(md(editor)).toBe("5. P\n6. a\n7. b\n");
+  const loose = await open("P\n\n- a\n\n- b\n");
+  escapeOn(loose.view, "P");
+  shift(loose.view, "ArrowDown");
+  press(loose.view, "5", { ctrlKey: true, altKey: true });
+  expect(md(loose.editor)).toBe("- P\n\n- a\n\n- b\n");
+});
+
+it("a turn some block of the range cannot take changes nothing", async () => {
+  const { editor, view } = await open(LISTED);
+  escapeOn(view, "Para");
+  shift(view, "ArrowDown");
+  shift(view, "ArrowDown");
+  press(view, "7", { ctrlKey: true, altKey: true });
+  expect(md(editor)).toBe(LISTED);
+});
+
+it("a range moved up into an ordered list leaves the part after it its numbers", async () => {
+  const markdown = "1. a\n2. b\n3. c\n\nP\n\nQ\n";
+  const { editor, view } = await open(markdown);
+  escapeOn(view, "P");
+  shift(view, "ArrowDown");
+  mod(view, "ArrowUp", { shiftKey: true });
+  expect(md(editor)).toBe("1. a\n2. b\n\nP\n\nQ\n\n3. c\n");
+  expect(inRange(view)).toEqual(["P", "Q"]);
+  undo(view.state, view.dispatch);
+  expect(md(editor)).toBe(markdown);
+});

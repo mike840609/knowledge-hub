@@ -1,6 +1,6 @@
 import type { Node as ProseNode, NodeType } from "@milkdown/kit/prose/model";
 import { NodeSelection, Selection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
-import { blockKind, turnInto, type BlockKind, type EditorBlock } from "./block-actions";
+import { blockKind, canTurnInto, turnInto, type BlockKind, type EditorBlock } from "./block-actions";
 
 /**
  * Sequences of blocks, and the range operations on them, each one undoable step
@@ -38,11 +38,13 @@ export function sequenceOf(doc: ProseNode, pos: number): EditorBlock[] {
 }
 
 /**
- * One block of a region: a plain block (`key` null), or an item with the key of its list. `at` is its index before
- * the edit, `number` an ordered item's number then, and `join` marks a block moved, copied or turned into place.
+ * One block of a region: a plain block (`key` null), or an item with the key of its list. `number` is an ordered
+ * item's number before the edit, `first` marks its list's first item, and `join` a block moved, copied or turned into
+ * place (it has left its list).
  */
-type Entry = { node: ProseNode; pos: number; key: number | null; at: number; number: number | null; join: boolean };
-type ListInfo = { type: NodeType; attrs: Record<string, unknown> };
+type Entry = { node: ProseNode; pos: number; key: number | null; number: number | null; first: boolean; join: boolean };
+/** A list as it was: its type and attributes, and where it stood (`pos`…`end`), to tell lists already side by side. */
+type ListInfo = { type: NodeType; attrs: Record<string, unknown>; pos: number; end: number };
 type Region = { from: number; to: number; entries: Entry[]; lists: Map<number, ListInfo>; base: number; whole: boolean };
 
 /** The region spanning sequence indices `lo`…`hi`: the top-level nodes holding them, or a nested sequence's list. */
@@ -56,10 +58,10 @@ function readRegion(doc: ProseNode, sequence: EditorBlock[], lo: number, hi: num
   const entries: Entry[] = [];
   const lists = new Map<number, ListInfo>();
   const read = (node: ProseNode, pos: number) => {
-    if (!isList(node)) { entries.push({ node, pos, key: null, at: entries.length, number: null, join: false }); return; }
-    lists.set(pos, { type: node.type, attrs: node.attrs });
+    if (!isList(node)) { entries.push({ node, pos, key: null, number: null, first: false, join: false }); return; }
+    lists.set(pos, { type: node.type, attrs: node.attrs, pos, end: pos + node.nodeSize });
     const order = Number(node.attrs.order) || 1;
-    node.forEach((item, offset, index) => entries.push({ node: item, pos: pos + 1 + offset, key: pos, at: entries.length, number: order + index, join: false }));
+    node.forEach((item, offset, index) => entries.push({ node: item, pos: pos + 1 + offset, key: pos, number: order + index, first: index === 0, join: false }));
   };
   if (nested) read($first.parent, from);
   else doc.nodesBetween(from, to, (node, pos) => { read(node, pos); return false; });
@@ -67,32 +69,38 @@ function readRegion(doc: ProseNode, sequence: EditorBlock[], lo: number, hi: num
   return { from, to, entries, lists, base, whole: !nested && from === 0 && to === doc.content.size };
 }
 
-const itemKind = (entry: Entry, lists: Map<number, ListInfo>) => `${lists.get(entry.key!)!.type.name}:${blockKind(entry.node)}`;
-
 /**
- * Joins neighbouring items of one kind that sit in different lists, where one of them was moved, copied or turned
- * there, or (`adjacent`, for a move) where the edit left two lists side by side: the later list takes the earlier's key.
+ * Joins neighbouring items of one list type that sit in different lists. A block moved, copied or turned there joins
+ * its neighbour; for a copy or a turn only an item of the same kind (a task beside a task). For a move the kind does
+ * not matter (an item rejoins a list of task and plain items alike), and two lists neither moved join only where the
+ * move left them side by side, never where they already stood so. The joined list keeps the key of a list that was
+ * there before, so its attributes (start, looseness) stay; between two such, the earlier one's.
  */
-function join(entries: Entry[], lists: Map<number, ListInfo>, adjacent: boolean) {
+function join(entries: Entry[], lists: Map<number, ListInfo>, move: boolean) {
   for (let index = 1; index < entries.length; index++) {
     const previous = entries[index - 1];
     const current = entries[index];
     if (previous.key === null || current.key === null || previous.key === current.key) continue;
-    if (itemKind(previous, lists) !== itemKind(current, lists)) continue;
-    if (!previous.join && !current.join && !(adjacent && current.at !== previous.at + 1)) continue;
-    const old = current.key;
-    for (let next = index; next < entries.length && entries[next].key === old; next++) entries[next].key = previous.key;
+    const before = lists.get(previous.key)!;
+    const after = lists.get(current.key)!;
+    if (before.type !== after.type) continue;
+    if (!move && blockKind(previous.node) !== blockKind(current.node)) continue;
+    if (!previous.join && !current.join && (!move || before.end === after.pos)) continue;
+    const target = previous.key >= 0 || current.key < 0 ? previous.key : current.key;
+    const [left, right] = [previous.key, current.key];
+    for (let at = index - 1; at >= 0 && entries[at].key === left; at--) entries[at].key = target;
+    for (let at = index; at < entries.length && entries[at].key === right; at++) entries[at].key = target;
   }
 }
 
 /**
- * Entries back into nodes: consecutive items with one key become one list with that list's attributes. A later
- * part of an ordered list keeps its numbers (2026-11-17) through `order`. Gives each entry's offset from the start.
+ * Entries back into nodes: consecutive items with one key become one list with that list's attributes. An ordered
+ * list's numbers: the part holding its first item keeps the list's start; the rest of a split keeps its numbers
+ * (2026-11-17) through `order`; items that left their list start at 1. Gives each entry's offset from the start.
  */
 function regroup(entries: Entry[], lists: Map<number, ListInfo>) {
   const nodes: ProseNode[] = [];
   const offsets = new Map<Entry, number>();
-  const seen = new Set<number>();
   let size = 0;
   for (let index = 0; index < entries.length;) {
     const entry = entries[index];
@@ -107,11 +115,10 @@ function regroup(entries: Entry[], lists: Map<number, ListInfo>) {
     const run: Entry[] = [];
     while (index < entries.length && entries[index].key === key) run.push(entries[index++]);
     const { type, attrs } = lists.get(key)!;
-    const later = seen.has(key) && type.name === "ordered_list" && run[0].number !== null;
-    seen.add(key);
+    const order = type.name !== "ordered_list" || run.some((item) => item.first) ? null : run[0].join || run[0].number === null ? 1 : run[0].number;
     let inner = size + 1;
     for (const item of run) { offsets.set(item, inner); inner += item.node.nodeSize; }
-    const list = type.create(later ? { ...attrs, order: run[0].number } : attrs, run.map((item) => item.node));
+    const list = type.create(order === null ? attrs : { ...attrs, order }, run.map((item) => item.node));
     nodes.push(list);
     size += list.nodeSize;
   }
@@ -141,12 +148,17 @@ export function deleteBlocks(state: EditorState, blocks: EditorBlock[]): Transac
   const region = readRegion(state.doc, sequence, first, last);
   const gone = new Set(blocks.map((block) => block.pos));
   const kept = region.entries.filter((entry) => !gone.has(entry.pos));
+  // A list whose first item went starts where its first item now is: a deletion renumbers, it does not split.
+  for (const key of region.lists.keys()) {
+    const remaining = kept.find((entry) => entry.key === key);
+    if (remaining && !kept.some((entry) => entry.key === key && entry.first)) remaining.first = true;
+  }
   const { nodes, offsets } = regroup(kept, region.lists);
   if (!nodes.length && (region.whole || state.doc.resolve(region.from).parent.childCount === 1)) nodes.push(state.schema.nodes.paragraph.create());
   const tr = state.tr.replaceWith(region.from, region.to, nodes);
   // The caret goes to the end of the block before the first one removed.
   const firstGone = region.entries.findIndex((entry) => gone.has(entry.pos));
-  const before = kept.filter((entry) => entry.at < firstGone).pop();
+  const before = kept.filter((entry) => region.entries.indexOf(entry) < firstGone).pop();
   const caret = before ? region.from + offsets.get(before)! + before.node.nodeSize : region.from;
   tr.setSelection(Selection.near(tr.doc.resolve(Math.min(caret, tr.doc.content.size)), -1));
   return tr;
@@ -158,7 +170,7 @@ export function duplicateBlocks(state: EditorState, blocks: EditorBlock[]): { tr
   const region = readRegion(state.doc, sequence, first, last);
   const start = first - region.base;
   const end = start + blocks.length;
-  const copies = region.entries.slice(start, end).map((entry): Entry => ({ ...entry, node: entry.node.copy(entry.node.content), at: -1, join: true }));
+  const copies = region.entries.slice(start, end).map((entry): Entry => ({ ...entry, node: entry.node.copy(entry.node.content), first: false, join: true }));
   const entries = [...region.entries.slice(0, end), ...copies, ...region.entries.slice(end)];
   join(entries, region.lists, false);
   const { tr, placed } = replace(state, region, entries, copies);
@@ -178,7 +190,7 @@ export function moveBlocks(state: EditorState, blocks: EditorBlock[], toIndex: n
   const touched = [first - 1, first, last, last + 1, original(toIndex - 1), original(toIndex)].filter((index) => index >= 0 && index < sequence.length);
   const region = readRegion(state.doc, sequence, Math.min(...touched), Math.max(...touched));
   const start = first - region.base;
-  // A fresh key for each list the moved items came from; `join` gives them a neighbouring list's of their kind.
+  // A fresh key for each list the moved items came from; `join` gives them a neighbouring list's key.
   const fresh = new Map<number, number>();
   const moving = region.entries.slice(start, start + count).map((entry): Entry => {
     if (entry.key === null) return { ...entry, join: true };
@@ -203,7 +215,8 @@ export function moveBlocks(state: EditorState, blocks: EditorBlock[], toIndex: n
  * Null when no block could be turned.
  */
 export function turnBlocks(state: EditorState, blocks: EditorBlock[], into: BlockKind): Transaction | null {
-  if (!blocks.length) return null;
+  // All or nothing: a block that cannot take the turn (and is not that kind already) refuses it for the range.
+  if (!blocks.length || !blocks.every((block) => blockKind(block.node) === into || canTurnInto(block.node, into))) return null;
   const { nodes } = state.schema;
   const lines = blocks.every((block) => block.node.type === nodes.paragraph || block.node.type === nodes.heading || block.node.type === nodes.list_item);
   if (LIST_TARGETS.has(into) && lines) {
@@ -211,7 +224,7 @@ export function turnBlocks(state: EditorState, blocks: EditorBlock[], into: Bloc
     const region = readRegion(state.doc, sequence, first, last);
     const ordered = into === "ordered";
     const key = -1;
-    region.lists.set(key, { type: ordered ? nodes.ordered_list : nodes.bullet_list, attrs: ordered ? { order: 1 } : {} });
+    region.lists.set(key, { type: ordered ? nodes.ordered_list : nodes.bullet_list, attrs: ordered ? { order: 1 } : {}, pos: -1, end: -1 });
     const itemAttrs = (attrs: Record<string, unknown>) => ({ ...attrs, listType: ordered ? "ordered" : "bullet", label: ordered ? "1." : "-", checked: into === "task" ? false : null });
     const chosen = new Set(blocks.map((block) => block.pos));
     const entries = region.entries.map((entry): Entry => {
@@ -219,7 +232,7 @@ export function turnBlocks(state: EditorState, blocks: EditorBlock[], into: Bloc
       const item = entry.key === null
         ? nodes.list_item.create(itemAttrs({}), nodes.paragraph.create(null, entry.node.content))
         : entry.node.type.create(itemAttrs(entry.node.attrs), entry.node.content);
-      return { ...entry, node: item, key, number: null, join: true };
+      return { ...entry, node: item, key, number: null, first: false, join: true };
     });
     join(entries, region.lists, false);
     const { nodes: replaced, offsets } = regroup(entries, region.lists);

@@ -1,6 +1,7 @@
 import { commandsCtx } from "@milkdown/kit/core";
 import type { MilkdownPlugin } from "@milkdown/kit/ctx";
 import { setBlockType } from "@milkdown/kit/prose/commands";
+import { closeHistory } from "@milkdown/kit/prose/history";
 import { InputRule, undoInputRule } from "@milkdown/kit/prose/inputrules";
 import { liftListItem, wrapInList } from "@milkdown/kit/prose/schema-list";
 import { AllSelection, NodeSelection, Plugin, PluginKey, Selection, TextSelection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
@@ -13,6 +14,7 @@ import { ReplaceStep } from "@milkdown/kit/prose/transform";
 import { $inputRule, $prose, $useKeymap } from "@milkdown/kit/utils";
 import { blockKind, canTurnInto, deleteBlock, duplicateBlock, moveBlock, selectedBlockPos, siblingBlocks, turnBlockInto, type BlockKind } from "./block-actions";
 import { blockRange } from "./block-range";
+import { moveBlocks, sequenceOf } from "./block-sequence";
 import { flipNearestDetails } from "./details-toggle";
 import { findWikiLinkTrigger } from "./link-suggestions";
 
@@ -272,6 +274,19 @@ function moveCurrentBlock(direction: -1 | 1) {
   return (state: EditorState, dispatch?: unknown, view?: EditorView) => {
     const pos = actionBlockPos(state);
     if (pos === null || !view?.editable) return false;
+    // A block chosen with Escape moves past its neighbour in its sequence (2026-11-21 block-unit spec): a paragraph
+    // passes one item, not the whole list, and an item at its list's end leaves the list. It stays chosen.
+    const chosen = selectedBlockPos(state);
+    const sequence = chosen === null ? [] : sequenceOf(state.doc, chosen);
+    const at = sequence.findIndex((block) => block.pos === chosen);
+    if (at >= 0) {
+      const toIndex = at + direction;
+      if (toIndex < 0 || toIndex >= sequence.length) return true;
+      if (!dispatch) return true;
+      view.dispatch(closeHistory(moveBlocks(state, [sequence[at]], toIndex).tr).scrollIntoView());
+      view.dispatch(closeHistory(view.state.tr));
+      return true;
+    }
     const blocks = siblingBlocks(state.doc, pos);
     const index = blocks.findIndex((block) => block.pos === pos);
     const neighbour = blocks[index + direction];
