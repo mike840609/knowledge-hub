@@ -31,21 +31,18 @@ test.describe("table edge controls", () => {
   test("the paragraph above a table stays clickable", async ({ page }) => {
     const sentence = "Every character of this sentence has to stay reachable by the pointer while the table below it shows its controls, ".repeat(3).slice(0, 300);
     expect(sentence).toHaveLength(300);
-    const { surface } = await openNote(page, `${sentence}\n`);
-    await surface.locator("p").first().click();
-    await page.keyboard.press("End");
-    await page.keyboard.press("Enter");
-    await page.keyboard.press("Alt+F10");
-    await page.getByRole("button", { name: "Add block below" }).click();
-    await page.keyboard.type("table");
-    await page.getByRole("listbox").getByRole("option", { name: /table/i }).click();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const { surface } = await openNote(page, `${sentence}\n\n| A | B |\n| - | - |\n| one | two |\n\nAfter the table.\n`);
     await expect(surface.locator("table")).toBeVisible();
+    const precedingText = await surface.locator("table").evaluate(table => (table.closest(".kh-markdown-table") ?? table).previousElementSibling?.textContent ?? null);
+    expect(precedingText).toBe(sentence);
     await surface.locator("tbody td").first().click();
     await expect(page.getByRole("button", { name: /^Row \d+ actions$/ })).toBeVisible();
     const misses = await page.evaluate(() => {
       const paragraph = document.querySelector<HTMLElement>("main [role=textbox] p");
-      if (!paragraph) return ["no paragraph"];
+      if (!paragraph) return { bad: ["no paragraph"], checked: 0 };
       const bad: string[] = [];
+      let checked = 0;
       const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         const text = node as Text;
@@ -54,13 +51,15 @@ test.describe("table edge controls", () => {
           range.setStart(text, i); range.setEnd(text, i + 1);
           const rect = range.getBoundingClientRect();
           if (rect.width === 0 || rect.height === 0) continue;
+          checked++;
           const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
           if (!hit || !paragraph.contains(hit)) bad.push(`${i}:${text.data[i]}:${hit?.className ?? "none"}`);
         }
       }
-      return bad;
+      return { bad, checked };
     });
-    expect(misses).toEqual([]);
+    expect(misses.checked).toBeGreaterThanOrEqual(290);
+    expect(misses.bad).toEqual([]);
   });
 
   test("a row added and a column aligned from the menus are saved", async ({ page }) => {
@@ -72,6 +71,7 @@ test.describe("table edge controls", () => {
     await surface.locator("tbody td").first().click();
     await page.getByRole("button", { name: "Column 1 actions" }).click();
     await page.getByRole("menuitemradio", { name: "Center" }).click();
+    await expect(page.locator("[data-autosave-status]")).not.toHaveAttribute("data-autosave-status", "saved");
     await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
     await page.reload();
     await expect(surface).toBeEditable(ROUND_TRIP);

@@ -984,8 +984,8 @@ caret in one, a `size-6` **row grip** hangs in the editor's left gutter level
 with that row and a **column grip** sits inside the table, its top on the top
 border, centred over that column. Both are drawn on `document.body`, `fixed`,
 like the block controls, with the block gutter's grip glyph, muted, `rounded-md`
-and the shared focus ring; a grip hides while its cell is scrolled out of
-the table's region. A grip opens a menu built like the block menu (same surface,
+and the shared focus ring; the column grip hides while its column is scrolled out of
+the table's region, and the row grip stays while its row is on screen. A grip opens a menu built like the block menu (same surface,
 rows and Escape): **Insert row above** (not on the header row), **Insert row
 below**, a rule, **Delete row**; and **Insert column left**, **Insert column
 right**, **Align** as four radio rows (Default, Left, Center, Right, the current
