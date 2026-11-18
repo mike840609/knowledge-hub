@@ -1,7 +1,7 @@
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { Fragment } from "@milkdown/kit/prose/model";
 import { closeHistory } from "@milkdown/kit/prose/history";
-import { Selection, type Transaction } from "@milkdown/kit/prose/state";
+import { NodeSelection, Selection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { calloutKind } from "@/shared/markdown/remark-callouts";
 import { htmlAsText } from "@/shared/markdown/remark-known-html";
@@ -232,17 +232,17 @@ function calloutFrom(node: ProseNode, schema: EditorView["state"]["schema"]): Pr
 /**
  * Turns one list item into another kind by splitting its list around it: the items before stay a
  * list, this item becomes the target, and the items after stay a list. Notion does the same when a
- * writer converts one bullet rather than the whole list.
+ * writer converts one bullet rather than the whole list. Works on `tr.doc`; returns the caret.
  */
-function turnListItemInto(view: EditorView, pos: number, item: ProseNode, target: BlockKind): boolean {
-  if (!item.firstChild) return false;
-  const schema = view.state.schema;
-  const $item = view.state.doc.resolve(pos + 1);
+function turnListItemInto(tr: Transaction, pos: number, item: ProseNode, target: BlockKind): number | null {
+  if (!item.firstChild) return null;
+  const schema = tr.doc.type.schema;
+  const $item = tr.doc.resolve(pos + 1);
   let itemDepth = -1;
   for (let depth = $item.depth; depth >= 1; depth--) {
     if ($item.node(depth).type.name === "list_item") { itemDepth = depth; break; }
   }
-  if (itemDepth < 1) return false;
+  if (itemDepth < 1) return null;
   const listDepth = itemDepth - 1;
   const list = $item.node(listDepth);
   const listPos = $item.before(listDepth);
@@ -268,34 +268,33 @@ function turnListItemInto(view: EditorView, pos: number, item: ProseNode, target
     pieces.push(list.type.create(after, Fragment.fromArray(items.slice(index + 1))));
   }
   const at = listPos + (index > 0 ? pieces[0].nodeSize : 0);
-  dispatchBlockAction(view, view.state.tr.replaceWith(listPos, listPos + list.nodeSize, pieces), target === "quote" ? at + 2 : at + 1);
-  return true;
+  tr.replaceWith(listPos, listPos + list.nodeSize, pieces);
+  return target === "quote" ? at + 2 : at + 1;
 }
 
 /**
- * Replaces one block with another kind, preserving inline content. A list of several items becomes
- * several paragraphs; a list item splits its list around the result; every other conversion is one
- * block. One undo step, caret in the result.
+ * Replaces the block at `pos` of `tr.doc` with another kind, preserving inline content, and returns
+ * the caret position in the result, or null when refused. It does not dispatch: callers may turn
+ * several blocks on one transaction (bottom-up, so earlier positions hold) for one undo step.
  */
-export function turnBlockInto(view: EditorView, pos: number, target: BlockKind): boolean {
-  if (!view.editable || target === "other" || target === "h4" || target === "h5" || target === "h6") return false;
-  const found = blockTarget(view.state.doc, pos);
+export function turnInto(tr: Transaction, pos: number, target: BlockKind): number | null {
+  if (target === "other" || target === "h4" || target === "h5" || target === "h6") return null;
+  const found = blockTarget(tr.doc, pos);
   const block = found ? { pos: found.pos, node: found.node } : null;
-  if (!block || !canTurnInto(block.node, target)) return false;
-  const schema = view.state.schema;
+  if (!block || !canTurnInto(block.node, target)) return null;
+  const schema = tr.doc.type.schema;
   if (target === "toggle" || target === "callout") {
     const replacement = target === "toggle" ? toggleFrom(block.node, schema) : calloutFrom(block.node, schema);
     const caret = pos + 1 + replacement.firstChild!.nodeSize + 1;
-    dispatchBlockAction(view, view.state.tr.replaceWith(pos, pos + block.node.nodeSize, replacement), target === "toggle" ? caret + 1 : caret);
-    return true;
+    tr.replaceWith(pos, pos + block.node.nodeSize, replacement);
+    return target === "toggle" ? caret + 1 : caret;
   }
-  if (block.node.type.name === "list_item") return turnListItemInto(view, pos, block.node, target);
+  if (block.node.type.name === "list_item") return turnListItemInto(tr, pos, block.node, target);
   if (target === "paragraph" && (block.node.type.name === "bullet_list" || block.node.type.name === "ordered_list")) {
     const paragraphs: ProseNode[] = [];
     block.node.forEach((item) => paragraphs.push(paragraphFrom(item, schema)));
-    const transaction = view.state.tr.replaceWith(pos, pos + block.node.nodeSize, paragraphs);
-    dispatchBlockAction(view, transaction, pos + 1);
-    return true;
+    tr.replaceWith(pos, pos + block.node.nodeSize, paragraphs);
+    return pos + 1;
   }
   if (target === "paragraph" && block.node.type.name === "blockquote") {
     const callout = calloutOf(block.node) !== null;
@@ -315,16 +314,36 @@ export function turnBlockInto(view: EditorView, pos: number, target: BlockKind):
       const content = Fragment.fromArray(rest);
       if (content.size) paragraphs.push(schema.nodes.paragraph.create(null, content));
     });
-    const transaction = view.state.tr.replaceWith(pos, pos + block.node.nodeSize, paragraphs);
-    dispatchBlockAction(view, transaction, pos + 1);
-    return true;
+    tr.replaceWith(pos, pos + block.node.nodeSize, paragraphs);
+    return pos + 1;
   }
   const replacement = LIST_KINDS.has(target)
     ? listFrom(block.node, target, schema)
     : leafFrom(block.node, target as LeafKind, schema);
-  const caret = target === "quote" ? pos + 2 : pos + 1;
-  dispatchBlockAction(view, view.state.tr.replaceWith(pos, pos + block.node.nodeSize, replacement), caret);
+  tr.replaceWith(pos, pos + block.node.nodeSize, replacement);
+  return target === "quote" ? pos + 2 : pos + 1;
+}
+
+/**
+ * Replaces one block with another kind, preserving inline content. A list of several items becomes
+ * several paragraphs; a list item splits its list around the result; every other conversion is one
+ * block. One undo step, caret in the result.
+ */
+export function turnBlockInto(view: EditorView, pos: number, target: BlockKind): boolean {
+  if (!view.editable) return false;
+  const tr = view.state.tr;
+  const caret = turnInto(tr, pos, target);
+  if (caret === null) return false;
+  dispatchBlockAction(view, tr, caret);
   return true;
+}
+
+/** The position of the selected block: a `NodeSelection` of a top-level node or of a list item, else null. */
+export function selectedBlockPos(state: EditorState): number | null {
+  const { selection } = state;
+  if (!(selection instanceof NodeSelection)) return null;
+  if (selection.node.type.name === "list_item") return selection.from;
+  return state.doc.resolve(selection.from).depth === 0 ? selection.from : null;
 }
 
 /** A copy of the block immediately below it, with the caret at the copy's start. */
