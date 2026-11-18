@@ -9,7 +9,7 @@ Each pair drives the same scenario; only the build differs.
 
 ## 1. Document page
 
-Before, the path line truncates the title, the favorite star and Full width sit in the header, Share is icon-only, and a document with no discussions has no Comments entry. After, the path line shows the full title, Share is labeled, Comments is always available for a writable document, and Full width and the favorite live in Document actions. The explorer keeps its star and clock toolbar menus.
+Before, the path line truncates the title, the favorite star and Full width sit in the header, and a document with no discussions has no Comments entry. After, the path line shows the full title, Comments is always available for a writable document, and Full width and the favorite live in Document actions. Share, Comments and Details are one row of icon buttons; the explorer keeps its star and clock toolbar menus.
 
 | Before | After |
 | --- | --- |
