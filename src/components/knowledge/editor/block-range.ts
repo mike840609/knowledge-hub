@@ -161,6 +161,17 @@ function pasteCopiedList(view: EditorView, event: ClipboardEvent, slice: Slice):
   const items: ProseNode[] = [];
   list.forEach((item) => items.push(item));
   if (!items.length) return false;
+  const item = $from.node(depth);
+  if ($from.parentOffset === 0 && $from.parent === item.firstChild && $from.parent.content.size > 0) {
+    // At the start of the item's text, inserting through replaceSelection would split the paragraph and
+    // leave an empty item above the pasted ones; they belong before the item instead.
+    const at = $from.before(depth);
+    const fragment = Fragment.fromArray(items);
+    const tr = view.state.tr.insert(at, fragment);
+    tr.setSelection(Selection.near(tr.doc.resolve(at + fragment.size)));
+    view.dispatch(tr.scrollIntoView());
+    return true;
+  }
   view.dispatch(view.state.tr.replaceSelection(new Slice(Fragment.fromArray(items), 0, 0)).scrollIntoView());
   return true;
 }

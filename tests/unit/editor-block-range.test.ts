@@ -834,3 +834,15 @@ it("pasting a copied ordered item into an ordered list renumbers it after the ta
   pasteClipboard(target.view, data);
   expect(md(target.editor)).toBe("3. A\n4. B\n5. C\n6. B\n");
 });
+
+it("pasting at the start of an item's text puts the items before it, with no empty item", async () => {
+  const source = await open("- A\n- B\n");
+  escapeOn(source.view, "B");
+  const { data } = clipEvent(source.view, "copy");
+  const target = await open("- A\n- CD\n");
+  let at = 0;
+  target.view.state.doc.descendants((node, pos) => { if (node.isText && node.text === "CD") at = pos; });
+  target.view.dispatch(target.view.state.tr.setSelection(TextSelection.create(target.view.state.doc, at)));
+  pasteClipboard(target.view, data);
+  expect(md(target.editor)).toBe("- A\n- B\n- CD\n");
+});
