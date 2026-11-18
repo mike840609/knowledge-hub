@@ -979,6 +979,13 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   margin-inline: max(0px, calc((100% - theme("maxWidth.reading")) / 2)) auto;
   transition: margin-inline-start 120ms ease-out;
 }
+/* Give the desktop path and its actions more room while keeping the same text column start. */
+@media (min-width: 1280px) {
+  .kh-document-pane .kh-document-toolbar {
+    width: auto;
+    max-width: calc(theme("maxWidth.reading") + theme("spacing.44"));
+  }
+}
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column {
   margin-inline-start: max(0px, min(calc((100% - theme("spacing.56") - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.reading") - 320px)));
   /* As wide as it was beside the outline: in a pane too narrow for the full reading width, the slot
