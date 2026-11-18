@@ -124,7 +124,8 @@ Nothing stored changes.
   after it, so the nested list was lost on reopening. Emptying a parent item's text did this before this spec, and
   the deviation above makes it routine. Such an item is now written `-` with its nested list below, which reads back
   as the same item (`editor/empty-quote.ts`). A to-do keeps `- [ ] <br />`: after the box the tag is inline, and the
-  nested list reads back.
+  nested list reads back. A loose item (a blank line between its children) keeps `- <br />`: there the blank line
+  already ends the HTML block, so what follows reads back inside the item.
 
 ## Out of scope, recorded
 
