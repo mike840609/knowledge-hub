@@ -14,6 +14,11 @@ describe("plainSearchSnippet", () => {
     )).toBe("See setup guide and source notes.");
   });
 
+  it("hides a block link's Markdown target comment", () => {
+    expect(plainSearchSnippet("Before.\n<!-- kh-block-f81d4fae-7dec-11d0-a765-00a0c91e6bf7 -->\n\nRoadmap notes."))
+      .toBe("Before. Roadmap notes.");
+  });
+
   it("removes a leading heading even when it differs from the saved title", () => {
     expect(plainSearchSnippet("# Release notes\nNew content"))
       .toBe("New content");

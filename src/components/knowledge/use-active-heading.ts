@@ -18,6 +18,8 @@ export function findHeading(slug: string, scope?: ParentNode | null): HTMLElemen
     // A shared page (`/s/:token`) has no document pane: its one reviewed article is the document.
     const shared = document.querySelector<HTMLElement>(`.kh-share-page article[data-review-document] ${selector}`);
     if (shared) return shared;
+    const edited = document.querySelector<HTMLElement>(`[data-document-pane] .kh-editor ${selector}`);
+    if (edited) return edited;
     // The composer's editor does not carry the reader's ids; its headings take the reader's slugs in reading order.
     const slugger = new HeadingSlugger();
     const editing = document.querySelectorAll<HTMLElement>("[data-document-pane] .kh-editor :is(h1, h2, h3, h4, h5, h6)");
@@ -28,6 +30,8 @@ export function findHeading(slug: string, scope?: ParentNode | null): HTMLElemen
   // nothing and is dropped — the search stays inside this pane only.
   const read = root.querySelector<HTMLElement>(`article ${selector}`);
   if (read) return read;
+  const edited = root.querySelector<HTMLElement>(`.kh-editor ${selector}`);
+  if (edited) return edited;
   const slugger = new HeadingSlugger();
   const editing = root.querySelectorAll<HTMLElement>(".kh-editor :is(h1, h2, h3, h4, h5, h6)");
   return [...editing].find((heading) => slugger.slug((heading.textContent ?? "").trim()) === slug) ?? null;

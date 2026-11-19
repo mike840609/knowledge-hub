@@ -108,7 +108,7 @@ Rendered mode is the preview. Remove the original Preview button, `⌘/Ctrl ⇧ 
 
 **Input area (Markdown mode)**
 
-- No border/background; use reader body font and size, not monospace. Consequently table and code-block source does not align.
+- ~~No border/background; use reader body font and size, not monospace. Consequently table and code-block source does not align.~~ **Superseded 2026-11-18:** the source is a shared code surface — `font-mono` 13/24 in a bordered, inset field with 16/12 padding — so tables and code align and the mode is visible at a glance (`2026-11-18-editor-source-and-title-design.md`).
 - Grow to `scrollHeight` on input; scroll the page, without nested scrollbars.
 - Autofocus on entry with the cursor at the beginning.
 - Title, textarea, and rendered editor **omit `kh-focus-ring`**. Text fields always satisfy `:focus-visible`, so a ring would surround the entire canvas throughout editing. The caret indicates focus; toggle/Cancel/Save retain rings. Record this exception to design-language §10.
@@ -173,7 +173,7 @@ The product requires Linear-like editing: edit formatted content by default and 
 
 ### 11.2 Modes and single source of truth
 
-- `mode: "rendered" | "source"`, default `rendered`. Source uses §6's unchanged textarea.
+- `mode: "rendered" | "source"`, default `rendered`. Source uses §6's textarea, amended 2026-11-18 to the shared code surface.
 - The `markdown` string remains the **only state source**. The editor is its view; title, drafts, dirty state, conflicts, and save read it.
 - **Parse on opening without writing back.** Retain the original string so merely opening does not mark dirty through normalization.
 - The **first user edit**, excluding programmatic ProseMirror transactions, immediately sets `touched` and dirty, enabling `beforeunload`/Cancel protection even before serialization.

@@ -22,6 +22,7 @@ import { carryTitle, resolveAuthoredTitle } from "@/lib/authored-title";
 import { matchesInitial } from "@/lib/composer-output";
 import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } from "@/lib/document-draft";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
+import { MARKDOWN_SOURCE_FIELD } from "./markdown-source";
 import { MAX_MARKDOWN_BYTES, markdownBytes } from "@/lib/markdown-limits";
 import { downloadMarkdown } from "@/lib/download-markdown";
 import { buildRecoveryMarkdown } from "@/lib/recovery-markdown";
@@ -67,7 +68,9 @@ const ARRIVAL_GRACE_MS = 3_000;
 
 function fitHeight(textarea: HTMLTextAreaElement) {
   textarea.style.height = "auto";
-  textarea.style.height = `${textarea.scrollHeight}px`;
+  // `scrollHeight` includes padding but not the border; adding the border keeps the last line
+  // from sitting under it.
+  textarea.style.height = `${textarea.scrollHeight + textarea.offsetHeight - textarea.clientHeight}px`;
 }
 
 export type ComposerSubmit = { title: string; markdown: string; expectedRevisionId: string | null };
@@ -196,11 +199,9 @@ export function DocumentComposer({
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const [draftStatus, setDraftStatus] = useState<DraftStatus>("loading");
   const persistent = useRef<PersistentDraft | null>(null);
-  // A new document started from a broken link's title keeps its draft in the tab, not the account: the
-  // account holds one blank "new" draft per workspace (`draft:new`, the only key the server accepts for it),
-  // and a second document under that key would restore the wrong text or overwrite the blank one's.
-  const seeded = draftKey.kind === "new" && draftKey.title !== undefined;
-  const durableDraft = access.workspace.type === "PERSONAL" && !seeded;
+  // Broken-link seeds and recovered creates keep their own tab drafts. The account has one draft:new per workspace.
+  const separateDraft = draftKey.kind === "new" && (draftKey.title !== undefined || draftKey.recoveryId !== undefined);
+  const durableDraft = access.workspace.type === "PERSONAL" && !separateDraft;
   // Everything waits for hydration; see `use-hydrated` for what a native submit costs.
   const hydrated = useHydrated();
   const [title, setTitle] = useState(initialTitle);
@@ -781,8 +782,11 @@ export function DocumentComposer({
             value={markdown}
             disabled={!interactive || !sourceReady}
             hidden={showing !== "source"}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
             onChange={(event) => applyMarkdown(event.target.value)}
-            className="min-h-[12rem] w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-reading text-kh-text outline-none placeholder:text-kh-text-muted"
+            className={MARKDOWN_SOURCE_FIELD}
           />
         </div>
       </form>

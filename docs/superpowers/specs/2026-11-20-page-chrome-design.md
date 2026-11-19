@@ -17,11 +17,11 @@ Notion's. Two of them are decided here. Nothing stored in a document changes.
    words says nothing. It waits for the first-use edit hint to go ("Click anywhere
    in the text to edit"), which shares the line: both together wrap a phone-width
    header, and focusing the editor must not move the layout (`zz-editor-blocks`).
-2. **Full width is the reader's own arrangement.** A header button (`Full
-   width`, a pressed toggle, from the `sm` breakpoint up) lets the reading
+2. **Full width is the reader's own arrangement.** A checkbox in Document
+   actions (`Full width`, from the `sm` breakpoint up) lets the reading
    column fill the pane. It is kept in this browser (`kh.document-full-width`,
    local storage), not in the document. One store (`use-full-width.ts`) serves the
-   button, which is in the header of every document page (an editable one, a
+   menu item, which is in the header of every document page (an editable one, a
    revision snapshot, a synced file, an archived page), and every document pane,
    which draws `data-full-width`, so no page sits at another width than the rest
    and a read-only one can undo it. It is read synchronously on the client, so a
@@ -32,16 +32,20 @@ Notion's. Two of them are decided here. Nothing stored in a document changes.
    entry). The column fills the pane with the
    editor's 56px block gutter kept inside it, the article's own reading width
    is lifted, and the outline moves to the right rail at every width (a column
-   that fills the pane has no left margin to hang it from). The rules apply from `sm` (640px) up, where the button is drawn, so a stored
-   choice cannot change a narrow window that has no button to undo it. While the
+   that fills the pane has no left margin to hang it from). The rules apply from `sm` (640px) up, where the menu item is shown, so a stored
+   choice cannot change a narrow window. While the
    discussions rail is open the existing layout, which makes room for it, wins,
    and full width waits. No colour, radius or elevation token is added.
 
 ## Out of scope, recorded
 
-- Removing the Rename pencil: Notion has none, but here it is the only way to
+- ~~Removing the Rename pencil: Notion has none, but here it is the only way to
   reach the title when the document's own `#` heading is its title (there is no
-  title field then), and the title-field case is one Tab away. It stays.
+  title field then), and the title-field case is one Tab away. It stays.~~
+  **Superseded:** the pencil is removed. The title field is the
+  control when there is one, and the opening H1 is edited in the article when
+  it is the title; the button repeated either click
+  (`2026-11-18-editor-source-and-title-design.md`).
 - A hover row above the title (Add icon, Add comment): the icon picker is
   already the page icon, and comments open from the selection toolbar and the
   header's comment button.

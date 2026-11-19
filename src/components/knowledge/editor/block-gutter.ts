@@ -3,6 +3,8 @@ import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/
 import { $prose } from "@milkdown/kit/utils";
 import { isInTable } from "@milkdown/kit/prose/tables";
 import { HeadingSlugger } from "@/shared/markdown/heading-slug";
+import { isBlockId } from "@/shared/markdown/remark-block-links";
+import { closeHistory } from "@milkdown/kit/prose/history";
 import { openBlockList } from "./slash-commands";
 import { blockKind, canTurnInto, headingText, deleteBlock, dispatchBlockAction, duplicateBlock, insertBlockBelow, moveBlock, selectedBlockPos, siblingBlocks, topLevelBlocks, turnBlockInto, type BlockKind, type EditorBlock } from "./block-actions";
 import { keepRange, rangeBlocks, setBlockRange } from "./block-range";
@@ -80,7 +82,7 @@ export function turnEntry(blocks: readonly EditorBlock[], kind: BlockKind): { ch
   return { checked, disabled };
 }
 
-export function blockGutter() {
+export function blockGutter(comment?: { available: (view: EditorView, pos: number) => boolean; run: (view: EditorView, pos: number) => void }, linkTo?: () => string | undefined) {
   // The blocks being dragged: one, or every block of the range (2026-11-21 block-unit spec, decision 6).
   const dragKey = new PluginKey<number[] | null>("khDraggedBlock");
   let focusControls: (() => boolean) | undefined;
@@ -184,19 +186,54 @@ export function blockGutter() {
         const down = menuButton("Move down", () => moveBy(1));
         up.disabled = !canMove(-1);
         down.disabled = !canMove(1);
+        const commentAction = !group && comment && active !== null && comment.available(view, active) ? menuButton("Comment", () => {
+          const pos = active;
+          closeMenu();
+          if (pos !== null && comment.available(view, pos)) comment.run(view, pos);
+        }) : null;
         const heading = !group && activeNode()?.type.name === "heading" ? menuButton("Copy link to heading", () => {
           const slug = active === null ? null : headingSlugAt(view, active);
           closeMenu();
-          if (slug === null) return;
-          // The same words twice are not announced twice: clear first, so a second copy is said again.
-          live.textContent = "";
-          const failed = () => { live.textContent = "Couldn't copy the link"; };
-          if (!navigator.clipboard) { failed(); return; }
-          const href = `${window.location.origin}${window.location.pathname}#${encodeURIComponent(slug)}`;
-          void navigator.clipboard.writeText(href).then(() => { live.textContent = "Link copied"; }, failed);
+          if (slug !== null) copyLink(window.location.pathname, slug);
         }) : null;
-        menu.append(turn, duplicate, remove, ...(heading ? [heading] : []), separator(), up, down);
+        const node = activeNode();
+        // A read-only copy cannot mint an id, but an id the Markdown already has is still a link to copy.
+        const blockLink = !group && node && Object.hasOwn(node.attrs, "blockId") && node.content.size && linkTo?.() && (isBlockId(node.attrs.blockId) || view.editable)
+          ? menuButton("Copy link to block", copyBlockLink) : null;
+        menu.append(turn, duplicate, remove);
+        const link = heading ?? blockLink;
+        if (link) menu.append(link);
+        if (commentAction) menu.append(commentAction);
+        menu.append(separator(), up, down);
         return turn;
+      }
+      function copyLink(path: string, fragment: string): boolean {
+        live.textContent = "";
+        const failed = () => { live.textContent = "Couldn't copy the link"; };
+        if (!navigator.clipboard) { failed(); return false; }
+        const href = new URL(path, window.location.origin);
+        href.hash = encodeURIComponent(fragment);
+        void navigator.clipboard.writeText(href.href).then(() => { live.textContent = "Link copied"; }, failed);
+        return true;
+      }
+      function copyBlockLink() {
+        const pos = active;
+        const node = activeNode();
+        const path = linkTo?.();
+        closeMenu();
+        grip.focus();
+        if (pos === null || !node || !path) return;
+        if (isBlockId(node.attrs.blockId)) { copyLink(path, node.attrs.blockId); return; }
+        if (!view.editable) return;
+        if (!navigator.clipboard || !globalThis.crypto?.randomUUID) {
+          live.textContent = "Couldn't copy the link";
+          return;
+        }
+        const id = `kh-block-${crypto.randomUUID()}`;
+        if (!copyLink(path, id)) return;
+        const tr = view.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, blockId: id });
+        view.dispatch(closeHistory(tr));
+        view.dispatch(closeHistory(view.state.tr));
       }
       function renderTurn(): void {
         menuMode = "turn";

@@ -50,7 +50,9 @@ editor must write a wikilink back as it read it").
    Lists, Blocks and Links; each heading appears once per query, and a group
    takes the best rank of its rows. **Page link** replaces the `/query` paragraph with
    `[[` and puts the caret after it, so the existing `[[` list owns the rest;
-   there is still one way to write a wikilink.
+   there is still one way to write a wikilink. With no query, a **Recent**
+   group of up to four distinct commands picked in this browser starts the
+   list (PR 367 amendment).
 7. **There is one editing surface.** The peek panel's Edit opens the document
    page, which is already the editor for a writer. `/edit` already redirects
    there; the unreferenced composer wrapper (`document-editor.tsx`) is removed.
@@ -61,14 +63,33 @@ editor must write a wikilink back as it read it").
   for personal workspaces (`editable-document.tsx`); its review API is
   document-scoped, so generalising it is an authorization change, not an
   editor fix.
-- Copy link to block and Move to another page: Markdown has no block IDs and
-  the editor has no block tree to move between.
+- Move to another page: the editor has no block tree to move between.
+  (Copy link to block was recorded here and is now in scope; see the
+  amendment below.)
 - Multi-block selection: deferred by the 2026-11-15 spec.
 - Row and column drag reorder in a table: Markdown-preserving but needs its own
   drag design in a table that already scrolls.
 - Header-row toggle: no Markdown state (decision 3).
 - The earlier deferred list: @ mentions, page width, images and captions,
   columns, embeds, cover, real-time collaboration.
+
+## Amendment (2026-11-18, PR 367)
+
+**Copy link to block.** The block menu in an editable document offers it for a
+paragraph, list item or code block. It copies `<document URL>#kh-block-<uuid>`;
+a block without an id is given one in a single undoable edit. Markdown carries the
+id as an HTML comment adjacent to the block — before a paragraph or fence, and
+inline at the end of a list item's paragraph — so the id survives a save and
+reopen. The reader and editor remove the comment and put the id on the block's
+element, so a hash link scrolls to it and the comment is invisible in every
+other Markdown reader. Ids are per document; splitting a block keeps the id on
+the original and removes it from the new fragment. Headings keep their own
+copy-link action; quotes and tables remain out of scope.
+
+**Recent slash commands.** With no query, the `/` list puts a Recent group of
+up to four distinct commands previously chosen in this browser (`localStorage`
+`kh-recent-slash-commands`) above the ordinary groups. A query shows no Recent
+group.
 
 ## Verification
 

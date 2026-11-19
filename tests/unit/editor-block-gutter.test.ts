@@ -2,7 +2,7 @@
 import { editorViewCtx } from "@milkdown/kit/core";
 import { undo } from "@milkdown/kit/prose/history";
 import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { blockGutter, gutterFits } from "@/components/knowledge/editor/block-gutter";
 import { slashCommands } from "@/components/knowledge/editor/slash-commands";
@@ -18,9 +18,9 @@ afterEach(async () => { for (const editor of opened.splice(0)) await editor.dest
 async function open(reveal = true) {
   return openWith('First\n\nSecond\n\nThird', reveal);
 }
-async function openWith(markdown: string, reveal = true) {
+async function openWith(markdown: string, reveal = true, comment?: Parameters<typeof blockGutter>[0], linkTo?: () => string) {
   const root = document.body.appendChild(document.createElement('div'));
-  const editor = await createMarkdownEditor({ root, markdown, className: 'kh-editor', ariaLabel: 'Content', editable: true, onUserEdit: () => {}, onMarkdown: () => {}, allowImage: () => false, extraPlugins: [blockGutter()] });
+  const editor = await createMarkdownEditor({ root, markdown, className: 'kh-editor', ariaLabel: 'Content', editable: true, onUserEdit: () => {}, onMarkdown: () => {}, allowImage: () => false, extraPlugins: [blockGutter(comment, linkTo)] });
   opened.push(editor);
   const view = editor.action(ctx => ctx.get(editorViewCtx));
   view.dom.getBoundingClientRect = () => rect(40, 300);
@@ -64,6 +64,21 @@ it('offers bounded move actions and moves the selected block down', async () => 
   expect(down.disabled).toBe(false);
   down.click();
   expect(editor.getMarkdown()).toMatch(/Second[\s\S]*First[\s\S]*Third/);
+});
+
+it('offers Comment for the current block without a text selection when review is available', async () => {
+  let available = false;
+  const run = vi.fn();
+  const { view } = await openWith('First\n\nSecond', true, { available: () => available, run });
+  button('Move block').click();
+  expect(menuItem('Comment')).toBeUndefined();
+  button('Move block').click();
+  available = true;
+  button('Move block').click();
+  expect(view.state.selection.empty).toBe(true);
+  menuItem('Comment')!.click();
+  expect(run).toHaveBeenCalledWith(view, 0);
+  expect(document.querySelector<HTMLElement>('.kh-block-move-menu')!.hidden).toBe(true);
 });
 
 it('turns a block into a heading from the gutter menu', async () => {
@@ -303,6 +318,46 @@ it("moves the list item up among its siblings", async () => {
   button("Move block").click();
   menuItem("Move up").click();
   expect(editor.getMarkdown().trim()).toBe("- First\n- Third\n- Second");
+});
+
+it.each([
+  ["First\n\nSecond", "First", "p"],
+  ["- First\n- Second", "First", "li"],
+  ["- [x] First\n- [ ] Second", "First", "li"],
+  ["```js\nFirst\n```\n\nSecond", "First", "pre"],
+])("copies a persistent block link, keeping its target across a move and round trip in %s", async (markdown, text, tagName) => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  const originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  try {
+    const { editor, view } = await openWith(markdown, false, undefined, () => "/w/workspace/knowledge/source/note");
+    caretAfter(view, text);
+    reveal(view);
+    button("Move block").click();
+    menuItem("Copy link to block").click();
+    const href = new URL(writeText.mock.lastCall?.[0]);
+    expect(href.pathname).toBe("/w/workspace/knowledge/source/note");
+    expect(href.hash).toMatch(/^#kh-block-[0-9a-f-]{36}$/);
+    const id = href.hash.slice(1);
+    expect(view.dom.querySelector(`${tagName}[id="${id}"]`)?.textContent).toBe(text);
+    reveal(view);
+    button("Move block").click();
+    menuItem("Move down").click();
+    const moved = editor.getMarkdown();
+    expect(moved.indexOf("Second")).toBeLessThan(moved.indexOf(text));
+    expect(moved).toContain(id);
+    const reopened = await openWith(moved, false);
+    expect(reopened.view.dom.querySelector(`${tagName}[id="${id}"]`)?.textContent).toBe(text);
+    expect(reopened.editor.getMarkdown()).toBe(moved);
+    caretAfter(reopened.view, text);
+    reveal(reopened.view);
+    button("Move block").click();
+    menuItem("Duplicate").click();
+    expect(reopened.editor.getMarkdown().split(id)).toHaveLength(2);
+  } finally {
+    if (originalClipboard) Object.defineProperty(navigator, "clipboard", originalClipboard);
+    else Reflect.deleteProperty(navigator, "clipboard");
+  }
 });
 
 it("turns one list item into a heading, splitting the list around it", async () => {

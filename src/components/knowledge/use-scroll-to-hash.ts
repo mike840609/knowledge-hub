@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { findHeading } from "./use-active-heading";
+import { findHeading, openAncestorDetails } from "./use-active-heading";
 
 /**
- * Takes the reader to the heading the address names, once the document is on
+ * Takes the reader to the heading or block the address names, once the document is on
  * screen.
  *
  * The browser does this itself on a full page load, and Next does it after a
@@ -26,6 +26,10 @@ export function useScrollToHash(documentKey: string): void {
     } catch {
       // Use it as written.
     }
-    findHeading(slug)?.scrollIntoView({ block: "start" });
+    const target = findHeading(slug);
+    if (target) {
+      openAncestorDetails(target);
+      target.scrollIntoView({ block: "start" });
+    }
   }, [documentKey]);
 }

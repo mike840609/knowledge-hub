@@ -129,6 +129,9 @@ test("the palette offers actions as well as documents, and keeps the keyboard ov
 
   await field.fill("settings");
   await expect(list.getByRole("option", { name: "Go to Settings" })).toBeVisible();
+  // While the search is in flight the row is on screen but not the active target; wait for the answer to
+  // settle, or Enter runs the full search instead of the command the reader can see.
+  await expect(list.getByRole("option", { name: "Go to Settings" })).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(new RegExp(`/w/${QUERY_MASTER_WORKSPACE}/settings`));
 });

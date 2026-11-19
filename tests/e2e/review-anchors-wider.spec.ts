@@ -134,17 +134,27 @@ test("a selection that cannot take a comment says why, where the button would ha
 test("the owner starts a discussion on their own document, and a reader of its link answers it", async ({ page, request }) => {
   const doc = await createReviewDocument(request, "The owner's own passage here.\n\nPress <kbd>Ctrl</kbd> too.");
   await page.setViewportSize({ width: 1440, height: 900 });
+  await page.clock.install();
   await page.goto(doc.href);
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
-  // A document nobody has said anything about offers nothing until something is selected.
-  await expect(page.getByRole("button", { name: /^(Show|Hide) comments/ })).toHaveCount(0);
+  // A document nobody has said anything about still offers its open discussion panel, with nothing to comment on until something is selected.
+  const comments = page.getByRole("button", { name: /^Show comments, 0 comments, 0 open/ });
+  await expect(comments).toBeVisible();
   await expect(page.getByRole("button", { name: "Comment on selection" })).toHaveCount(0);
+  await comments.click();
+  await expect(page.getByText(/No comments yet/)).toBeVisible();
+  await page.getByRole("button", { name: /^Hide comments, 0 comments, 0 open/ }).click();
 
-  // What cannot take a comment says so beside the selection, where the control would be.
+  // Even after the reader's delayed hint would appear, formatting stays usable in the editor.
   await selectText(page, "p", "too");
-  await expect(page.getByRole("status").filter({ hasText: "This passage cannot take a comment." })).toBeVisible();
+  const toolbar = page.getByRole("toolbar", { name: "Formatting" });
+  await expect(toolbar).toBeVisible();
+  await page.clock.runFor(600);
+  await expect(page.locator(".kh-selection-bubble")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Comment on selection" })).toHaveCount(0);
+  await toolbar.getByRole("button", { name: "Bold", exact: true }).click();
+  await expect(page.locator("[data-review-document] strong").filter({ hasText: "too" })).toBeVisible();
 
   await selectText(page, "p", "own passage");
   const posted = page.waitForResponse(response => response.url().endsWith(`/api/documents/${doc.documentId}/review-threads`) && response.request().method() === "POST");
@@ -154,9 +164,10 @@ test("the owner starts a discussion on their own document, and a reader of its l
   await expect(page.getByRole("button", { name: /^Hide comments, 1 comments, 1 open/ })).toBeVisible();
   await expect(page.locator("[data-review-marker]")).toHaveCount(1);
 
-  // What the owner said themselves does not await them: on coming back the rail is shut.
+  // What the owner said themselves does not await them: on coming back the rail is shut, and the
+  // header still has their control once the discussions have loaded again.
   await page.reload();
-  await expect(page.getByRole("button", { name: /^Show comments, 1 comments, 1 open/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Show comments, 1 comments, 1 open/ })).toBeVisible({ timeout: 15_000 });
 
   // It is the document's, not a link's: every link reads it, by the owner's name, and may answer.
   await page.goto(`${phase3Origin("viewer")}${doc.links[1].path}`);

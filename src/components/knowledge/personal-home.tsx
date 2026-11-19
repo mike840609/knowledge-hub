@@ -27,6 +27,7 @@ import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-auth
 import { MenuRoot, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
 import { ShareLinkDialogHost } from "./share-link-dialog";
 import { useHydrated } from "@/components/shell/use-hydrated";
+import { RowPreviewButton } from "./row-preview-button";
 
 type Doc = ContinueDoc;
 
@@ -105,6 +106,7 @@ function Row({ href, icon, title, timestamp, eventLabel, provenance, stackProven
         {!stackProvenance && (timestamp || eventLabel) ? <span className="hidden shrink-0 text-caption text-kh-text-muted sm:block"><EventTime timestamp={timestamp} eventLabel={eventLabel} /></span> : null}
       </Link>
       {trailing}
+      <RowPreviewButton actions={actions} label={title} className="kh-row-action hidden lg:flex" />
       <RowActionsTrigger actions={actions} onRun={onRun} label={title} className="kh-row-action mr-1" />
     </RowContextMenu>
   );
@@ -210,10 +212,10 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
   }
 
   function draftRow(item: DraftItem) {
-    // Draft rows have no star or menu; invisible copies of both keep their times on the same edge as Recent's.
+    // Draft rows omit document actions. Matching slots align their times with Recent.
     const slot = buttonClasses({ variant: "ghost", icon: true, size: "sm", className: "invisible" });
     return <Row key={item.id} href={draftHref(item)} icon={<PenLine size={14} aria-hidden="true" />} title={item.draft.title || "Untitled draft"} timestamp={item.at} provenance={draftProvenance(item)}
-      trailing={<span aria-hidden="true" className="mr-1 flex shrink-0"><span className={slot} /><span className={slot} /></span>} />;
+      trailing={<span aria-hidden="true" className="mr-1 flex shrink-0"><span className={`${slot} hidden lg:inline-flex`} /><span className={slot} /><span className={slot} /></span>} />;
   }
 
   const recentDocs = recentShown.map(item => item.doc);

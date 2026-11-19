@@ -10,7 +10,7 @@
  * `userId` is the server-resolved Hub user id, threaded from the page: two people sharing a tab
  * must not be offered each other's draft. It is key material only, never authorization.
  */
-export type DraftKey = { kind: "edit"; userId: string; documentId: string } | { kind: "new"; userId: string; workspaceId: string; title?: string };
+export type DraftKey = { kind: "edit"; userId: string; documentId: string } | { kind: "new"; userId: string; workspaceId: string; title?: string; recoveryId?: string };
 export type Draft = { title: string; markdown: string; baseRevisionId: string | null };
 export type DraftStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
@@ -18,6 +18,7 @@ const VERSION = 1;
 
 export function draftStorageKey(key: DraftKey): string {
   if (key.kind === "edit") return `kh:draft:edit:${key.userId}:${key.documentId}`;
+  if (key.recoveryId !== undefined) return `kh:draft:new:${key.userId}:${key.workspaceId}:recovery:${key.recoveryId}`;
   return key.title === undefined
     ? `kh:draft:new:${key.userId}:${key.workspaceId}`
     : `kh:draft:new:${key.userId}:${key.workspaceId}:${encodeURIComponent(key.title)}`;

@@ -33,4 +33,22 @@ describe("MariaDbKnowledgeSearchRepository timeout mapping", () => {
 
     await expect(repository.search(criteria)).rejects.toBe(original);
   });
+
+  it("hides a block link's Markdown target comment from the returned snippet", async () => {
+    const snippet = "Before.\n<!-- kh-block-f81d4fae-7dec-11d0-a765-00a0c91e6bf7 -->\nAfter.";
+    const query = vi.fn().mockResolvedValue([{
+      document_id: "document-1", source_id: "source-1", workspace_id: "workspace-1",
+      title: "Title", page_icon: null, source_name: "Notes", workspace_name: "Workspace",
+      status: "ACTIVE", updated_at: new Date("2026-11-18T00:00:00Z"),
+      anchor_at: 0, markdown_length: [...snippet].length, snippet,
+    }]);
+    const repository = new MariaDbKnowledgeSearchRepository({ query } as unknown as QueryConnection);
+
+    const [row] = await repository.search(criteria);
+
+    expect(row.snippet).toContain("Before.");
+    expect(row.snippet).toContain("After.");
+    expect(row.snippet).not.toContain("kh-block");
+    expect(row.snippetClipped).toEqual({ start: false, end: false });
+  });
 });

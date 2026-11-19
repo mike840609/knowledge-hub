@@ -184,6 +184,14 @@ export function ShareLinkDialog({
   }, []);
 
   const named = mode === "NAMED";
+  const audienceSummary = named
+    ? "Only the people you choose can open this link after signing in. It has no expiry."
+    : `Anyone with this link can open it without signing in. It expires after ${expiresInDays} ${expiresInDays === 1 ? "day" : "days"}.`;
+  const documentScope = isSource
+    ? "every document in this source, including documents added later"
+    : isFolder
+      ? "every document in this folder and its subfolders, including documents added later"
+      : "this document";
   const active = links?.filter((link) => link.active) ?? [];
   const inactive = links?.filter((link) => !link.active) ?? [];
 
@@ -193,17 +201,6 @@ export function ShareLinkDialog({
         <Dialog.Backdrop className={dialogBackdropClasses()} />
         <Dialog.Popup className={dialogPopupClasses("max-h-[85vh] w-[min(36rem,92vw)] overflow-y-auto")}>
           <Dialog.Title className="text-title font-semibold">{isSource ? (sourceName ? `Share source ${sourceName}` : "Share source") : isFolder ? (folderName ? `Share folder ${folderName}` : "Share folder") : "Share link"}</Dialog.Title>
-          <Dialog.Description className="mt-1 text-body text-kh-text-muted">
-            {isSource
-              ? named ? "Only the people you pick can open this source, and only after signing in. It never expires." : "Anyone with this link can read and download every document in this source, frontmatter included, and any you add later. They will see every change you make from now on, but they cannot edit anything or see anything else in My Space."
-              : named
-              ? `Only the people you pick can open this ${isFolder ? "folder" : "document"}, and only after signing in. It never expires. Remove a person, or revoke the link, to end their access.`
-              : isFolder
-              ? "Anyone with this link can read and download every document in this folder and its subfolders, frontmatter included, without signing in, and any you add later. They will see every change you make from now on, but they cannot edit anything or see anything else in My Space. Share only what you are happy to see forwarded."
-              : "Anyone with this link can read and download this document, frontmatter included, without signing in. They will see every change you make from now on, but they cannot edit it or see anything else in My Space. Share only what you are happy to see forwarded."}
-            {!named && reviewCapability.read && <> Anyone with a valid link can read existing comments.{reviewCapability.write ? " Signing in is required to add comments and replies." : " Adding comments is currently disabled."}</>}
-          </Dialog.Description>
-
           {/* One choice of audience, so a native radio group (design language: a choice is a radio, a tab swaps a view). The checked option carries a border and weight, not only a tint. */}
           <fieldset className="mt-4 flex gap-1 rounded-md border border-kh-border p-1" disabled={busy}>
             <legend className="sr-only">Who can open it</legend>
@@ -259,6 +256,7 @@ export function ShareLinkDialog({
               <Label>
                 Expires after
                 <SelectMenu
+                  aria-label="Expires after"
                   className="mt-1 flex w-full"
                   value={expiresInDays}
                   disabled={busy}
@@ -267,7 +265,13 @@ export function ShareLinkDialog({
                 />
               </Label>
             )}
-            <Button type="submit" disabled={busy || !target || (named && recipients.length === 0)}>{busy ? "Creating…" : "Create link"}</Button>
+            <div className="flex w-full flex-col items-end gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <Dialog.Description className="min-w-0 text-body-sm text-kh-text-muted">
+                {audienceSummary} Viewers can read and download the latest Markdown, including frontmatter, for {documentScope}.
+                {!named && reviewCapability.read && <> Anyone with a valid link can read existing comments.{reviewCapability.write ? " Sign in to add comments and replies." : " Adding comments is currently disabled."}</>}
+              </Dialog.Description>
+              <Button type="submit" disabled={busy || !target || (named && recipients.length === 0)}>{busy ? "Creating…" : "Create link"}</Button>
+            </div>
           </form>
           <div className="mt-3"><GovernanceError error={error} /></div>
 

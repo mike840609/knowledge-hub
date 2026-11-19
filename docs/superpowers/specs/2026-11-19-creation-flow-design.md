@@ -19,23 +19,29 @@ decides each and amends the design-language contract. Nothing stored changes.
    still mounting. Keys typed in either were lost, which kept only the tail of
    the title, such as "iately" from "Typed immediately".
 
-   - **The buffer.** `typing-ahead.ts` keeps plain characters and Backspace
-     from the press until the title field takes focus. Every entry starts it:
+   - **The buffer.** `typing-ahead.ts` keeps what is typed where no field has
+     focus from the press until the starter's fields take over: plain
+     characters, spaces, Enter (which ends the title and starts the body) and
+     Backspace, with the title capped at 512 characters. Every entry starts it:
      the sidebar `+`, Home's button and its `C` key, and the action runner,
      which covers the palette, row menus and the folder `+`. A field that
      still has focus as it starts, such as the palette's search while the
-     palette closes, loses it (the starter's own title keeps it, so an IME
+     palette closes, loses it (the starter's own fields keep it, so an IME
      goes on composing there), and a closing dialog hands focus back to no
      field. Keys typed into another field or a contenteditable are that
      field's. Untaken after ten seconds, it stops and forgets what it kept.
-   - **The starter page.** While the note is being made, the starter shows a
-     title field with what was typed so far.
-   - **On arrival.** The editor takes the text as the title and puts the caret
-     after it.
-   - **Enter.** Pressed in that time, Enter ends the title and the caret goes
-     to the body, as Enter in the title does, once the editor is ready. The
-     starter's title field is read-only from then on. Keys typed after it,
-     before the editor is ready, are not kept.
+   - **The starter page.** While the note is being made, the title and body
+     accept edits. Enter in the title moves focus to the body. The buffer
+     keeps both fields through the gaps where neither has focus.
+   - **On arrival.** The editor takes the title and body, puts the caret after
+     the text in the active field, and autosaves. An active composition in
+     the starter finishes before the page opens the editor. When navigation
+     has already started, the editor keeps the last visible composition text.
+   - **On failure.** Both fields remain visible and editable. Retry opens the
+     same draft after creation succeeds. The new-document form can also
+     open it as a separate draft in the current tab.
+   - **Separate visits.** Each visit starts a create request. Replaying the
+     effect on a mounted starter keeps the same request.
    - **A plain click only.** A modified click (a new tab or window) starts
      nothing, so the tab left behind keeps its keys.
    - **Not kept, recorded.** An IME composes only into a focused field. In

@@ -22,6 +22,7 @@ import type { MoveNodeInput } from "./use-tree-mutations";
 import { matchesCommittedTreeView } from "./source-tree-cache";
 import { Status } from "@/components/ui/status";
 import { Tooltip } from "@/components/ui/tooltip";
+import { RowPreviewButton } from "./row-preview-button";
 
 export type KnowledgeTreeProps = {
   items: KnowledgeTreeItem[];
@@ -148,11 +149,10 @@ function TreeNodeRow({
         <Tooltip label={isFavorite ? "Remove from favorites" : "Add to favorites"}><button type="button" onClick={() => onToggleFavorite(item.documentId)} aria-label={`${isFavorite ? "Remove from" : "Add to"} favorites: ${item.label}`} className={`mr-1 inline-flex kh-control kh-icon-control h-6 w-6 shrink-0 items-center justify-center rounded-md kh-focus-ring ${isFavorite ? "text-kh-selected-text" : "kh-row-action text-kh-text-muted hover:bg-kh-bg-hover"}`}>
           <Star size={14} fill={isFavorite ? "currentColor" : "none"} aria-hidden="true" />
         </button></Tooltip>
-        {/* Floated just inside the favourite toggle, carrying the row's own
-            background: reserving a second control slot would have re-truncated
-            every label in the tree to buy a button that is invisible most of
-            the time. `right-8` is that toggle's width plus its margin. */}
+        {/* Float the actions in front of the label to keep its full width at rest.
+            `right-8` leaves the favorite toggle and its margin clear. */}
         <div className="kh-tree-row-actions kh-row-action absolute right-8 top-1/2 flex -translate-y-1/2 items-center rounded-md bg-inherit">
+          <RowPreviewButton actions={actions} label={item.label} className="hidden xl:flex" />
           <RowActionsTrigger actions={actions} onRun={onRunAction} label={item.label} />
         </div>
       </RowContextMenu>

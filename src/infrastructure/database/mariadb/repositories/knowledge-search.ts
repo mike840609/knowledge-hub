@@ -19,7 +19,8 @@ function mapRow(row: DbRow): KnowledgeSearchRow {
   // Mirrors the SQL window: SUBSTRING counts characters, so compare in code points, not UTF-16 units.
   const anchorAt = Number(row.anchor_at ?? 0);
   const start = anchorAt > 0 ? Math.max(anchorAt - SNIPPET_LEAD, 1) : 1;
-  const snippetLength = row.snippet === null || row.snippet === undefined ? 0 : [...String(row.snippet)].length;
+  const rawSnippet = row.snippet === null || row.snippet === undefined ? "" : String(row.snippet);
+  const snippetLength = [...rawSnippet].length;
   return {
     snippetClipped: { start: start > 1, end: start - 1 + snippetLength < Number(row.markdown_length ?? 0) },
     documentId: String(row.document_id),
@@ -29,7 +30,8 @@ function mapRow(row: DbRow): KnowledgeSearchRow {
     pageIcon: row.page_icon === null || row.page_icon === undefined ? null : String(row.page_icon),
     sourceName: asRequiredString(row.source_name, "search source name"),
     workspaceName: asRequiredString(row.workspace_name, "search workspace name"),
-    snippet: row.snippet === null || row.snippet === undefined ? "" : String(row.snippet),
+    // A block link's target is an HTML comment; no result copy or API consumer should show it.
+    snippet: rawSnippet.replace(/<!--[\s\S]*?-->/g, " "),
     status: String(row.status) as "ACTIVE" | "ARCHIVED",
     updatedAt: asDate(row.updated_at),
   };

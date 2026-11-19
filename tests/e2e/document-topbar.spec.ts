@@ -15,7 +15,7 @@ async function createNote(page: Page, workspaceId: string, title: string) {
 }
 
 /**
- * The document's own top line: the favorite star, the page icon above the
+ * The document's own top line: the favorite action, the page icon above the
  * title, and the overflow that carries Duplicate. None of these need a detour
  * through the explorer.
  */
@@ -27,8 +27,12 @@ test("a document can be favorited, given an icon, and duplicated from its own he
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(title, ROUND_TRIP);
 
   const main = page.locator("main");
-  await main.getByRole("button", { name: "Add to favorites", exact: true }).click();
-  await expect(main.getByRole("button", { name: "Remove from favorites", exact: true })).toHaveAttribute("aria-pressed", "true");
+  const actions = main.getByRole("button", { name: "Document actions", exact: true });
+  await actions.click();
+  await page.getByRole("menuitem", { name: "Add to favorites", exact: true }).click();
+  await actions.click();
+  await expect(page.getByRole("menuitem", { name: "Remove from favorites", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   await main.getByRole("button", { name: "Add page icon", exact: true }).click();
   // The picker shows the icon before the server has it; reloading earlier would read the page without it.
@@ -39,7 +43,7 @@ test("a document can be favorited, given an icon, and duplicated from its own he
   await page.reload();
   await expect(main.getByRole("button", { name: "Change page icon", exact: true })).toBeVisible(ROUND_TRIP);
 
-  await main.getByRole("button", { name: "Document actions", exact: true }).click();
+  await actions.click();
   await page.getByRole("menuitem", { name: "Duplicate document", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(`${title} copy`, ROUND_TRIP);
   // The copy inherits the page's identity, not only its words.

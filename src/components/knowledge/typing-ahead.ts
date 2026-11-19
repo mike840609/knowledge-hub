@@ -1,15 +1,10 @@
 /**
- * Keys typed between pressing Create and the new note's title field taking focus
- * (2026-11-19 creation-flow spec, decision 3). For that moment no field has focus: the new-note page
- * is still loading, or the editor is still mounting. A character typed then would land nowhere, so
- * it is kept here and becomes the start of the title.
- *
- * ponytail: plain characters and Backspace only. An IME composes into a focused field and never
- * reaches here; the title field takes over as soon as it has focus.
+ * Keep writing through route transitions, when neither the starter's fields nor the editor has
+ * focus. The starter's native fields take over while the create request is pending, including IME.
  */
-let typed: string | null = null;
-/** Enter was pressed: the title is done and writing goes on in the body. */
-let entered = false;
+export type NewNoteDraft = { text: string; body: string; entered: boolean };
+
+let draft: NewNoteDraft | null = null;
 let stopListening: (() => void) | null = null;
 let expiry: ReturnType<typeof setTimeout> | undefined;
 
@@ -27,50 +22,48 @@ export function isNewNoteHref(href: string): boolean {
   return /\/knowledge\/new(?:$|\?(?!.*\bcompose\b))/.test(href);
 }
 
-/** Starts keeping keys, beginning with `initial`. After ten seconds untaken, it stops and forgets them. */
-export function bufferTyping(initial = "", keepFocus = false): void {
-  stopListening?.();
-  clearTimeout(expiry);
-  typed = initial;
-  entered = false;
+/** The returned draft survives the listener's expiry when it is already on its way to an editor. */
+export function bufferTyping({ text = "", body = "", entered = false, keepFocus = false }: Partial<NewNoteDraft> & { keepFocus?: boolean } = {}): NewNoteDraft {
+  takeTyped();
+  const writing = { text, body, entered };
+  draft = writing;
   const onKeyDown = (event: KeyboardEvent) => {
-    if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || event.ctrlKey || event.metaKey || event.altKey) return;
     if (event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.closest("input, textarea, select"))) return;
+    const field = writing.entered ? "body" : "text";
     if (event.key === "Enter") {
-      entered = true;
-      stopListening?.();
-    } else if (event.key === "Backspace") typed = (typed ?? "").slice(0, -1);
-    else if (event.key.length === 1 && (typed || event.key !== " ")) typed = (typed ?? "") + event.key;
+      if (writing.entered) writing.body += "\n";
+      else writing.entered = true;
+    } else if (event.key === "Backspace") writing[field] = writing[field].replace(/.$/su, "");
+    else if (Array.from(event.key).length === 1 && (writing.entered || writing.text || event.key !== " ")) {
+      if (writing.entered || writing.text.length + event.key.length <= 512) writing[field] += event.key;
+    }
     else return;
     event.preventDefault();
   };
   window.addEventListener("keydown", onKeyDown, true);
   // A field still focused here (the palette's search while it closes) would take the keys instead. The
-  // starter's own title keeps focus: it feeds `setTyped` itself, and an IME composes only into a focused field.
+  // starter's own fields keep focus so they can continue accepting input until the editor opens.
   if (!keepFocus && typeof document !== "undefined" && document.activeElement instanceof HTMLElement) document.activeElement.blur();
   // Untaken by then, the note was left: a later starter must not pick these keys up.
-  expiry = setTimeout(() => { stopListening?.(); typed = null; entered = false; }, 10_000);
+  expiry = setTimeout(takeTyped, 10_000);
   stopListening = () => {
     window.removeEventListener("keydown", onKeyDown, true);
     stopListening = null;
   };
+  return writing;
 }
 
-/** The title field has the keys now: what it holds replaces what was kept, and Enter there ends the title. */
-export function setTyped(value: string, enter = false): void {
-  if (typed === null) return;
-  typed = value;
-  if (!enter) return;
-  entered = true;
-  stopListening?.();
+/** Stop listening for this handover without disturbing any later create action. */
+export function finishTyping(writing: NewNoteDraft): void {
+  if (draft === writing) takeTyped();
 }
 
-/** Stops keeping keys and hands over what was typed ("" for nothing), and whether Enter ended it. */
-export function takeTyped(): { text: string; entered: boolean } {
+/** Stops keeping keys and hands over what was typed before the starter took focus. */
+export function takeTyped(): NewNoteDraft {
   stopListening?.();
   clearTimeout(expiry);
-  const taken = { text: typed ?? "", entered };
-  typed = null;
-  entered = false;
+  const taken = draft ?? { text: "", body: "", entered: false };
+  draft = null;
   return taken;
 }

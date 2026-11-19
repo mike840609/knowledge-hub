@@ -4,11 +4,12 @@ import type { applicationServices as ApplicationServices } from "@/server/compos
 vi.mock("@/server/composition", () => ({ applicationServices: vi.fn() }));
 import { applicationServices } from "@/server/composition";
 import { getSearchPageModel } from "@/server/search-read";
-const listDocuments = vi.fn(), search = vi.fn();
+const listDocuments = vi.fn(), search = vi.fn(), listChains = vi.fn();
 const input = { q: "needle", scope: "workspace" as const, sourceId: null, includeArchived: false, page: 1 };
 const emptyResult = { terms: ["needle"], hits: [], page: 1, hasNext: false, tooLong: false };
 beforeEach(() => {
   vi.clearAllMocks(); listDocuments.mockResolvedValue([]); search.mockResolvedValue(emptyResult);
+  listChains.mockResolvedValue(new Map());
   const workspace = { id: "ws", name: "My Space", type: "PERSONAL" };
   vi.mocked(applicationServices).mockReturnValue({
     establishTrustedCaller: async () => ({ caller: { identity: { id: "owner" } } }),
@@ -17,7 +18,9 @@ beforeEach(() => {
     search: { search }, personalPreferences: { get: async () => ({ value: { completed: true } }) },
     unitOfWork: {
       run: async (work: (repositories: unknown) => unknown) => work({ entries: { findByDocumentIds: async () => [] } }),
-      read: async (work: (repositories: unknown) => unknown) => work({ entries: { findByDocumentIds: async () => [] } }),
+      read: async (work: (repositories: unknown) => unknown) => work({
+        entries: { findByDocumentIds: async () => [] }, tree: { listChainsByDocumentIds: listChains },
+      }),
     },
   } as unknown as ReturnType<typeof ApplicationServices>);
 });
@@ -30,8 +33,16 @@ it("uses document presence to distinguish a no-hit query from missing content", 
   expect(await getSearchPageModel("ws", input)).toMatchObject({ hasDocuments: true });
 });
 it("avoids an extra document-list query for successful live search results", async () => {
-  search.mockResolvedValue({ ...emptyResult, hits: [{ documentId: "doc" }] });
-  await getSearchPageModel("ws", input); expect(listDocuments).not.toHaveBeenCalled();
+  search.mockResolvedValue({ ...emptyResult, hits: [{ documentId: "doc", sourceId: "notes" }] });
+  listChains.mockResolvedValue(new Map([["doc", [
+    { nodeType: "DOCUMENT", status: "ACTIVE" },
+    { nodeType: "FOLDER", name: "Design", status: "ACTIVE" },
+    { nodeType: "FOLDER", name: "Handbook", status: "ACTIVE" },
+  ]]]));
+  const model = await getSearchPageModel("ws", input);
+  expect(model.result?.hits[0]?.folderPath).toBe("Handbook › Design");
+  expect(listChains).toHaveBeenCalledWith(["doc"], "notes");
+  expect(listDocuments).not.toHaveBeenCalled();
 });
 it("does not inspect local content for all-workspace queries or search errors", async () => {
   await getSearchPageModel("ws", { ...input, scope: "all" });

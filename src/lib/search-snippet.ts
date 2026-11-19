@@ -11,6 +11,8 @@ const PARTIAL_TRAILING = /\s*[\x21-\x7E]+$/;
 export function plainSearchSnippet(markdown: string, clipped: { start: boolean; end: boolean } = NO_CUT): string {
   const body = clipped.start ? markdown.replace(PARTIAL_LEADING, "") : markdown;
   let text = body
+    // A block link's target is an HTML comment beside its block; it is not part of the prose.
+    .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/^﻿?(?:[ \t]*\r?\n)*#\s+[^\r\n]*(?:\r?\n|$)/, "")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
     .replace(/!\[[^\]]*(?:\][^\s]*)?$/g, " ")

@@ -20,29 +20,32 @@ async function surface(page: Page, url: string) {
 }
 const saved = (page: Page) => expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", { timeout: 15000 });
 
-test("rename selects an opening heading and preserves the document body", async ({ page }) => {
+test("an opening heading is the title and is edited in place", async ({ page }) => {
   const workspace = await personalWorkspaceId(page);
   const response = await page.request.post(`/api/workspaces/${workspace}/documents`, { data: { title: "Old heading", markdown: "# Old heading\n\nKeep this paragraph." } });
   const result = await response.json();
   const url = `/w/${workspace}/knowledge/${result.sourceId}/${result.documentId}`;
   const editor = await surface(page, url);
-  await page.getByRole("button", { name: "Rename document" }).click();
-  await expect(editor).toBeFocused();
-  await page.keyboard.insertText("New heading");
+  await editor.getByText("Old heading", { exact: true }).click();
+  await page.keyboard.press("End");
+  await page.keyboard.insertText(" updated");
   await saved(page);
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Old heading updated");
   await page.reload();
-  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("New heading");
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Old heading updated");
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Keep this paragraph.");
 });
 
-test("rename also selects the heading in Markdown mode", async ({ page }) => {
+test("the opening heading can be renamed in Markdown mode", async ({ page }) => {
   const workspace = await personalWorkspaceId(page);
   const response = await page.request.post(`/api/workspaces/${workspace}/documents`, { data: { title: "Old heading", markdown: "# Old heading\n\nKeep this paragraph." } });
   const result = await response.json();
   const url = `/w/${workspace}/knowledge/${result.sourceId}/${result.documentId}`;
   await surface(page, url);
   await page.getByRole("button", { name: "Markdown source" }).click();
-  await page.getByRole("button", { name: "Rename document" }).click();
+  const source = page.getByRole("textbox", { name: "Markdown", exact: true });
+  await source.click();
+  await source.evaluate((element) => (element as HTMLTextAreaElement).setSelectionRange(2, 2 + "Old heading".length));
   await page.keyboard.insertText("New heading");
   await saved(page);
   await page.reload();
@@ -57,8 +60,8 @@ test("renaming a frontmatter title persists without changing other metadata or b
   const result = await response.json();
   const url = `/w/${workspace}/knowledge/${result.sourceId}/${result.documentId}`;
   await surface(page, url);
-  await page.getByRole("button", { name: "Rename document" }).click();
   const title = page.getByRole("textbox", { name: "Title", exact: true });
+  await title.click();
   await expect(title).toBeFocused();
   await title.fill("Updated title");
   await saved(page);
@@ -219,7 +222,7 @@ test("inline: content and title autosave without navigating or losing focus", as
   await saved(page);
   await expect(editor).toBeFocused();
   await expect(page).toHaveURL(new RegExp(`${url}$`));
-  await page.getByRole("button", { name: "Rename document" }).click();
+  await page.getByRole("textbox", { name: "Title", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toBeFocused();
   await page.getByRole("textbox", { name: "Title", exact: true }).fill("Renamed inline");
   await saved(page);

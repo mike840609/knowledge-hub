@@ -2,8 +2,8 @@ import { Editor, defaultValueCtx, editorViewCtx, editorViewOptionsCtx, remarkPlu
 import type { Ctx, MilkdownPlugin } from "@milkdown/kit/ctx";
 import { history } from "@milkdown/kit/plugin/history";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
-import { commonmark, hardbreakFilterNodes, imageSchema } from "@milkdown/kit/preset/commonmark";
-import { gfm, tableSchema, wrapInTaskListInputRule } from "@milkdown/kit/preset/gfm";
+import { commonmark, codeBlockSchema, hardbreakFilterNodes, imageSchema, paragraphSchema } from "@milkdown/kit/preset/commonmark";
+import { extendListItemSchemaForTask, gfm, tableSchema, wrapInTaskListInputRule } from "@milkdown/kit/preset/gfm";
 import { Plugin, Selection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $ctx, $prose, getMarkdown, replaceAll } from "@milkdown/kit/utils";
@@ -19,6 +19,8 @@ import { pasteHtml } from "./paste-html";
 import { markdownPastePlugins } from "./markdown-paste";
 import { TASK_EDITABLE_CHANGED } from "./task-checkbox";
 import { configureWikiLinkStringify, wikiLinkPlugins } from "./wiki-link";
+import { remarkBlockLinks } from "@/shared/markdown/remark-block-links";
+import { blockLinkPlugin, linkedCodeBlock, linkedListItem, linkedParagraph } from "./block-links";
 
 /** The editor could not make a document of this Markdown; the caller should fall back to the source. */
 export class EditorParseError extends Error {
@@ -72,14 +74,26 @@ const safeImageSchema = imageSchema.extendSchema((previous) => (ctx) => {
     },
   };
 });
-const commonmarkWithSafeImages = commonmark.filter((plugin) => plugin !== imageSchema[0] && plugin !== imageSchema[1]);
+const commonmarkWithLocalSchemas = commonmark.flatMap(plugin => {
+  if (plugin === imageSchema[0] || plugin === imageSchema[1]) return [];
+  if (plugin === paragraphSchema[0]) return [linkedParagraph[0]];
+  if (plugin === paragraphSchema[1]) return [linkedParagraph[1]];
+  if (plugin === codeBlockSchema[0]) return [linkedCodeBlock[0]];
+  if (plugin === codeBlockSchema[1]) return [linkedCodeBlock[1]];
+  return [plugin];
+});
 
 const scrollableTable = tableSchema.extendSchema(previous => ctx => ({
   ...previous(ctx),
   toDOM: () => ["div", { class: "kh-markdown-table kh-editor-table", role: "region", "aria-label": "Table", tabindex: "0" }, ["table", ["tbody", 0]]],
 }));
 // Without Milkdown's `[ ] ` rule: notion-keys' own covers list items too, and asks which line it is on.
-const gfmWithScrollableTables = gfm.filter(plugin => plugin !== tableSchema[0] && plugin !== tableSchema[1] && plugin !== wrapInTaskListInputRule);
+const gfmWithLocalSchemas = gfm.flatMap(plugin => {
+  if (plugin === tableSchema[0] || plugin === tableSchema[1] || plugin === wrapInTaskListInputRule) return [];
+  if (plugin === extendListItemSchemaForTask[0]) return [linkedListItem[0]];
+  if (plugin === extendListItemSchemaForTask[1]) return [linkedListItem[1]];
+  return [plugin];
+});
 
 type MarkdownNode = { type: string; title?: string | null; children?: MarkdownNode[] };
 type DefinitionNode = MarkdownNode & { identifier?: string; url?: string };
@@ -199,16 +213,14 @@ export type MarkdownEditor = {
    * Replaces the whole document. Emits no `onUserEdit` and no `onMarkdown` — not even for an edit still waiting out its debounce — and clears the undo history.
    * Throws `EditorParseError` when non-empty Markdown comes out as nothing (the open path's rule); the editor then holds that empty document and should be discarded.
    */
-  replaceMarkdown: (markdown: string) => void;
+  replaceMarkdown: (markdown: string, preserveTrailingInput?: boolean) => void;
   setEditable: (editable: boolean) => void;
   /** Focus with the selection where it is. */
   focus: () => void;
   /** Focus with the caret at the very start of the document. */
   focusStart: () => void;
-  /** Caret at the end, in an empty paragraph added there unless the document already ends in one (keys spec, decision 1). */
-  focusEnd: () => void;
-  /** Select the opening H1 so its existing content can be renamed in place. */
-  selectOpeningHeading: () => void;
+  /** Caret at the end. By default, make room to type in a new paragraph. */
+  focusEnd: (appendParagraph?: boolean) => void;
   action: <T>(fn: (ctx: Ctx) => T) => T;
   destroy: () => Promise<void>;
 };
@@ -251,7 +263,7 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
       configureEmptyQuoteStringify(ctx);
       // Milkdown also refuses Shift+Enter in a table, where a break could only be written as a space. Here it has a writing.
       ctx.set(hardbreakFilterNodes.key, ["code_block"]);
-      ctx.update(remarkPluginsCtx, (previous) => [...previous, { plugin: resolveImageReferences, options: {} }, { plugin: fillNullImageTitles, options: {} }, { plugin: remarkCellBreaks, options: {} }] as typeof previous);
+      ctx.update(remarkPluginsCtx, (previous) => [...previous, { plugin: remarkBlockLinks, options: {} }, { plugin: resolveImageReferences, options: {} }, { plugin: fillNullImageTitles, options: {} }, { plugin: remarkCellBreaks, options: {} }] as typeof previous);
       ctx.update(editorViewOptionsCtx, (previous) => ({
         ...previous,
         editable: () => editable,
@@ -308,15 +320,16 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
       });
     })
     .use(detailsRemark)
-    .use(commonmarkWithSafeImages)
+    .use(commonmarkWithLocalSchemas)
     .use(detailsPlugins)
     .use(safeImageSchema)
     .use(imagePolicyCtx)
-    .use(gfmWithScrollableTables)
+    .use(gfmWithLocalSchemas)
     .use(scrollableTable)
     // In every host of the editor, not an extra: a document with a wikilink must survive being opened in it.
     .use(wikiLinkPlugins)
     .use(readerHints)
+    .use(blockLinkPlugin)
     .use(notionKeys)
     .use(pasteHtml)
     .use(markdownPastePlugins)
@@ -343,11 +356,27 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
 
   return {
     getMarkdown: () => editor.action(getMarkdown()),
-    replaceMarkdown: (markdown) => {
+    replaceMarkdown: (markdown, preserveTrailingInput = false) => {
       editor.action(replaceAll(markdown, true));
       if (!parsedIntact(markdown, editor.action(getMarkdown()))) {
         throw new EditorParseError("The editor produced an empty document from non-empty Markdown.");
       }
+      const suffix = preserveTrailingInput ? markdown.match(/[ \t\n]+$/)?.[0] : undefined;
+      if (!suffix) return;
+      // Markdown parsing drops terminal whitespace, but the starter's writer is still at that caret.
+      editor.action(ctx => {
+        const view = ctx.get(editorViewCtx);
+        const { doc, schema } = view.state;
+        const { $from: end } = Selection.atEnd(doc);
+        const [spaces, ...lines] = suffix.split("\n");
+        const tr = view.state.tr;
+        if (spaces && end.parent.type === schema.nodes.paragraph) {
+          const kept = end.parent.textContent.match(/[ \t]+$/)?.[0].length ?? 0;
+          if (spaces.length > kept) tr.insertText(spaces.slice(kept), end.pos);
+        }
+        for (const line of lines) tr.insert(tr.doc.content.size, schema.nodes.paragraph.create(null, line ? schema.text(line) : null));
+        if (tr.docChanged) view.dispatch(tr.setMeta("addToHistory", false));
+      });
     },
     setEditable: (next) => {
       editable = next;
@@ -365,24 +394,17 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
         view.dispatch(view.state.tr.setSelection(Selection.atStart(view.state.doc)));
         view.focus();
       }),
-    focusEnd: () =>
+    focusEnd: (appendParagraph = true) =>
       editor.action((ctx) => {
         const view = ctx.get(editorViewCtx);
         const { doc, schema } = view.state;
         const last = doc.lastChild;
         const tr = view.state.tr;
         // Not an edit: the empty line is room to type in, and a press that writes nothing must not save a revision or start the autosave.
-        if (view.editable && !(last?.type.name === "paragraph" && last.content.size === 0)) tr.insert(doc.content.size, schema.nodes.paragraph.create()).setMeta("addToHistory", false);
+        if (appendParagraph && view.editable && !(last?.type.name === "paragraph" && last.content.size === 0)) tr.insert(doc.content.size, schema.nodes.paragraph.create()).setMeta("addToHistory", false);
         view.dispatch(tr.setSelection(Selection.atEnd(tr.doc)).scrollIntoView());
         view.focus();
       }),
-    selectOpeningHeading: () => editor.action((ctx) => {
-      const view = ctx.get(editorViewCtx);
-      const first = view.state.doc.firstChild;
-      if (!first || first.type.name !== "heading" || Number(first.attrs.level) !== 1) return;
-      view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1, first.content.size + 1)).scrollIntoView());
-      view.focus();
-    }),
     action: (fn) => editor.action(fn),
     destroy: async () => {
       await editor.destroy();

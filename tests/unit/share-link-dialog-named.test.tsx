@@ -3,6 +3,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ShareLinkDialog } from "@/components/knowledge/share-link-dialog";
+import type { ShareTarget } from "@/components/actions/action-menu";
 import { ToastProvider } from "@/components/ui/toast";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -38,6 +39,7 @@ beforeEach(() => {
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     calls.push({ url, method, body });
     if (url === "/api/documents/doc-1/share-links" && method === "GET") return json({ links: existingLinks });
+    if (/^\/api\/(tree-nodes\/folder-1|sources\/source-1)\/share-links$/.test(url) && method === "GET") return json({ links: [] });
     if (url === "/api/documents/doc-1/share-links" && method === "POST") {
       return json({ link: body.recipients ? link({ id: "link-new", path: "/s/tok-new", label: body.label ?? null, audience: "NAMED", recipientCount: body.recipients.length }) : link({ id: "link-new", path: "/s/tok-new", expiresAt: "2026-12-03T00:00:00.000Z" }) }, 201);
     }
@@ -69,8 +71,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function open() {
-  await act(async () => { root.render(createElement(ToastProvider, null, createElement(ShareLinkDialog, { target: DOC, onOpenChange: () => {} }))); });
+async function open(target: ShareTarget = DOC) {
+  await act(async () => { root.render(createElement(ToastProvider, null, createElement(ShareLinkDialog, { target, onOpenChange: () => {} }))); });
   await flush();
 }
 const flush = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
@@ -91,6 +93,30 @@ async function pick(query: string, name: string) {
 }
 const submit = () => act(async () => { document.querySelector("form")!.requestSubmit(); });
 const posts = () => calls.filter((call) => call.method === "POST" && call.url === "/api/documents/doc-1/share-links");
+
+function createSummary() {
+  const descriptionId = document.querySelector('[role="dialog"]')?.getAttribute("aria-describedby");
+  const summary = descriptionId ? document.getElementById(descriptionId) : null;
+  expect(summary?.closest("form")).toBe(createButton().form);
+  return summary?.textContent;
+}
+
+it("summarizes audience, expiry and the downloadable file beside link creation", async () => {
+  await open();
+  expect(createSummary()).toMatch(/without signing in.*expires after 30 days.*download.*Markdown.*frontmatter/i);
+  await act(async () => { mode("Specific people").click(); });
+  expect(createSummary()).toMatch(/people you choose.*after signing in.*no expiry.*download.*Markdown.*frontmatter/i);
+});
+
+it.each([
+  [{ folderNodeId: "folder-1" }, /subfolders.*added later/i],
+  [{ sourceId: "source-1" }, /source.*added later/i],
+] as const)("describes documents added later for grouped sharing", async (target, scope) => {
+  await open(target);
+  expect(createSummary()).toMatch(scope);
+  await act(async () => { mode("Specific people").click(); });
+  expect(createSummary()).toMatch(scope);
+});
 
 it("offers anyone-with-the-link (with expiry) first and chosen, specific people second", async () => {
   await open();
