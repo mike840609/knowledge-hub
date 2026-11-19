@@ -365,11 +365,16 @@ export function tableActions() {
         };
         // Row grip: level with its row in the editor's gutter, but never up in the block gutter's buttons (24px, at the table's top).
         const rowLeft = Math.max(editorRect.left + (gutterWidth - 24) / 2, bounds.left + 4);
-        const visibleRowTop = Math.max(rowRect.top, clip.top);
-        const visibleRowBottom = Math.min(rowRect.bottom, clip.bottom);
-        const rowCentre = (visibleRowTop + visibleRowBottom) / 2;
-        const rowTop = Math.max(tableRect.top + 24 + 4, clip.top, Math.min(rowCentre - 12, clip.bottom - 24));
-        rowGrip.hidden = gone || rowRect.bottom < clip.top || rowRect.top > clip.bottom || rowTop + 24 > clip.bottom;
+        const gutterBottom = tableRect.top + 24 + 4;
+        let rowTop = Math.max(rowRect.top + rowRect.height / 2 - 12, gutterBottom);
+        let rowLimit = clip.bottom;
+        if (rowTop < clip.top || rowTop + 24 > clip.bottom) {
+          // When the usual position is clipped, use the visible part of the target row.
+          const visibleTop = Math.max(rowRect.top, clip.top, gutterBottom);
+          rowLimit = Math.min(rowRect.bottom, clip.bottom);
+          rowTop = Math.max(visibleTop, (visibleTop + rowLimit) / 2 - 12);
+        }
+        rowGrip.hidden = gone || rowRect.bottom < clip.top || rowRect.top > clip.bottom || rowTop + 24 > rowLimit;
         rowGrip.style.left = `${rowLeft}px`;
         rowGrip.style.top = `${rowTop}px`;
         // Column grip: a low handle across the table's top border, half of it in the table's own top margin, which holds no text.

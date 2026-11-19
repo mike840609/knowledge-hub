@@ -450,6 +450,18 @@ it("hides the row grip when the visible table cannot fit it", async () => {
   layout(root, view, { table, row0, pane: new DOMRect(50, 170, 600, 400) });
   expect(button("Row 2 actions").hidden).toBe(true);
 });
+it.each([
+  { edge: "top", pane: new DOMRect(50, 173, 600, 400), text: "two", row: 2 },
+  { edge: "bottom", pane: new DOMRect(50, 50, 600, 125), text: "four", row: 3 },
+])("hides the hovered row grip when only a sliver of its row is visible at the $edge", async ({ pane, text, row }) => {
+  const { root, view } = await open();
+  const table = new DOMRect(100, 100, 300, 112);
+  const row0 = new DOMRect(100, 100, 300, 37);
+  layout(root, view, { table, row0, pane });
+  const cell = [...root.querySelectorAll("td")].find(td => td.textContent === text)!;
+  cell.dispatchEvent(new Event("pointermove", { bubbles: true }));
+  expect(button(`Row ${row} actions`).hidden).toBe(true);
+});
 it("keeps the add bars outside the table as its edges scroll through the pane", async () => {
   const { root, view } = await open();
   const pane = new DOMRect(50, 100, 600, 400);
