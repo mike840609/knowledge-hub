@@ -103,9 +103,13 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       expect(denied.status()).toBe(403);
       await viewer.page.goto(`/w/${id}/knowledge`);
       await expect(viewer.page.getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
-      await workspaceSwitcher(viewer.page).click();
+      const viewerSwitcher = workspaceSwitcher(viewer.page);
+      const mySpace = viewer.page.getByRole("menuitem", { name: "My Space", exact: true });
+      await viewerSwitcher.click();
+      await expect(mySpace).toBeVisible();
       await expect(viewer.page.getByRole("menuitem", { name: "Settings", exact: true })).toHaveCount(0);
-      await viewer.page.keyboard.press("Escape");
+      await mySpace.press("Escape");
+      await expect(viewerSwitcher).toHaveAttribute("aria-expanded", "false");
       const viewerDestinations = await openKnowledgeDestinations(viewer.page);
       await expect(viewerDestinations.getByRole("link", { name: "Graph", exact: true })).toBeVisible();
       await expect(viewerDestinations.getByRole("link", { name: /^(Sources|Shares)$/ })).toHaveCount(0);
@@ -115,6 +119,7 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       await expect(viewer.page.locator('input[type="file"]')).toHaveCount(0);
       await viewer.page.goto("/");
       await viewer.page.getByLabel("Workspace: My Space", { exact: true }).click();
+      await expect(mySpace).toBeVisible();
       await expect(viewer.page.getByRole("menuitem", { name: "Create team", exact: true })).toHaveCount(0);
     } finally { await owner.context.close(); await admin.context.close(); await viewer.context.close(); }
   });

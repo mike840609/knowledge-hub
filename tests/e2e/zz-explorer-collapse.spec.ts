@@ -41,6 +41,44 @@ function testDestinations() {
     await expect(page.getByRole("button", { name: "Collapse navigation", exact: true })).toBeFocused();
   });
 
+  base("browser history does not reopen Knowledge destinations", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const workspace = `/w/${await personalWorkspaceId(page)}`;
+    await page.goto(`${workspace}/graph`);
+    await page.getByRole("navigation", { name: "Primary", exact: true }).getByRole("link", { name: "Home", exact: true }).click();
+    const trigger = page.getByRole("button", { name: "Knowledge", exact: true });
+    const popup = page.getByRole("navigation", { name: "Knowledge destinations", exact: true, includeHidden: true });
+    await trigger.click();
+    await expect(popup).toBeVisible();
+    await page.goBack();
+    await expect(page.getByRole("button", { name: "Knowledge / Graph", exact: true })).toBeVisible();
+    await expect(popup).toBeHidden();
+    await page.goForward();
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await expect(popup).toBeHidden();
+  });
+
+  for (const mode of ["collapse", "resize"] as const) {
+    base(`Knowledge destinations close when desktop navigation ${mode}s`, async ({ page }) => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      const workspace = `/w/${await personalWorkspaceId(page)}`;
+      await page.goto(`${workspace}/home`);
+      const trigger = page.getByRole("button", { name: "Knowledge", exact: true });
+      const popup = page.getByRole("navigation", { name: "Knowledge destinations", exact: true, includeHidden: true });
+      await trigger.click();
+      await expect(popup).toBeVisible();
+      if (mode === "collapse") {
+        await expect(trigger).toBeFocused();
+        await page.keyboard.press("ControlOrMeta+Backslash");
+        await expect(page.getByRole("button", { name: "Expand navigation", exact: true })).toBeFocused();
+      } else {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await expect(page.getByRole("button", { name: "Open menu", exact: true })).toBeVisible();
+      }
+      await expect(popup).toBeHidden();
+    });
+  }
+
   base.describe("mobile sidebar destinations", () => {
     base.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
     for (const [route, name] of [["home", "Knowledge"], ["sources", "Knowledge / Sources"]]) {
@@ -89,6 +127,25 @@ function testDestinations() {
       await graph.tap();
       await expect(page).toHaveURL(`${workspace}/graph`, ROUND_TRIP);
       await expect(drawer).toBeHidden();
+    });
+
+    base("closing the drawer with the sidebar shortcut also closes Knowledge destinations", async ({ page }) => {
+      const workspace = `/w/${await personalWorkspaceId(page)}`;
+      await page.goto(`${workspace}/home`);
+      const opener = page.getByRole("button", { name: "Open menu", exact: true });
+      const drawer = page.getByRole("dialog", { name: "Menu", exact: true });
+      const trigger = drawer.getByRole("button", { name: "Knowledge", exact: true });
+      const popup = page.getByRole("navigation", { name: "Knowledge destinations", exact: true, includeHidden: true });
+      await opener.tap();
+      await trigger.click();
+      await expect(popup).toBeVisible();
+      await trigger.focus();
+      await page.keyboard.press("ControlOrMeta+Backslash");
+      await expect(drawer).toBeHidden();
+      await expect(popup).toBeHidden();
+      await expect(opener).toBeFocused();
+      await opener.tap();
+      await expect(trigger).toHaveAttribute("aria-expanded", "false");
     });
   });
 }
