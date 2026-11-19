@@ -31,11 +31,9 @@ function readIncludeArchivedSuffix(): string {
 }
 
 /**
- * The narrow-screen side peek, mounted by the knowledge layout only while a
- * peek is open on a viewport under lg. Wide screens show the PeekPane split
- * instead. Any surface — search results, graph, backlinks — opens a read-only
- * peek through requestPeek(), which the layout answers. v1 is read plus an
- * Edit link only; the Drawer never embeds the editor.
+ * The workspace's read-only side peek below lg. Any surface can call
+ * requestPeek(), which the shared PeekHost answers with this drawer or the
+ * PeekPane split. The Edit link opens the document editor.
  */
 export function PeekDialog({
   request,

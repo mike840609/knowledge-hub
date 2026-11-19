@@ -13,12 +13,12 @@ import { DialogCloseButton } from "@/components/ui/dialog-close";
 import { Label } from "@/components/ui/label";
 
 /**
- * Mounted once by the knowledge layout. One dialog for both jobs that need a name from the reader —
+ * Mounted once in the workspace. One dialog for both jobs that need a name from the reader —
  * a new folder and a rename — because they ask the same question of the same field with the same
  * limits. What the server refuses (a parent archived in the meantime, a source that is now read-only)
  * comes back as words beside the field and leaves the dialog open, so the name typed is not lost.
  */
-export function FolderNameDialogHost() {
+export function FolderNameDialogHost({ workspaceId }: { workspaceId: string }) {
   const [request, setRequest] = useState<FolderNameRequest | null>(null);
   useEffect(() => {
     const open = (event: Event) => {
@@ -28,11 +28,11 @@ export function FolderNameDialogHost() {
     window.addEventListener(FOLDER_NAME_REQUEST_EVENT, open);
     return () => window.removeEventListener(FOLDER_NAME_REQUEST_EVENT, open);
   }, []);
-  return <FolderNameDialog request={request} onClose={() => setRequest(null)} />;
+  return <FolderNameDialog workspaceId={workspaceId} request={request} onClose={() => setRequest(null)} />;
 }
 
-function FolderNameDialog({ request, onClose }: { request: FolderNameRequest | null; onClose: () => void }) {
-  const mutations = useTreeMutations();
+function FolderNameDialog({ workspaceId, request, onClose }: { workspaceId: string; request: FolderNameRequest | null; onClose: () => void }) {
+  const mutations = useTreeMutations(workspaceId);
   const errorId = useId();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);

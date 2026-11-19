@@ -12,7 +12,7 @@ test("onboarding follows real actions and persists progress across browser sessi
   const output = comparisonDir("onboarding-progress");
   await mkdir(output, { recursive: true });
   const home = async () => { await page.goto(`/w/${ws}/home`); };
-  const guide = page.getByRole("region", { name: "Get started", exact: true });
+  const guide = page.locator("#kh-workspace-main").getByRole("region", { name: "Get started", exact: true });
   await home();
   await expect(guide.getByText("0 of 4 steps complete", { exact: false })).toBeVisible();
   await expect(guide.getByRole("link", { name: "Add your first document", exact: true })).toBeVisible();

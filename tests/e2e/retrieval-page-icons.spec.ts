@@ -78,17 +78,21 @@ test("a page icon follows the document to Home, the palette, the explorer and se
   await expect(recentMenu).toBeHidden();
   await expect(clock).toBeFocused();
 
-  // The same menu remains reachable in the narrower desktop drawer.
+  // The same menu remains reachable from the Inbox's compact desktop rail.
   await page.setViewportSize({ width: 1100, height: 800 });
-  await page.getByRole("button", { name: "Show documents", exact: true }).click();
-  const drawer = page.getByRole("dialog", { name: "Browse", exact: true });
-  const drawerClock = drawer.getByRole("button", { name: "Recent documents", exact: true });
+  await page.goto(`/w/${workspaceId}/inbox`);
+  await page.getByRole("button", { name: "Expand navigation", exact: true }).click();
+  const drawer = page.getByRole("dialog", { name: "Menu", exact: true });
+  const drawerExplorer = drawer.getByRole("complementary", { name: "Knowledge explorer", exact: true });
+  const drawerClock = drawerExplorer.getByRole("button", { name: "Recent documents", exact: true });
   await expect(drawerClock).toBeInViewport();
-  const fits = await drawerClock.evaluate(button => {
-    const toolbar = button.closest('aside')!;
-    const bounds = toolbar.getBoundingClientRect();
-    return [...toolbar.querySelectorAll(':scope > div:first-child button, :scope > div:first-child a')]
-      .every(control => { const rect = control.getBoundingClientRect(); return rect.left >= bounds.left && rect.right <= bounds.right; });
+  const fits = await drawerExplorer.evaluate(element => {
+    const bounds = element.getBoundingClientRect();
+    const controls = [...element.querySelectorAll(':scope > div:first-child button, :scope > div:first-child a')];
+    return controls.length > 0 && controls.every(control => {
+      const rect = control.getBoundingClientRect();
+      return rect.left >= bounds.left && rect.right <= bounds.right;
+    });
   });
   expect(fits).toBe(true);
   await drawerClock.click();

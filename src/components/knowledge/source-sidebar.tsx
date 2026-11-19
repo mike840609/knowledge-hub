@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { bufferTyping, plainClick } from "./typing-ahead";
 import Link from "next/link";
-import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, ChevronsLeft, Plus, ListFilter, Star, Share2 } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, Plus, ListFilter, Star, Share2 } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
@@ -30,17 +30,15 @@ const READ_ONLY_DESCRIPTION = "Synced from a folder, read-only in the Hub";
 
 export type SourceSidebarProps = {
   workspaceId: string;
-  /** Null in a workspace with no sources yet, where the explorer is there to say how to add one. */
+  /** The source on the current Knowledge route, when there is one. */
   source: SourceView | null;
+  defaultSourceId?: string;
   collections: { source: SourceView; tree: KnowledgeTreeItem[] }[];
   sources?: SourceView[];
   treeStates?: Record<string, TreeLoadState>;
   ensureTree?: (id: string) => Promise<void>;
   retryTree?: (id: string) => Promise<void>;
   selectedDocumentId?: string;
-  includeArchived: boolean;
-  /** Given where the explorer stands beside the content (desktop); the navigation menu's copy has no way to collapse. */
-  onCollapse?: () => void;
 };
 
 function withoutArchivedSubtrees(items: KnowledgeTreeItem[]): KnowledgeTreeItem[] {
@@ -53,14 +51,14 @@ function withoutArchivedSubtrees(items: KnowledgeTreeItem[]): KnowledgeTreeItem[
     }
     return false;
   };
-  return items.filter((item) => !hidden(item));
+  const visible = items.filter((item) => !hidden(item));
+  return visible.length === items.length ? items : visible;
 }
 
-export function SourceSidebar({ workspaceId, source, collections, sources, treeStates, ensureTree, retryTree, selectedDocumentId, includeArchived, onCollapse }: SourceSidebarProps) {
+export function SourceSidebar({ workspaceId, source, defaultSourceId, collections, sources, treeStates, ensureTree, retryTree, selectedDocumentId }: SourceSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const routeParams = useParams();
   const { access, confirmed } = useWorkspaceAuthorization();
   // Only My Space's owner has links to be reminded of; the route refuses anyone else.
   const canShareSources = confirmed && access.workspace.type === "PERSONAL" && access.isPersonalOwner;
@@ -79,7 +77,8 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   const sidebarReady = queryReady && filterReady && expandedReady && shortcutsReady;
   const recentMenuPopulated = useRef(false);
   const showArchived = searchParams.get("includeArchived") === "true";
-  const resolvedDocumentId = selectedDocumentId ?? (typeof routeParams?.documentId === "string" ? routeParams.documentId : undefined);
+  const initiallyOpen = source && (showArchived || source.status === "ACTIVE") ? source.id : defaultSourceId;
+  const currentDocumentKey = source && selectedDocumentId ? documentShortcutKey(source.id, selectedDocumentId) : null;
   const needle = query.trim().toLowerCase();
   const headers = useMemo(() => sources ?? collections.map(c => c.source), [sources, collections]);
   // Favorites and Recent have independent requests: unrelated favorite changes
@@ -92,30 +91,40 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
     if (!expandedReady) return;
     for (const candidate of headers) {
       if (!showArchived && candidate.status === "ARCHIVED") continue;
-      if (needle || (expanded[candidate.id] ?? candidate.id === source?.id)) void ensureTree?.(candidate.id);
+      const currentDocumentSource = currentDocumentKey !== null && candidate.id === source?.id;
+      if (needle || currentDocumentSource || (expanded[candidate.id] ?? candidate.id === initiallyOpen)) void ensureTree?.(candidate.id);
     }
-  }, [headers, showArchived, needle, expanded, expandedReady, source?.id, ensureTree]);
+  }, [headers, showArchived, needle, expanded, expandedReady, initiallyOpen, currentDocumentKey, source?.id, ensureTree]);
   const visibleCollections = useMemo(() => headers.map(candidate => ({ source: candidate, tree: collections.find(c => c.source.id === candidate.id)?.tree ?? [] }))
     .filter(({ source: candidate }) => showArchived || candidate.status === "ACTIVE")
-    .map((collection) => ({ ...collection, tree: showArchived && includeArchived ? collection.tree : withoutArchivedSubtrees(collection.tree) }))
+    .map((collection) => ({ ...collection, tree: showArchived ? collection.tree : withoutArchivedSubtrees(collection.tree) }))
     .sort((a, b) => Number(b.source.sourceType === "HUB") - Number(a.source.sourceType === "HUB")),
-  [headers, collections, showArchived, includeArchived]);
+  [headers, collections, showArchived]);
   const documents = useMemo(() => {
     const map = new Map<string, { documentId: string; sourceId: string; sourceName: string; ownership: SourceView["ownership"]; label: string; pageIcon: string | null }>();
+    const visibleSourceIds = new Set(visibleCollections.map(({ source }) => source.id));
+    const authoritativeSources = new Set(collections.filter(({ source }) => {
+      const state = treeStates?.[source.id];
+      return state?.status !== "loaded" || !state.stale;
+    }).map(({ source }) => source.id));
     for (const collection of visibleCollections) {
+      if (!authoritativeSources.has(collection.source.id)) continue;
       for (const item of collection.tree) {
         if (item.type === "document") map.set(`${collection.source.id}:${item.documentId}`, { documentId: item.documentId, sourceId: collection.source.id, sourceName: collection.source.name, ownership: collection.source.ownership, label: item.label, pageIcon: item.pageIcon ?? null });
       }
     }
     for (const document of [...shortcutMetadata.documents, ...recentMetadata.documents]) {
-      // Loaded trees are authoritative about hidden archived ancestors.
-      if (!collections.some(c => c.source.id === document.sourceId)) map.set(`${document.sourceId}:${document.documentId}`, document);
+      // Current trees decide archive visibility. A tree retained across a
+      // workspace refresh keeps its rows mounted while shortcuts use metadata.
+      if (visibleSourceIds.has(document.sourceId) && !authoritativeSources.has(document.sourceId)) {
+        map.set(`${document.sourceId}:${document.documentId}`, document);
+      }
     }
     return map;
-  }, [visibleCollections, shortcutMetadata.documents, recentMetadata.documents, collections]);
+  }, [visibleCollections, shortcutMetadata.documents, recentMetadata.documents, collections, treeStates]);
   const favoriteKeys = shortcuts.favorites.filter((key) => documents.has(key));
   const favoritesLoading = !shortcutsReady || shortcutMetadata.loading;
-  const recentCandidates = (recentMenuKeys ?? shortcuts.recent).filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== `${source?.id}:${resolvedDocumentId}`);
+  const recentCandidates = (recentMenuKeys ?? shortcuts.recent).filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== currentDocumentKey);
   // Freeze only after a usable link has appeared. Raw history can contain
   // exclusively current, favorite, or inaccessible documents and still be empty.
   useEffect(() => {
@@ -130,28 +139,27 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
 
   const recordedOpen = useRef<string | null>(null);
   useEffect(() => {
-    const key = source && resolvedDocumentId ? documentShortcutKey(source.id, resolvedDocumentId) : null;
-    const visit = key ? `${workspaceId}:${key}` : null;
+    const visit = currentDocumentKey ? `${workspaceId}:${currentDocumentKey}` : null;
     // Explorer refreshes and display filters rebuild `documents` while the
     // reader stays on the same document. Only entering it records an open.
     if (recordedOpen.current !== visit) recordedOpen.current = null;
-    if (key && documents.has(key) && recordedOpen.current !== visit) {
+    if (currentDocumentKey && documents.has(currentDocumentKey) && recordedOpen.current !== visit) {
       recordedOpen.current = visit;
-      updateShortcuts((previous) => rememberDocument(previous, key));
+      updateShortcuts((previous) => rememberDocument(previous, currentDocumentKey));
     }
-  }, [workspaceId, source?.id, resolvedDocumentId, documents, updateShortcuts]);
+  }, [workspaceId, currentDocumentKey, documents, updateShortcuts]);
 
   const toggleFavorite = useCallback((sourceId: string, documentId: string) => {
     updateShortcuts((previous) => toggleFavoriteDocument(previous, documentShortcutKey(sourceId, documentId)));
   }, [updateShortcuts]);
 
-  const runAction = useActionRunner({ onToggleFavorite: toggleFavorite });
-  const mutations = useTreeMutations();
+  const runAction = useActionRunner({ onToggleFavorite: toggleFavorite, workspaceId });
+  const mutations = useTreeMutations(workspaceId);
 
   function shortcutMenuItem(key: string) {
     const document = documents.get(key);
     if (!document) return null;
-    const selected = document.documentId === resolvedDocumentId;
+    const selected = key === currentDocumentKey;
     return (
       <MenuItem
         key={key}
@@ -176,7 +184,11 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   const createActions = actionsFor("create", actionContext);
   const createFolder = createActions.find((action) => action.id === "create.folder");
   const importAction = createActions.find((action) => action.id === "create.import");
-  const getStarted = !needle && (!ensureTree || headers.every(s => treeStates?.[s.id]?.status === "loaded")) && hasNoDocuments(collections) ? startActions(actionContext) : null;
+  const allTreesLoaded = !ensureTree || headers.every(({ id }) => {
+    const state = treeStates?.[id];
+    return state?.status === "loaded" && !state.stale;
+  });
+  const getStarted = !needle && allTreesLoaded && hasNoDocuments(collections) ? startActions(actionContext) : null;
   const addFolder = createFolder ? (
     <Tooltip label="Create folder">
       <button type="button" aria-label="Create folder" onClick={() => runAction(createFolder)} className={buttonClasses({ variant: "ghost", icon: true })}>
@@ -199,8 +211,9 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   }
 
   return (
-    <aside aria-label="Knowledge explorer" aria-busy={!sidebarReady} className="kh-sidebar-surface flex h-full min-h-0 w-full shrink-0 flex-col gap-3 border-t border-kh-border lg:border-r lg:border-t-0 bg-kh-bg-explorer px-3 pb-3 pt-2">
-      <div className="flex shrink-0 items-center gap-2">
+    <aside aria-label="Knowledge explorer" aria-busy={!sidebarReady} className="kh-sidebar-surface flex h-full min-h-0 min-w-0 flex-col gap-1 px-2 pt-1">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-1">
+        <h2 className="px-2 text-caption font-medium text-kh-text-muted">Knowledge</h2>
         <div className="flex items-center gap-0.5">
           <MenuRoot>
             <MenuTrigger aria-label="Favorite documents" title="Favorite documents" className={buttonClasses({ variant: "ghost", icon: true })}>
@@ -232,8 +245,6 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                 </> : recentCandidates.length === 0 ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">No recent documents</p> : null}
             </MenuContent>
           </MenuRoot>
-        </div>
-        <div className="flex items-center gap-0.5">
           <Tooltip label="Filter documents and sources">
             <button
               ref={filterTriggerRef}
@@ -267,15 +278,6 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
             </MenuContent>
           </MenuRoot>
         </div>
-        {onCollapse ? (
-          <div className="flex flex-1 justify-end">
-            <Tooltip label="Hide documents">
-              <button type="button" data-explorer-collapse aria-label="Hide documents" onClick={onCollapse} className={buttonClasses({ variant: "ghost", icon: true })}>
-                <ChevronsLeft size={16} aria-hidden="true" />
-              </button>
-            </Tooltip>
-          </div>
-        ) : null}
       </div>
       {filterOpen ? <div className="shrink-0"><TreeFilter value={query} onChange={setQuery} onClose={closeFilter} /></div> : null}
       {/* `relative`: the tree's absolutely placed boxes (its `sr-only` live regions) are placed against this
@@ -291,7 +293,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
           </div>
         ) : null}
         {matches.map(({ source: candidate, tree }) => {
-          const open = Boolean(needle) || (expanded[candidate.id] ?? candidate.id === source?.id);
+          const open = Boolean(needle) || (expanded[candidate.id] ?? candidate.id === initiallyOpen);
           const readOnly = candidate.ownership === "SOURCE_MANAGED";
           const isNotes = candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE";
           const sourceActions = actionsFor("row", {
@@ -331,7 +333,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                   sidebarReady={sidebarReady}
                   workspaceId={workspaceId}
                   sourceId={candidate.id}
-                  selectedDocumentId={resolvedDocumentId}
+                  selectedDocumentId={candidate.id === source?.id ? selectedDocumentId : undefined}
                   revealLayoutKey={String(filterOpen)}
                   includeArchived={showArchived}
                   query={candidate.name.toLowerCase().includes(needle) ? "" : query}

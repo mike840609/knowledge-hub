@@ -74,7 +74,8 @@ async function documentWithDiscussion(request: Parameters<typeof createReviewDoc
 
 test("a discussion that awaits the owner is open beside its passage when the document is, in the outline's place", async ({ page, request }) => {
   const doc = await documentWithDiscussion(request);
-  await page.setViewportSize({ width: 1680, height: 900 });
+  // Leave a 1216px pane beside the workspace sidebar, below the left-outline breakpoint.
+  await page.setViewportSize({ width: 1488, height: 900 });
   await page.goto(doc.href);
   const rail = page.getByRole("complementary", { name: "Document comments" });
   const outlineRail = page.getByRole("complementary", { name: "On this page" });
@@ -138,7 +139,7 @@ test("a discussion that awaits the owner is open beside its passage when the doc
 
 test("a pane wide enough for outline, article and discussions keeps all three side by side, the outline on the left", async ({ page, request }) => {
   const doc = await documentWithDiscussion(request);
-  // The pane is the window less the navigation and the explorer: 2000px leaves it past 88rem (1408px).
+  // The pane is the window less the workspace sidebar: 2000px leaves it past 88rem (1408px).
   await page.setViewportSize({ width: 2000, height: 900 });
   await page.goto(doc.href);
   const pane = page.getByRole("region", { name: "Document content" });
@@ -180,7 +181,7 @@ test("a pane wide enough for outline, article and discussions keeps all three si
 
 test("below 88rem of pane the outline stays on the right, as before", async ({ page, request }) => {
   const doc = await createReviewDocument(request, "## Alpha\n\nA paragraph.\n\n## Beta\n\nAnother.\n");
-  await page.setViewportSize({ width: 1680, height: 900 });
+  await page.setViewportSize({ width: 1488, height: 900 });
   await page.goto(doc.href);
   const outlineRail = page.getByRole("complementary", { name: "On this page" });
   await expect(outlineRail).toHaveCount(1);
@@ -344,12 +345,11 @@ test("opening and closing the owner's discussions moves nothing under the pointe
   const crumb = page.getByRole("region", { name: "Document content", exact: true }).getByRole("navigation", { name: "Breadcrumb" });
   const edit = page.getByRole("button", { name: "Details", exact: true });
   const where = async () => ({ crumb: Math.round((await crumb.boundingBox())!.x), article: Math.round((await article.boundingBox())!.x), edit: Math.round((await edit.boundingBox())!.x) });
-  // 2400: a pane past 108rem holds article, rail and outline with the column where it stood. 1440: the
-  // pane is narrower than the reading width beside the outline, so the outline's slot is what the rail
-  // takes. Re-centred, the path line's controls leapt 224-272px right and the column slid 48px left.
+  // At 2400px, the pane holds the article, rail and outline with the column where it stood.
+  // At 1280px, the pane is narrower than the reading column beside the outline, so the rail takes the outline's slot.
   // From 88rem the outline is on the left and the column slides only between 1408px and 1500px of pane
   // (owner-comments-rail spec, 2026-10-21 amendment); the side-by-side test covers that.
-  for (const width of [2400, 1440]) {
+  for (const width of [2400, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(doc.href);
     await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();

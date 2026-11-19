@@ -23,7 +23,7 @@ test("new users get actionable guidance on every empty page and can reopen Home 
     await page.goto(`/w/${ws}/${route}`);
     await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
     await expect(page.locator("[data-illustration]")).toHaveCount(1);
-    await expect(page.getByRole("link", { name: route === "sources" ? "Import folder" : "Import your first knowledge source", exact: true })).toBeVisible();
+    await expect(page.locator("#kh-workspace-main").getByRole("link", { name: route === "sources" ? "Import folder" : "Import your first knowledge source", exact: true })).toBeVisible();
     // Personal leads with the import, in the explorer as on the page.
     // Knowledge draws both ways in and says once what each leads to; the explorer beside it does not offer them again.
     if (route === "knowledge") await expect(page.locator('[data-illustration="start"]')).toBeVisible();
@@ -48,7 +48,7 @@ test("new users get actionable guidance on every empty page and can reopen Home 
     await page.screenshot({ path: `${output}/after-${route.split("?")[0]}-dark.png`, animations: "disabled" });
   }
   await page.goto(`/w/${ws}/home`);
-  const guide = page.getByRole("region", { name: "Get started", exact: true });
+  const guide = page.locator("#kh-workspace-main").getByRole("region", { name: "Get started", exact: true });
   await expect(guide.getByText("0 of 4 steps complete", { exact: false })).toBeVisible();
   await guide.getByRole("button", { name: "Hide guidance" }).click();
   await expect(guide).toHaveCount(0);

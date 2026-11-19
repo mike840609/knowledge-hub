@@ -4,7 +4,7 @@
 
 ## Current state
 
-`KM_TEAM_WORKSPACES_ENABLED` is disabled by default. The Teams section of the workspace switcher displays a disabled **Team workspaces · Coming soon** entry. It lists no Team names and offers neither the archive list nor a creation entry point. My Space remains available.
+When `KM_TEAM_WORKSPACES_ENABLED` is off, My Space opens directly and the sidebar omits the workspace switcher. Enabling the flag shows the switcher and Team actions available to the caller.
 
 When the server establishes a trusted caller, it also restricts that caller to their own My Space. Opening a Team URL directly or using an existing Team ID through search, APIs, export, or governance services therefore does not grant access to Team content. Existing Team documents, members, roles, and archive state remain in the database and become usable again after Team access is re-enabled. Disabling the switcher alone cannot enforce this restriction; service authorization must check it too.
 

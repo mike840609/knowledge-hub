@@ -89,7 +89,7 @@ test.describe("blocks in the rendered editor", () => {
     }
   });
 
-  test("with both sidebars open, the block controls sit left of the text at 1440px and wider, where reading puts it", async ({ page }) => {
+  test("with the workspace sidebar expanded, the block controls sit left of the text at 1440px and wider, where reading puts it", async ({ page }) => {
     const stamp = unique("Gutter");
     const workspaceId = await mySpace(page);
     const prose = "A paragraph long enough to fill the measure of the reading column, so its width says where the column ends as well as where it begins.";
@@ -101,7 +101,7 @@ test.describe("blocks in the rendered editor", () => {
     for (const width of [1440, 1920]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(url);
-      // The default layout: the primary nav and the explorer both open.
+      // Compare the reader and editor with the workspace sidebar expanded.
       await expect(page.getByRole("navigation", { name: "Primary" })).toBeVisible();
       await expect(page.getByRole("complementary", { name: "Knowledge explorer" })).toBeVisible();
       const surface = composer(page).getByRole("textbox", { name: "Content" });

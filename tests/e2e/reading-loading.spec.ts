@@ -24,7 +24,7 @@ for (const scenario of [
   { name: "wide pane", width: 1440, inspector: false },
   { name: "wide pane with details", width: 1800, inspector: true },
   { name: "narrow pane with details", width: 1440, inspector: true },
-  { name: "explorer drawer", width: 1100, inspector: false },
+  { name: "small desktop pane", width: 1100, inspector: false },
   { name: "mobile", width: 390, inspector: false },
 ]) {
   test(`document loading keeps the reading column aligned: ${scenario.name}`, async ({ page, loadingDocuments }) => {
@@ -48,14 +48,15 @@ for (const scenario of [
     });
     await page.goto(start);
     const content = page.getByRole("region", { name: "Document content", exact: true });
-    // The first column that holds content; the outline's zero-height box (`kh-outline-rail-left`) shares the class only to share its edge.
-    const readingColumn = () => content.locator(".kh-reading-column:not(.kh-outline-rail-left)").first();
+    const readingColumn = content.locator(".kh-reading-column").filter({
+      has: page.locator("article:visible").or(page.getByText("Loading document", { exact: true })),
+    });
     await expect(content.locator("article:visible")).toBeVisible(ROUND_TRIP);
     if (scenario.inspector) {
       await page.getByRole("button", { name: "Details", exact: true }).first().click();
       await expect(page.getByRole("complementary", { name: "Document details", exact: true })).toBeVisible();
     }
-    const before = await readingColumn().boundingBox();
+    const before = await readingColumn.boundingBox();
     expect(before).not.toBeNull();
 
     // The prefetched loading boundary can render while the document response
@@ -66,29 +67,29 @@ for (const scenario of [
       await new Promise((resolve) => setTimeout(resolve, 600));
       await route.fulfill({ response });
     });
-    if (scenario.width < 1280) {
-      // Article links deliberately disable prefetch. Under 1280 the explorer is
-      // a drawer (the Menu drawer under 1024), mounted on demand, so exercise
-      // its prefetched loading state explicitly.
-      const prefetched = page.waitForResponse((response) =>
-        new URL(response.url()).pathname === destination && Boolean(response.request().headers()["next-router-prefetch"]),
-      );
-      await page.getByRole("button", { name: scenario.width < 1024 ? "Open menu" : "Show documents", exact: true }).click();
-      const document = page.getByRole("treeitem", { name: withOutlineTitle, exact: true });
-      await document.scrollIntoViewIfNeeded();
-      await prefetched;
-      await document.click();
-      // The explorer closes on navigation; a link under its backdrop would not navigate.
+    const mobile = scenario.width < 1024;
+    if (mobile) {
+      await page.getByRole("button", { name: "Open menu", exact: true }).click();
+    }
+    // The tree reveals the current document as it hydrates. Let that settle
+    // before bringing the destination link into view so Next can prefetch it.
+    const tree = page.getByRole("tree", { name: "Knowledge tree" }).filter({
+      has: page.getByRole("link", { name: withOutlineTitle, exact: true }),
+    });
+    await expect(tree).toHaveAttribute("aria-busy", "false", ROUND_TRIP);
+    const destinationLink = tree.getByRole("link", { name: withOutlineTitle, exact: true });
+    if (mobile) await destinationLink.scrollIntoViewIfNeeded();
+    else await destinationLink.hover();
+    await expect.poll(() => destinationPrefetched, ROUND_TRIP).toBe(true);
+    if (mobile) {
+      await destinationLink.click();
       await expect(page.locator("[role=dialog]")).toHaveCount(0, ROUND_TRIP);
     } else {
-      // Article links do not prefetch; the boundary comes from the explorer's link, which prefetches
-      // only once on screen. A My Space filled by earlier specs can push it below the fold.
-      await page.getByRole("treeitem", { name: withOutlineTitle, exact: true }).scrollIntoViewIfNeeded();
-      await expect.poll(() => destinationPrefetched, ROUND_TRIP).toBe(true);
+      // The article link can reuse the tree link's prefetched boundary.
       await content.getByRole("link", { name: withOutlineTitle, exact: true }).click();
     }
     await expect(content.getByRole("status")).toHaveText("Loading document");
-    const loading = await readingColumn().boundingBox();
+    const loading = await readingColumn.boundingBox();
     expect(loading).not.toBeNull();
     expect(Math.abs(loading!.x - before!.x)).toBeLessThanOrEqual(1);
     expect(Math.abs(loading!.width - before!.width)).toBeLessThanOrEqual(1);
@@ -96,7 +97,7 @@ for (const scenario of [
 
     await expect(content.locator("article:visible")).toBeVisible(ROUND_TRIP);
     await expect(page).toHaveURL(new RegExp(`${destination}$`));
-    const after = await readingColumn().boundingBox();
+    const after = await readingColumn.boundingBox();
     expect(after).not.toBeNull();
     expect(Math.abs(after!.x - loading!.x)).toBeLessThanOrEqual(1);
     expect(Math.abs(after!.width - loading!.width)).toBeLessThanOrEqual(1);
@@ -114,7 +115,7 @@ for (const scenario of [
       await expect(page).toHaveURL(new RegExp(`${start}$`), ROUND_TRIP);
     }
     await expect(content.locator("article:visible")).toBeVisible(ROUND_TRIP);
-    const returned = await readingColumn().boundingBox();
+    const returned = await readingColumn.boundingBox();
     expect(Math.abs(returned!.x - before!.x)).toBeLessThanOrEqual(1);
     await expect(page.getByRole("complementary", { name: "On this page", exact: true })).toHaveCount(0);
     if (scenario.inspector) {

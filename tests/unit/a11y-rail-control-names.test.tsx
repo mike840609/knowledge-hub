@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
+const flags = vi.hoisted(() => ({ teamsOpen: true }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {}, push: () => {} }) }));
 vi.mock("@/components/shell/use-workspace-authorization", () => ({
   useWorkspaceAuthorization: () => ({
@@ -10,7 +11,7 @@ vi.mock("@/components/shell/use-workspace-authorization", () => ({
     refresh: () => {},
     access: { actions: { canImport: true, canWrite: true }, workspace: { lifecycleState: "ACTIVE" } },
     navigation: {
-      teamsOpen: true,
+      teamsOpen: flags.teamsOpen,
       items: [
         { id: "01a11c50-660c-76e2-8ec7-769051bd255c", type: "PERSONAL", name: "Local Knowledge User", lifecycleState: "ACTIVE" },
       ],
@@ -35,6 +36,13 @@ function buttonIn(root: Element) {
 // not match what is announced. Neither glyph is content: the shortcut is already exposed as
 // `aria-keyshortcuts`, and the mark is decoration.
 describe("the rail's control names", () => {
+  beforeEach(() => { flags.teamsOpen = true; });
+
+  it.each([false, true])("hides the workspace switcher in personal-only mode with compact=%s", (compact) => {
+    flags.teamsOpen = false;
+    expect(renderToStaticMarkup(<WorkspaceSelector workspaceId="01a11c50-660c-76e2-8ec7-769051bd255c" compact={compact} />)).toBe("");
+  });
+
   it("announces the workspace it switches, and keeps the mark's letter out of the text", () => {
     const root = mount(renderToStaticMarkup(<WorkspaceSelector workspaceId="01a11c50-660c-76e2-8ec7-769051bd255c" />));
     const trigger = buttonIn(root)!;

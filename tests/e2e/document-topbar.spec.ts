@@ -28,11 +28,16 @@ test("a document can be favorited, given an icon, and duplicated from its own he
 
   const main = page.locator("main");
   const actions = main.getByRole("button", { name: "Document actions", exact: true });
+  const menu = page.getByRole("menu", { name: "Document actions", exact: true });
   await actions.click();
-  await page.getByRole("menuitem", { name: "Add to favorites", exact: true }).click();
+  await menu.getByRole("menuitem", { name: "Add to favorites", exact: true }).click();
+  // The closing menu can still show the updated label while its exit animation runs.
+  await expect(menu).toBeHidden();
   await actions.click();
-  await expect(page.getByRole("menuitem", { name: "Remove from favorites", exact: true })).toBeVisible();
+  await expect(menu).toBeFocused();
+  await expect(menu.getByRole("menuitem", { name: "Remove from favorites", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
 
   await main.getByRole("button", { name: "Add page icon", exact: true }).click();
   // The picker shows the icon before the server has it; reloading earlier would read the page without it.

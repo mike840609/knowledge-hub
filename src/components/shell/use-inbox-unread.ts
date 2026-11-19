@@ -1,40 +1,43 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { reviewRequest } from "@/components/knowledge/review-thread-list";
 
 /**
  * How many share-comment notifications await this reader.
  *
- * The Inbox navigation row needs the number before its popover is opened, and
- * the popover already learned when to refresh: a notification arrived, the
- * window regained focus, or the reader moved to another page. This keeps the
- * same rhythm in one place instead of a second copy of it.
+ * The sidebar's Inbox badge refreshes when notifications change, when the
+ * window regains focus, and when the reader navigates to another page.
  */
 export function useInboxUnread(enabled: boolean): number {
   const pathname = usePathname();
   const [count, setCount] = useState(0);
 
-  const refresh = useCallback(async () => {
-    if (!enabled) return;
-    try {
-      const data = await reviewRequest<{ count: number }>("/api/review-notifications/unread-count");
-      setCount(data.count);
-    } catch {
-      // The Hub remains usable when review notifications are temporarily unavailable.
-    }
-  }, [enabled]);
-
   useEffect(() => {
+    if (!enabled) return;
+    let latestRequest = 0;
+    async function refresh() {
+      const request = ++latestRequest;
+      try {
+        const data = await reviewRequest<{ count: number }>("/api/review-notifications/unread-count");
+        if (request !== latestRequest) return;
+        // Let an in-flight navigation finish before updating the shell's badge.
+        startTransition(() => setCount(data.count));
+      } catch {
+        // Keep the last count when review notifications are temporarily unavailable.
+      }
+    }
+
     void refresh();
     window.addEventListener("kh:notification-changed", refresh);
     window.addEventListener("focus", refresh);
     return () => {
+      latestRequest++;
       window.removeEventListener("kh:notification-changed", refresh);
       window.removeEventListener("focus", refresh);
     };
-  }, [pathname, refresh]);
+  }, [enabled, pathname]);
 
   return count;
 }

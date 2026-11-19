@@ -3,6 +3,7 @@
 import {Input} from "@/components/ui/input";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { refreshOnArrival } from "@/components/shell/refresh-on-arrival";
 import { requestWorkspaceAccessCheck, useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { useEffect, useState } from "react";
 import type { ImportPreview } from "@/modules/sources/application/reconcile-import-snapshot";
@@ -99,9 +100,13 @@ export function ImportStickyFooter({
     ? `/w/${workspaceId}/sources/${preview.sourceId}/update`
     : `/w/${workspaceId}/sources/import`;
 
-  async function openResult(body:{sourceId:string;runId?:string|null}):Promise<void>{
-    try{await adoptPendingHandle(preview.snapshotId,body.sourceId);}catch{}
-    router.push(body.runId?`/w/${workspaceId}/sources/${body.sourceId}/runs/${body.runId}`:`/w/${workspaceId}/sources/${body.sourceId}?import=success`);
+  async function openResult({ sourceId, runId }: { sourceId: string; runId?: string | null }): Promise<void> {
+    try { await adoptPendingHandle(preview.snapshotId, sourceId); } catch {}
+    const href = runId
+      ? `/w/${workspaceId}/sources/${sourceId}/runs/${runId}`
+      : `/w/${workspaceId}/sources/${sourceId}?import=success`;
+    refreshOnArrival(href);
+    router.push(href);
   }
   async function recover():Promise<boolean>{
     try{

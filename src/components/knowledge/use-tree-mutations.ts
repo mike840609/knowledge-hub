@@ -75,12 +75,12 @@ export type TreeMutations = {
  * It decides nothing about what the reader may do: the registry decides what is offered, and the
  * server decides what happens. A refusal is said in words (`organizeFailure`) and changes nothing here.
  */
-export function useTreeMutations(): TreeMutations {
+export function useTreeMutations(workspace?: string): TreeMutations {
   const router = useRouter();
   const toast = useToast();
   const pathname = usePathname();
   const params = useParams<{ workspaceId?: string }>();
-  const workspaceId = params?.workspaceId ?? "";
+  const workspaceId = workspace ?? params?.workspaceId ?? "";
 
   const refresh = useCallback(() => router.refresh(), [router]);
 

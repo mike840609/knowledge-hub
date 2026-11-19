@@ -22,9 +22,8 @@ it("propagates a failed source read to the page error boundary", async () => {
 it("renders the first-use state only after a successful empty source read", async () => {
   mocks.listSources.mockResolvedValue([]);
   const result = await WorkspaceKnowledgePage({ params: Promise.resolve({ workspaceId: "ws" }) });
-  // Inside the explorer, which has no source to show and offers the ways to add one.
+  // The workspace shell owns the sidebar, even when the route has no source.
   expect(result.type).toBe(KnowledgeLayout);
-  expect(result.props).toMatchObject({ workspaceId: "ws", source: null, collections: [] });
   expect(result.props.children.type).toBe(KnowledgeEmptyState);
   expect(mocks.defaultTarget).not.toHaveBeenCalled();
 });

@@ -9,16 +9,16 @@ test("first folder guidance persists dismissal and rejects invalid or inaccessib
   const initial = await (await request.get(endpoint)).json();
   expect((await request.put(endpoint, { data: { value: { schemaVersion: 1, dismissed: false }, version: initial.version } })).ok()).toBe(true);
   await page.goto(`/w/${ws}/home`);
+  const guide = page.locator("#kh-workspace-main").getByRole("region", { name: "Get started", exact: true });
   // The full suite shares this workspace: earlier tests may already have imported folders.
-  const emptyFolders = await page.getByText("Import a Markdown folder to bring your knowledge into My Space.", { exact: false }).isVisible();
-  await expect(page.getByRole("region", { name: "Get started", exact: true })).toBeVisible();
-  if (emptyFolders) await expect(page.getByRole("link", { name: "Add your first document", exact: true })).toBeVisible();
+  const emptyFolders = await guide.getByText("Import a Markdown folder to bring your knowledge into My Space.", { exact: false }).isVisible();
+  await expect(guide).toBeVisible();
+  if (emptyFolders) await expect(guide.getByRole("link", { name: "Add your first document", exact: true })).toBeVisible();
   const snapshot = await stageReadingFolder(request, { workspaceId: ws, sourceName: "Onboarding folder", fixture: "reading-flow-v1" });
   await page.goto(`/w/${ws}/sources/imports/${snapshot}`);
   await page.getByRole("button", { name: "Apply changes" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await page.goto(`/w/${ws}/home`);
-  const guide = page.getByRole("region", { name: "Get started", exact: true });
   await expect(guide).toBeVisible();
   await expect(guide.getByRole("link", { name: "Read your first document" })).toBeVisible();
   await guide.getByRole("link", { name: "Prepare AI context" }).click();
@@ -48,7 +48,7 @@ test("first folder guidance persists dismissal and rejects invalid or inaccessib
   await expect(guide).toHaveCount(0);
   const other = await browser.newContext(); const resumed = await other.newPage();
   await resumed.goto(`${new URL(page.url()).origin}/w/${ws}/home`);
-  await expect(resumed.getByRole("region", { name: "Get started", exact: true })).toHaveCount(0);
+  await expect(resumed.locator("#kh-workspace-main").getByRole("region", { name: "Get started", exact: true })).toHaveCount(0);
   expect((await (await request.get(endpoint)).json()).value.dismissed).toBe(true);
   expect((await request.put(endpoint, { data: { value: { schemaVersion: 1, dismissed: false }, version: before.version } })).status()).toBe(409);
   expect((await request.put(endpoint, { data: { value: { schemaVersion: 1, dismissed: true, surprise: 1 }, version: before.version + 1 } })).status()).toBe(400);

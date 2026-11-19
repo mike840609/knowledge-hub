@@ -65,6 +65,36 @@ test("owner Inbox is a discussion index, one row per discussion, settled and fil
   const card = selected.getByRole("region", { name: "Comment thread" });
   await expect(card.getByText("Inbox verification comment", { exact: true })).toBeVisible(LOADED);
   await expect(card.getByText("A second reader comment", { exact: true })).toBeVisible(LOADED);
+
+  // At 1440px, the menu overlays the compact sidebar without disturbing the selected discussion.
+  const sidebar = page.locator('aside:has(nav[aria-label="Primary"])');
+  const pane = page.locator('#kh-workspace-main');
+  const discussion = pane.locator('section[aria-label="Selected discussion"]');
+  const before = await discussion.boundingBox();
+  expect(before).not.toBeNull();
+  await expect(sidebar).toHaveCSS("width", "48px");
+  await expect(pane).toHaveCSS("width", "1392px");
+  const expand = sidebar.getByRole("button", { name: "Expand navigation", exact: true });
+  await expect(expand).toHaveAttribute("aria-haspopup", "dialog");
+  await expect(expand).toHaveAttribute("aria-expanded", "false");
+  await expand.click();
+
+  const menu = page.getByRole("dialog", { name: "Menu", exact: true });
+  await expect(menu.getByRole("button", { name: /^Workspace:/ })).toBeVisible();
+  await expect(menu.getByRole("button", { name: "Search ⌘K", exact: true })).toBeVisible();
+  await expect(menu.getByRole("navigation", { name: "Primary", exact: true })).toBeVisible();
+  await expect(menu.getByRole("navigation", { name: "Document tree", exact: true })).toBeVisible();
+  await expect(menu.getByRole("button", { name: /^Account:/ })).toBeVisible();
+  await expect(sidebar).toHaveCSS("width", "48px");
+  await expect(pane).toHaveCSS("width", "1392px");
+  expect(await discussion.boundingBox()).toEqual(before);
+
+  await menu.getByRole("button", { name: "Close panel", exact: true }).click();
+  await expect(menu).toHaveCount(0);
+  await expect(expand).toBeFocused();
+  await expect(expand).toHaveAttribute("aria-expanded", "false");
+  expect(await discussion.boundingBox()).toEqual(before);
+  await expect(rows.first().getByRole("link")).toHaveAttribute("aria-current", "true");
   await card.getByRole("button", { name: "Reply", exact: true }).click();
   await card.getByRole("textbox", { name: "Reply", exact: true }).fill("Answered from the Inbox");
   await card.getByRole("button", { name: "Reply", exact: true }).click();

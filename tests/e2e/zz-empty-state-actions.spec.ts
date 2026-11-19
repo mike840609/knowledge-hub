@@ -32,7 +32,7 @@ test("empty-result recovery preserves work and successful imports lead to readin
   await expect(page.getByRole("checkbox", { name: /^Select / }).first()).toBeVisible();
   expect(await page.getByRole("checkbox", { name: /^Select / }).evaluateAll(nodes => nodes.filter(node => (node as HTMLInputElement).checked).length)).toBe(1);
   await page.goto(`/w/${ws}/home`);
-  const guide = page.getByRole("region", { name: "Get started", exact: true });
+  const guide = page.locator("#kh-workspace-main").getByRole("region", { name: "Get started", exact: true });
   const preference = await (await request.get(`/api/workspaces/${ws}/onboarding`)).json();
   if (preference.value.dismissed) {
     await page.getByRole("button", { name: "Home actions" }).click();

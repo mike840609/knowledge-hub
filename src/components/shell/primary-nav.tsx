@@ -3,34 +3,70 @@
 import { useWorkspaceAuthorization } from "./use-workspace-authorization";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { Ref } from "react";
+import { buttonClasses } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import { BarChart3, BookOpenText, Bot, Database, Inbox, Network, Settings, Home, Share2, type LucideIcon } from "lucide-react";
-import { useInboxUnread } from "./use-inbox-unread";
+import { BarChart3, Bot, Database, Inbox, Network, Settings, Home, Share2, type LucideIcon } from "lucide-react";
 
-type NavItem = { name: string; href: string; Icon: LucideIcon; badge?: number; label?: string };
+type NavItem = { name: string; href: string; Icon: LucideIcon; badge?: number; label?: string; ref?: Ref<HTMLAnchorElement> };
+
+function inboxItem(workspaceId: string, unread: number, ref?: Ref<HTMLAnchorElement>): NavItem {
+  return { name: "Inbox", href: `/w/${workspaceId}/inbox`, Icon: Inbox, badge: unread, label: unread > 0 ? `Inbox, ${unread} unread` : "Inbox", ref };
+}
+
+function NavigationLink({ item, pathname, appearance }: { item: NavItem; pathname: string; appearance: "row" | "rail" | "header" }) {
+  const { name, href, Icon, badge, label = name, ref } = item;
+  const selected = pathname === href || pathname.startsWith(`${href}/`);
+  const header = appearance === "header";
+  const iconOnly = appearance !== "row";
+  const stateClasses = selected ? "bg-kh-bg-hover font-medium text-kh-text hover:bg-kh-bg-hover" : "text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text";
+  const classes = header
+    ? buttonClasses({
+      variant: "ghost", icon: true,
+      className: "relative aria-[current=page]:border-kh-border-strong aria-[current=page]:bg-kh-bg-hover aria-[current=page]:text-kh-text [@media(pointer:coarse)]:size-11",
+    })
+    : `kh-control flex kh-rail-row items-center rounded-md px-2 kh-rail-text transition kh-focus-ring ${iconOnly ? "relative justify-center" : "gap-2"} ${stateClasses}`;
+  const link = (
+    <Link ref={ref} href={href} aria-current={selected ? "page" : undefined} aria-label={label} className={classes}>
+      <Icon size={15} aria-hidden="true" />
+      {iconOnly ? null : <span className="min-w-0 flex-1 truncate">{name}</span>}
+      {badge ? (
+        <span
+          className={iconOnly
+            ? `absolute ${header ? "-right-0.5 -top-0.5" : "right-1 top-0.5"} inline-flex min-w-4 items-center justify-center rounded-full bg-kh-primary px-1 text-micro font-semibold leading-4 text-kh-on-primary tabular-nums`
+            : "inline-flex min-w-4 shrink-0 items-center justify-center rounded-full bg-kh-bg-selected px-1.5 text-caption font-semibold leading-5 text-kh-selected-text tabular-nums"}
+          aria-hidden="true"
+        >
+          {badge > 99 ? "99+" : badge}
+        </span>
+      ) : null}
+    </Link>
+  );
+  return iconOnly ? <Tooltip label={label} side={header ? "bottom" : "right"}>{link}</Tooltip> : link;
+}
+
+export function InboxHeaderLink({ workspaceId, unread, ref }: { workspaceId: string; unread: number; ref?: Ref<HTMLAnchorElement> }) {
+  const pathname = usePathname();
+  return <NavigationLink item={inboxItem(workspaceId, unread, ref)} pathname={pathname} appearance="header" />;
+}
 
 export function PrimaryNav({
   workspaceId,
-  onNavigate,
   compact = false,
+  inboxUnread,
+  inboxRef,
 }: {
   workspaceId: string;
-  onNavigate?: () => void;
   compact?: boolean;
+  inboxUnread?: number;
+  inboxRef?: Ref<HTMLAnchorElement>;
 }) {
   const { access } = useWorkspaceAuthorization();
   const pathname = usePathname();
   const personal = access.workspace.type === "PERSONAL";
-  const unread = useInboxUnread(personal);
-  const inboxLabel = unread > 0 ? `Inbox, ${unread} unread` : "Inbox";
   const items: NavItem[] = [
-    ...(personal ? [{ name: "Inbox", href: `/w/${workspaceId}/inbox`, Icon: Inbox, badge: unread, label: inboxLabel }] : []),
+    ...(personal && inboxUnread !== undefined ? [inboxItem(workspaceId, inboxUnread, inboxRef)] : []),
     ...(personal ? [{ name: "Home", href: `/w/${workspaceId}/home`, Icon: Home }] : []),
-    {
-      name: "Knowledge",
-      href: `/w/${workspaceId}/knowledge`,
-      Icon: BookOpenText,
-    },
     {
       name: "Graph",
       href: `/w/${workspaceId}/graph`,
@@ -50,33 +86,9 @@ export function PrimaryNav({
   // content (the explorer's document, a menu's row), and two accent blocks side by side competed for the eye.
   return (
     <nav aria-label="Primary" className="flex flex-col gap-0.5 p-2">
-      {items.map(({ name, href, Icon, badge, label }) => {
-        const selected = pathname === href || pathname.startsWith(`${href}/`);
-        const link = (
-          <Link
-            key={name}
-            href={href}
-            onClick={onNavigate}
-            aria-current={selected ? "page" : undefined}
-            aria-label={label ?? name}
-            className={`kh-control flex kh-rail-row items-center rounded-md px-2 kh-rail-text transition kh-focus-ring ${compact ? "relative justify-center" : "gap-2"} ${selected ? "bg-kh-bg-hover font-medium text-kh-text hover:bg-kh-bg-hover" : "text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text"}`}
-          >
-            <Icon size={15} aria-hidden="true" />
-            {compact ? null : <span className="min-w-0 flex-1 truncate">{name}</span>}
-            {badge ? (
-              <span
-                className={compact
-                  ? "absolute right-1 top-0.5 inline-flex min-w-4 items-center justify-center rounded-full bg-kh-primary px-1 text-micro font-semibold leading-4 text-kh-on-primary tabular-nums"
-                  : "inline-flex min-w-4 shrink-0 items-center justify-center rounded-full bg-kh-bg-selected px-1.5 text-caption font-semibold leading-5 text-kh-selected-text tabular-nums"}
-                aria-hidden="true"
-              >
-                {badge > 99 ? "99+" : badge}
-              </span>
-            ) : null}
-          </Link>
-        );
-        return compact ? <Tooltip key={name} label={label ?? name} side="right">{link}</Tooltip> : link;
-      })}
+      {items.map((item) => (
+        <NavigationLink key={item.name} item={item} pathname={pathname} appearance={compact ? "rail" : "row"} />
+      ))}
     </nav>
   );
 }

@@ -1,10 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { Menu } from "lucide-react";
+import type { ReactNode } from "react";
 import type { WorkspaceShellModel } from "@/server/knowledge-read";
 import { QuickSearch } from "@/components/search/quick-search";
-import { buttonClasses } from "@/components/ui/button";
 import { DocumentContextBar } from "./document-context-bar";
 
 /**
@@ -12,17 +11,25 @@ import { DocumentContextBar } from "./document-context-bar";
  * topbar — the rail carries the wordmark, switcher and Search, and the document pane its own title and
  * actions — but the palette stays mounted here, once, at every width.
  */
-export function Topbar({ model, onMenuClick }: { model: WorkspaceShellModel; onMenuClick?: () => void }) {
+export function Topbar({
+  model,
+  menuTrigger,
+  onSearchOpen,
+}: {
+  model: WorkspaceShellModel;
+  menuTrigger: ReactNode;
+  onSearchOpen: () => HTMLElement | null;
+}) {
   return (
     <header className="flex h-12 shrink-0 items-center border-b border-kh-border bg-kh-bg-raised lg:hidden">
       <div className="flex shrink-0 items-center gap-2 px-3">
-        {onMenuClick ? <button type="button" aria-label="Open menu" onClick={onMenuClick} className={buttonClasses({ variant: "ghost", icon: true })}><Menu className="h-4 w-4" aria-hidden="true" /></button> : null}
+        {menuTrigger}
         <div className="hidden items-center gap-1 sm:flex">
           <Image src="/icon.svg" width={20} height={20} alt="" className="shrink-0" />
           <span className="whitespace-nowrap text-caption font-semibold text-kh-text">Knowledge Hub</span>
         </div>
       </div>
-      <QuickSearch workspaceId={model.workspace.id} />
+      <QuickSearch workspaceId={model.workspace.id} onOpen={onSearchOpen} />
       <DocumentContextBar workspaceId={model.workspace.id} className="flex-1 px-3" />
     </header>
   );

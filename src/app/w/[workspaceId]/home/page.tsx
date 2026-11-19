@@ -6,7 +6,6 @@ import { resolveAuthoredTitle } from "@/lib/authored-title";
 import { documentsForHome } from "@/lib/home-continue";
 import { applicationServices } from "@/server/composition";
 import { PersonalHome } from "@/components/knowledge/personal-home";
-import { PeekHost } from "@/components/knowledge/peek-host";
 import { notFound } from "next/navigation";
 import { FirstUseGuidance } from "@/components/knowledge/first-use-guidance";
 import { getHomeOnboardingState } from "@/server/onboarding-state";
@@ -36,5 +35,5 @@ export default async function PersonalHomePage({ params }: { params: Promise<{ w
   const sourceNames=new Map(folderModel?.items.map(i=>[i.source.id,i.source.name])??[]);
   const reminders = knowledgeFreshness(folderModel?.items ?? [], freshnessThreshold(freshness.value), new Date());
   const notices = await unreadHomeNotices(s.reviews, caller);
-  return <PeekHost><div className="min-h-0 min-w-0 flex-1 overflow-y-auto"><PersonalHome guidanceDismissed={onboarding.value.dismissed} slots={slots} workspaceId={workspaceId} documents={homeDocuments.map(d=>({...d,sourceName:sourceNames.get(d.sourceId),sourcePath:paths.get(d.documentId)}))} drafts={drafts} reminders={reminders} notices={notices} /></div></PeekHost>;
+  return <PersonalHome guidanceDismissed={onboarding.value.dismissed} slots={slots} workspaceId={workspaceId} documents={homeDocuments.map(d=>({...d,sourceName:sourceNames.get(d.sourceId),sourcePath:paths.get(d.documentId)}))} drafts={drafts} reminders={reminders} notices={notices} />;
 }

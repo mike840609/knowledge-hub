@@ -190,31 +190,27 @@ Neutral surfaces, named by role:
 ```text
 bg          canvas — document and page content
 bg-raised   chrome on the canvas — topbar, inspector panel
-bg-sunken   primary navigation rail
-bg-explorer secondary navigation — knowledge sidebar and its loading placeholder
+bg-sunken   workspace sidebar — primary navigation and Knowledge
+bg-explorer shared folder tree
 bg-subtle   inset fills — code blocks, table headers, kbd
 ```
 
-Primary navigation uses `bg-sunken`; the Knowledge explorer and its loading
-placeholder use `bg-explorer`, separated by the existing 1px border. Primary
-navigation selection uses a neutral hover fill; the selected document keeps
-the accent fill, so location within a folder is the stronger cue.
+The workspace sidebar uses `bg-sunken` for both navigation and the Knowledge
+tree. Primary navigation selection uses a neutral hover fill. The selected
+document keeps the accent fill, so location within a folder is the stronger cue.
 
-`bg-explorer` aliases `bg-subtle` in light mode. In dark mode it is
-`#0e0f12`, between the primary rail (`#0a0b0e`) and canvas (`#131417`),
-so the secondary rail does not appear as a bright inset panel.
+`bg-explorer` aliases `bg-subtle` in light mode. In dark mode the shared folder
+tree uses `#0e0f12`, between `bg-sunken` (`#0a0b0e`) and the canvas (`#131417`).
 
 
 ### Navigation colour scheme
 
-In both themes, surfaces become progressively lighter from left to right:
-primary navigation → Knowledge explorer → reading canvas. Keep the existing
-1px separators; do not use shadows to distinguish these regions.
+The workspace sidebar and reading canvas are separated by a 1px border.
 
 | Region | Token | Light | Dark |
 | --- | --- | --- | --- |
-| Primary navigation | `bg-sunken` | `#f1f2f5` | `#0a0b0e` |
-| Knowledge explorer and loading placeholder | `bg-explorer` | `#f6f7f9` (alias of `bg-subtle`) | `#0e0f12` |
+| Workspace sidebar | `bg-sunken` | `#f1f2f5` | `#0a0b0e` |
+| Shared folder tree | `bg-explorer` | `#f6f7f9` (alias of `bg-subtle`) | `#0e0f12` |
 | Reading canvas | `bg` | `#ffffff` | `#131417` |
 
 The primary navigation's current item uses `bg-hover` with `text`, so it
@@ -724,17 +720,16 @@ owner's page it acts when that control is there (discussions to open, or open
 ones to close). Where the comments are a drawer, the drawer is a dialog and keeps
 its keys: `D` opens it and `Esc` closes it. Not `C` (Create document) nor `M` (Move).
 
-⌘\ (Ctrl \ elsewhere) collapses and expands the primary navigation, and is
+⌘\ (Ctrl \ elsewhere) collapses and expands the workspace sidebar, and is
 `NAV_TOGGLE_SHORTCUT` in the registry: the app shell reads the key from there,
 the collapse button takes its `aria-keyshortcuts` from there, and the palette's
 "Toggle navigation" shows it (`matchesShortcut` in `lib/shortcut-keys.ts` reads
 a shortcut that carries a modifier, as `isSingleKeyShortcut` reads one that
 does not). It acts from the composer's title and editor, since no field types
 it — the writer is who most wants the room — but a dialog or menu that is open,
-the palette included, keeps its keys. Where the rail is not on screen (a window
-under `lg`) it opens and closes the menu that takes its place. It is not ⌘/,
-which the composer has for the rendered/source switch, nor ⌘B, which is bold
-there. The Knowledge explorer beside it collapses on its own, to a 40px strip, by its header's Hide documents (`2026-10-21-explorer-collapse-design.md`); ⌘\ does not reach it.
+the palette included, keeps its keys. On a narrow window or in compact Inbox
+layout, it opens the workspace Menu drawer. Escape closes the drawer.
+The composer keeps ⌘/ for the rendered/source switch and ⌘B for bold.
 
 The composer's title field, its rendered editor and its Markdown text are the
 one place without the focus ring. A text field matches `:focus-visible` for as
@@ -1622,22 +1617,12 @@ so their content arrives in a hidden `<div>` at the end of the body and an
 the form never reaches the page. Blocking the framework chunks is the faithful
 version — inline scripts still run, React never hydrates.
 
-### A feature that is announced and not open is a disabled row that says so
+### The workspace switcher appears when Team workspaces are open
 
-Team workspaces exist and are not yet offered. The workspace switcher does not
-hide the place where they will be, and does not list them as if they could be
-entered: it shows one disabled row, "Team workspaces", with "Coming soon" on it,
-and nothing that leads to one (no team names, no "Archived" submenu, no "Create
-team"). A reader is told the feature is coming and is not offered something
-that would go nowhere. The disabled row carries its own explanation as text,
-not only as a tooltip, which only a pointer reaches.
-
-What this decides is what the switcher *offers*. It is not access control and
-must not be read as one (`docs/operations/team-workspaces-availability.md`): a
-link into a Team workspace still opens it, and the services' rules are the same
-whether the flag is on or off. A test holds both halves — that the closed
-switcher offers nothing, and that a link still works — so that nobody takes the
-first for the second.
+Personal-only mode opens My Space directly. Search takes the first row below the
+sidebar header. The expanded sidebar, compact rail, and Menu drawer show the
+switcher when Team workspaces are enabled. Server authorization enforces Team
+availability on direct routes and API calls (`docs/operations/team-workspaces-availability.md`).
 
 ### A timestamp is rendered in the reader's zone, which means twice
 
@@ -1866,9 +1851,7 @@ them, since resolution is read at read time and nothing was rewritten.
 The 2026-09-30 personal rollout adds document/folder organization through the
 existing Hub commands, Markdown downloads, revision restoration, persistent
 personal drafts and account favorites. The personal rollout spec supersedes
-the earlier deferred-product decisions on these operations. Team navigation
-remains visible but disabled, labelled Coming soon, until server configuration
-explicitly enables it. Disabled controls have no navigation or click action.
+the earlier deferred-product decisions on these operations. The workspace switcher appears when server configuration enables Team workspaces.
 
 1. The palette is mostly navigation, and that is a product gap rather than a
    UI one. Counted against the code it can offer about fourteen entries, of
@@ -1897,11 +1880,9 @@ explicitly enables it. Disabled controls have no navigation or click action.
     and the navigation guard this item asked about became a tab-scoped draft
     restored on return, since the App Router cannot intercept in-app
     navigation. Personal workspaces now save drafts to the account separately from published revisions, with a local recovery copy and visible save status; Team drafts remain tab-scoped.
- 4. Knowledge pages carry two sidebars side by side: the primary nav
-    (`src/components/shell/app-shell.tsx`, `w-44`, collapsible to `w-12`)
-    and the Knowledge explorer (`src/components/knowledge/source-sidebar.tsx`,
-    `w-72`). The reference has one. Merging them changes the shell every page
-    sits in, so it comes after item 3.
+ 4. The primary navigation and Knowledge tree share one workspace sidebar
+    (`src/components/shell/app-shell.tsx`,
+    `src/components/knowledge/workspace-knowledge-navigation.tsx`).
  5. One thing is deferred on purpose, with the condition that reopens it. List
     pages sit in `kh-page` rather than spanning the window; widen them when the
     Sources list is long enough that the width costs a reader something. (`E`
@@ -1927,7 +1908,7 @@ distinction that cannot be made with what exists, not to match a count.
 
 ## October 2026 remediation
 
-Desktop navigation keeps a 176px primary rail, collapsible to 48px, beside an independent 288px contextual explorer, collapsible to a 40px strip. Wide screens have no topbar: rail, explorer and content all start at the top of the window, and the explorer retains its full height when the primary rail collapses. Between 1024 and 1279px the inline explorer is replaced by a 40px strip that opens the same explorer in a left drawer over the content; the drawer closes on Escape, its X, or any page change, and Escape or the X returns focus to the strip. The 288px column returns at 1280px. This is the retrieval-first compromise: the 176px rail is unchanged, while a 1024px window no longer spends 288px on a second column. Favorites and Recent open from the star and clock buttons in the explorer toolbar. Under 1024px the app shell's Menu drawer remains the one explorer. The explorer has no multi-select: each row's own menu acts on its one document, and a document row shows its glyph, not a checkbox (multi-select was removed on 2026-10-28 because the hover checkbox read as noise over the list). The primary rail opens with the wordmark and its collapse control, then the workspace switcher, then a Search row drawn like navigation. A personal workspace puts **Inbox** first among the navigation rows, with the unread count beside it; it is the only Inbox control at every width — the rail's header row is the wordmark and the collapse control, and the narrow topbar has none (`2026-10-31-single-inbox-entry-design.md`). Where its own box is at least 75rem wide the Inbox is a 22rem discussion index beside the selected discussion: one row per discussion, newest activity first, over four relationship tabs (`All` / `My documents` / `Following` / `Mentions`) and status and unread filters that are server-side and live in the URL; the selection is the thread (`?item=`), nothing is selected on arrival because selecting marks it read, ↑/↓ move it, and a modified click still opens the document. The page has no unread count of its own — the rail badge is the only number — and documents and folders shared with the reader by name sit in a separate unread **Shared with you** section (`2026-11-04-inbox-discussion-index-design.md`). Narrower, it is the same index as a plain list whose rows open the document. The reader pins its breadcrumb and actions to the top of the reading column while the rest of its header scrolls away. The breadcrumb reserves room for the nearest folder or source and truncates the other segments when the path is long. Markdown, Share, Comments and Details sit beside Document actions. The overflow carries Copy link, Add or remove from favorites, Duplicate, Move, Download Markdown, Archive or Restore, and the Full width checkbox, so a page can be arranged without going back to the tree. The document's own title is `page-title` 32/40, with its page icon above it; when the title is the H1 the document opens with, that leading H1 wears the same scale. The icon is a document-level choice and never a revision. The picker is a popover over a bundled catalog of about 350 emoji (`src/lib/emoji-catalog.ts`, no dependency, no fetch), grouped Suggested (the original 16, first and not repeated), Smileys, People, Nature, Food, Activities, Travel, Objects and Symbols, each with English and Traditional Chinese keywords. Its search field takes focus on open; a query matches name and keywords as a case-insensitive substring and lists results in catalog order, or says "No emoji match." in muted body-sm text. Arrow keys move through the grid (a cell shows focus with the focus ring, drawn inset so the scrolling list does not clip it, as menu rows do — the hover fill alone is not a focus indicator; ArrowUp from the first row returns to the field), Enter in the field or on a cell chooses, Escape closes and returns focus to the trigger, and IME composition is never read as a key. "Remove icon" stays. The server accepts exactly the catalog's characters (`isPageIcon`); `tests/e2e/page-icon-picker.spec.ts` drives it. The same icon follows the document to every retrieval surface — tree rows, Home's Recent and Favorites, the ⌘K palette, full search and the shared page — so scanning for a glyph works wherever a reader looks. A pinned bar's lower edge is not a rule: while it is pinned, the content scrolling under it fades into it through a 16px gradient from `--kh-bg` to transparent (`.kh-fade-below`, in `globals.css`), drawn below the bar, click-through, and never taller than would swallow a line of text. The composer's pinned command line uses the same edge. The rule is for a page's pinned *top line* over reading or writing; a sticky table header and a pinned bottom action bar keep their rule, which separates a header from its rows and an action bar from the form it acts on. On a document page the rail's first row (wordmark), the explorer's first row (Documents) and the document's breadcrumb line are each 48px and centred on one line, so the three columns share one top edge. Narrow screens keep a topbar (Menu, search icon, and the document's title, star and actions once its header scrolls away) and one Menu drawer headed by the switcher (`2026-10-08-workspace-switcher-in-rail-design.md`). Reader/composer share DocumentPane geometry and lay a document out line for line alike — the 48px path line, the page icon and `page-title` title with one muted caption line under it, the outline (rail or disclosure), then the text — so nothing moves between reading and editing (`tests/e2e/zz-editor-blocks.spec.ts` measures both). The composer pins Save/Cancel/Markdown in its path line; its draft status and title hints take the reader's "Updated" line, which stays one line tall when empty and may wrap to a second only while a status needs it (a rename notice beside a draft status on a phone) — a jump the writer caused, not one between reading and editing. Details is the reader's panel with the reader's open state: the document is edited inline, so a panel open while reading is open while editing and after Cancel or Save, beside text that has not moved. The composer has a Details button in the reader's place, last in its path line, but no ⌘I, which the editor gives to italic. See `2026-10-02-linear-remediation-design.md` for the coordinated contract. Kbd and graph action hints use `text-muted` to meet small-text contrast. Desktop controls retain 24/32/40px heights; coarse pointers get at least 40px physical targets through the shared control classes.
+A workspace uses one 272px sidebar on desktop. The switcher, Search and primary navigation sit above the Knowledge section, and the account menu sits at the bottom. The workspace tree scrolls independently and keeps its folder state when a page changes. Its authorized source headers load with the shell and expanded sources load their documents on demand. Favorites and Recent open from the star and clock buttons in Knowledge. The sidebar can collapse to 48px. At 1024–1471px, Inbox uses this compact width and opens the full workspace sidebar in the Menu drawer so its discussion list and preview have room. Below 1024px the Menu drawer offers the same primary navigation and Knowledge tree. The explorer has no multi-select: each row's own menu acts on its one document, and a document row shows its glyph, not a checkbox (multi-select was removed on 2026-10-28 because the hover checkbox read as noise over the list). The primary rail opens with the wordmark and its collapse control, then the workspace switcher, then a Search row drawn like navigation. A personal workspace places its single **Inbox** link beside the collapse control when the desktop sidebar is expanded, with the unread count on the icon. The compact rail and Menu drawer put Inbox first among their navigation rows (`2026-10-31-single-inbox-entry-design.md`). Where its own box is at least 75rem wide the Inbox is a 22rem discussion index beside the selected discussion: one row per discussion, newest activity first, over four relationship tabs (`All` / `My documents` / `Following` / `Mentions`) and status and unread filters that are server-side and live in the URL; the selection is the thread (`?item=`), nothing is selected on arrival because selecting marks it read, ↑/↓ move it, and a modified click still opens the document. The page has no unread count of its own — the sidebar badge shows the unread total — and documents and folders shared with the reader by name sit in a separate unread **Shared with you** section (`2026-11-04-inbox-discussion-index-design.md`). Narrower, it is the same index as a plain list whose rows open the document. The reader pins the breadcrumb and document actions at the top of the pane. The breadcrumb aligns with the reading column, and the actions sit 24px from the pane’s inline end. The breadcrumb reserves room for the nearest folder or source and truncates the other segments when the path is long. Markdown, Share, Comments and Details sit beside Document actions. The overflow carries Copy link, Add or remove from favorites, Duplicate, Move, Download Markdown, Archive or Restore, and the Full width checkbox, so a page can be arranged without going back to the tree. The document's own title is `page-title` 32/40, with its page icon above it; when the title is the H1 the document opens with, that leading H1 wears the same scale. The icon is a document-level choice and never a revision. The picker is a popover over a bundled catalog of about 350 emoji (`src/lib/emoji-catalog.ts`, no dependency, no fetch), grouped Suggested (the original 16, first and not repeated), Smileys, People, Nature, Food, Activities, Travel, Objects and Symbols, each with English and Traditional Chinese keywords. Its search field takes focus on open; a query matches name and keywords as a case-insensitive substring and lists results in catalog order, or says "No emoji match." in muted body-sm text. Arrow keys move through the grid (a cell shows focus with the focus ring, drawn inset so the scrolling list does not clip it, as menu rows do — the hover fill alone is not a focus indicator; ArrowUp from the first row returns to the field), Enter in the field or on a cell chooses, Escape closes and returns focus to the trigger, and IME composition is never read as a key. "Remove icon" stays. The server accepts exactly the catalog's characters (`isPageIcon`); `tests/e2e/page-icon-picker.spec.ts` drives it. The same icon follows the document to every retrieval surface — tree rows, Home's Recent and Favorites, the ⌘K palette, full search and the shared page — so scanning for a glyph works wherever a reader looks. A pinned bar's lower edge is not a rule: while it is pinned, the content scrolling under it fades into it through a 16px gradient from `--kh-bg` to transparent (`.kh-fade-below`, in `globals.css`), drawn below the bar, click-through, and never taller than would swallow a line of text. The composer's pinned command line uses the same edge. The rule is for a page's pinned *top line* over reading or writing; a sticky table header and a pinned bottom action bar keep their rule, which separates a header from its rows and an action bar from the form it acts on. On a document page the sidebar’s wordmark row and the document’s breadcrumb row are each 48px high. Narrow screens keep a topbar (Menu, search icon, and the document's title, star and actions once its header scrolls away) and one Menu drawer headed by the switcher (`2026-10-08-workspace-switcher-in-rail-design.md`). Reader/composer share DocumentPane geometry and lay a document out line for line alike — the 48px path line, the page icon and `page-title` title with one muted caption line under it, the outline (rail or disclosure), then the text — so nothing moves between reading and editing (`tests/e2e/zz-editor-blocks.spec.ts` measures both). The composer pins Save/Cancel/Markdown in its path line; its draft status and title hints take the reader's "Updated" line, which stays one line tall when empty and may wrap to a second only while a status needs it (a rename notice beside a draft status on a phone) — a jump the writer caused, not one between reading and editing. Details is the reader's panel with the reader's open state: the document is edited inline, so a panel open while reading is open while editing and after Cancel or Save, beside text that has not moved. The composer has a Details button in the reader's place, last in its path line, but no ⌘I, which the editor gives to italic. See `2026-10-02-linear-remediation-design.md` for the coordinated contract. Kbd and graph action hints use `text-muted` to meet small-text contrast. Desktop controls retain 24/32/40px heights; coarse pointers get at least 40px physical targets through the shared control classes.
 
 
 ### Shared article discussion layout (2026-10-12, PR #168)

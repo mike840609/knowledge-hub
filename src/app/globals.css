@@ -977,25 +977,24 @@ input[type="search"]::-webkit-search-cancel-button:hover {
    where the pane is wide, the whole column slid 48px left. Each column is centred as `mx-auto` would
    be, but as a length so it can slide; while the rail is open it keeps the left edge it had beside the
    outline — the outline's 224px slot is what the rail takes — or moves left only as far as the rail
-   needs. Only the column that holds the article widens; the path line and the header keep the
-   article's width, so their controls stay where they were clicked. The outline gives the rail its
-   place and is shown above the article instead, as it is in a narrow pane; what follows the article
-   in its column stays the article's width. */
+   needs. The outline moves above the article while the rail is open. Content following the article
+   stays at the article's width. */
 .kh-document-pane .kh-reading-column {
   margin-inline: max(0px, calc((100% - theme("maxWidth.reading")) / 2)) auto;
   transition: margin-inline-start 120ms ease-out;
 }
-/* Give the desktop path and its actions more room while keeping the same text column start. */
-@media (min-width: 1280px) {
-  .kh-document-pane .kh-document-toolbar {
-    width: auto;
-    max-width: calc(theme("maxWidth.reading") + theme("spacing.44"));
-  }
+/* The path starts with the reading column. Extend its end across any right-hand outline
+   slot to the edge of the scrollable pane, which is measured independently of Details. */
+.kh-document-pane .kh-document-toolbar {
+  inline-size: auto;
+  max-inline-size: none;
+  margin-inline-end: calc(100% - 100cqi);
+  background-color: var(--kh-bg);
 }
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column {
   margin-inline-start: max(0px, min(calc((100% - theme("spacing.56") - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.reading") - 320px)));
-  /* As wide as it was beside the outline: in a pane too narrow for the full reading width, the slot
-     the outline gives up would otherwise widen the path line and push its controls right. */
+}
+.kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column:where(:not(.kh-document-toolbar)) {
   max-width: min(theme("maxWidth.reading"), calc(100% - theme("spacing.56")));
 }
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column:has(> .kh-review-document) { max-width: calc(theme("maxWidth.reading") + 320px); }
@@ -1008,7 +1007,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 @media (min-width: 640px) {
   .kh-document-pane[data-full-width]:not(:has(.kh-review-document[data-review-inline][data-review-open])) .kh-reading-column {
     max-width: none;
-    margin-inline: 0;
+    margin-inline-start: 0;
     padding-inline-start: theme("spacing.14");
   }
 }
@@ -1024,7 +1023,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 /* The editor's 56px block gutter hangs left of the text (`.kh-editor-blocks`), into the column's 24px padding
    and its left margin. Where the pane shows the outline rail on the right (60rem) and has not yet reached the
    left-hung outline (88rem), the rail's 224px slot leaves the column less than its reading width, so the margin
-   is 0 — at 1440px with both sidebars the pane is 976px, the column 752px, and the gutter had 24px. There the
+   is 0 — a 976px pane leaves a 752px column and 24px for the gutter. There the
    column's own left padding makes up what its margin lacks, up to 56px: `3.5rem - margin`, never below the 24px
    it has. It is the column, not the editor, so reading and editing keep one left edge; the text's right edge
    does not move. Each margin is the one the rules above give, in the same `100%` (padding resolves against the
@@ -1078,12 +1077,9 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-inline { display: none; }
   .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column {
     margin-inline-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.reading") - 320px)));
-    max-width: theme("maxWidth.reading");
   }
-  /* The path line keeps the wider box that gives its actions room (see the 1280px rule above);
-     narrowing it here would slide those actions left under the pointer as the rail opens. */
-  .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-document-toolbar {
-    max-width: calc(theme("maxWidth.reading") + theme("spacing.44"));
+  .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column:where(:not(.kh-document-toolbar)) {
+    max-width: theme("maxWidth.reading");
   }
 }
 

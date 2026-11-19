@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ImportStickyFooter } from "@/components/imports/import-sticky-footer";
 import { adoptPendingHandle } from "@/components/imports/folder-handle-store";
+import { refreshOnArrival } from "@/components/shell/refresh-on-arrival";
 import type { ImportPreview } from "@/modules/sources/application/reconcile-import-snapshot";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -20,6 +21,7 @@ vi.mock("@/components/shell/use-workspace-authorization", () => ({
 vi.mock("@/components/imports/folder-handle-store", () => ({
   adoptPendingHandle: vi.fn(),
 }));
+vi.mock("@/components/shell/refresh-on-arrival", () => ({ refreshOnArrival: vi.fn() }));
 
 function readyPreview(overrides: Partial<ImportPreview> = {}): ImportPreview {
   return {
@@ -83,6 +85,7 @@ describe("import sticky footer pending-handle adoption", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("/api/source-imports/snap-new/apply", { method: "POST" });
     expect(adoptPendingHandle).toHaveBeenCalledWith("snap-new", "src-9");
+    expect(refreshOnArrival).toHaveBeenCalledWith("/w/w1/sources/src-9?import=success");
     expect(push).toHaveBeenCalledWith("/w/w1/sources/src-9?import=success");
   });
 
@@ -109,6 +112,7 @@ it("opens the recorded run and recovers a committed Apply after response loss",a
  vi.stubGlobal("fetch",fetchMock);
  act(()=>root.render(createElement(ImportStickyFooter,{workspaceId:"w1",preview:readyPreview()})));
  await act(async()=>{applyButton().click();});
+ expect(refreshOnArrival).toHaveBeenCalledWith("/w/w1/sources/src-9/runs/run-9");
  expect(push).toHaveBeenCalledWith("/w/w1/sources/src-9/runs/run-9");
  expect(fetchMock.mock.calls[1][0]).toBe("/api/source-imports/snap-new");
 });

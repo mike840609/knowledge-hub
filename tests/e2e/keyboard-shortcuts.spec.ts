@@ -130,14 +130,18 @@ test.describe("⌘\\ collapses and expands the navigation", () => {
   test("from anywhere on the page, and the choice is remembered", async ({ page }) => {
     await openArchitecture(page);
     const nav = navigation(page);
+    const explorer = page.getByRole("navigation", { name: "Document tree", exact: true });
     await expect(nav.collapse).toHaveAttribute("aria-keyshortcuts", "Meta+\\ Control+\\");
     expect(await nav.width()).toBeGreaterThan(150);
+    await expect(explorer).toBeVisible();
 
     await pressUntil(page, "ControlOrMeta+Backslash", () => expect(nav.expand).toBeVisible({ timeout: 1_000 }));
     await expect.poll(nav.width).toBeLessThan(60);
+    await expect(explorer).toBeHidden();
     await page.keyboard.press("ControlOrMeta+Backslash");
     await expect(nav.collapse).toBeVisible();
     await expect.poll(nav.width).toBeGreaterThan(150);
+    await expect(explorer).toBeVisible();
 
     // Collapsed, and reloaded: still collapsed.
     await page.keyboard.press("ControlOrMeta+Backslash");
@@ -197,7 +201,7 @@ test.describe("⌘\\ collapses and expands the navigation", () => {
 
   test("in a window too narrow for the rail, it opens the menu that takes its place", async ({ page }) => {
     await page.setViewportSize({ width: 800, height: 700 });
-    // The tree is behind the Browse button at this width, so go to the source and let it land on a document.
+    // Go to the source and let it land on a document before opening the menu.
     await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
     await expect(page.getByRole("textbox", { name: "Title", exact: true })).toBeVisible(ROUND_TRIP);
     await pressUntil(page, "ControlOrMeta+Backslash", () => expect(page.getByRole("dialog", { name: "Menu" })).toBeVisible({ timeout: 1_000 }));
@@ -239,8 +243,8 @@ test("C stops answering once Home is left without a full load", async ({ page })
   await openPersonalHome(page);
   // Prove Home's listener is live before leaving, so its absence afterwards means something.
   await expect(page.getByRole("main").getByRole("link", { name: "Create document" })).toHaveAttribute("aria-keyshortcuts", "C");
-  await page.getByRole("navigation").getByRole("link", { name: "Knowledge", exact: true }).first().click();
-  await expect(page).not.toHaveURL(/\/home$/, ROUND_TRIP);
+  await page.getByRole("complementary", { name: "Workspace navigation", exact: true }).getByRole("link", { name: /^Inbox/ }).click();
+  await expect(page).toHaveURL(/\/inbox$/, ROUND_TRIP);
   await page.waitForLoadState("networkidle");
   const before = new URL(page.url()).pathname;
   await page.keyboard.press("c");

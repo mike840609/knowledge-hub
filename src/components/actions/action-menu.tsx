@@ -35,9 +35,7 @@ export const SHARE_REQUEST_EVENT = "kh:request-share";
 export type ShareTarget = { documentId: string } | { folderNodeId: string; name?: string } | { sourceId: string; name?: string };
 
 /**
- * Ask the share-link dialog (ShareLinkDialogHost, mounted by the knowledge
- * layout) to open for a document or a folder. The one way every surface asks,
- * so the event's shape lives in one place.
+ * Open the workspace's share-link dialog for a document, folder, or source.
  */
 export function requestShare(target: ShareTarget): void {
   window.dispatchEvent(new CustomEvent(SHARE_REQUEST_EVENT, { detail: target }));
@@ -68,12 +66,13 @@ export async function writeLinkToClipboard(href: string): Promise<boolean> {
 export type ActionHandlers = {
   /** Client-local, so it is a callback rather than a request. */
   onToggleFavorite: (sourceId: string, documentId: string) => void;
+  workspaceId?: string;
 };
 
-export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
+export function useActionRunner({ onToggleFavorite, workspaceId }: ActionHandlers) {
   const router = useRouter();
   const toast = useToast();
-  const mutations = useTreeMutations();
+  const mutations = useTreeMutations(workspaceId);
   return useCallback(
     (action: Action) => {
       const { effect } = action;
@@ -118,7 +117,7 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
               window.dispatchEvent(new CustomEvent("kh:request-details", { detail: { tab: "links" } }));
               return;
             case "document.open-share":
-              // The dialog lives with the knowledge layout; any surface asks
+              // The dialog lives with the workspace; any surface asks
               // for it the same way it asks for details.
               requestShare({ documentId: effect.documentId });
               return;
