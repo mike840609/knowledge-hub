@@ -776,6 +776,19 @@ it("re-measures the gutter's room when the pane's box changes, without a window 
   expect(gutterToolbar().hidden).toBe(false);
 });
 
+it("rechecks the pointer when a pane shrink occurs before the queued hover frame", async () => {
+  const notify = observeEditorResize();
+  const { view } = await openWide();
+  const pendingMove = move(view, 300);
+  view.dom.getBoundingClientRect = narrowEditorRect;
+  await pendingMove;
+  expect(gutterToolbar().hidden).toBe(true);
+  notify(view.dom);
+  expect(gutterToolbar().hidden).toBe(true);
+  await move(view, 25);
+  expect(gutterToolbar().hidden).toBe(false);
+});
+
 it("hides the controls when the pane changes size while the pointer stands still", async () => {
   const notify = observeEditorResize();
   const { view } = await openWide();
@@ -826,6 +839,30 @@ it("repositions focused keyboard controls and keeps the block menu open across a
   expect(grip.getAttribute("aria-expanded")).toBe("true");
   expect(document.activeElement).toBe(first);
   expect(gutterToolbar().style.left).toBe("104px");
+});
+
+it.each(["toolbar", "menu"] as const)("returns focus to the unchanged caret when a resize clips the focused %s", async (target) => {
+  const notify = observeEditorResize();
+  // A coarse-pointer editor normally shows its controls synchronously on gaining focus.
+  if (target === "menu") vi.stubGlobal("matchMedia", () => ({ matches: true }));
+  const pane = document.body.appendChild(document.createElement("div"));
+  pane.className = "kh-document-pane";
+  pane.getBoundingClientRect = () => rect(0, 180);
+  const { view } = await openWide(pane);
+  caretAfter(view, "First");
+  const selection = view.state.selection;
+  reveal(view);
+  if (target === "menu") button("Move block").click();
+  expect(document.activeElement).toBe(target === "menu" ? menuItem("Turn into") : button("Add block below"));
+
+  view.dom.firstElementChild!.getBoundingClientRect = () => rect(160, 200);
+  notify(view.dom);
+
+  expect(gutterToolbar().hidden).toBe(true);
+  expect(button("Move block").getAttribute("aria-expanded")).toBe("false");
+  expect(document.activeElement).toBe(view.dom);
+  expect(view.state.selection.eq(selection)).toBe(true);
+  expect(window.getSelection()!.anchorOffset).toBe(5);
 });
 
 it("repositions touch controls while focus stays in the editor during a resize", async () => {
