@@ -69,10 +69,13 @@ export function PrimaryNav({
     ...(personal && inboxUnread !== undefined ? [inboxItem(workspaceId, inboxUnread, inboxRef)] : []),
     ...(personal ? [{ name: "Home", href: `/w/${workspaceId}/home`, Icon: Home }] : []),
     ...(compact ? knowledgeDestinations(workspaceId, access).map((item) => ({ ...item, compactOnly: true })) : []),
-    ...(personal ? [{ name: "Tasks", href: `/w/${workspaceId}/tasks`, Icon: Bot }] : []),
-    ...(personal ? [{name: "Insights", href: `/w/${workspaceId}/profile`, Icon: BarChart3}] : []),
-    ...(access.actions.canOpenSettings ? [{name: "Settings", href: `/w/${workspaceId}/settings`, Icon: Settings}] : []),
+    ...(compact && personal ? [
+      { name: "Tasks", href: `/w/${workspaceId}/tasks`, Icon: Bot, compactOnly: true },
+      { name: "Insights", href: `/w/${workspaceId}/profile`, Icon: BarChart3, compactOnly: true },
+    ] : []),
+    ...(compact && access.actions.canOpenSettings ? [{ name: "Settings", href: `/w/${workspaceId}/settings`, Icon: Settings, compactOnly: true }] : []),
   ];
+  if (items.length === 0) return null;
   // The current place is a neutral step above hover, not the accent: the accent marks what is selected in the
   // content (the explorer's document, a menu's row), and two accent blocks side by side competed for the eye.
   return (

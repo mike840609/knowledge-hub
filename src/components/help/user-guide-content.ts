@@ -16,7 +16,7 @@ export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean
     intro:"My Space 個人工作區的日常操作。先看示意圖與實際畫面，再依需要展開細節；按鈕名稱與英文介面一致。",
     sections:[
       section("quick-start","五分鐘開始使用",[
-        "到 Sources 選 Import folder，依上圖完成匯入。每次都選完整根目錄。",
+        "從側欄開啟 Knowledge → Sources，再選 Import folder，依上圖完成匯入。每次都選完整根目錄。",
         "預覽時展開更新項目查看差異；先解決阻擋問題，再 Apply。大量封存時先確認是否選錯目錄。",
         "成功後從結果頁開啟文章。沒有自己的資料夾？先試 Try with a sample wiki。",
       ],[{title:"預覽檢查與大量封存確認",items:[
@@ -96,7 +96,7 @@ export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean
         ]},
       ],[{target:"inbox",label:"開啟 Inbox"}]),
       section("insights","Insights 的數字",[
-        "從側欄 Insights 開啟統計；點 Recent changes 的 Added、Updated 或 Archived 可開啟對應的文章清單。",
+        "從帳號選單開啟 Insights；點 Recent changes 的 Added、Updated 或 Archived 可開啟對應的文章清單。",
         "用 Refresh 更新統計。Updated 是查詢時間；Last synced 才是成功同步時間。",
       ],[{title:"統計範圍與未讀數的計算",items:[
         "Insights 顯示目前知識組成、未讀更新、來源分布與同步狀態；來源分布也列出各資料夾已開啟過的文件數。",
@@ -105,7 +105,7 @@ export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean
         "未讀數只計入有永久變更紀錄的目前同步版本；舊匯入缺少紀錄時會提示，不補造歷史。",
       ]}]),
       section("tasks","Tasks：代理完成的任務",[
-        "在 Claude Code 或 OpenCode 完成任務後執行 /hub-export，再從側欄開啟 Tasks。",
+        "在 Claude Code 或 OpenCode 完成任務後執行 /hub-export，再到 Home 選 Open Tasks。",
         "第一次使用：Set up export → 建立 binding → 複製一次性指令，在自己的機器執行。每台機器一個 binding；token 只顯示一次。",
         "清單分 Active／Archived。每列顯示 Agent 與完成時間，超過一個版本時才顯示 revision；點開詳情會標明是哪個 binding 匯出的。",
         "詳情包含 Summary、Verification、Findings／Decisions／Changes、References 與 Revisions。Verification 是代理回報的結果，不是 Hub 的認證。",
@@ -159,7 +159,7 @@ export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean
     intro:"Daily tasks in My Space. Start with each diagram and screen, then expand details as needed. Button names match the English interface.",
     sections:[
       section("quick-start","Get started in five minutes",[
-        "In Sources, select Import folder and follow the diagram. Always choose the complete root folder.",
+        "In the sidebar, open Knowledge → Sources, then select Import folder and follow the diagram. Always choose the complete root folder.",
         "Expand updated items to inspect differences. Resolve blockers before Apply; check the root if many articles are marked archived.",
         "Open an article from the result page. No folder yet? Try with a sample wiki first.",
       ],[{title:"Preview checks and large-archive confirmation",items:[
@@ -239,7 +239,7 @@ export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean
         ]},
       ],[{target:"inbox",label:"Open Inbox"}]),
       section("insights","Understand Insights",[
-        "Open Insights from the sidebar; under Recent changes, Added, Updated or Archived opens the matching article list.",
+        "Open Insights from the account menu; under Recent changes, Added, Updated or Archived opens the matching article list.",
         "Use Refresh for current statistics. Updated is the query time; Last synced is the successful sync time.",
       ],[{title:"Statistics scope and unread counts",items:[
         "Insights shows current knowledge composition, unread updates, source distribution and sync status. Distribution also shows how many documents you have opened in each folder.",
@@ -248,7 +248,7 @@ export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean
         "Unread counts require recorded changes on the current synced revision. Missing legacy history is explained rather than invented.",
       ]}]),
       section("tasks","Tasks: results from coding agents",[
-        "Finish a task in Claude Code or OpenCode, run /hub-export, then open Tasks from the sidebar.",
+        "Finish a task in Claude Code or OpenCode, run /hub-export, then choose Open Tasks on Home.",
         "First use: Set up export → create a binding → copy the one-time line and run it on your own machine. One binding per machine; the token is shown once.",
         "The list has Active / Archived. Each row shows the agent and completion time, plus the revision when a task has more than one; it opens the detail that names the binding.",
         "The detail shows Summary, Verification, Findings / Decisions / Changes, References and Revisions. Verification is what the agent reported, not a Hub certification.",

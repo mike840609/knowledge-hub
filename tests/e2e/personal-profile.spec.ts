@@ -63,7 +63,8 @@ test("personal profile counts, detail links, themes and mobile layout",async({pa
  await expect(page.locator("[data-browsed-count]").filter({visible:true})).toHaveCount(0);
  await expect(page.getByRole("region",{name:"Recent",exact:true}).getByRole("link",{name:/Team guide/})).toBeVisible();
  await page.screenshot({path:path.join(output,"home-light.png"),fullPage:true,animations:"disabled"});
- await page.getByRole("navigation",{name:"Primary"}).getByRole("link",{name:"Insights"}).click();
+ await page.getByRole("button",{name:/^Account:/}).click();
+ await page.getByRole("menuitem",{name:"Insights",exact:true}).click();
  await expect(page.locator("[data-browsed-count]").filter({visible:true})).toHaveAttribute("data-browsed-count",String(baseline.browsed+1));
  await expect(page.getByRole("heading",{name:"Insights",exact:true})).toBeVisible();await expect(page.getByRole("heading",{name:"Sync overview",exact:true})).toBeVisible();
  await page.screenshot({path:path.join(output,"desktop-light.png"),fullPage:true,animations:"disabled"});

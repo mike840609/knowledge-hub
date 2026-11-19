@@ -10,17 +10,18 @@ test("task results in My Space: export, browse, version, archive and restore, al
   const snapshot = await stageReadingFolder(request, { workspaceId: ws, sourceName, fixture: "task-export-my-space" });
   expect((await request.post(`/api/source-imports/${snapshot}/apply`, { data: {} })).ok()).toBe(true);
 
-  // A row in My Space's primary navigation (design, Amendment 3); Home's menu no longer repeats it.
+  // Home links to the full Tasks page, including when task search is off.
   await page.goto(`/w/${ws}/home`);
   await page.getByRole("button", { name: "Home actions" }).click();
   await expect(page.getByRole("menuitem", { name: "Copy for Agent" })).toBeVisible(); // the menu is drawn, so the absence below means something
   await expect(page.getByRole("menuitem", { name: "Tasks from coding agents" })).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toHaveCount(0);
-  const tasksRow = page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Tasks", exact: true });
-  await tasksRow.click();
+  await page.getByRole("link", { name: "Open Tasks", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/w/${ws}/tasks$`));
-  await expect(tasksRow).toHaveAttribute("aria-current", "page");
+  const home = page.getByRole("navigation", { name: "Primary", exact: true }).getByRole("link", { name: "Home", exact: true });
+  await expect(home).toBeVisible();
+  await expect(home).not.toHaveAttribute("aria-current", /.+/);
   await expect(page.getByRole("heading", { name: "Tasks", exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: "Set up export" }).click();

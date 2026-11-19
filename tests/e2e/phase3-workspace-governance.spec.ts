@@ -1,4 +1,3 @@
-import { openKnowledgeDestinations } from "./fixtures/knowledge-destinations";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { chooseOption, expectOptions } from "./fixtures/select-menu";
 import { tmpdir } from "node:os";
@@ -86,6 +85,13 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       await grant(owner.context.request, id, "admin", "ADMIN");
       await grant(owner.context.request, id, "viewer", "VIEWER");
       await admin.page.goto(`/w/${id}/settings/groups`);
+      const workspaceSwitcher = (page: typeof admin.page) => page.getByRole("button", { name: /^Workspace: / });
+      await workspaceSwitcher(admin.page).click();
+      await expect(admin.page.getByRole("menuitem", { name: "Settings", exact: true })).toHaveAttribute("href", `/w/${id}/settings`);
+      await admin.page.keyboard.press("Escape");
+      await admin.page.getByRole("button", { name: "Collapse navigation", exact: true }).click();
+      await expect(admin.page.getByRole("navigation", { name: "Primary", exact: true }).getByRole("link", { name: "Settings", exact: true })).toHaveAttribute("href", `/w/${id}/settings`);
+      await admin.page.getByRole("button", { name: "Expand navigation", exact: true }).click();
       await admin.page.locator("summary").filter({hasText:"Add group mapping"}).click();
       await expectOptions(admin.page.getByLabel("New group role"), ["EDITOR", "VIEWER"]);
       await admin.page.goto(`/w/${id}/settings/members`);
@@ -97,6 +103,9 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       expect(denied.status()).toBe(403);
       await viewer.page.goto(`/w/${id}/knowledge`);
       await expect(viewer.page.getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
+      await workspaceSwitcher(viewer.page).click();
+      await expect(viewer.page.getByRole("menuitem", { name: "Settings", exact: true })).toHaveCount(0);
+      await viewer.page.keyboard.press("Escape");
       const viewerDestinations = await openKnowledgeDestinations(viewer.page);
       await expect(viewerDestinations.getByRole("link", { name: "Graph", exact: true })).toBeVisible();
       await expect(viewerDestinations.getByRole("link", { name: /^(Sources|Shares)$/ })).toHaveCount(0);
@@ -299,3 +308,4 @@ test.describe("Phase 3 Workspace product acceptance", () => {
   });
 
 });
+import { openKnowledgeDestinations } from "./fixtures/knowledge-destinations";

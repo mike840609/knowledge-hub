@@ -64,6 +64,7 @@ function WorkspaceSidebarContent({
           identityEmpId={model.identityEmpId}
           workspaceId={workspaceId}
           compact={compact}
+          insightsHref={!compact && model.workspace.type === "PERSONAL" ? `/w/${workspaceId}/profile` : undefined}
         />
       </div>
     </>
