@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { editorViewCtx } from "@milkdown/kit/core";
 import { undo, redo } from "@milkdown/kit/prose/history";
+import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import { afterEach, expect, it, vi } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
-import { insertBlockBelow, moveBlock, topLevelBlocks, turnBlockInto, duplicateBlock, deleteBlock, canTurnInto } from "@/components/knowledge/editor/block-actions";
+import { insertBlockBelow, moveBlock, topLevelBlocks, turnBlockInto, duplicateBlock, deleteBlock, canTurnInto, turnInto, selectedBlockPos } from "@/components/knowledge/editor/block-actions";
 import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
 import { LINK_MARKDOWN_FIXTURES } from "../fixtures/link-markdown";
 
@@ -213,4 +214,35 @@ it.each([
   const output = editor.getMarkdown();
   for (const words of expected) expect(output).toContain(words);
   if (markerGone) expect(output).not.toContain("[!NOTE]");
+});
+
+it("turnInto composes two turns in one transaction, one undo step", async () => {
+  const { editor, view } = await open("One\n\nTwo");
+  const two = view.state.doc.firstChild!.nodeSize;
+  const tr = view.state.tr;
+  expect(turnInto(tr, two, "h2")).not.toBeNull();
+  expect(turnInto(tr, 0, "h2")).not.toBeNull();
+  view.dispatch(tr);
+  expect(editor.getMarkdown().trim()).toBe("## One\n\n## Two");
+  undo(view.state, view.dispatch);
+  expect(editor.getMarkdown().trim()).toBe("One\n\nTwo");
+});
+
+it("turnInto refuses without touching the transaction", async () => {
+  const { view } = await open("One");
+  const tr = view.state.tr;
+  expect(turnInto(tr, 0, "paragraph")).toBeNull();
+  expect(tr.docChanged).toBe(false);
+});
+
+it("selectedBlockPos answers a selected item or top-level block, else null", async () => {
+  const { view } = await open("Intro\n\n- a\n- b");
+  const list = view.state.doc.firstChild!.nodeSize;
+  const second = list + 1 + view.state.doc.child(1).firstChild!.nodeSize;
+  view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, second)));
+  expect(selectedBlockPos(view.state)).toBe(second);
+  view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, 0)));
+  expect(selectedBlockPos(view.state)).toBe(0);
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 2)));
+  expect(selectedBlockPos(view.state)).toBeNull();
 });

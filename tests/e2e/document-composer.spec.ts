@@ -72,7 +72,7 @@ test("selecting text shows the toolbar, and Bold writes ** into the Markdown", a
   await expect(source).toHaveValue("**hello world**\n");
 });
 
-test("the toolbar works from the keyboard: select, Tab into it, press Bold", async ({ page }) => {
+test("the toolbar works from the keyboard: select, Tab into it, through Turn into, press Bold", async ({ page }) => {
   const url = await createNote(page, unique("Toolbar Keys"), "hello world\n");
   const surface = await openEditor(page, url);
   const toolbar = page.getByRole("toolbar", { name: "Formatting" });
@@ -90,10 +90,25 @@ test("the toolbar works from the keyboard: select, Tab into it, press Bold", asy
   for (let letter = 0; letter < "world".length; letter += 1) await press("Shift+ArrowRight");
   await expect(toolbar).toBeVisible(ROUND_TRIP);
 
-  // The toolbar follows the editor in the tab order, and focus moving into it keeps it open.
+  // The toolbar follows the editor in the tab order, and focus moving into it keeps it open. Its first control is
+  // Turn into (2026-11-21 list-commands spec, decision 5).
+  const turnInto = toolbar.getByRole("button", { name: "Turn into, Text" });
+  await page.keyboard.press("Tab");
+  await expect(turnInto).toBeFocused();
+  await expect(toolbar).toBeVisible();
+  // Enter opens Turn into on its first enabled entry; Escape closes it and goes back to the text, selection kept.
+  await page.keyboard.press("Enter");
+  await expect(toolbar.getByRole("menu", { name: "Turn into" })).toBeVisible();
+  await expect(toolbar.getByRole("menuitemradio", { name: "Heading 1" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(toolbar.getByRole("menu", { name: "Turn into" })).toBeHidden();
+  await expect(surface).toBeFocused();
+  await expect(toolbar).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`${url}$`));
+  await page.keyboard.press("Tab");
+  await expect(turnInto).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(bold).toBeFocused();
-  await expect(toolbar).toBeVisible();
   await page.keyboard.press("Enter");
 
   // Enter presses the toolbar button without navigating.
@@ -149,21 +164,24 @@ test("the toolbar goes away when focus leaves the editor", async ({ page }) => {
   await expect(toolbar).toBeHidden();
 });
 
-test("the bulleted-list button wraps a paragraph into a list and lifts it back out", async ({ page }) => {
+test("Turn into wraps a paragraph into a list and turns it back into text", async ({ page }) => {
   const url = await createNote(page, unique("List Toggle"), "item\n");
   const surface = await openEditor(page, url);
   const toolbar = page.getByRole("toolbar", { name: "Formatting" });
   await surface.locator("p").click();
   await surface.locator("p").selectText();
-  await toolbar.getByRole("button", { name: "Bulleted list" }).click();
+  // The list buttons became entries of the toolbar's Turn into menu (2026-11-21 list-commands spec, decision 5).
+  await toolbar.getByRole("button", { name: /^Turn into/ }).click();
+  await toolbar.getByRole("menuitemradio", { name: "Bulleted list" }).click();
   await expect(surface.getByRole("listitem")).toHaveCount(1);
-  await expect(toolbar.getByRole("button", { name: "Bulleted list" })).toHaveAttribute("aria-pressed", "true");
+  await expect(toolbar.getByRole("button", { name: "Turn into, Bulleted list" })).toBeVisible();
   let source = await showMarkdown(composer(page));
   await expect(source).toHaveValue("- item\n");
 
   await composer(page).getByRole("button", { name: /^Markdown( source)?$/ }).click();
   await surface.locator("li p").selectText();
-  await toolbar.getByRole("button", { name: "Bulleted list" }).click();
+  await toolbar.getByRole("button", { name: /^Turn into/ }).click();
+  await toolbar.getByRole("menuitemradio", { name: "Text" }).click();
   await expect(surface.getByRole("listitem")).toHaveCount(0);
   source = await showMarkdown(composer(page));
   await expect(source).toHaveValue("item\n");

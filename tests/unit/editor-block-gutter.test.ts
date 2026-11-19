@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { editorViewCtx } from "@milkdown/kit/core";
-import { TextSelection } from "@milkdown/kit/prose/state";
+import { undo } from "@milkdown/kit/prose/history";
+import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import { afterEach, expect, it, vi } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
-import { blockGutter } from "@/components/knowledge/editor/block-gutter";
+import { blockGutter, gutterFits } from "@/components/knowledge/editor/block-gutter";
 import { slashCommands } from "@/components/knowledge/editor/slash-commands";
 
 const rect = (top: number, bottom: number) => ({ x: 20, y: top, left: 20, right: 600, top, bottom, width: 580, height: bottom - top, toJSON: () => ({}) }) as DOMRect;
@@ -194,15 +195,16 @@ it('keeps the controls inside the pane when the gutter hangs past its left edge'
   expect(document.querySelector<HTMLElement>('.kh-block-gutter')!.style.left).toBe('104px');
 });
 
-async function openWithList() {
+async function openWithList(markdown = 'First\n\nSecond', at?: string) {
   const root = document.body.appendChild(document.createElement('div'));
   const slash = slashCommands();
-  const editor = await createMarkdownEditor({ root, markdown: 'First\n\nSecond', className: 'kh-editor', ariaLabel: 'Content', editable: true, onUserEdit: () => {}, onMarkdown: () => {}, allowImage: () => false, extraPlugins: [...slash.plugins, blockGutter()], configure: slash.configure });
+  const editor = await createMarkdownEditor({ root, markdown, className: 'kh-editor', ariaLabel: 'Content', editable: true, onUserEdit: () => {}, onMarkdown: () => {}, allowImage: () => false, extraPlugins: [...slash.plugins, blockGutter()], configure: slash.configure });
   opened.push(editor);
   const view = editor.action(ctx => ctx.get(editorViewCtx));
   view.dom.getBoundingClientRect = () => rect(40, 300);
   [...view.dom.children].forEach((child, index) => { child.getBoundingClientRect = () => rect(40 + index * 60, 80 + index * 60); });
   view.focus();
+  if (at) caretAfter(view, at);
   view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', altKey: true, bubbles: true, cancelable: true }));
   button('Add block below').click();
   const list = document.querySelector<HTMLElement>('.kh-slash-menu')!;
@@ -245,6 +247,43 @@ it('+ then "h2" and Enter makes a Heading 2', async () => {
   expect(view.state.doc.child(1).attrs.level).toBe(2);
   view.dispatch(view.state.tr.insertText('Picked'));
   expect(editor.getMarkdown()).toBe('First\n\n## Picked\n\nSecond\n');
+});
+
+// List commands spec, decision 4: + on an item adds an empty item below and opens the "/" list on it, as on a paragraph.
+it("plus on an item writes a slash", async () => {
+  const { view, list } = await openWithList("- a\n- b\n- c\n", "b");
+  const items = view.state.doc.firstChild!;
+  expect(items.childCount).toBe(4);
+  expect(items.child(2).textContent).toBe("/");
+  expect(view.state.selection.$from.node(-1)).toBe(items.child(2));
+  expect(list.hidden).toBe(false);
+});
+
+it("dismissing takes the slash back", async () => {
+  const { editor, view, list, press } = await openWithList("- a\n- b\n- c\n", "b");
+  press("Escape");
+  expect(list.hidden).toBe(true);
+  expect(view.state.doc.firstChild!.child(2).textContent).toBe("");
+  expect(view.state.selection.$from.node(-1)).toBe(view.state.doc.firstChild!.child(2));
+  // This editor writes an empty item as `- <br />`, the brief's `- `.
+  expect(editor.getMarkdown()).toBe("- a\n- b\n- <br />\n- c\n");
+});
+
+it("plus on a task item", async () => {
+  const { editor, list, press } = await openWithList("- [ ] a\n", "a");
+  expect(list.hidden).toBe(false);
+  press("Escape");
+  // An empty to-do is written `- [ ] <br />`, the brief's `- [ ] `.
+  expect(editor.getMarkdown()).toBe("- [ ] a\n- [ ] <br />\n");
+});
+
+it("choosing from plus turns the new item", async () => {
+  const { editor, view, list, press } = await openWithList("- a\n- b\n- c\n", "b");
+  view.dispatch(view.state.tr.insertText("quo"));
+  press("Enter");
+  expect(list.hidden).toBe(true);
+  view.dispatch(view.state.tr.insertText("Q"));
+  expect(editor.getMarkdown()).toBe("- a\n- b\n\n> Q\n\n- c\n");
 });
 
 // Launcher audit: every block action went through `topLevelBlocks`, so on a list item the
@@ -465,4 +504,360 @@ it("removes the whole list when its only item is deleted among other blocks", as
   button("Move block").click();
   menuItem("Delete").click();
   expect(editor.getMarkdown().trim()).toBe("Before\n\nAfter");
+});
+
+// 2026-11-21 block-unit spec, decisions 5 and 6: the grip of a block inside the range acts on the range.
+const shiftKey = (view: import("@milkdown/kit/prose/view").EditorView, key: string) => view.dom.dispatchEvent(new KeyboardEvent("keydown", { key, shiftKey: true, bubbles: true, cancelable: true }));
+/** `Two`, `Three` chosen as a range whose anchor is `Three`, so the controls stand at `Three`. */
+function rangeTwoThree(view: import("@milkdown/kit/prose/view").EditorView, index = 2) {
+  let pos = 0;
+  for (let at = 0; at < index; at++) pos += view.state.doc.child(at).nodeSize;
+  view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)));
+  shiftKey(view, "ArrowUp");
+  expect([...view.dom.querySelectorAll(".kh-block-in-range")].length).toBe(2);
+}
+const live = () => [...document.querySelectorAll<HTMLElement>('[aria-live="polite"]')].map(region => region.textContent);
+async function openRange() {
+  const opened = await openWith("One\n\nTwo\n\nThree", false);
+  rangeTwoThree(opened.view);
+  reveal(opened.view);
+  return opened;
+}
+
+it("Duplicate acts on the range", async () => {
+  const { editor, view } = await openRange();
+  button("Move block").click();
+  menuItem("Duplicate").click();
+  expect(editor.getMarkdown()).toBe("One\n\nTwo\n\nThree\n\nTwo\n\nThree\n");
+  expect(live()).toContain("2 blocks duplicated");
+  // The copies become the range.
+  expect([...view.dom.querySelectorAll(".kh-block-in-range")].map(node => node.textContent)).toEqual(["Two", "Three"]);
+  // In its direction: the copy of `Three`, the anchor, is the block chosen.
+  expect(view.state.selection).toBeInstanceOf(NodeSelection);
+  expect((view.state.selection as NodeSelection).node.textContent).toBe("Three");
+  expect(view.state.selection.from).toBe([0, 1, 2, 3].reduce((size, at) => size + view.state.doc.child(at).nodeSize, 0));
+});
+
+it("the menu names the count", async () => {
+  await openRange();
+  button("Move block").click();
+  expect(document.querySelector<HTMLElement>('[role="menu"]')!.getAttribute("aria-label")).toBe("Block actions, 2 blocks");
+});
+
+it("Delete, Move up, Turn into Heading 2 act on the range", async () => {
+  const { editor, view } = await openRange();
+  const original = editor.getMarkdown();
+  const restore = () => { undo(view.state, view.dispatch); expect(editor.getMarkdown()).toBe(original); rangeTwoThree(view); };
+  button("Move block").click();
+  menuItem("Delete").click();
+  expect(editor.getMarkdown()).toBe("One\n");
+  expect(live()).toContain("2 blocks deleted");
+  restore();
+  button("Move block").click();
+  menuItem("Move up").click();
+  expect(editor.getMarkdown()).toBe("Two\n\nThree\n\nOne\n");
+  expect(live()).toContain("2 blocks moved");
+  expect([...view.dom.querySelectorAll(".kh-block-in-range")].map(node => node.textContent)).toEqual(["Two", "Three"]);
+  restore();
+  button("Move block").click();
+  menuItem("Turn into").click();
+  menuItem("Heading 2").click();
+  expect(editor.getMarkdown()).toBe("One\n\n## Two\n\n## Three\n");
+  expect(live()).toContain("2 blocks turned into heading 2");
+  restore();
+});
+
+it("Turn into is disabled when one block cannot take it", async () => {
+  const { view } = await openWith("| a | b |\n| --- | --- |\n| 1 | 2 |\n\nPara", false);
+  // The anchor is the paragraph, which alone could become a toggle.
+  rangeTwoThree(view, 1);
+  reveal(view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  expect(menuItem("Toggle").disabled).toBe(true);
+});
+
+it.each([
+  ["a paragraph and a heading 2", "One\n\nPara\n\n## H\n", "Heading 2", false],
+  ["two headings 2", "One\n\n## G\n\n## H\n", "Heading 2", true],
+  ["a code block and a paragraph", "One\n\n```\ncode\n```\n\nPara\n", "Toggle", true],
+  ["a code block and a paragraph", "One\n\n```\ncode\n```\n\nPara\n", "Text", false],
+])("Turn into on %s: %s disabled is %s", async (_name, markdown, label, disabled) => {
+  const { view } = await openWith(markdown, false);
+  rangeTwoThree(view);
+  reveal(view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  expect(menuItem(label).disabled).toBe(disabled);
+});
+
+it("the range's menu entries and a range move do nothing once the editor is read-only", async () => {
+  for (const label of ["Duplicate", "Delete", "Move up"]) {
+    const { editor, view } = await openRange();
+    const original = editor.getMarkdown();
+    button("Move block").click();
+    const item = menuItem(label);
+    view.setProps({ editable: () => false });
+    item.click();
+    expect(editor.getMarkdown()).toBe(original);
+    view.setProps({ editable: () => true });
+  }
+  const { editor, view } = await openRange();
+  const original = editor.getMarkdown();
+  button("Move block").click();
+  menuItem("Turn into").click();
+  const heading = menuItem("Heading 2");
+  view.setProps({ editable: () => false });
+  heading.click();
+  expect(editor.getMarkdown()).toBe(original);
+});
+
+it.each([
+  ["a quote", "> - a\n\nAfter\n", ">\n\nAfter\n"],
+  ["a callout", "> [!NOTE]\n> - a\n\nAfter\n", null],
+])("the grip's Delete on the last item of a list in %s writes no <br />", async (_name, markdown, expected) => {
+  const { editor, view } = await openWith(markdown, false);
+  caretAfter(view, "a");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Delete").click();
+  expect(editor.getMarkdown()).not.toContain("<br");
+  expect(editor.getMarkdown()).not.toContain("- a");
+  if (expected) expect(editor.getMarkdown()).toBe(expected);
+});
+
+it("no Copy link to heading on a range", async () => {
+  const { view } = await openWith("One\n\n## Two\n\n## Three", false);
+  rangeTwoThree(view);
+  reveal(view);
+  button("Move block").click();
+  expect(menuItem("Copy link to heading")).toBeUndefined();
+  expect(menuItem("Duplicate")).toBeDefined();
+});
+
+it("opening the menu keeps the range", async () => {
+  const { view } = await openRange();
+  button("Move block").dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+  button("Move block").click();
+  expect(document.querySelector<HTMLElement>(".kh-block-move-menu")!.hidden).toBe(false);
+  expect([...view.dom.querySelectorAll(".kh-block-in-range")].map(node => node.textContent)).toEqual(["Two", "Three"]);
+});
+
+it("the grip of a block outside the range ends it", async () => {
+  const { editor, view } = await openRange();
+  view.dom.dispatchEvent(new MouseEvent("mousemove", { clientX: 25, clientY: 60, bubbles: true }));
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+  button("Move block").dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+  expect(view.dom.querySelectorAll(".kh-block-in-range").length).toBe(0);
+  button("Move block").click();
+  expect(document.querySelector<HTMLElement>('[role="menu"]')!.getAttribute("aria-label")).toBe("Block actions");
+  menuItem("Duplicate").click();
+  expect(editor.getMarkdown()).toBe("One\n\nOne\n\nTwo\n\nThree\n");
+});
+
+it("dragging a grip inside the range moves the range", async () => {
+  const { editor, view } = await openRange();
+  drag("dragstart", button("Move block"));
+  expect([...view.dom.querySelectorAll(".kh-block-drag-source")].map(node => node.textContent)).toEqual(["Two", "Three"]);
+  drag("dragover", view.dom, 50);
+  drag("drop", view.dom, 50);
+  expect(editor.getMarkdown()).toBe("Two\n\nThree\n\nOne\n");
+  expect(view.dom.querySelector(".kh-block-drag-source")).toBeNull();
+  expect(live()).toContain("2 blocks moved");
+});
+
+// Controller ruling: the menu and a single block's drag move by the sequence rule, as the keys do.
+it("Move down on a paragraph above a list passes one item, not the whole list", async () => {
+  const { editor, view } = await openWith("Para\n\n- a\n- b\n", false);
+  caretAfter(view, "Para");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Move down").click();
+  expect(editor.getMarkdown()).toBe("- a\n\nPara\n\n- b\n");
+});
+
+it("Move down on a list's last item takes it out of the list", async () => {
+  const { editor, view } = await openWith("- a\n- b\n\nPara\n", false);
+  caretAfter(view, "b");
+  reveal(view);
+  button("Move block").click();
+  expect(menuItem("Move down").disabled).toBe(false);
+  menuItem("Move down").click();
+  expect(editor.getMarkdown()).toBe("- a\n\nPara\n\n- b\n");
+});
+
+// Block-unit spec decision 7: the pointer anywhere on a block's line shows its controls.
+async function openWide() {
+  const opened = await open(false);
+  // Room for a gutter left of the text: the editor starts 100px in.
+  opened.view.dom.getBoundingClientRect = () => ({ ...rect(40, 300), left: 100, x: 100 });
+  return opened;
+}
+const move = async (view: import("@milkdown/kit/prose/view").EditorView, x: number, y = 60) => {
+  view.dom.dispatchEvent(new MouseEvent("mousemove", { clientX: x, clientY: y, bubbles: true }));
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+};
+const gutterToolbar = () => document.querySelector<HTMLElement>(".kh-block-gutter")!;
+
+it("pointer over the text shows the controls", async () => {
+  const { view } = await openWide();
+  await move(view, 300, 130);
+  expect(gutterToolbar().hidden).toBe(false);
+  expect(gutterToolbar().style.top).toBe("100px");
+});
+
+it("typing hides them until the pointer moves", async () => {
+  const { view } = await openWide();
+  await move(view, 300);
+  expect(gutterToolbar().hidden).toBe(false);
+  view.dom.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true }));
+  expect(gutterToolbar().hidden).toBe(true);
+  await move(view, 300);
+  expect(gutterToolbar().hidden).toBe(true);
+  await move(view, 310);
+  expect(gutterToolbar().hidden).toBe(false);
+});
+
+it("a pure modifier key does not hide them", async () => {
+  const { view } = await openWide();
+  await move(view, 300);
+  view.dom.dispatchEvent(new KeyboardEvent("keydown", { key: "Shift", bubbles: true }));
+  expect(gutterToolbar().hidden).toBe(false);
+});
+
+it("a held mouse button keeps them hidden", async () => {
+  const { view } = await openWide();
+  await move(view, 300);
+  view.dom.dispatchEvent(new MouseEvent("mousedown", { clientX: 300, clientY: 60, bubbles: true }));
+  expect(gutterToolbar().hidden).toBe(true);
+  await move(view, 320);
+  expect(gutterToolbar().hidden).toBe(true);
+  document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+  await move(view, 330);
+  expect(gutterToolbar().hidden).toBe(false);
+});
+
+it("a text drag that ends without a mouseup does not keep them hidden", async () => {
+  const { view } = await openWide();
+  await move(view, 300);
+  view.dom.dispatchEvent(new MouseEvent("mousedown", { clientX: 300, clientY: 60, bubbles: true }));
+  expect(gutterToolbar().hidden).toBe(true);
+  // A native drag of selected text: the browser sends dragend, never mouseup.
+  view.dom.dispatchEvent(new Event("dragend", { bubbles: true }));
+  await move(view, 330);
+  expect(gutterToolbar().hidden).toBe(false);
+});
+
+it("the gutter's room is measured once, again after a resize or scroll, not on every pointer move", async () => {
+  const { view } = await openWide();
+  await move(view, 300);
+  expect(gutterToolbar().hidden).toBe(false);
+  // The pane narrows without telling anyone: the pointer keeps the trigger it had.
+  view.dom.getBoundingClientRect = () => rect(40, 300);
+  await move(view, 310);
+  expect(gutterToolbar().hidden).toBe(false);
+  window.dispatchEvent(new Event("resize"));
+  await move(view, 320);
+  expect(gutterToolbar().hidden).toBe(true);
+  view.dom.getBoundingClientRect = () => ({ ...rect(40, 300), left: 100, x: 100 });
+  document.dispatchEvent(new Event("scroll"));
+  await move(view, 330);
+  expect(gutterToolbar().hidden).toBe(false);
+});
+
+it("a narrow gutter keeps the gutter-only trigger", async () => {
+  const { view } = await open(false);
+  expect(gutterFits(view.dom)).toBe(false);
+  await move(view, 200);
+  expect(gutterToolbar().hidden).toBe(true);
+  await move(view, 25);
+  expect(gutterToolbar().hidden).toBe(false);
+});
+
+it("gutterFits measures against the nearest clipping ancestor", async () => {
+  const { view } = await openWide();
+  expect(gutterFits(view.dom)).toBe(true);
+  const clip = document.body.appendChild(document.createElement("div"));
+  clip.style.overflowX = "auto";
+  clip.appendChild(view.dom.parentElement!);
+  clip.getBoundingClientRect = () => ({ ...rect(0, 900), left: 80, x: 80 });
+  expect(gutterFits(view.dom)).toBe(false);
+  clip.getBoundingClientRect = () => ({ ...rect(0, 900), left: 40, x: 40 });
+  expect(gutterFits(view.dom)).toBe(true);
+});
+
+it.each([
+  ["a flat list, one item", "- A\n- B\n- C\n", false, "- A\n- C\n"],
+  ["a flat list, a range", "- A\n- B\n- C\n", true, "- A\n"],
+  ["a nested list, one item", "- Outer\n  - A\n  - B\n  - C\n", false, "- Outer\n  - A\n  - C\n"],
+  ["a nested list, a range", "- Outer\n  - A\n  - B\n  - C\n", true, "- Outer\n  - A\n"],
+] as const)("Alt+F10 targets the chosen item or range in %s (range %s)", async (_name, markdown, range, remaining) => {
+  const { editor, view } = await openWith(markdown, false);
+  caretAfter(view, "B");
+  view.dom.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+  if (range) shiftKey(view, "ArrowDown");
+  reveal(view);
+  expect(document.activeElement).toBe(button("Add block below"));
+  button("Move block").focus();
+  button("Move block").click();
+  expect(document.querySelector('[role="menu"]')?.getAttribute("aria-label")).toBe(range ? "Block actions, 2 blocks" : "Block actions");
+  menuItem("Delete").click();
+  expect(editor.getMarkdown()).toBe(remaining);
+  expect(undo(view.state, view.dispatch)).toBe(true);
+  expect(editor.getMarkdown()).toBe(markdown);
+});
+
+it("marks the current kind aria-current in the grip's Turn into for a single block, and disables it", async () => {
+  const { view } = await openWith("- First\n- Second\n", false);
+  caretAfter(view, "Second");
+  reveal(view);
+  button("Move block").click();
+  menuItem("Turn into").click();
+  const current = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"][aria-current="true"]')];
+  expect(current.map((item) => item.textContent)).toEqual(["Bulleted list"]);
+  expect(current[0].disabled).toBe(true);
+  expect(menuItem("Numbered list").disabled).toBe(false);
+});
+
+// List commands spec, decision 4, the cases Task 2 left untested: a nested item, an item with children, and leaving
+// the line without choosing.
+it("plus on a nested item adds an empty sibling in the nested list, with the / list open on it", async () => {
+  const { editor, view, list, press } = await openWithList("- a\n  - b\n  - c\n- d\n", "b");
+  const nested = view.state.doc.firstChild!.child(0).child(1);
+  expect(nested.childCount).toBe(3);
+  expect(nested.child(1).textContent).toBe("/");
+  expect(view.state.selection.$from.node(-1)).toBe(nested.child(1));
+  expect(list.hidden).toBe(false);
+  press("Escape");
+  expect(editor.getMarkdown()).toBe("- a\n  - b\n  - <br />\n  - c\n- d\n");
+});
+
+it("plus on an item with children adds the new item after the item and its nested list", async () => {
+  const { editor, view, list, press } = await openWithList("- a\n  - b\n- c\n", "a");
+  const items = view.state.doc.firstChild!;
+  expect(items.childCount).toBe(3);
+  expect(items.child(0).childCount).toBe(2);
+  expect(items.child(1).textContent).toBe("/");
+  expect(list.hidden).toBe(false);
+  view.dispatch(view.state.tr.insertText("h2"));
+  press("Enter");
+  view.dispatch(view.state.tr.insertText("H"));
+  expect(editor.getMarkdown()).toBe("- a\n  - b\n\n## H\n\n- c\n");
+});
+
+it("clicking away after plus on an item takes the lone / back and leaves the empty item", async () => {
+  const { editor, view, list } = await openWithList("- a\n- b\n", "a");
+  expect(list.hidden).toBe(false);
+  view.dom.blur();
+  view.dom.dispatchEvent(new FocusEvent("blur"));
+  expect(list.hidden).toBe(true);
+  expect(view.state.doc.firstChild!.child(1).textContent).toBe("");
+  expect(editor.getMarkdown()).toBe("- a\n- <br />\n- b\n");
+});
+
+it("moving the caret out after plus on an item takes the lone / back too", async () => {
+  const { editor, view, list } = await openWithList("- a\n- b\n", "a");
+  caretAfter(view, "b");
+  expect(list.hidden).toBe(true);
+  expect(editor.getMarkdown()).toBe("- a\n- <br />\n- b\n");
 });

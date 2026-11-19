@@ -103,7 +103,65 @@ Nothing stored changes.
    the same text stays selected, so a mark can follow.
 7. **Every entry point gives the same result.** The toolbar, the grip menu,
    the `/` list and the turn keys call the same function for the same blocks.
+   Changing between a bulleted item and a to-do with either list shortcut splits the list around
+   the converted item, as the grip does. Pressing the shortcut for the current kind still lifts it.
    A test turns the same item through each and compares the saved Markdown.
+
+## Deviations
+
+- **A bullet ↔ to-do change splits the list.** Both list shortcuts, the grip, the toolbar and the `/` list
+  turn the item through the same split: the converted item becomes a one-item list of its own, and the
+  items before and after it stay in lists of the original kind. The writer separates adjacent lists with a
+  blank line and alternates the marker (`-` / `*`) so they re-read as two lists: converting the first item
+  gives `- [ ] one`, blank line, `* two`; converting the middle of three gives `- alpha`, blank line,
+  `* [ ] beta`, blank line, `- gamma`. This round-trips byte-identically, but it replaces the older
+  in-place change (one list, only the item's `checked` toggled).
+- **An item with a nested list keeps it under `/`.** Decision 2 says a choice made with `/query` alone replaces
+  the item. Some choices would drop the item's nested list: Text, a heading, Quote and Code (Turn into's leaf kinds),
+  and Divider, Table, Diagram, Toggle and Callout. For these, the `/` list puts the block below the item and its
+  nested list, as a choice made after text does (decision 3), and leaves the item's first line empty. The grip's Turn
+  into refuses these kinds on such an item (`canTurnInto`), so here the two entries give different results, and
+  decision 7's parity test excludes this case. The `/` path is chosen because it is safer than losing content: the
+  writer typed `/`, and a choice should not silently delete the item's children.
+- **In an item, a divider brings an empty line after it.** A divider there is followed by an empty paragraph, and
+  the caret goes into it, as `/hr` does at the top level. Otherwise, in a list's last item, the caret would stay on
+  the divider and the next key would replace it, and in a middle item the next key would type into the next item. A
+  divider chosen in a middle item therefore saves as list, divider, empty line (`<br />`), list. A table keeps the
+  caret in its first cell, as at the top level.
+- **An item whose first line is empty saves without that line.** Milkdown writes an empty paragraph as `<br />`. At
+  the start of an item that holds a nested list, `- <br />` begins an HTML block, which swallows the indented lines
+  after it, so the nested list was lost on reopening. Emptying a parent item's text did this before this spec, and
+  the deviation above makes it routine. Such an item is now written `-` with its nested list below, which reads back
+  as the same item (`editor/empty-quote.ts`). A to-do keeps `- [ ] <br />`: after the box the tag is inline, and the
+  nested list reads back. A loose item (a blank line between its children) keeps `- <br />`: there the blank line
+  already ends the HTML block, so what follows reads back inside the item.
+
+- **`Mod-Alt-0`…`3` turn a list item from its first line.** `2026-11-19-editor-keys-caret-design.md` (decision 5)
+  left `0`–`3` to Milkdown. On an item's first line Milkdown's keys set that line to a heading, which an item cannot
+  start with, so they did nothing while the grip turned the item; decision 7's parity test found it. With the caret on
+  an item's first line these four keys now call the grip's turn, and the key is claimed even where the turn is refused
+  (an item with a nested list), where Milkdown's did nothing either. A selection that touches several blocks, at
+  least one of them an item, turns all of them as the toolbar does; it is claimed even where the turn is refused,
+  matching the toolbar's disabled entries. Anywhere else they stay Milkdown's: with a single caret block, a loose
+  item's later paragraph or a code block in an item still turns in place, and a paragraph in a quote still becomes a
+  heading in the quote. Inside a quote, a callout or a toggle's body the keys turn the caret's item within its
+  container, and so does the toolbar's Turn into: a selection in an item there touches that item (the container
+  rule, the whole quote or callout, and every entry disabled in a toggle's body, is for the container's paragraphs,
+  not its items). The grip, whose blocks are the top-level ones and the items of top-level lists, reaches only the
+  container there, so decision 7's parity test covers items of top-level lists only.
+- **A block put inside a list item makes that item loose.** A nested item that a choice turns (decision 2), a block
+  that goes below a nested item (decision 3), and the grip's Turn into on a nested item all leave a block as a child
+  of the parent item. A tight item writes its children without blank lines between them, and there a `---` turned
+  the line above it into a setext heading, a toggle read back as raw HTML in a paragraph, a table as pipe text, and a
+  paragraph after the nested list joined its last item. The split that puts the block there sets the parent item's
+  `spread` in the same transaction, so it is written with blank lines between its children and reads back as the
+  same tree (`tests/unit/editor-slash-commands.test.ts`, "reads back as the same tree"). A split that leaves only
+  lists in the item changes nothing.
+- **The block and table controls step aside while the toolbar's Turn into menu is open.** The toolbar lives inside
+  the document pane, whose `contain: layout` makes a stacking context, so no `z-index` of its own lifts it over the
+  controls drawn on the body at 30, and at 1440 × 900 its menu hangs over the gutter's column. The browser run found
+  the gutter painted over the menu. A `body:has(…)` rule in `globals.css` hides those controls (`visibility: hidden`)
+  while the menu is open.
 
 ## Out of scope, recorded
 
@@ -131,7 +189,8 @@ Nothing stored changes.
     selection.
   - Numbered list enabled in a bulleted item.
   - Several blocks turned with one `Mod-z` back.
-  - Toolbar, grip, `/` and keys give the same Markdown for the same item.
+- `tests/unit/editor-turn-parity.test.ts`: toolbar, grip, `/` and keys give the same result for the same item (the
+  `/` path, which empties the item, by node types and list kinds), for a plain item and an item holding a `[[link]]`.
 - `tests/e2e/zz-list-commands.spec.ts`:
   - The audit's three cases (`+` on an item, `/quo` in an item, Numbered list
     from the toolbar in a bulleted item), read from the saved Markdown.

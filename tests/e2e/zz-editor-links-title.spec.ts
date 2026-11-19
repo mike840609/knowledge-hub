@@ -257,8 +257,11 @@ test.describe("the toolbar's new buttons (13)", () => {
     await toolbar(page).getByRole("button", { name: "Strikethrough" }).click();
     await toolbar(page).getByRole("button", { name: "Inline code" }).click();
     await expect(surface.locator("code")).toHaveText("gamma");
-    await toolbar(page).getByRole("button", { name: "Heading 3" }).click();
+    // Heading 3 is an entry of the toolbar's Turn into menu (2026-11-21 list-commands spec, decision 5).
+    await toolbar(page).getByRole("button", { name: /^Turn into/ }).click();
+    await toolbar(page).getByRole("menuitemradio", { name: "Heading 3" }).click();
     await expect(surface.locator("h3")).toBeVisible();
+    await expect(toolbar(page).getByRole("button", { name: "Turn into, Heading 3" })).toBeVisible();
     const markdown = await save(page);
     expect(markdown).toContain("### alpha beta `gamma`");
   });
