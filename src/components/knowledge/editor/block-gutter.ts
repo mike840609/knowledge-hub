@@ -280,9 +280,15 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
       let dragging: { blocks: EditorBlock[]; sequence: EditorBlock[] | null; doc: typeof view.state.doc } | null = null;
       let dropAt: number | null = null;
       let frame = 0;
-      let pointerY = 0;
       let destroyed = false;
+      let restoringClippedFocus = false;
+      const pane = dom.closest(".kh-document-pane");
+      const column = dom.closest<HTMLElement>(".kh-reading-column");
+      const boxKey = (rect: DOMRect) => `${rect.left}:${rect.width}`;
+      const layoutKey = (editorRect: DOMRect, scroller?: DOMRect) => `${boxKey(editorRect)}:${scroller ? boxKey(scroller) : ""}`;
+      let positionedAt = "";
       const blockElement = (pos: number) => view.nodeDOM(pos) as HTMLElement | null;
+      const controlsHaveFocus = () => toolbar.contains(document.activeElement) || menu.contains(document.activeElement);
       function closeMenu() { menu.hidden = true; grip.setAttribute("aria-expanded", "false"); }
       function hide() { cancelAnimationFrame(frame); frame = 0; toolbar.hidden = true; closeMenu(); }
       function cancelDrag() {
@@ -300,16 +306,26 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
         }
         return $from.depth > 0 ? $from.before(1) : $from.pos;
       }
-      function position() {
+      function position(editorBox?: DOMRect) {
         if (!view.editable || active === null) { hide(); return; }
         const element = blockElement(active);
         if (!element) { hide(); return; }
         const rect = element.getBoundingClientRect();
-        const editorRect = dom.getBoundingClientRect();
-        const scroller = dom.closest(".kh-document-pane")?.getBoundingClientRect();
-        if (rect.top < Math.max(0, scroller?.top ?? 0) || rect.top > Math.min(window.innerHeight, scroller?.bottom ?? window.innerHeight) - 24) { hide(); return; }
+        const editorRect = editorBox ?? dom.getBoundingClientRect();
+        const scroller = pane?.getBoundingClientRect();
+        if (rect.top < Math.max(0, scroller?.top ?? 0) || rect.top > Math.min(window.innerHeight, scroller?.bottom ?? window.innerHeight) - 24) {
+          const restore = controlsHaveFocus();
+          hide();
+          if (restore) {
+            // ProseMirror restores the caret without scrolling. A coarse pointer must not reopen the clipped controls.
+            restoringClippedFocus = true;
+            try { view.focus(); } finally { restoringClippedFocus = false; }
+          }
+          return;
+        }
         // The gutter hangs left of the text and may run past the pane, which clips it; the controls stay inside.
         const left = Math.max(Math.max(0, scroller?.left ?? 0) + 4, editorRect.left + 4);
+        positionedAt = layoutKey(editorRect, scroller);
         toolbar.style.left = `${left}px`;
         toolbar.style.top = `${rect.top}px`;
         toolbar.hidden = false;
@@ -318,7 +334,7 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
           menu.style.top = `${Math.max(8, Math.min(rect.top + 28, window.innerHeight - menu.offsetHeight - 8))}px`;
         }
       }
-      function pointAt(y: number) {
+      function pointAt(y: number, editorRect: DOMRect) {
         const blocks = topLevelBlocks(view.state.doc);
         let closest = blocks[0]?.pos ?? null;
         let distance = Infinity;
@@ -333,9 +349,8 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
         // this where there is layout; jsdom (and a detached editor) has none, so the top-level
         // block above stays the answer there.
         try {
-          const rect = dom.getBoundingClientRect();
           const gutterWidth = Number.parseFloat(getComputedStyle(dom).paddingLeft) || 56;
-          const at = view.posAtCoords({ left: rect.left + gutterWidth + 4, top: y });
+          const at = view.posAtCoords({ left: editorRect.left + gutterWidth + 4, top: y });
           if (at) {
             const $at = view.state.doc.resolve(at.pos);
             for (let depth = $at.depth; depth >= 1; depth--) {
@@ -362,28 +377,45 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
       let typed = false;
       let held = false;
       let fits: boolean | null = null;
+      let fitAt = "";
       let lastX = 0;
       let lastY = 0;
+      function inHoverTrigger(x: number, rect: DOMRect) {
+        // Anywhere on the block's line when the pane gives the gutter room; otherwise the gutter alone. The room is
+        // re-measured when the editor's box moves or resizes, and after a window resize or scroll, not on every move
+        // (it reads computed styles up the tree).
+        const boxAt = boxKey(rect);
+        if (fits === null || boxAt !== fitAt) {
+          fitAt = boxAt;
+          fits = gutterFits(dom);
+        }
+        if (x < rect.left) return false;
+        if (fits) return x < rect.right;
+        const gutterWidth = Number.parseFloat(getComputedStyle(dom).paddingLeft) || 56;
+        return x < rect.left + gutterWidth;
+      }
+      const showHoveredBlock = () => {
+        frame = 0;
+        if (destroyed || dragging || !menu.hidden || !view.editable || held || typed) return;
+        const rect = dom.getBoundingClientRect();
+        // Layout may change after mousemove, before the frame and before ResizeObserver notices.
+        if (!inHoverTrigger(lastX, rect)) {
+          if (!controlsHaveFocus() && !(usesTouch() && view.hasFocus())) hide();
+          return;
+        }
+        active = pointAt(lastY, rect);
+        position(rect);
+      };
       const hover = (event: MouseEvent) => {
         const moved = event.clientX !== lastX || event.clientY !== lastY;
         lastX = event.clientX; lastY = event.clientY;
         if (typed && moved) typed = false;
         if (dragging || !menu.hidden || !view.editable) return;
-        if (held || typed) { if (!toolbar.contains(document.activeElement)) hide(); return; }
-        const rect = dom.getBoundingClientRect();
-        const gutterWidth = Number.parseFloat(getComputedStyle(dom).paddingLeft) || 56;
-        // Anywhere on the block's line when the pane gives the gutter room; otherwise the gutter alone. The room is
-        // measured once and again after a resize or a scroll, not on every move (it reads computed styles up the tree).
-        fits ??= gutterFits(dom);
-        const inTrigger = fits
-          ? event.clientX >= rect.left && event.clientX < rect.right
-          : event.clientX >= rect.left && event.clientX < rect.left + gutterWidth;
-        if (!inTrigger) {
-          if (!toolbar.contains(document.activeElement)) hide();
+        if (held || typed || !inHoverTrigger(lastX, dom.getBoundingClientRect())) {
+          if (!controlsHaveFocus()) hide();
           return;
         }
-        pointerY = event.clientY;
-        if (!frame) frame = requestAnimationFrame(() => { frame = 0; if (!destroyed) { active = pointAt(pointerY); position(); } });
+        if (!frame) frame = requestAnimationFrame(showHoveredBlock);
       };
       const keydown = (event: KeyboardEvent) => {
         if (["Shift", "Control", "Alt", "Meta"].includes(event.key) || !menu.hidden) return;
@@ -398,7 +430,7 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
         if (menu.hidden && !dragging && !toolbar.contains(document.activeElement)) hide();
       };
       const usesTouch = () => window.matchMedia?.("(hover: none) and (pointer: coarse)").matches ?? false;
-      const focus = () => { active = selectedBlock(); if (usesTouch()) position(); else hide(); };
+      const focus = () => { active = selectedBlock(); if (!restoringClippedFocus && usesTouch()) position(); else hide(); };
       const blur = (event: FocusEvent) => {
         if (event.relatedTarget instanceof Node && (toolbar.contains(event.relatedTarget) || menu.contains(event.relatedTarget))) return;
         hide();
@@ -548,6 +580,23 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
       document.addEventListener("dragover", dragOver, true); document.addEventListener("drop", drop, true); document.addEventListener("dragend", cancelDrag); document.addEventListener("dragleave", dragLeave);
       const reposition = () => { fits = null; if (!toolbar.hidden) position(); };
       window.addEventListener("scroll", reposition, true); window.addEventListener("resize", reposition);
+      const layoutChanged = () => {
+        fits = null;
+        if (toolbar.hidden) return;
+        const changed = positionedAt !== layoutKey(dom.getBoundingClientRect(), pane?.getBoundingClientRect());
+        // Clear stale hover controls while keeping the menu and controls reached by keyboard or touch available.
+        if (changed && menu.hidden && !toolbar.contains(document.activeElement) && !(usesTouch() && view.hasFocus())) hide();
+        else position();
+      };
+      // The inspector can resize the pane without resizing the window or the capped reading column.
+      const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(layoutChanged);
+      resizeObserver?.observe(dom);
+      if (pane) resizeObserver?.observe(pane);
+      // The column's animated start margin and padding can move it again without changing either observed size.
+      const columnSettled = (event: TransitionEvent) => {
+        if (event.target === column && /^(margin|padding)-(inline-start|left|right)$/.test(event.propertyName)) layoutChanged();
+      };
+      column?.addEventListener("transitionend", columnSettled);
       return { update(_view, previous) {
         if (dragging && view.state.doc !== dragging.doc) cancelDrag();
         if (!view.editable) { cancelDrag(); hide(); return; }
@@ -558,6 +607,8 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
         dom.removeEventListener("mousemove", hover); dom.removeEventListener("keydown", keydown); dom.removeEventListener("mousedown", mousedown); document.removeEventListener("mouseup", release); document.removeEventListener("dragend", release); document.removeEventListener("drop", release); dom.removeEventListener("mouseleave", leave); dom.removeEventListener("focus", focus); dom.removeEventListener("blur", blur);
         document.removeEventListener("pointerdown", outside); document.removeEventListener("dragover", dragOver, true); document.removeEventListener("drop", drop, true); document.removeEventListener("dragend", cancelDrag); document.removeEventListener("dragleave", dragLeave);
         window.removeEventListener("scroll", reposition, true); window.removeEventListener("resize", reposition);
+        resizeObserver?.disconnect();
+        column?.removeEventListener("transitionend", columnSettled);
       } };
     },
   }));
