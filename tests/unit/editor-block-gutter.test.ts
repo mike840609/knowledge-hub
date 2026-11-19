@@ -14,12 +14,12 @@ window.scrollBy = () => {};
 Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
 Range.prototype.getBoundingClientRect = () => rect(0, 0);
 const opened: MarkdownEditor[] = [];
-afterEach(async () => { for (const editor of opened.splice(0)) await editor.destroy(); document.body.innerHTML = ""; });
-async function open(reveal = true) {
-  return openWith('First\n\nSecond\n\nThird', reveal);
+afterEach(async () => { for (const editor of opened.splice(0)) await editor.destroy(); document.body.innerHTML = ""; vi.unstubAllGlobals(); });
+async function open(reveal = true, mount?: HTMLElement) {
+  return openWith('First\n\nSecond\n\nThird', reveal, undefined, undefined, mount);
 }
-async function openWith(markdown: string, reveal = true, comment?: Parameters<typeof blockGutter>[0], linkTo?: () => string) {
-  const root = document.body.appendChild(document.createElement('div'));
+async function openWith(markdown: string, reveal = true, comment?: Parameters<typeof blockGutter>[0], linkTo?: () => string, mount = document.body) {
+  const root = mount.appendChild(document.createElement('div'));
   const editor = await createMarkdownEditor({ root, markdown, className: 'kh-editor', ariaLabel: 'Content', editable: true, onUserEdit: () => {}, onMarkdown: () => {}, allowImage: () => false, extraPlugins: [blockGutter(comment, linkTo)] });
   opened.push(editor);
   const view = editor.action(ctx => ctx.get(editorViewCtx));
@@ -687,10 +687,12 @@ it("Move down on a list's last item takes it out of the list", async () => {
 });
 
 // Block-unit spec decision 7: the pointer anywhere on a block's line shows its controls.
-async function openWide() {
-  const opened = await open(false);
+const wideEditorRect = () => ({ ...rect(40, 300), left: 100, x: 100, width: 500 });
+const narrowEditorRect = () => ({ ...rect(40, 300), right: 420, width: 400 });
+async function openWide(mount?: HTMLElement) {
+  const opened = await open(false, mount);
   // Room for a gutter left of the text: the editor starts 100px in.
-  opened.view.dom.getBoundingClientRect = () => ({ ...rect(40, 300), left: 100, x: 100 });
+  opened.view.dom.getBoundingClientRect = wideEditorRect;
   return opened;
 }
 const move = async (view: import("@milkdown/kit/prose/view").EditorView, x: number, y = 60) => {
@@ -698,6 +700,18 @@ const move = async (view: import("@milkdown/kit/prose/view").EditorView, x: numb
   await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 };
 const gutterToolbar = () => document.querySelector<HTMLElement>(".kh-block-gutter")!;
+
+function observeEditorResize() {
+  let notify: ResizeObserverCallback | undefined;
+  const observed = new Set<Element>();
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(callback: ResizeObserverCallback) { notify = callback; }
+    observe(target: Element) { observed.add(target); }
+    unobserve(target: Element) { observed.delete(target); }
+    disconnect() { observed.clear(); }
+  });
+  return (target: Element) => { if (observed.has(target)) notify?.([], {} as ResizeObserver); };
+}
 
 it("pointer over the text shows the controls", async () => {
   const { view } = await openWide();
@@ -748,21 +762,97 @@ it("a text drag that ends without a mouseup does not keep them hidden", async ()
   expect(gutterToolbar().hidden).toBe(false);
 });
 
-it("the gutter's room is measured once, again after a resize or scroll, not on every pointer move", async () => {
+it("re-measures the gutter's room when the pane's box changes, without a window event", async () => {
   const { view } = await openWide();
   await move(view, 300);
   expect(gutterToolbar().hidden).toBe(false);
-  // The pane narrows without telling anyone: the pointer keeps the trigger it had.
-  view.dom.getBoundingClientRect = () => rect(40, 300);
+  // The reading column narrows for a layout reason (an inspector opens): no resize or scroll reaches the window.
+  view.dom.getBoundingClientRect = narrowEditorRect;
   await move(view, 310);
-  expect(gutterToolbar().hidden).toBe(false);
-  window.dispatchEvent(new Event("resize"));
-  await move(view, 320);
   expect(gutterToolbar().hidden).toBe(true);
-  view.dom.getBoundingClientRect = () => ({ ...rect(40, 300), left: 100, x: 100 });
-  document.dispatchEvent(new Event("scroll"));
+  // Widened again: the text trigger comes back after the next move.
+  view.dom.getBoundingClientRect = wideEditorRect;
   await move(view, 330);
   expect(gutterToolbar().hidden).toBe(false);
+});
+
+it("hides the controls when the pane changes size while the pointer stands still", async () => {
+  const notify = observeEditorResize();
+  const { view } = await openWide();
+  await move(view, 300);
+  expect(gutterToolbar().hidden).toBe(false);
+  // The first delivery and a height-only change leave the hover trigger valid.
+  notify(view.dom);
+  expect(gutterToolbar().hidden).toBe(false);
+  const before = view.dom.getBoundingClientRect();
+  view.dom.getBoundingClientRect = () => ({ ...before, bottom: 400, height: 360 });
+  notify(view.dom);
+  expect(gutterToolbar().hidden).toBe(false);
+  view.dom.getBoundingClientRect = narrowEditorRect;
+  notify(view.dom);
+  expect(gutterToolbar().hidden).toBe(true);
+});
+
+it("hides hover controls when the document pane shrinks before the capped editor moves", async () => {
+  const notify = observeEditorResize();
+  const pane = document.body.appendChild(document.createElement("div"));
+  pane.className = "kh-document-pane";
+  pane.getBoundingClientRect = () => ({ ...rect(0, 900), left: 0, x: 0, right: 1000, width: 1000 });
+  const { view } = await openWide(pane);
+  await move(view, 300);
+  expect(gutterToolbar().hidden).toBe(false);
+  pane.getBoundingClientRect = () => ({ ...rect(0, 900), left: 0, x: 0, right: 680, width: 680 });
+  notify(pane);
+  expect(gutterToolbar().hidden).toBe(true);
+});
+
+it("repositions focused keyboard controls and keeps the block menu open across a resize", async () => {
+  const notify = observeEditorResize();
+  const { view } = await openWide();
+  reveal(view);
+  const add = button("Add block below");
+  expect(document.activeElement).toBe(add);
+  view.dom.getBoundingClientRect = narrowEditorRect;
+  notify(view.dom);
+  expect(gutterToolbar().hidden).toBe(false);
+  expect(document.activeElement).toBe(add);
+  expect(gutterToolbar().style.left).toBe("24px");
+  const grip = button("Move block");
+  grip.click();
+  const first = menuItem("Turn into");
+  expect(document.activeElement).toBe(first);
+  view.dom.getBoundingClientRect = wideEditorRect;
+  notify(view.dom);
+  expect(grip.getAttribute("aria-expanded")).toBe("true");
+  expect(document.activeElement).toBe(first);
+  expect(gutterToolbar().style.left).toBe("104px");
+});
+
+it("repositions touch controls while focus stays in the editor during a resize", async () => {
+  const notify = observeEditorResize();
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(hover: none) and (pointer: coarse)" }));
+  const { view } = await open(false);
+  expect(gutterToolbar().hidden).toBe(false);
+  expect(document.activeElement).toBe(view.dom);
+  view.dom.getBoundingClientRect = () => ({ ...narrowEditorRect(), left: 30, x: 30, width: 390 });
+  notify(view.dom);
+  expect(gutterToolbar().hidden).toBe(false);
+  expect(gutterToolbar().style.left).toBe("34px");
+});
+
+it("repositions focused controls when the reading column finishes sliding without a resize", async () => {
+  const column = document.body.appendChild(document.createElement("div"));
+  column.className = "kh-reading-column";
+  const { view } = await openWide(column);
+  reveal(view);
+  const add = button("Add block below");
+  expect(gutterToolbar().style.left).toBe("104px");
+  view.dom.getBoundingClientRect = () => ({ ...wideEditorRect(), left: 80, x: 80, right: 580 });
+  const finished = new Event("transitionend", { bubbles: true });
+  Object.defineProperty(finished, "propertyName", { value: "margin-left" });
+  column.dispatchEvent(finished);
+  expect(gutterToolbar().style.left).toBe("84px");
+  expect(document.activeElement).toBe(add);
 });
 
 it("a narrow gutter keeps the gutter-only trigger", async () => {

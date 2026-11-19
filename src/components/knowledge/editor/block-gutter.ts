@@ -282,6 +282,11 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
       let frame = 0;
       let pointerY = 0;
       let destroyed = false;
+      const pane = dom.closest(".kh-document-pane");
+      const column = dom.closest<HTMLElement>(".kh-reading-column");
+      const boxKey = (rect: DOMRect) => `${rect.left}:${rect.width}`;
+      const layoutKey = (editorRect: DOMRect, scroller?: DOMRect) => `${boxKey(editorRect)}:${scroller ? boxKey(scroller) : ""}`;
+      let positionedAt = "";
       const blockElement = (pos: number) => view.nodeDOM(pos) as HTMLElement | null;
       function closeMenu() { menu.hidden = true; grip.setAttribute("aria-expanded", "false"); }
       function hide() { cancelAnimationFrame(frame); frame = 0; toolbar.hidden = true; closeMenu(); }
@@ -306,10 +311,11 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
         if (!element) { hide(); return; }
         const rect = element.getBoundingClientRect();
         const editorRect = dom.getBoundingClientRect();
-        const scroller = dom.closest(".kh-document-pane")?.getBoundingClientRect();
+        const scroller = pane?.getBoundingClientRect();
         if (rect.top < Math.max(0, scroller?.top ?? 0) || rect.top > Math.min(window.innerHeight, scroller?.bottom ?? window.innerHeight) - 24) { hide(); return; }
         // The gutter hangs left of the text and may run past the pane, which clips it; the controls stay inside.
         const left = Math.max(Math.max(0, scroller?.left ?? 0) + 4, editorRect.left + 4);
+        positionedAt = layoutKey(editorRect, scroller);
         toolbar.style.left = `${left}px`;
         toolbar.style.top = `${rect.top}px`;
         toolbar.hidden = false;
@@ -362,6 +368,7 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
       let typed = false;
       let held = false;
       let fits: boolean | null = null;
+      let fitAt = "";
       let lastX = 0;
       let lastY = 0;
       const hover = (event: MouseEvent) => {
@@ -373,8 +380,13 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
         const rect = dom.getBoundingClientRect();
         const gutterWidth = Number.parseFloat(getComputedStyle(dom).paddingLeft) || 56;
         // Anywhere on the block's line when the pane gives the gutter room; otherwise the gutter alone. The room is
-        // measured once and again after a resize or a scroll, not on every move (it reads computed styles up the tree).
-        fits ??= gutterFits(dom);
+        // re-measured when the editor's box moves or resizes, and after a window resize or scroll, not on every move
+        // (it reads computed styles up the tree).
+        const boxAt = boxKey(rect);
+        if (fits === null || boxAt !== fitAt) {
+          fitAt = boxAt;
+          fits = gutterFits(dom);
+        }
         const inTrigger = fits
           ? event.clientX >= rect.left && event.clientX < rect.right
           : event.clientX >= rect.left && event.clientX < rect.left + gutterWidth;
@@ -548,6 +560,23 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
       document.addEventListener("dragover", dragOver, true); document.addEventListener("drop", drop, true); document.addEventListener("dragend", cancelDrag); document.addEventListener("dragleave", dragLeave);
       const reposition = () => { fits = null; if (!toolbar.hidden) position(); };
       window.addEventListener("scroll", reposition, true); window.addEventListener("resize", reposition);
+      const layoutChanged = () => {
+        fits = null;
+        if (toolbar.hidden) return;
+        const changed = positionedAt !== layoutKey(dom.getBoundingClientRect(), pane?.getBoundingClientRect());
+        // Clear stale hover controls while keeping the menu and controls reached by keyboard or touch available.
+        if (changed && menu.hidden && !toolbar.contains(document.activeElement) && !(usesTouch() && view.hasFocus())) hide();
+        else position();
+      };
+      // The inspector can resize the pane without resizing the window or the capped reading column.
+      const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(layoutChanged);
+      resizeObserver?.observe(dom);
+      if (pane) resizeObserver?.observe(pane);
+      // The column's animated start margin and padding can move it again without changing either observed size.
+      const columnSettled = (event: TransitionEvent) => {
+        if (event.target === column && /^(margin|padding)-(inline-start|left|right)$/.test(event.propertyName)) layoutChanged();
+      };
+      column?.addEventListener("transitionend", columnSettled);
       return { update(_view, previous) {
         if (dragging && view.state.doc !== dragging.doc) cancelDrag();
         if (!view.editable) { cancelDrag(); hide(); return; }
@@ -558,6 +587,8 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
         dom.removeEventListener("mousemove", hover); dom.removeEventListener("keydown", keydown); dom.removeEventListener("mousedown", mousedown); document.removeEventListener("mouseup", release); document.removeEventListener("dragend", release); document.removeEventListener("drop", release); dom.removeEventListener("mouseleave", leave); dom.removeEventListener("focus", focus); dom.removeEventListener("blur", blur);
         document.removeEventListener("pointerdown", outside); document.removeEventListener("dragover", dragOver, true); document.removeEventListener("drop", drop, true); document.removeEventListener("dragend", cancelDrag); document.removeEventListener("dragleave", dragLeave);
         window.removeEventListener("scroll", reposition, true); window.removeEventListener("resize", reposition);
+        resizeObserver?.disconnect();
+        column?.removeEventListener("transitionend", columnSettled);
       } };
     },
   }));
