@@ -172,7 +172,20 @@ function pasteCopiedList(view: EditorView, event: ClipboardEvent, slice: Slice):
     if ($from.depth === depth + 1 && $from.parentOffset === 0 && $from.index(depth) === 0 &&
         (!selection.empty || $from.parent.content.size > 0 || $from.node(depth).childCount > 1)) {
       const from = $from.before(depth);
-      const to = selection.empty ? from : selection.to;
+      let to = selection.empty ? from : selection.to;
+      const { $to } = selection;
+      if (!selection.empty && $to.parentOffset === $to.parent.content.size) {
+        // Include the end of a fully selected nested item so fitting the slice cannot leave
+        // an empty item behind. Stop if there is unselected content, including child lists.
+        for (let endDepth = $to.depth - 1; endDepth > depth; endDepth--) {
+          const node = $to.node(endDepth);
+          if ($to.indexAfter(endDepth) < node.childCount) break;
+          if (node.type.name === "list_item") {
+            to = $to.after(endDepth);
+            break;
+          }
+        }
+      }
       tr.replaceRange(from, to, items);
       tr.setSelection(Selection.near(tr.doc.resolve(tr.mapping.map(to))));
     } else {

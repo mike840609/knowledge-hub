@@ -930,3 +930,27 @@ it("pasting from an ordered item into a paragraph keeps the paragraph's unselect
   expect(md(editor)).toBe(markdown);
   expect(view.state.selection).toEqual(TextSelection.create(view.state.doc, from, to));
 });
+
+it.each([
+  [7, "- DEEChild"],
+  [2, "- Child\n   - DEEChild"],
+])("pasting through a nested item ending at offset %i keeps only its unselected content", async (end, nested) => {
+  const source = await open("5. B\n");
+  escapeOn(source.view, "B");
+  const { data } = clipEvent(source.view, "copy");
+  const markdown = "8. DDDD\n   - DDChild\n   - DEEChild\n9. E\n";
+  const { view, editor } = await open(markdown);
+  let from = 0;
+  let to = 0;
+  view.state.doc.descendants((node, pos) => {
+    if (node.text === "DDDD") from = pos;
+    if (node.text === "DDChild") to = pos + end;
+  });
+  const selection = TextSelection.create(view.state.doc, from, to);
+  view.dispatch(view.state.tr.setSelection(selection));
+  pasteClipboard(view, data);
+  expect(md(editor)).toBe(`8. B\n9.\n   ${nested}\n10. E\n`);
+  expect(undo(view.state, view.dispatch)).toBe(true);
+  expect(md(editor)).toBe(markdown);
+  expect(view.state.selection).toEqual(selection);
+});
