@@ -43,6 +43,29 @@ function testDestinations() {
 
   base.describe("mobile sidebar destinations", () => {
     base.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
+    for (const [route, name] of [["home", "Knowledge"], ["sources", "Knowledge / Sources"]]) {
+      base(`the ${route} Knowledge label fits in the touch drawer`, async ({ page }) => {
+        const workspace = `/w/${await personalWorkspaceId(page)}`;
+        await page.addInitScript(() => localStorage.setItem("kh:density", "compact"));
+        await page.goto(`${workspace}/${route}`);
+        await page.getByRole("button", { name: "Open menu", exact: true }).tap();
+        const drawer = page.getByRole("dialog", { name: "Menu", exact: true });
+        const trigger = drawer.getByRole("button", { name, exact: true });
+        const { textFits, height } = await trigger.evaluate((button) => {
+          const text = button.querySelector("span")!;
+          const range = document.createRange();
+          range.selectNodeContents(text);
+          const bounds = text.getBoundingClientRect();
+          return {
+            textFits: [...range.getClientRects()].every((line) => line.right <= bounds.right + 1),
+            height: button.getBoundingClientRect().height,
+          };
+        });
+        expect(textFits).toBe(true);
+        expect(height).toBe(40);
+      });
+    }
+
     base("Knowledge destinations work in the touch drawer", async ({ page }) => {
       const workspace = `/w/${await personalWorkspaceId(page)}`;
       await page.goto(`${workspace}/home`);

@@ -36,8 +36,8 @@ export function KnowledgeDestinations({ workspaceId }: { workspaceId: string }) 
   return (
     <Popover.Root open={openOn === pathname} onOpenChange={(open) => setOpenOn(open ? pathname : null)}>
       <h2 className="min-w-0 flex-1">
-        <Popover.Trigger title={label} className="kh-control kh-rail-row kh-focus-ring flex max-w-full items-center gap-1 rounded-md px-2 text-left text-caption font-medium text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text data-[popup-open]:bg-kh-bg-hover data-[popup-open]:text-kh-text">
-          <span className="truncate">{label}</span>
+        <Popover.Trigger title={label} className="kh-control kh-rail-row kh-focus-ring flex max-w-full items-center gap-0.5 rounded-md px-0.5 text-left text-caption font-medium text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text data-[popup-open]:bg-kh-bg-hover data-[popup-open]:text-kh-text">
+          <span className="leading-none">Knowledge{current && <> <span className="inline-block whitespace-nowrap">/ {current.name}</span></>}</span>
           <ChevronDown size={13} className="shrink-0" aria-hidden="true" />
         </Popover.Trigger>
       </h2>
