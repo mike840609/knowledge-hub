@@ -1,3 +1,4 @@
+import { openKnowledgeDestinations } from "./fixtures/knowledge-destinations";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { chooseOption, expectOptions } from "./fixtures/select-menu";
 import { tmpdir } from "node:os";
@@ -96,7 +97,10 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       expect(denied.status()).toBe(403);
       await viewer.page.goto(`/w/${id}/knowledge`);
       await expect(viewer.page.getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
-      await expect(viewer.page.getByRole("link", { name: "Sources", exact: true })).toHaveCount(0);
+      const viewerDestinations = await openKnowledgeDestinations(viewer.page);
+      await expect(viewerDestinations.getByRole("link", { name: "Graph", exact: true })).toBeVisible();
+      await expect(viewerDestinations.getByRole("link", { name: /^(Sources|Shares)$/ })).toHaveCount(0);
+      await viewer.page.keyboard.press("Escape");
       await expect(viewer.page.getByRole("link", { name: "Import knowledge" })).toHaveCount(0);
       await viewer.page.goto(`/w/${id}/sources/import`);
       await expect(viewer.page.locator('input[type="file"]')).toHaveCount(0);
@@ -290,7 +294,7 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       await expect(owner.page.getByLabel("Archived workspace", { exact: true })).toBeVisible();
       release();
       await expect(owner.page.locator('input[type="file"]')).toHaveCount(0);
-      await expect(owner.page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Sources", exact: true })).toBeVisible();
+      await expect((await openKnowledgeDestinations(owner.page)).getByRole("link", { name: "Sources", exact: true })).toBeVisible();
     } finally { release(); await owner.context.close(); }
   });
 

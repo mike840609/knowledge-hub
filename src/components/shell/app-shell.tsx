@@ -188,7 +188,9 @@ export function AppShell({
     const trigger = desktopTrigger.current;
     const inboxFocused = active instanceof HTMLAnchorElement && active.pathname === inboxHref
       && active.closest("aside") === trigger?.closest("aside");
-    if (inboxFocused || (!navCollapsed && desktopKnowledgeSlot?.contains(active))) {
+    const compactDestinationFocused = navCollapsed && active instanceof HTMLElement
+      && active.hasAttribute("data-compact-destination") && active.closest("aside") === trigger?.closest("aside");
+    if (inboxFocused || compactDestinationFocused || (!navCollapsed && desktopKnowledgeSlot?.contains(active))) {
       trigger?.focus();
     }
     setNavCollapsed((collapsed) => !collapsed);

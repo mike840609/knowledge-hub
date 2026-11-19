@@ -29,7 +29,8 @@ test.describe("Team-enabled fixture routes", () => {
     await expect(page.getByText("Knowledge Hub", { exact: true }).filter({ visible: true })).toBeVisible();
     await expect(page.getByLabel("Workspace: Query Master", { exact: true })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Document tree", exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Sources" })).toBeVisible();
+    await expect((await openKnowledgeDestinations(page)).getByRole("link", { name: "Sources", exact: true })).toBeVisible();
     await expect(page.getByText(/Organization:/)).toHaveCount(0);
   });
 });
+import { openKnowledgeDestinations } from "./fixtures/knowledge-destinations";

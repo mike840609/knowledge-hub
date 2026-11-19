@@ -64,27 +64,18 @@ function WorkspaceKnowledge({ workspaceId, sources, target, onClick }: Workspace
     <>
       {portal && createPortal(
         <div className="contents" onClick={onClick}>
-          {sources === null ? (
-            <aside aria-label="Knowledge explorer" className="px-2">
-              <h2 className="text-caption font-medium text-kh-text-muted">Knowledge</h2>
-              <p role="status" className="mt-2 text-body text-kh-text-muted">
-                Sources could not be loaded.{" "}
-                <button type="button" className="underline kh-focus-ring" onClick={() => router.refresh()}>Retry</button>
-              </p>
-            </aside>
-          ) : (
             <SourceSidebar
               workspaceId={workspaceId}
               source={source}
               defaultSourceId={defaultSourceId}
               selectedDocumentId={selectedDocumentId}
-              sources={sources}
+              sources={headers}
               collections={trees.collections}
               treeStates={trees.states}
-              ensureTree={trees.ensure}
+              ensureTree={sources === null ? undefined : trees.ensure}
               retryTree={trees.retry}
+              onRetrySources={sources === null ? () => router.refresh() : undefined}
             />
-          )}
         </div>,
         portal,
       )}

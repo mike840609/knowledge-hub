@@ -58,9 +58,10 @@ test.describe("the workspace graph", () => {
 
     // Reached from the primary navigation.
     await page.goto(`/w/${workspaceId}/knowledge`);
-    await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Graph" }).click();
+    await (await openKnowledgeDestinations(page)).getByRole("link", { name: "Graph", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/graph$`), ROUND_TRIP);
-    await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Graph" })).toHaveAttribute("aria-current", "page");
+    await expect((await openKnowledgeDestinations(page)).getByRole("link", { name: "Graph", exact: true })).toHaveAttribute("aria-current", "page");
+    await page.keyboard.press("Escape");
     await expect(page.getByRole("group", { name: /^Knowledge graph, \d+ nodes?, \d+ links?$/ })).toBeVisible(ROUND_TRIP);
 
     // A and B link to each other; C is an orphan, and shown by default.
@@ -111,7 +112,7 @@ test.describe("the workspace graph", () => {
     await expect(page.getByRole("row", { name: new RegExp(`${missing}.*Unresolved`) })).toBeVisible();
 
     // A node is a real link: it opens its document.
-    await page.getByRole("link", { name: "Graph", exact: true }).first().click();
+    await (await openKnowledgeDestinations(page)).getByRole("link", { name: "Graph", exact: true }).click();
     await page.goto(`/w/${workspaceId}/graph?unresolved=1`);
     await node(page, a).locator("circle").last().click();
     await expect(page).toHaveURL(docA.url, ROUND_TRIP);
@@ -193,3 +194,4 @@ test("the source filter stays inside its slot and clear of the toggles beside it
   const sameRow = Math.abs((box.y + box.height / 2) - (orphans.y + orphans.height / 2)) < 8;
   if (sameRow) expect(box.x + box.width).toBeLessThanOrEqual(orphans.x);
 });
+import { openKnowledgeDestinations } from "./fixtures/knowledge-destinations";
