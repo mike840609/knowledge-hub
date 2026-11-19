@@ -19,6 +19,12 @@ const button = (name: string) => document.querySelector<HTMLButtonElement>(`butt
 const item = (name: string) => [...document.querySelectorAll<HTMLElement>('[role=menu]:not([hidden]) [role^=menuitem]')].find(el => el.textContent === name)!;
 const choose = (grip: string, name: string) => { button(grip).click(); item(name).click(); };
 const rows = (view: EditorView) => { const out: number[] = []; view.state.doc.descendants(node => { if (/^table_(header_)?row$/.test(node.type.name)) out.push(node.childCount); }); return out; };
+// jsdom has no layout. Give the grips a visible table unless a case supplies its own bounds.
+function showTables(root: HTMLElement) {
+  root.querySelectorAll(".kh-markdown-table").forEach(table => {
+    table.getBoundingClientRect = () => new DOMRect(0, 0, 300, 120);
+  });
+}
 async function open(extraPlugins = [tableActions()]) {
   const root = document.body.appendChild(document.createElement("div"));
   const editor = await createMarkdownEditor({
@@ -27,6 +33,7 @@ async function open(extraPlugins = [tableActions()]) {
     onUserEdit() {}, onMarkdown() {}, allowImage: () => false, extraPlugins,
   });
   editors.push(editor);
+  showTables(root);
   const view = editor.action(ctx => ctx.get(editorViewCtx));
   let pos = 0;
   view.state.doc.descendants((node, position) => {
@@ -45,6 +52,7 @@ async function openMarkdown(markdown: string) {
     onUserEdit() {}, onMarkdown() {}, allowImage: () => false, extraPlugins: [tableActions()],
   });
   editors.push(editor);
+  showTables(root);
   const view = editor.action(ctx => ctx.get(editorViewCtx));
   view.focus();
   return { root, editor, view };
@@ -247,6 +255,7 @@ it("deleting the last body row and then the only column leaves a sound document"
     onUserEdit() {}, onMarkdown() {}, allowImage: () => false, extraPlugins: [tableActions()],
   });
   editors.push(editor);
+  showTables(root);
   const view = editor.action(ctx => ctx.get(editorViewCtx));
   const caretIn = (text: string) => {
     let at = 0;
@@ -434,6 +443,13 @@ it("the controls are clamped to the document pane and the gutter width is read f
   expect(button("Add row").hidden).toBe(false);
   expect(parseFloat(button("Add row").style.left) + parseFloat(button("Add row").style.width)).toBe(650);
 });
+it("hides the row grip when the visible table cannot fit it", async () => {
+  const { root, view } = await open();
+  const table = new DOMRect(100, 100, 300, 90);
+  const row0 = new DOMRect(100, 100, 300, 45);
+  layout(root, view, { table, row0, pane: new DOMRect(50, 170, 600, 400) });
+  expect(button("Row 2 actions").hidden).toBe(true);
+});
 it("keeps the add bars outside the table as its edges scroll through the pane", async () => {
   const { root, view } = await open();
   const pane = new DOMRect(50, 100, 600, 400);
@@ -532,6 +548,7 @@ it("Alt+F10 uses the caret's table, not the one last hovered", async () => {
     onUserEdit() {}, onMarkdown() {}, allowImage: () => false, extraPlugins: [tableActions()],
   });
   editors.push(editor);
+  showTables(root);
   const view = editor.action(ctx => ctx.get(editorViewCtx));
   let one = 0;
   view.state.doc.descendants((node, pos) => { if (node.isText && node.text === "one") one = pos; });

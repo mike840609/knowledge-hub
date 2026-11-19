@@ -1,6 +1,6 @@
 import { closeHistory } from "@milkdown/kit/prose/history";
 import { Fragment, Mark, Slice, type Node as ProseNode } from "@milkdown/kit/prose/model";
-import { NodeSelection, Plugin, PluginKey, Selection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
+import { NodeSelection, Plugin, PluginKey, Selection, TextSelection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 import { blockKind, selectedBlockPos, type BlockKind, type EditorBlock } from "./block-actions";
@@ -152,27 +152,36 @@ function clip(view: EditorView, event: ClipboardEvent, cut: boolean): boolean {
  */
 function pasteCopiedList(view: EditorView, event: ClipboardEvent, slice: Slice): boolean {
   if (!view.editable || !(event.clipboardData?.getData("text/html") ?? "").includes(COPIED_LIST)) return false;
-  const { $from } = view.state.selection;
-  let depth = -1;
-  for (let at = $from.depth; at >= 1; at--) if ($from.node(at).type.name === "list_item") { depth = at; break; }
-  if (depth < 1) return false;
   const list = slice.content.childCount === 1 ? slice.content.firstChild : null;
-  if (!list || list.type !== $from.node(depth - 1).type) return false;
-  const items: ProseNode[] = [];
-  list.forEach((item) => items.push(item));
-  if (!items.length) return false;
-  const item = $from.node(depth);
-  if ($from.parentOffset === 0 && $from.parent === item.firstChild && $from.parent.content.size > 0) {
-    // At the start of the item's text, inserting through replaceSelection would split the paragraph and
-    // leave an empty item above the pasted ones; they belong before the item instead.
-    const at = $from.before(depth);
-    const fragment = Fragment.fromArray(items);
-    const tr = view.state.tr.insert(at, fragment);
-    tr.setSelection(Selection.near(tr.doc.resolve(at + fragment.size)));
-    view.dispatch(tr.scrollIntoView());
-    return true;
+  if (!list || !list.childCount) return false;
+  const { selection } = view.state;
+  const tr = view.state.tr;
+  const items = new Slice(list.content, 0, 0);
+  if (selection instanceof NodeSelection && selection.node.type.name === "list_item") {
+    if (selection.$from.parent.type !== list.type) return false;
+    tr.replaceSelection(items);
+  } else {
+    if (!(selection instanceof TextSelection)) return false;
+    const { $from } = selection;
+    let depth = $from.depth;
+    while (depth > 0 && $from.node(depth).type.name !== "list_item") depth--;
+    if (!depth || $from.node(depth - 1).type !== list.type) return false;
+
+    // Delete selected text first. The remaining text (possibly in a later item) and any nested
+    // children then sit at the insertion point, just as they do when pasting at a caret.
+    tr.deleteSelection();
+    const start = tr.selection.$from;
+    if (start.depth === depth + 1 && start.parentOffset === 0 && start.index(depth) === 0 &&
+        start.node(depth).type.name === "list_item" && start.node(depth - 1).type === list.type &&
+        (start.parent.content.size > 0 || start.node(depth).childCount > 1)) {
+      const at = start.before(depth);
+      tr.insert(at, list.content);
+      tr.setSelection(Selection.near(tr.doc.resolve(at + list.content.size)));
+    } else {
+      tr.replaceSelection(items);
+    }
   }
-  view.dispatch(view.state.tr.replaceSelection(new Slice(Fragment.fromArray(items), 0, 0)).scrollIntoView());
+  view.dispatch(tr.setMeta("paste", true).setMeta("uiEvent", "paste").scrollIntoView());
   return true;
 }
 

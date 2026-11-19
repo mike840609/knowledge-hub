@@ -365,8 +365,11 @@ export function tableActions() {
         };
         // Row grip: level with its row in the editor's gutter, but never up in the block gutter's buttons (24px, at the table's top).
         const rowLeft = Math.max(editorRect.left + (gutterWidth - 24) / 2, bounds.left + 4);
-        const rowTop = Math.max(rowRect.top + rowRect.height / 2 - 12, tableRect.top + 24 + 4);
-        rowGrip.hidden = gone || rowRect.bottom < clip.top || rowRect.top > clip.bottom || rowTop < bounds.top || rowTop + 24 > bounds.bottom;
+        const visibleRowTop = Math.max(rowRect.top, clip.top);
+        const visibleRowBottom = Math.min(rowRect.bottom, clip.bottom);
+        const rowCentre = (visibleRowTop + visibleRowBottom) / 2;
+        const rowTop = Math.max(tableRect.top + 24 + 4, clip.top, Math.min(rowCentre - 12, clip.bottom - 24));
+        rowGrip.hidden = gone || rowRect.bottom < clip.top || rowRect.top > clip.bottom || rowTop + 24 > clip.bottom;
         rowGrip.style.left = `${rowLeft}px`;
         rowGrip.style.top = `${rowTop}px`;
         // Column grip: a low handle across the table's top border, half of it in the table's own top margin, which holds no text.

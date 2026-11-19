@@ -846,3 +846,47 @@ it("pasting at the start of an item's text puts the items before it, with no emp
   pasteClipboard(target.view, data);
   expect(md(target.editor)).toBe("- A\n- B\n- CD\n");
 });
+
+it("pasting over an item's selected prefix consumes the text and preserves its nested list", async () => {
+  const source = await open("- B\n");
+  escapeOn(source.view, "B");
+  const { data } = clipEvent(source.view, "copy");
+  const markdown = "- A\n- CDEF\n  - child\n";
+  const { view, editor } = await open(markdown);
+  let at = 0;
+  view.state.doc.descendants((node, pos) => { if (node.isText && node.text === "CDEF") at = pos; });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at, at + 2)));
+  pasteClipboard(view, data);
+  expect(md(editor)).toBe("- A\n- B\n- EF\n  - child\n");
+  expect(undo(view.state, view.dispatch)).toBe(true);
+  expect(md(editor)).toBe(markdown);
+});
+
+it("pasting over a chosen ordered item keeps the list numbering and replaces its subtree", async () => {
+  const source = await open("8. B\n   - copied child\n");
+  escapeOn(source.view, "B");
+  const { data } = clipEvent(source.view, "copy");
+  const markdown = "1. A\n2. C\n   - old child\n3. D\n";
+  const { view, editor } = await open(markdown);
+  escapeOn(view, "C");
+  pasteClipboard(view, data);
+  expect(md(editor)).toBe("1. A\n2. B\n   - copied child\n3. D\n");
+  expect(undo(view.state, view.dispatch)).toBe(true);
+  expect(md(editor)).toBe(markdown);
+});
+
+it("pasting across list items replaces the selected text through the last item's prefix", async () => {
+  const source = await open("- B\n");
+  escapeOn(source.view, "B");
+  const { data } = clipEvent(source.view, "copy");
+  const { view, editor } = await open("- A\n- C\n- DEF\n- G\n");
+  let from = 0;
+  let to = 0;
+  view.state.doc.descendants((node, pos) => {
+    if (node.text === "C") from = pos;
+    if (node.text === "DEF") to = pos + 1;
+  });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, from, to)));
+  pasteClipboard(view, data);
+  expect(md(editor)).toBe("- A\n- B\n- EF\n- G\n");
+});

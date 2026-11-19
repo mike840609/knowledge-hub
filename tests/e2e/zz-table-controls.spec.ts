@@ -92,6 +92,32 @@ test.describe("table edge controls", () => {
     await expect(page.getByRole("button", { name: "Row 2 actions" })).toBeFocused();
   });
 
+  test("Alt+F10 reaches the visible part of a tall row", async ({ page }) => {
+    const text = "Long text wraps in this table cell. ".repeat(800);
+    const { surface } = await openNote(page, `| Details |\n| --- |\n| ${text} |\n`);
+    const cell = surface.locator("td").first();
+    await cell.click({ position: { x: 20, y: 16 } });
+    await page.mouse.move(0, 0);
+    const visible = await cell.evaluate(td => {
+      const row = td.getBoundingClientRect();
+      const table = td.closest(".kh-markdown-table")!.getBoundingClientRect();
+      const pane = td.closest(".kh-document-pane")!.getBoundingClientRect();
+      return {
+        top: Math.max(0, row.top, table.top, pane.top),
+        bottom: Math.min(innerHeight, row.bottom, table.bottom, pane.bottom),
+        centre: row.top + row.height / 2,
+      };
+    });
+    expect(visible.bottom - visible.top).toBeGreaterThan(24);
+    expect(visible.centre).toBeGreaterThan(visible.bottom);
+    await page.keyboard.press("Alt+F10");
+    const grip = page.getByRole("button", { name: "Row 2 actions" });
+    await expect(grip).toBeFocused();
+    const box = (await grip.boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(visible.top);
+    expect(box.y + box.height).toBeLessThanOrEqual(visible.bottom);
+  });
+
   test("a cell scrolled out of view hides its grip", async ({ page }) => {
     const cell = (prefix: string) => Array.from({ length: 12 }, (_, i) => `${prefix}${i} ${"w".repeat(40)}`);
     const markdown = `| ${cell("H").join(" | ")} |\n| ${cell("-").map(() => "---").join(" | ")} |\n| ${cell("C").join(" | ")} |\n`;
