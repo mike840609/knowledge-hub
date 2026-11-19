@@ -225,7 +225,8 @@ export function turnBlocks(state: EditorState, blocks: EditorBlock[], into: Bloc
   if (!blocks.length || !blocks.every((block) => blockKind(block.node) === into || canTurnInto(block.node, into))) return null;
   const { nodes } = state.schema;
   const lines = blocks.every((block) => block.node.type === nodes.paragraph || block.node.type === nodes.heading || block.node.type === nodes.list_item);
-  if (LIST_TARGETS.has(into) && lines) {
+  // One item splits its list exactly as it does from the grip, even beside an item of the target kind.
+  if (blocks.length > 1 && LIST_TARGETS.has(into) && lines) {
     const { sequence, first, last } = locate(state, blocks);
     const region = readRegion(state.doc, sequence, first, last);
     const ordered = into === "ordered";

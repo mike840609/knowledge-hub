@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { editorViewCtx } from "@milkdown/kit/core";
-import { TextSelection } from "@milkdown/kit/prose/state";
+import { redo, undo } from "@milkdown/kit/prose/history";
+import { AllSelection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { afterEach, expect, it } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
@@ -55,6 +56,52 @@ it.each([
   caretAt(view, 2);
   expect(press(view, digit, { ctrlKey: true, altKey: true }).defaultPrevented).toBe(true);
   expect(md(editor)).toBe(expected);
+});
+
+it.each([
+  ["alpha", "4", "- [ ] alpha!"],
+  ["- alpha", "5", "alpha!"],
+  ["- alpha", "4", "- [ ] alpha!"],
+])("separates typing from the list shortcut on %s through undo and redo", async (source, digit, turned) => {
+  const { editor, view } = await open(source);
+  caretAfter(view, "alpha");
+  type(view, "!");
+  press(view, digit, { ctrlKey: true, altKey: true });
+  expect(md(editor)).toBe(turned);
+  type(view, "?");
+  for (const expected of [turned, source + "!", source]) {
+    expect(undo(view.state, view.dispatch)).toBe(true);
+    expect(md(editor)).toBe(expected);
+  }
+  for (const expected of [source + "!", turned, turned + "?"]) {
+    expect(redo(view.state, view.dispatch)).toBe(true);
+    expect(md(editor)).toBe(expected);
+  }
+});
+
+it("keeps the active end of a backward text selection when turning a bullet into a task", async () => {
+  const { view } = await open("- alpha\n- beta\n- gamma");
+  caretAfter(view, "beta");
+  const end = view.state.selection.head;
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, end, end - 3)));
+  press(view, "4", { ctrlKey: true, altKey: true });
+  const { selection, doc } = view.state;
+  expect(doc.textBetween(selection.from, selection.to)).toBe("eta");
+  expect(selection.head).toBe(selection.from);
+});
+
+it.each([
+  ["- alpha", "## alpha"],
+  ["- alpha\n- beta\n- gamma", "## alpha\n\n## beta\n\n## gamma"],
+])("turns the entire list after selecting all in %s", async (source, turned) => {
+  const { editor, view } = await open(source);
+  caretAfter(view, "alpha");
+  press(view, "a", { ctrlKey: true });
+  press(view, "a", { ctrlKey: true });
+  expect(view.state.selection).toBeInstanceOf(AllSelection);
+  press(view, "2", { ctrlKey: true, altKey: true });
+  expect(md(editor)).toBe(turned);
+  expect(view.state.selection).toBeInstanceOf(AllSelection);
 });
 
 it("Mod-Alt-7 makes the line a toggle", async () => {

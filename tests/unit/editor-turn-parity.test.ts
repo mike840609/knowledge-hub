@@ -176,3 +176,17 @@ describe.each(CASES)("turning the middle item of $name", ({ markdown, text }) =>
     }
   });
 });
+
+it.each([
+  ["- [ ] alpha\n- beta\n- gamma", "task", "To-do list", "4"],
+  ["- alpha\n- [x] beta\n- gamma", "bullet", "Bulleted list", "5"],
+])("splits the middle item even beside its new kind in %s", async (source, id, label, digit) => {
+  const key = { key: digit, init: { ctrlKey: true, altKey: true, keyCode: digit.charCodeAt(0) } };
+  const kind = { id, label, alias: id === "task" ? "todo" : "bullet", keys: [key] };
+  const grip = await byGrip(source, "beta", kind);
+  const expectedShape = await shape(grip);
+  expect(expectedShape).toHaveLength(3);
+  expect(await byToolbar(source, "beta", kind)).toBe(grip);
+  expect(await byKey(source, "beta", key)).toBe(grip);
+  expect(await shape(await bySlash(source, "beta", kind))).toEqual(expectedShape);
+});

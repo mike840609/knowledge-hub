@@ -200,14 +200,18 @@ function toggleList(target: "ordered" | "bullet" | "task") {
       if (!canTurnInto(state.selection.node, into)) return false;
       return dispatch ? turnBlockInto(view, chosen, into) : true;
     }
+    const dispatchTurn = dispatch && ((tr: Transaction) => {
+      dispatch(closeHistory(tr));
+      dispatch(closeHistory(view.state.tr));
+    });
     const { nodes } = state.schema;
     const kind = listKindAt(state);
-    if (kind === target) return liftListItem(nodes.list_item)(state, dispatch);
+    if (kind === target) return liftListItem(nodes.list_item)(state, dispatchTurn);
     const depth = listItemDepth(state);
-    if (depth === null) return wrapParagraph(state, target, dispatch);
+    if (depth === null) return wrapParagraph(state, target, dispatchTurn);
     const { $from, $to } = state.selection;
     if ($to.pos > $from.end(depth)) return false;
-    if (!dispatch) return true;
+    if (!dispatchTurn) return true;
     const itemPos = $from.before(depth);
     const tr = state.tr;
     const turnedItemPos = turnInto(tr, itemPos, target);
@@ -215,8 +219,8 @@ function toggleList(target: "ordered" | "bullet" | "task") {
     const shift = turnedItemPos - itemPos;
     tr.setSelection(state.selection instanceof NodeSelection
       ? NodeSelection.create(tr.doc, $from.pos + shift)
-      : TextSelection.create(tr.doc, $from.pos + shift, $to.pos + shift));
-    dispatch(tr.scrollIntoView());
+      : TextSelection.create(tr.doc, state.selection.anchor + shift, state.selection.head + shift));
+    dispatchTurn(tr.scrollIntoView());
     return true;
   };
 }
@@ -397,14 +401,16 @@ function turnChosenInto(target: BlockKind) {
  */
 function turnItemInto(target: BlockKind) {
   return (state: EditorState, dispatch?: (tr: Transaction) => void, view?: EditorView) => {
-    if (!view?.editable || !(state.selection instanceof TextSelection) || rangeBlocks(state) !== null) return false;
+    const selectAll = state.selection instanceof AllSelection;
+    if (!view?.editable || !(selectAll || state.selection instanceof TextSelection) || rangeBlocks(state) !== null) return false;
     // A selection that touches several blocks turns every block the toolbar would turn, whichever end is
     // the anchor and even when it starts on a later line. Only a single caret block keeps the first-line rule.
     const blocks = blocksTouched(state);
-    if (blocks.length > 1 && blocks.some((block) => block.node.type.name === "list_item")) {
+    if ((selectAll || blocks.length > 1) && blocks.some((block) => block.node.type.name === "list_item")) {
       if (dispatch) {
         const tr = turnBlocks(state, blocks, target);
         if (tr) {
+          if (selectAll) tr.setSelection(new AllSelection(tr.doc));
           // One undo step, and typing after it is its own step, as every other turn entry point does.
           view.dispatch(closeHistory(tr).scrollIntoView());
           view.dispatch(closeHistory(view.state.tr));
