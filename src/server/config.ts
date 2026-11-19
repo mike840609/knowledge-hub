@@ -13,8 +13,8 @@ export function localIdentityEnabled(): boolean {
 }
 
 /**
- * Whether Team workspaces are open to the people who use the product. They are announced and not yet
- * open: the workspace switcher shows "Coming soon" where they will be, and does not take anyone to one.
+ * Whether Team workspaces are open to the people who use the product.
+ * The workspace switcher is hidden in personal-only mode.
  * `KM_TEAM_WORKSPACES_ENABLED=true` opens them; anything else, unset included, keeps them closed. It is
  * read on every request, so opening them later is a configuration change and a restart, not a build.
  *

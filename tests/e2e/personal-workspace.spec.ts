@@ -8,9 +8,7 @@ test("personal rollout: disabled teams, drafts across browsers, organize, export
   const navigation = await (await page.request.get("/api/workspaces")).json();
   expect(navigation.teamsOpen).toBe(false); expect(navigation.items).toHaveLength(1);
   const workspaceId = navigation.items[0].id;
-  await page.getByRole("button", { name: "Workspace: My Space" }).click();
-  await expect(page.getByRole("menuitem", { name: /Team workspaces.*Coming soon/ })).toBeDisabled();
-  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Workspace: My Space" })).toHaveCount(0);
   const blocked = await page.request.post("/api/workspaces", { data: { name: "Not available" } }); expect(blocked.status()).toBe(403);
   const response = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title: "Personal lifecycle", markdown: "Original body" } });
   expect(response.ok()).toBe(true); const doc = await response.json();

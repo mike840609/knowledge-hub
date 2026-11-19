@@ -108,7 +108,7 @@ A preview is a fixed, staged snapshot. Resolve blocking diagnostics before apply
 - ZIP exports include the latest saved versions of archived documents, but exclude drafts, revision history, and attachment bytes. The limit is 64 MiB / 9,999 documents.
 - Documents use archive and restore for their lifecycle; there is no general end-user permanent deletion.
 - Search is keyword-based. An MCP server, semantic/hybrid retrieval, and advanced agent memory are future directions, not shipped features.
-- Team workspaces display **Coming soon** by default. Enabling the feature flag does not complete production identity integration.
+- The default rollout opens My Space directly. Team workspaces and the workspace switcher appear when `KM_TEAM_WORKSPACES_ENABLED=true`. Production identity still requires its own configuration.
 - Discussion writes are separately gated by `KM_REVIEW_WRITES_ENABLED`. Existing discussion reads and owner moderation remain available when writes are off.
 - Hiding a discussion does not physically erase stored data.
 
@@ -285,7 +285,7 @@ make test-e2e          # production build and Playwright on an isolated database
 | Symptom | Fix |
 | --- | --- |
 | Database connection fails | Check Docker, `make db-logs`, and the credentials in `.env`. The local database uses port 3307, the dev server 3000, and E2E 3101 by default. |
-| Team navigation is unavailable | **Coming soon** is the default. Set `KM_TEAM_WORKSPACES_ENABLED=true` and restart. |
+| Team navigation is unavailable | Personal-only mode hides the workspace switcher. Set `KM_TEAM_WORKSPACES_ENABLED=true` and restart to enable Team navigation. |
 | Production identity error | Local identity does not provide production login. Integrate an SSO session reader or use the documented Google demo provider. |
 | Import cannot be applied | Resolve blockers in Preview. A 409 version conflict requires a new preview; there is no Force Apply. |
 | Links or graph entries are missing | Ensure migrations are complete, then run `make db-reindex-links`. Fix wikilinks in synced documents at the original source. |

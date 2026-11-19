@@ -40,6 +40,8 @@ export function WorkspaceSelector({ workspaceId, compact = false }: { workspaceI
   const router = useRouter();
   const { navigation, confirmed, refresh } = useWorkspaceAuthorization();
   const [creating, setCreating] = useState(false);
+  if (!navigation.teamsOpen) return null;
+
   const current = navigation.items.find((item) => item.id === workspaceId);
   const currentName = current ? displayName(current) : "Workspace";
 
@@ -64,10 +66,6 @@ export function WorkspaceSelector({ workspaceId, compact = false }: { workspaceI
   const personal = navigation.items.filter((entry) => entry.type === "PERSONAL");
   const teams = navigation.items.filter((entry) => entry.type === "TEAM" && entry.lifecycleState === "ACTIVE");
   const archived = navigation.items.filter((entry) => entry.type === "TEAM" && entry.lifecycleState === "ARCHIVED");
-  // Team workspaces are announced and not yet open. While they are not, the switcher says so where they
-  // will be — one disabled row — and takes nobody to one: not by their names, not by "Archived", and not
-  // by creating one. Server authorization also closes direct links while Team is unavailable.
-  const teamsOpen = navigation.teamsOpen;
   return (
     <>
       <MenuRoot>
@@ -94,26 +92,19 @@ export function WorkspaceSelector({ workspaceId, compact = false }: { workspaceI
           {personal.map(item)}
           <MenuGroup>
             <MenuGroupLabel>Teams</MenuGroupLabel>
-            {teamsOpen ? teams.map(item) : (
-              <MenuItem disabled>
-                <span className="min-w-0 flex-1 truncate">Team workspaces</span>
-                <span className="shrink-0 text-caption text-kh-text-muted">Coming soon</span>
-              </MenuItem>
-            )}
+            {teams.map(item)}
           </MenuGroup>
           {/* Always present, even when empty: a reader looking for an archived
               team needs to see that the section exists and is simply empty. */}
-          {teamsOpen && (
-            <MenuSub>
-              <MenuSubTrigger>Archived</MenuSubTrigger>
-              <MenuContent className="w-56">
-                {archived.length > 0
-                  ? archived.map(item)
-                  : <MenuItem disabled>No archived teams</MenuItem>}
-              </MenuContent>
-            </MenuSub>
-          )}
-          {teamsOpen && navigation.canCreateTeam && (
+          <MenuSub>
+            <MenuSubTrigger>Archived</MenuSubTrigger>
+            <MenuContent className="w-56">
+              {archived.length > 0
+                ? archived.map(item)
+                : <MenuItem disabled>No archived teams</MenuItem>}
+            </MenuContent>
+          </MenuSub>
+          {navigation.canCreateTeam && (
             <>
               <MenuSeparator />
               <MenuItem disabled={!confirmed} onClick={() => setCreating(true)}>

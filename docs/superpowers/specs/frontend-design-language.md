@@ -1617,22 +1617,12 @@ so their content arrives in a hidden `<div>` at the end of the body and an
 the form never reaches the page. Blocking the framework chunks is the faithful
 version — inline scripts still run, React never hydrates.
 
-### A feature that is announced and not open is a disabled row that says so
+### The workspace switcher appears when Team workspaces are open
 
-Team workspaces exist and are not yet offered. The workspace switcher does not
-hide the place where they will be, and does not list them as if they could be
-entered: it shows one disabled row, "Team workspaces", with "Coming soon" on it,
-and nothing that leads to one (no team names, no "Archived" submenu, no "Create
-team"). A reader is told the feature is coming and is not offered something
-that would go nowhere. The disabled row carries its own explanation as text,
-not only as a tooltip, which only a pointer reaches.
-
-What this decides is what the switcher *offers*. It is not access control and
-must not be read as one (`docs/operations/team-workspaces-availability.md`): a
-link into a Team workspace still opens it, and the services' rules are the same
-whether the flag is on or off. A test holds both halves — that the closed
-switcher offers nothing, and that a link still works — so that nobody takes the
-first for the second.
+Personal-only mode opens My Space directly. Search takes the first row below the
+sidebar header. The expanded sidebar, compact rail, and Menu drawer show the
+switcher when Team workspaces are enabled. Server authorization enforces Team
+availability on direct routes and API calls (`docs/operations/team-workspaces-availability.md`).
 
 ### A timestamp is rendered in the reader's zone, which means twice
 
@@ -1861,9 +1851,7 @@ them, since resolution is read at read time and nothing was rewritten.
 The 2026-09-30 personal rollout adds document/folder organization through the
 existing Hub commands, Markdown downloads, revision restoration, persistent
 personal drafts and account favorites. The personal rollout spec supersedes
-the earlier deferred-product decisions on these operations. Team navigation
-remains visible but disabled, labelled Coming soon, until server configuration
-explicitly enables it. Disabled controls have no navigation or click action.
+the earlier deferred-product decisions on these operations. The workspace switcher appears when server configuration enables Team workspaces.
 
 1. The palette is mostly navigation, and that is a product gap rather than a
    UI one. Counted against the code it can offer about fourteen entries, of
