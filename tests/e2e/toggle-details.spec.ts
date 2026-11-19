@@ -14,7 +14,9 @@ test("a paragraph becomes a toggle, flips open, and folds in the reader", async 
     await page.waitForTimeout(300);
   }
   await expect(toolbar).toBeVisible(ROUND_TRIP);
-  await toolbar.getByRole("button", { name: "Toggle section" }).click();
+  // Toggle is an entry of the toolbar's Turn into menu (2026-11-21 list-commands spec, decision 5).
+  await toolbar.getByRole("button", { name: /^Turn into/ }).click();
+  await toolbar.getByRole("menuitemradio", { name: "Toggle" }).click();
   const source = await showMarkdown(composer(page));
   await expect.poll(() => source.inputValue(), ROUND_TRIP).toContain("<summary>Fold me</summary>");
   await expect.poll(() => source.inputValue(), ROUND_TRIP).toContain("<details open>");

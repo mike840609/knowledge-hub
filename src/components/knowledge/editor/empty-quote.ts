@@ -1,6 +1,6 @@
 import { remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 import type { Ctx } from "@milkdown/kit/ctx";
-import type { Blockquote } from "mdast";
+import type { Blockquote, Paragraph } from "mdast";
 import { defaultHandlers } from "mdast-util-to-markdown";
 
 /**
@@ -20,6 +20,18 @@ export function configureEmptyQuoteStringify(ctx: Ctx): void {
         const line = only?.type === "paragraph" && only.children.length === 1 ? only.children[0] : null;
         if (line?.type === "html" && line.value === "<br />") return ">";
         return defaultHandlers.blockquote(node, parent, state, info);
+      },
+      // A list item whose first line is empty and which goes on with a nested list is written without that line
+      // (`-` and the nested list below), which reads back as the same item. Written `- <br />`, the indented lines
+      // after it would read back as part of that HTML, and the nested list would be lost (2026-11-21 list commands
+      // spec, deviations). The item itself is still written by the list item handler in force (GFM's, for a to-do).
+      paragraph: (node: Paragraph, parent, state, info) => {
+        const line = node.children.length === 1 ? node.children[0] : null;
+        // A to-do keeps `[ ] <br />`: after its box the tag is inline, not an HTML block, so the nested list reads back.
+        // A loose item keeps it too: the blank line after a bare `-` would end the item, and there the blank line
+        // already ends the HTML block, so what follows reads back inside the item.
+        if (parent?.type === "listItem" && parent.checked == null && !parent.spread && parent.children.length > 1 && parent.children[0] === node && parent.children[1].type === "list" && line?.type === "html" && line.value === "<br />") return "";
+        return (previous.handlers?.paragraph ?? defaultHandlers.paragraph)(node, parent, state, info);
       },
     },
   }));

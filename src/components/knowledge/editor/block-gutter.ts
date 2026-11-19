@@ -55,6 +55,31 @@ export function gutterFits(dom: HTMLElement): boolean {
   return textLeft - clipLeft >= 56;
 }
 
+/** Turn into's entries, in order: the grip menu's and the selection toolbar's (2026-11-21 list-commands spec, decision 5). */
+export const TURN_OPTIONS: readonly [BlockKind, string][] = [
+  ["paragraph", "Text"],
+  ["h1", "Heading 1"],
+  ["h2", "Heading 2"],
+  ["h3", "Heading 3"],
+  ["bullet", "Bulleted list"],
+  ["ordered", "Numbered list"],
+  ["task", "To-do list"],
+  ["quote", "Quote"],
+  ["code", "Code"],
+  ["toggle", "Toggle"],
+  ["callout", "Callout"],
+];
+
+/**
+ * One Turn into entry for `blocks`, in both menus: checked when every block already is `kind`; enabled where every
+ * block can take it, a block already of that kind taking it as it is; disabled when every block already is it.
+ */
+export function turnEntry(blocks: readonly EditorBlock[], kind: BlockKind): { checked: boolean; disabled: boolean } {
+  const checked = blocks.length > 0 && blocks.every((block) => blockKind(block.node) === kind);
+  const disabled = !blocks.length || checked || !blocks.every((block) => blockKind(block.node) === kind || canTurnInto(block.node, kind));
+  return { checked, disabled };
+}
+
 export function blockGutter() {
   // The blocks being dragged: one, or every block of the range (2026-11-21 block-unit spec, decision 6).
   const dragKey = new PluginKey<number[] | null>("khDraggedBlock");
@@ -98,19 +123,6 @@ export function blockGutter() {
       toolbar.append(add, grip);
       const menu = document.createElement("div"); menu.className = "kh-block-move-menu"; menu.hidden = true; menu.setAttribute("role", "menu"); menu.setAttribute("aria-label", "Block actions");
       let menuMode: "main" | "turn" = "main";
-      const turnOptions: readonly [BlockKind, string][] = [
-        ["paragraph", "Text"],
-        ["h1", "Heading 1"],
-        ["h2", "Heading 2"],
-        ["h3", "Heading 3"],
-        ["bullet", "Bulleted list"],
-        ["ordered", "Numbered list"],
-        ["task", "To-do list"],
-        ["quote", "Quote"],
-        ["code", "Code"],
-        ["toggle", "Toggle"],
-        ["callout", "Callout"],
-      ];
       const blocksNow = () => active === null ? topLevelBlocks(view.state.doc) : siblingBlocks(view.state.doc, active);
       const activeIndex = () => blocksNow().findIndex((block) => block.pos === active);
       const activeNode = () => (active === null ? null : view.state.doc.nodeAt(active));
@@ -192,11 +204,10 @@ export function blockGutter() {
         const group = groupNow();
         menu.setAttribute("aria-label", group ? `Turn ${group.length} blocks into` : "Turn block into");
         const node = activeNode();
-        const current = group ? null : node ? blockKind(node) : null;
         const back = menuButton("Back", () => { const first = renderMain(); position(); first.focus(); });
         back.setAttribute("aria-label", "Back to block actions");
         menu.append(back, separator());
-        for (const [kind, label] of turnOptions) {
+        for (const [kind, label] of TURN_OPTIONS) {
           const button = menuButton(label, () => {
             const blocks = groupNow();
             if (blocks) {
@@ -213,15 +224,10 @@ export function blockGutter() {
             }
             closeMenu();
           });
-          if (group) {
-            // Enabled only where every block can take it; a block already of that kind takes it as it is.
-            const already = group.every((block) => blockKind(block.node) === kind);
-            button.disabled = already || !group.every((block) => blockKind(block.node) === kind || canTurnInto(block.node, kind));
-            if (already) button.setAttribute("aria-current", "true");
-          } else {
-            button.disabled = !node || !canTurnInto(node, kind);
-          }
-          if (kind === current) button.setAttribute("aria-current", "true");
+          // The range's blocks, or the controls' block alone: one predicate for both, shared with the selection toolbar.
+          const { checked, disabled } = turnEntry(group ?? (node && active !== null ? [{ pos: active, node }] : []), kind);
+          button.disabled = disabled;
+          if (checked) button.setAttribute("aria-current", "true");
           menu.append(button);
         }
       }

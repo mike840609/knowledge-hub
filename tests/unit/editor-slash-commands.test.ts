@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 import { editorViewCtx } from "@milkdown/kit/core";
 import { undo } from "@milkdown/kit/prose/history";
+import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { TextSelection } from "@milkdown/kit/prose/state";
+import type { EditorView } from "@milkdown/kit/prose/view";
 import type { Blockquote } from "mdast";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { afterEach, expect, it, vi } from "vitest";
+import { turnBlockInto } from "@/components/knowledge/editor/block-actions";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { matchingCommands, openBlockList, slashCommands } from "@/components/knowledge/editor/slash-commands";
+import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
 import { calloutMarker } from "@/shared/markdown/remark-callouts";
 
 const rect = { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 } as DOMRect;
@@ -313,4 +317,381 @@ it("keeps each group together for a filtered query", async () => {
   const groups = [...menu().querySelectorAll("[data-slash-group]")].map((group) => group.textContent);
   expect(groups).toEqual([...new Set(groups)]);
   expect(groups).toEqual(["Basic blocks", "Lists", "Blocks", "Links"]);
+});
+
+// 2026-11-21 list commands spec, decisions 1–3: the `/` list in a list item's first paragraph. Every result is read
+// back from the saved Markdown, opened again in the editor.
+function itemPositions(doc: ProseNode): number[] {
+  const found: number[] = [];
+  doc.descendants((node, pos) => { if (node.type.name === 'list_item') found.push(pos); });
+  return found;
+}
+/** Puts the caret at the end of the `n`th item's first line (document order), its text first replaced by `text` when given. */
+function inItem(view: EditorView, n: number, text?: string) {
+  const pos = itemPositions(view.state.doc)[n];
+  const line = view.state.doc.nodeAt(pos + 1)!;
+  const from = pos + 2;
+  const tr = view.state.tr;
+  if (text !== undefined) { if (text) tr.replaceWith(from, from + line.content.size, view.state.schema.text(text)); else tr.delete(from, from + line.content.size); }
+  tr.setSelection(TextSelection.create(tr.doc, from + (text ?? '\u0000'.repeat(line.content.size)).length));
+  view.dispatch(tr);
+}
+async function typedInItem(markdown: string, n: number, text: string | undefined, typed: string) {
+  const opened = await open(markdown);
+  inItem(opened.view, n, text);
+  opened.view.dispatch(opened.view.state.tr.insertText(typed));
+  return opened;
+}
+const childTypes = (node: ProseNode) => { const types: string[] = []; node.forEach(child => types.push(child.type.name)); return types; };
+const itemTexts = (list: ProseNode) => { const texts: string[] = []; list.forEach(item => texts.push(item.firstChild!.textContent)); return texts; };
+/** The saved Markdown, and the document the editor makes of it when opened again. */
+async function saved(editor: MarkdownEditor) {
+  const markdown = editor.getMarkdown();
+  const again = await open(markdown);
+  return { markdown, doc: again.view.state.doc };
+}
+
+it('quote alone in an item splits the list, as one undoable step', async () => {
+  const { editor, view } = await typedInItem('- a\n- b\n- c', 1, '', '/quo');
+  expect(menu().hidden).toBe(false);
+  key(view.dom, 'Enter');
+  expect(menu().hidden).toBe(true);
+  const before = view.state.doc;
+  const { markdown, doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(['bullet_list', 'blockquote', 'bullet_list']);
+  expect(itemTexts(doc.child(0))).toEqual(['a']);
+  expect(itemTexts(doc.child(2))).toEqual(['c']);
+  expect(markdown).not.toContain('/quo');
+  expect(childTypes(before)).toEqual(['bullet_list', 'blockquote', 'bullet_list']);
+  undo(view.state, view.dispatch);
+  expect(childTypes(view.state.doc)).toEqual(['bullet_list']);
+  expect(itemTexts(view.state.doc.child(0))).toEqual(['a', '/quo', 'c']);
+});
+
+it('numbered from a bulleted item moves it into a numbered list of its own', async () => {
+  const { editor, view } = await typedInItem('- a\n- b\n- c', 1, '', '/num');
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('B'));
+  const { doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(['bullet_list', 'ordered_list', 'bullet_list']);
+  expect(itemTexts(doc.child(1))).toEqual(['B']);
+});
+
+it('same kind keeps the item, and the slash is gone', async () => {
+  const { editor, view } = await typedInItem('- a\n- b\n- c', 1, '', '/bul');
+  key(view.dom, 'Enter');
+  expect(menu().hidden).toBe(true);
+  const { markdown, doc } = await saved(editor);
+  // An empty item is written `- <br />`, as Milkdown writes every empty paragraph; the "/bul" is gone.
+  expect(markdown).toBe('- a\n- <br />\n- c\n');
+  expect(childTypes(doc)).toEqual(['bullet_list']);
+  expect(itemTexts(doc.child(0))).toEqual(['a', '', 'c']);
+  expect(view.state.selection.$from.parent.type.name).toBe('paragraph');
+  expect(view.state.selection.$from.node(-1).type.name).toBe('list_item');
+});
+
+it('only item turned: the list goes', async () => {
+  const { editor, view } = await typedInItem('- x', 0, '', '/code');
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('let x'));
+  const { doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(['code_block']);
+  expect(doc.firstChild!.textContent).toBe('let x');
+});
+
+it('an ordered list split by a turned item goes on with its numbers', async () => {
+  const { editor, view } = await typedInItem('1. a\n2. b\n3. c', 1, '', '/quo');
+  key(view.dom, 'Enter');
+  const { doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(['ordered_list', 'blockquote', 'ordered_list']);
+  expect(doc.child(0).attrs.order).toBe(1);
+  expect(doc.child(2).attrs.order).toBe(3);
+});
+
+it('resumes a zero-based list with its original number after an inline command', async () => {
+  const { editor, view } = await typedInItem('0. alpha\n1. beta', 0, undefined, ' /code');
+  key(view.dom, 'Enter');
+  const { doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(['ordered_list', 'code_block', 'ordered_list']);
+  expect(doc.child(0).attrs.order).toBe(0);
+  expect(doc.child(2).attrs.order).toBe(1);
+});
+
+it('page link stays inline in the item', async () => {
+  const { view } = await typedInItem('- a\n- b\n- c', 1, '', '/page');
+  key(view.dom, 'Enter');
+  const item = view.state.doc.nodeAt(itemPositions(view.state.doc)[1])!;
+  expect(item.type.name).toBe('list_item');
+  expect(item.textContent).toBe('[[');
+  expect(childTypes(view.state.doc)).toEqual(['bullet_list']);
+});
+
+it('date stays inline in the item', async () => {
+  const { editor, view } = await typedInItem('- a\n- b\n- c', 1, '', '/date');
+  key(view.dom, 'Enter');
+  const { doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(['bullet_list']);
+  expect(itemTexts(doc.child(0))[1]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+});
+
+it.each([['table', 'table'], ['tog', 'details'], ['call', 'blockquote'], ['mermaid', 'code_block']])('/%s alone in an item splits the list around a %s', async (query, type) => {
+  const { editor, view } = await typedInItem('- a\n- b\n- c', 1, '', '/' + query);
+  key(view.dom, 'Enter');
+  const { doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(['bullet_list', type, 'bullet_list']);
+  expect(itemTexts(doc.child(0))).toEqual(['a']);
+  expect(itemTexts(doc.child(2))).toEqual(['c']);
+});
+
+it('mid-line code goes below the item and splits the list after it', async () => {
+  const { editor, view } = await typedInItem('- a\n- b\n- c', 1, 'b', ' /code');
+  expect(menu().hidden).toBe(false);
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('run'));
+  const { markdown, doc } = await saved(editor);
+  expect(markdown).not.toContain('/code');
+  expect(childTypes(doc)).toEqual(['bullet_list', 'code_block', 'bullet_list']);
+  expect(itemTexts(doc.child(0)).map(text => text.trim())).toEqual(['a', 'b']);
+  expect(doc.child(1).textContent).toBe('run');
+  expect(itemTexts(doc.child(2))).toEqual(['c']);
+});
+
+it('mid-line bullet adds an item after it', async () => {
+  const { editor, view } = await typedInItem('- a\n- b\n- c', 1, 'b', ' /bul');
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('new'));
+  const { doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(['bullet_list']);
+  expect(itemTexts(doc.child(0)).map(text => text.trim())).toEqual(['a', 'b', 'new', 'c']);
+});
+
+it("a nested item's block becomes a child of the parent item", async () => {
+  const { editor, view } = await typedInItem('- a\n  - n', 1, '', '/quo');
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('said'));
+  const { doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(['bullet_list']);
+  const item = doc.child(0).child(0);
+  expect(childTypes(item)).toEqual(['paragraph', 'blockquote']);
+  expect(item.child(1).textContent).toBe('said');
+});
+
+it("a mid-line block in a nested item becomes a child of the parent item, after or splitting the nested list", async () => {
+  const last = await typedInItem('- a\n  - n', 1, 'n', ' /code');
+  key(last.view.dom, 'Enter');
+  const after = (await saved(last.editor)).doc;
+  expect(childTypes(after)).toEqual(['bullet_list']);
+  expect(childTypes(after.child(0).child(0))).toEqual(['paragraph', 'bullet_list', 'code_block']);
+
+  const middle = await typedInItem('- a\n  - n1\n  - n2', 1, 'n1', ' /code');
+  key(middle.view.dom, 'Enter');
+  middle.view.dispatch(middle.view.state.tr.insertText('x'));
+  const split = (await saved(middle.editor)).doc;
+  expect(childTypes(split)).toEqual(['bullet_list']);
+  const item = split.child(0).child(0);
+  expect(childTypes(item)).toEqual(['paragraph', 'bullet_list', 'code_block', 'bullet_list']);
+  expect(itemTexts(item.child(1)).map(text => text.trim())).toEqual(['n1']);
+  expect(item.child(2).textContent).toBe('x');
+  expect(itemTexts(item.child(3))).toEqual(['n2']);
+});
+
+it('works in a list item inside a quote', async () => {
+  const { editor, view } = await typedInItem('> - a\n> - b', 1, '', '/code');
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('x'));
+  const { doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(['blockquote']);
+  expect(childTypes(doc.child(0))).toEqual(['bullet_list', 'code_block']);
+});
+
+it('inline code in an item keeps the slash: no list opens', async () => {
+  const { view } = await open('- a\n- `ls`\n- c');
+  const pos = itemPositions(view.state.doc)[1];
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, pos + 3)));
+  view.dispatch(view.state.tr.insertText(' /co'));
+  expect(menu().hidden).toBe(true);
+});
+
+it('an item holding a wikilink keeps it, and its edge, when a mid-line block goes below', async () => {
+  const { editor, view } = await typedInItem('- a\n- [[T]]\n- c', 1, undefined, ' /code');
+  expect(menu().hidden).toBe(false);
+  key(view.dom, 'Enter');
+  const { markdown, doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(['bullet_list', 'code_block', 'bullet_list']);
+  expect(markdown).toContain('[[T]]');
+  expect(markdown).not.toContain('\\[');
+  expect(extractDocumentLinks(markdown).map(link => link.target)).toEqual(['T']);
+  let wiki = 0;
+  doc.child(0).descendants(node => { if (node.type.name === 'wiki_link') wiki++; });
+  expect(wiki).toBe(1);
+});
+
+// Fix round: a divider in an item is followed by an empty line, as at the top level, and the caret goes there, so the
+// next key neither replaces the divider nor types into the next item.
+it.each([
+  ['the middle item', '- a\n- b\n- c', 1, '', ['bullet_list', 'hr', 'paragraph', 'bullet_list']],
+  ['the last item', '- a\n- b', 1, '', ['bullet_list', 'hr', 'paragraph']],
+  ['the only item', '- b', 0, '', ['hr', 'paragraph']],
+  ['the last item, mid-line', '- a\n- b', 1, 'b', ['bullet_list', 'hr', 'paragraph']],
+])('/hr in %s keeps the divider, and what is typed next goes on a line after it', async (_name, markdown, n, text, types) => {
+  const { editor, view } = await typedInItem(markdown, n, text, text ? ' /hr' : '/hr');
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('Z'));
+  const { doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(types);
+  const after = types.indexOf('hr') + 1;
+  expect(doc.child(after).textContent).toBe('Z');
+  if (types.at(-1) === 'bullet_list' && types.length > 3) expect(itemTexts(doc.child(after + 1))).toEqual(['c']);
+});
+
+it('/table in the middle of a list puts the caret in its first cell, not in the next item', async () => {
+  const { editor, view } = await typedInItem('- a\n- b\n- c', 1, '', '/table');
+  key(view.dom, 'Enter');
+  expect(view.state.selection.$from.node(-1).type.name).toBe('table_header');
+  view.dispatch(view.state.tr.insertText('Z'));
+  const { doc } = await saved(editor);
+  expect(itemTexts(doc.child(2))).toEqual(['c']);
+  expect(doc.child(1).firstChild!.firstChild!.textContent).toBe('Z');
+});
+
+// Deviation (list commands spec): an item with a nested list keeps it; a block that would replace the item goes below it.
+it('a quote chosen alone in an item with a nested list goes after the item, keeping the nested list', async () => {
+  const { editor, view } = await typedInItem('- a\n- p\n  - n\n- c', 1, '', '/quo');
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('said'));
+  const { markdown, doc } = await saved(editor);
+  expect(markdown).not.toContain('/quo');
+  expect(childTypes(doc)).toEqual(['bullet_list', 'blockquote', 'bullet_list']);
+  expect(itemTexts(doc.child(0))).toEqual(['a', '']);
+  const parent = doc.child(0).child(1);
+  expect(childTypes(parent)).toEqual(['paragraph', 'bullet_list']);
+  expect(itemTexts(parent.child(1))).toEqual(['n']);
+  expect(doc.child(1).textContent).toBe('said');
+  expect(itemTexts(doc.child(2))).toEqual(['c']);
+});
+
+it('works in a list item inside a toggle body', async () => {
+  const { editor, view } = await typedInItem('<details open>\n<summary>T</summary>\n\n- a\n- b\n\n</details>', 1, '', '/code');
+  expect(menu().hidden).toBe(false);
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('x'));
+  const { doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(['details']);
+  expect(childTypes(doc.child(0).lastChild!)).toEqual(['bullet_list', 'code_block']);
+  expect(doc.child(0).lastChild!.lastChild!.textContent).toBe('x');
+});
+
+it('works in a list item inside a callout', async () => {
+  const { editor, view } = await typedInItem('> [!NOTE]\n> - a\n> - b', 1, '', '/code');
+  expect(menu().hidden).toBe(false);
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('x'));
+  const { markdown, doc } = await saved(editor);
+  expect(markdown).toContain('[!NOTE]');
+  expect(childTypes(doc)).toEqual(['blockquote']);
+  expect(childTypes(doc.child(0))).toEqual(['paragraph', 'bullet_list', 'code_block']);
+  expect(doc.child(0).lastChild!.textContent).toBe('x');
+});
+
+it('a mid-line /todo in a to-do item adds an unchecked to-do after it', async () => {
+  const { editor, view } = await typedInItem('- [x] a\n- [x] b', 1, 'b', ' /todo');
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('new'));
+  const { doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(['bullet_list']);
+  expect(itemTexts(doc.child(0)).map(text => text.trim())).toEqual(['a', 'b', 'new']);
+  const checked: unknown[] = []; doc.child(0).forEach(item => checked.push(item.attrs.checked));
+  expect(checked).toEqual([true, true, false]);
+});
+
+it('a mid-line same-kind item in a numbered list takes no stale label', async () => {
+  const { view } = await typedInItem('1. a\n2. b\n3. c', 1, 'b', ' /num');
+  key(view.dom, 'Enter');
+  const list = view.state.doc.child(0);
+  expect(list.childCount).toBe(4);
+  expect(list.child(1).attrs.label).toBe('2.');
+  expect(list.child(2).attrs.label).toBe('3.');
+});
+
+// An item whose first line is empty and which holds more is not written `- <br />`: the indented lines after a lone
+// `<br />` read back as part of that HTML, and the nested list was lost on reopening.
+it.each(['- a\n- p\n  - n\n- c', '1. a\n2. p\n   1. n\n3. c', '- [ ] a\n- [x] p\n  - [ ] n\n- [ ] c'])('an item with an empty first line keeps its nested list through save and reopen: %j', async (source) => {
+  const { editor, view } = await open(source);
+  inItem(view, 1, '');
+  const { markdown, doc } = await saved(editor);
+  if (!source.includes('[')) expect(markdown).not.toContain('<br />');
+  expect(doc.toString()).toBe(view.state.doc.toString());
+  const checked: unknown[] = []; doc.descendants(node => { if (node.type.name === 'list_item') checked.push(node.attrs.checked); });
+  const before: unknown[] = []; view.state.doc.descendants(node => { if (node.type.name === 'list_item') before.push(node.attrs.checked); });
+  expect(checked).toEqual(before);
+});
+
+// Whole-branch review, I1: only an empty first line followed by a nested list is written as a bare `-`. Followed by a
+// paragraph, the bare `-` and the blank line after it would end the item, and the paragraph would leave the list.
+it('an emptied parent item whose nested item became text reads back as the same tree', async () => {
+  const { editor, view } = await open('- a\n- p\n  - n\n- c');
+  inItem(view, 1, '');
+  inItem(view, 2, '');
+  view.dispatch(view.state.tr.insertText('/p'));
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('x'));
+  const { markdown, doc } = await saved(editor);
+  expectSameTree(markdown, doc, view.state.doc);
+});
+
+it('a tight item with an empty first line and a paragraph after it keeps the paragraph in the item', async () => {
+  const { editor, view } = await open('- a\n- p\n\n  x\n- c');
+  inItem(view, 1, '');
+  const pos = itemPositions(view.state.doc)[1];
+  view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...view.state.doc.nodeAt(pos)!.attrs, spread: false }));
+  const { markdown, doc } = await saved(editor);
+  expect(childTypes(doc)).toEqual(['bullet_list']);
+  expect(childTypes(doc.child(0).child(1))).toEqual(['paragraph', 'paragraph']);
+  expect(doc.child(0).child(1).lastChild!.textContent, markdown).toBe('x');
+});
+
+// A loose item's empty first line is left as `<br />`: a blank line after a bare `-` would end the item there.
+it.each(['- a\n- p\n\n  second\n- c', '- a\n- p\n\n  second\n\n  - n\n- c', '- a\n- p\n\n  - n\n- c'])('a loose item with an empty first line reads back as the same tree: %j', async (source) => {
+  const { editor, view } = await open(source);
+  inItem(view, 1, '');
+  const { doc } = await saved(editor);
+  expect(doc.toString()).toBe(view.state.doc.toString());
+});
+
+// Whole-branch review, C1: a block that `/` puts inside a parent item (a nested item turned, or a block below the last
+// nested item) must read back as the same tree. Written tight, `---` under the item's line made it a setext heading, a
+// toggle became raw HTML in a paragraph, a table pipe text, and a paragraph after the nested list joined its last item.
+/** `doc.eq`, attributes and all; the reopened document is carried into the first editor's schema to be compared. */
+function expectSameTree(markdown: string, reopened: ProseNode, current: ProseNode) {
+  const carried = current.type.schema.nodeFromJSON(reopened.toJSON());
+  expect(carried.eq(current), `${markdown}\n---\n${JSON.stringify(reopened.toJSON())}\n---\n${JSON.stringify(current.toJSON())}`).toBe(true);
+}
+const IN_PARENT = [['p', 'text'], ['h1', 'h1'], ['h2', 'h2'], ['h3', 'h3'], ['quote', 'quote'], ['code', 'code'], ['mermaid', 'diagram'], ['toggle', 'toggle'], ['callout', 'callout'], ['hr', 'divider'], ['table', 'table']];
+it.each(IN_PARENT.flatMap(([query, name]) => [
+  [name, 'alone in the only nested item', '- a\n  - n\n- c', 1, '', `/${query}`],
+  [name, 'alone in the last nested item', '- a\n  - n1\n  - n2\n- c', 2, '', `/${query}`],
+  [name, 'mid-line in the last nested item', '- a\n  - n1\n  - n2\n- c', 2, 'n2', ` /${query}`],
+] as const))('%s chosen %s reads back as the same tree', async (_name, _where, source, n, text, typed) => {
+  const { editor, view } = await typedInItem(source, n, text, typed);
+  expect(menu().hidden).toBe(false);
+  key(view.dom, 'Enter');
+  expect(menu().hidden).toBe(true);
+  view.dispatch(view.state.tr.insertText('x'));
+  if (text) {
+    // The space before a mid-line `/` stays on the line, as at the top level, and Markdown keeps no line's trailing
+    // space; it goes here so the comparison is of the tree alone.
+    let end = -1;
+    view.state.doc.descendants((node, pos) => { if (node.isText && node.text === `${text} `) end = pos + node.nodeSize; return end < 0; });
+    expect(end).toBeGreaterThan(0);
+    view.dispatch(view.state.tr.delete(end - 1, end));
+  }
+  const { markdown, doc } = await saved(editor);
+  expectSameTree(markdown, doc, view.state.doc);
+});
+
+it("the grip's Turn into Text on a parent item's last nested item reads back as the same tree", async () => {
+  const { editor, view } = await open('- a\n  - n1\n  - n2\n- c');
+  turnBlockInto(view, itemPositions(view.state.doc)[2], 'paragraph');
+  const { markdown, doc } = await saved(editor);
+  expectSameTree(markdown, doc, view.state.doc);
 });

@@ -1160,6 +1160,10 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-table-col-grip { @apply h-3 w-6; }
 .kh-table-col-grip svg { flex: none; transform: rotate(90deg); }
 .kh-block-gutter[hidden], .kh-block-move-menu[hidden], .kh-slash-menu[hidden] { display: none; }
+/* The selection toolbar's Turn into menu hangs over the gutter's column, inside the document pane, whose `contain: layout`
+   keeps it under anything drawn on the body at 30: while it is open, the controls drawn there step aside.
+   Global across editors on the page: only one selection, so one Turn into menu, can be open at a time. */
+body:has(.kh-selection-toolbar [role="menu"]:not([hidden])) :is(.kh-block-gutter, .kh-table-grip, .kh-table-col-grip, .kh-table-add) { visibility: hidden; }
 .kh-block-gutter button {
   @apply flex size-6 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text kh-focus-ring;
 }

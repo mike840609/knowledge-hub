@@ -192,6 +192,15 @@ function listFrom(node: ProseNode, target: BlockKind, schema: EditorView["state"
 
 type LeafKind = "paragraph" | "h1" | "h2" | "h3" | "quote" | "code";
 
+/** Text written into a code block, up to an inline-content offset in its source. */
+export function codeText(node: ProseNode, end = node.content.size): string {
+  return node.textBetween(0, end, "\n", (leaf) => {
+    if (leaf.type.name === "wiki_link") return String(leaf.attrs.raw ?? "");
+    if (leaf.type.name === "hardbreak") return "\n";
+    return String(leaf.attrs.alt ?? "");
+  });
+}
+
 function leafFrom(node: ProseNode, target: LeafKind, schema: EditorView["state"]["schema"]): ProseNode {
   const inline = inlineContent(node, schema);
   switch (target) {
@@ -204,9 +213,7 @@ function leafFrom(node: ProseNode, target: LeafKind, schema: EditorView["state"]
     case "quote":
       return schema.nodes.blockquote.create(null, schema.nodes.paragraph.create(null, inline));
     case "code": {
-      // `textContent` drops a hard break entirely; a code block must keep the
-      // line the writer sees. `leafText` supplies the newline for hard breaks.
-      const text = node.type.name === "code_block" ? node.textContent : node.textBetween(0, node.content.size, "\n", (leaf) => leaf.type.name === "wiki_link" ? String(leaf.attrs.raw ?? "") : leaf.type.name === "hardbreak" ? "\n" : String(leaf.attrs.alt ?? ""));
+      const text = codeText(node);
       return schema.nodes.code_block.create(null, text ? schema.text(text) : undefined);
     }
   }
@@ -229,6 +236,78 @@ function calloutFrom(node: ProseNode, schema: EditorView["state"]["schema"]): Pr
   return schema.nodes.blockquote.create(null, [marker, schema.nodes.paragraph.create(null, inlineContent(node, schema))]);
 }
 
+/** The list holding the item at `itemPos` of `tr.doc`: the list, its position, and the item's index in it. */
+function listAround(doc: ProseNode, itemPos: number) {
+  const $item = doc.resolve(itemPos);
+  const list = $item.parent;
+  if (doc.nodeAt(itemPos)?.type.name !== "list_item" || (list.type.name !== "bullet_list" && list.type.name !== "ordered_list")) throw new RangeError(`No list item at ${itemPos}`);
+  return { list, listPos: $item.before(), index: $item.index() };
+}
+
+/**
+ * Splits the item's list at `index`…`end` (the items in between leave it) and puts `nodes` there, returning the
+ * position of the first node. The part holding the list's first item keeps the list's attributes; an ordered part that
+ * goes on after the new blocks goes on from its number (2026-11-17, rule R1 of the block-unit spec).
+ */
+function splitListAt(tr: Transaction, itemPos: number, nodes: ProseNode[], replaceItem: boolean): number {
+  const { list, listPos, index } = listAround(tr.doc, itemPos);
+  const items: ProseNode[] = [];
+  list.forEach((child) => items.push(child));
+  const cut = replaceItem ? index : index + 1;
+  const rest = index + 1;
+  const pieces: ProseNode[] = [];
+  if (cut > 0) pieces.push(list.type.create(list.attrs, Fragment.fromArray(items.slice(0, cut))));
+  pieces.push(...nodes);
+  if (rest < items.length) {
+    const after = list.type.name === "ordered_list" ? { ...list.attrs, order: Number(list.attrs.order ?? 1) + rest } : list.attrs;
+    pieces.push(list.type.create(after, Fragment.fromArray(items.slice(rest))));
+  }
+  tr.replaceWith(listPos, listPos + list.nodeSize, pieces);
+  // In a list item (a nested list split), the nodes become the item's children. A tight item is written without blank
+  // lines between them, and a `---`, a toggle, a table or a paragraph there then reads back as something else (a setext
+  // heading, raw HTML, pipe text, the nested list's last item). The item goes loose instead, which reads back as itself.
+  const $list = tr.doc.resolve(listPos);
+  const parent = $list.parent;
+  if (parent.type.name === "list_item" && !parent.attrs.spread && nodes.some((node) => !LIST_NODES.has(node.type.name))) {
+    tr.setNodeMarkup($list.before(), undefined, { ...parent.attrs, spread: true });
+  }
+  return listPos + (cut > 0 ? pieces[0].nodeSize : 0);
+}
+const LIST_NODES = new Set(["bullet_list", "ordered_list"]);
+
+/**
+ * Puts `nodes` in the place of the list item at `itemPos` of `tr.doc`, splitting its list around them, and returns the
+ * position of the first node. Inside a list item (a nested item), the nodes become children of that item.
+ */
+export function replaceListItem(tr: Transaction, itemPos: number, nodes: ProseNode[]): number {
+  return splitListAt(tr, itemPos, nodes, true);
+}
+
+/** A list of one kind holding `items`; a numbered one starts at 1, as a run that left its list does. */
+function listOf(schema: EditorView["state"]["schema"], items: ProseNode[]): ProseNode {
+  const ordered = items[0].attrs.listType === "ordered";
+  return (ordered ? schema.nodes.ordered_list : schema.nodes.bullet_list).create(ordered ? { order: 1 } : null, items);
+}
+
+/**
+ * Puts `nodes` after the list item at `itemPos` of `tr.doc` (its nested list included), at its level, and returns the
+ * position of the first node. One `list_item` of the item's own kind becomes its next sibling; one of another kind goes
+ * in a list of its own. Anything else splits the list after the item and stands between the two parts.
+ */
+export function insertAfterListItem(tr: Transaction, itemPos: number, nodes: ProseNode[]): number {
+  const item = tr.doc.nodeAt(itemPos);
+  if (item?.type.name !== "list_item") throw new RangeError(`No list item at ${itemPos}`);
+  const only = nodes.length === 1 ? nodes[0] : null;
+  if (only?.type.name === "list_item" && blockKind(only) === blockKind(item)) {
+    const at = itemPos + item.nodeSize;
+    // The new item's own label, not the one it follows: the writer numbers a list's items again from its start.
+    const label = item.attrs.listType === "ordered" ? `${Number(tr.doc.resolve(itemPos).parent.attrs.order ?? 1) + tr.doc.resolve(itemPos).index() + 1}.` : "-";
+    tr.insert(at, item.type.create({ ...item.attrs, label, checked: item.attrs.checked == null ? null : false }, only.content));
+    return at;
+  }
+  return splitListAt(tr, itemPos, only?.type.name === "list_item" ? [listOf(tr.doc.type.schema, [only])] : nodes, false);
+}
+
 /**
  * Turns one list item into another kind by splitting its list around it: the items before stay a
  * list, this item becomes the target, and the items after stay a list. Notion does the same when a
@@ -237,38 +316,16 @@ function calloutFrom(node: ProseNode, schema: EditorView["state"]["schema"]): Pr
 function turnListItemInto(tr: Transaction, pos: number, item: ProseNode, target: BlockKind): number | null {
   if (!item.firstChild) return null;
   const schema = tr.doc.type.schema;
-  const $item = tr.doc.resolve(pos + 1);
-  let itemDepth = -1;
-  for (let depth = $item.depth; depth >= 1; depth--) {
-    if ($item.node(depth).type.name === "list_item") { itemDepth = depth; break; }
-  }
-  if (itemDepth < 1) return null;
-  const listDepth = itemDepth - 1;
-  const list = $item.node(listDepth);
-  const listPos = $item.before(listDepth);
-  const index = $item.index(listDepth);
-  const items: ProseNode[] = [];
-  list.forEach((child) => items.push(child));
   let replacement: ProseNode;
   if (LIST_KINDS.has(target)) {
     // Keep the item whole, nested list and all; only its list kind (and to-do state) changes.
     const ordered = target === "ordered";
     const attrs = { ...item.attrs, listType: ordered ? "ordered" : "bullet", label: ordered ? "1." : "-", checked: target === "task" ? false : null };
-    const converted = item.type.create(attrs, item.content);
-    replacement = (ordered ? schema.nodes.ordered_list : schema.nodes.bullet_list).create(ordered ? { order: 1 } : null, converted);
+    replacement = listOf(schema, [item.type.create(attrs, item.content)]);
   } else {
     replacement = leafFrom(item.firstChild, target as LeafKind, schema);
   }
-  const pieces: ProseNode[] = [];
-  if (index > 0) pieces.push(list.type.create(list.attrs, Fragment.fromArray(items.slice(0, index))));
-  pieces.push(replacement);
-  if (index < items.length - 1) {
-    // An ordered list that goes on after the new block goes on from its number.
-    const after = list.type === schema.nodes.ordered_list ? { ...list.attrs, order: (Number(list.attrs.order) || 1) + index + 1 } : list.attrs;
-    pieces.push(list.type.create(after, Fragment.fromArray(items.slice(index + 1))));
-  }
-  const at = listPos + (index > 0 ? pieces[0].nodeSize : 0);
-  tr.replaceWith(listPos, listPos + list.nodeSize, pieces);
+  const at = replaceListItem(tr, pos, [replacement]);
   return target === "quote" ? at + 2 : at + 1;
 }
 

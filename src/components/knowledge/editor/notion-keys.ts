@@ -9,12 +9,12 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 import { toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
 import { addRowAfter, goToNextCell, isInTable } from "@milkdown/kit/prose/tables";
 import { customInputRulesKey } from "@milkdown/kit/prose";
-import { Fragment, type Mark, type Node as ProseNode } from "@milkdown/kit/prose/model";
+import type { Mark, Node as ProseNode } from "@milkdown/kit/prose/model";
 import { ReplaceStep } from "@milkdown/kit/prose/transform";
 import { $inputRule, $prose, $useKeymap } from "@milkdown/kit/utils";
-import { blockKind, canTurnInto, deleteBlock, duplicateBlock, isBlockItem, moveBlock, selectedBlockPos, siblingBlocks, turnBlockInto, type BlockKind } from "./block-actions";
+import { blockKind, canTurnInto, deleteBlock, duplicateBlock, isBlockItem, moveBlock, selectedBlockPos, siblingBlocks, turnBlockInto, turnInto, type BlockKind } from "./block-actions";
 import { blockRange, rangeBlocks } from "./block-range";
-import { moveBlocks, sequenceOf } from "./block-sequence";
+import { blocksTouched, moveBlocks, sequenceOf, turnBlocks } from "./block-sequence";
 import { flipNearestDetails } from "./details-toggle";
 import { findWikiLinkTrigger } from "./link-suggestions";
 
@@ -186,8 +186,7 @@ function listItemDepth(state: EditorState): number | null {
  * A list of the given kind, or the item lifted back to a paragraph when it already is one. Only the
  * caret's item changes and the caret stays where it was, in one transaction (one undo step). An item
  * in a list of the other kind is cut out of it: the items before and after stay in their list, and the
- * item, with whatever is nested under it, becomes a list of its own. Bullet and to-do share a list, so
- * switching between them is only the item's `checked`.
+ * item, with whatever is nested under it, becomes a list of its own.
  */
 function toggleList(target: "ordered" | "bullet" | "task") {
   return (state: EditorState, dispatch?: (tr: Transaction) => void, view?: EditorView) => {
@@ -201,43 +200,27 @@ function toggleList(target: "ordered" | "bullet" | "task") {
       if (!canTurnInto(state.selection.node, into)) return false;
       return dispatch ? turnBlockInto(view, chosen, into) : true;
     }
+    const dispatchTurn = dispatch && ((tr: Transaction) => {
+      dispatch(closeHistory(tr));
+      dispatch(closeHistory(view.state.tr));
+    });
     const { nodes } = state.schema;
     const kind = listKindAt(state);
-    if (kind === target) return liftListItem(nodes.list_item)(state, dispatch);
-    const checked = target === "task" ? false : null;
+    if (kind === target) return liftListItem(nodes.list_item)(state, dispatchTurn);
     const depth = listItemDepth(state);
-    if (depth === null) return wrapParagraph(state, target, dispatch);
+    if (depth === null) return wrapParagraph(state, target, dispatchTurn);
     const { $from, $to } = state.selection;
-    if ($to.pos > $from.end(depth)) return false; // several items selected: nothing here is meant for that
-    const item = $from.node(depth);
+    if ($to.pos > $from.end(depth)) return false;
+    if (!dispatchTurn) return true;
     const itemPos = $from.before(depth);
-    if ((kind === "ordered") === (target === "ordered")) {
-      if (dispatch) dispatch(state.tr.setNodeMarkup(itemPos, undefined, { ...item.attrs, checked }).scrollIntoView());
-      return true;
-    }
-    if (!dispatch) return true;
-    const list = $from.node(depth - 1);
-    const listPos = $from.before(depth - 1);
-    const index = $from.index(depth - 1);
-    const items: ProseNode[] = [];
-    list.forEach((child) => items.push(child));
-    const ordered = target === "ordered";
-    const own = (ordered ? nodes.ordered_list : nodes.bullet_list).create(null, item.type.create({ ...item.attrs, checked, listType: ordered ? "ordered" : "bullet", label: ordered ? "1." : "•" }, item.content, item.marks));
-    const pieces: ProseNode[] = [];
-    if (index > 0) pieces.push(list.copy(Fragment.from(items.slice(0, index))));
-    pieces.push(own);
-    if (index < items.length - 1) {
-      // An ordered list that goes on after the item goes on from its number.
-      const after = list.type === nodes.ordered_list ? { ...list.attrs, order: (list.attrs.order ?? 1) + index + 1 } : list.attrs;
-      pieces.push(list.type.create(after, Fragment.from(items.slice(index + 1))));
-    }
-    const tr = state.tr.replaceWith(listPos, listPos + list.nodeSize, pieces);
-    // The item now sits one list wrapper in, after the list of the items that came before it.
-    const shift = listPos + (index > 0 ? pieces[0].nodeSize : 0) + 1 - itemPos;
+    const tr = state.tr;
+    const turnedItemPos = turnInto(tr, itemPos, target);
+    if (turnedItemPos === null) return false;
+    const shift = turnedItemPos - itemPos;
     tr.setSelection(state.selection instanceof NodeSelection
       ? NodeSelection.create(tr.doc, $from.pos + shift)
-      : TextSelection.create(tr.doc, $from.pos + shift, $to.pos + shift));
-    dispatch(tr.scrollIntoView());
+      : TextSelection.create(tr.doc, state.selection.anchor + shift, state.selection.head + shift));
+    dispatchTurn(tr.scrollIntoView());
     return true;
   };
 }
@@ -410,6 +393,49 @@ function turnChosenInto(target: BlockKind) {
 }
 
 /**
+ * `Mod-Alt-0`…`-3` with the caret on a list item's first line: the item turns, as the grip and the toolbar turn it
+ * (list commands spec, decision 7). Milkdown's own keys would set that line to a heading, which an item cannot start
+ * with, and do nothing. The key is claimed there even when the turn is refused (an item with a nested list), where
+ * Milkdown's did nothing either. Anywhere else, a later paragraph or a code block in an item included, they stay
+ * Milkdown's.
+ */
+function turnItemInto(target: BlockKind) {
+  return (state: EditorState, dispatch?: (tr: Transaction) => void, view?: EditorView) => {
+    const selectAll = state.selection instanceof AllSelection;
+    if (!view?.editable || !(selectAll || state.selection instanceof TextSelection) || rangeBlocks(state) !== null) return false;
+    // A selection that touches several blocks turns every block the toolbar would turn, whichever end is
+    // the anchor and even when it starts on a later line. Only a single caret block keeps the first-line rule.
+    const blocks = blocksTouched(state);
+    if ((selectAll || blocks.length > 1) && blocks.some((block) => block.node.type.name === "list_item")) {
+      if (dispatch) {
+        const tr = turnBlocks(state, blocks, target);
+        if (tr) {
+          if (selectAll) tr.setSelection(new AllSelection(tr.doc));
+          // One undo step, and typing after it is its own step, as every other turn entry point does.
+          view.dispatch(closeHistory(tr).scrollIntoView());
+          view.dispatch(closeHistory(view.state.tr));
+          view.focus();
+        }
+      }
+      return true;
+    }
+    const depth = listItemDepth(state);
+    const { $from } = state.selection;
+    if (depth === null || $from.parent.type.name !== "paragraph" || $from.parent !== $from.node(depth).firstChild) return false;
+    if (dispatch) turnBlockInto(view, $from.before(depth), target);
+    return true;
+  };
+}
+
+/** Both digit inputs: a block chosen with Escape first, then the caret on a list item's first line. */
+function turnDigitInto(target: BlockKind) {
+  const chosen = turnChosenInto(target);
+  const item = turnItemInto(target);
+  return (state: EditorState, dispatch?: (tr: Transaction) => void, view?: EditorView) =>
+    chosen(state, dispatch, view) || item(state, dispatch, view);
+}
+
+/**
  * `Mod-Enter` in a to-do: tick it, or untick it (keys spec, decision 4). Elsewhere the key is the page's
  * (save). Called from editor-core's direct `handleKeyDown`, which claims `Mod-Enter` before any keymap.
  */
@@ -439,11 +465,11 @@ export function flipToggleAtTitle(view: EditorView): boolean {
 // Milkdown merges these into the editor's one keymap, ahead of ProseMirror's base keymap (priority 50).
 const notionKeymap = $useKeymap("khNotionKeys", {
   // Notion's `Mod-Alt` digits (keys spec, decision 5): 0–3 stay Milkdown's (text, headings) except on a block
-  // chosen with Escape, where they turn that block; 4–8 are Notion's.
-  TextByDigitChosen: { shortcuts: "Mod-Alt-0", priority: 70, command: () => turnChosenInto("paragraph") as never },
-  H1ByDigitChosen: { shortcuts: "Mod-Alt-1", priority: 70, command: () => turnChosenInto("h1") as never },
-  H2ByDigitChosen: { shortcuts: "Mod-Alt-2", priority: 70, command: () => turnChosenInto("h2") as never },
-  H3ByDigitChosen: { shortcuts: "Mod-Alt-3", priority: 70, command: () => turnChosenInto("h3") as never },
+  // chosen with Escape or with the caret on a list item's first line, where they turn that block; 4–8 are Notion's.
+  TextByDigitInItem: { shortcuts: "Mod-Alt-0", priority: 70, command: () => turnDigitInto("paragraph") as never },
+  H1ByDigitInItem: { shortcuts: "Mod-Alt-1", priority: 70, command: () => turnDigitInto("h1") as never },
+  H2ByDigitInItem: { shortcuts: "Mod-Alt-2", priority: 70, command: () => turnDigitInto("h2") as never },
+  H3ByDigitInItem: { shortcuts: "Mod-Alt-3", priority: 70, command: () => turnDigitInto("h3") as never },
   TodoByDigit: { shortcuts: "Mod-Alt-4", priority: 70, command: () => toggleList("task") as never },
   BulletByDigit: { shortcuts: "Mod-Alt-5", priority: 70, command: () => toggleList("bullet") as never },
   NumberedByDigit: { shortcuts: "Mod-Alt-6", priority: 70, command: () => toggleList("ordered") as never },

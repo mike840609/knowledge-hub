@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { editorViewCtx } from "@milkdown/kit/core";
-import { TextSelection } from "@milkdown/kit/prose/state";
+import { redo, undo } from "@milkdown/kit/prose/history";
+import { AllSelection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { afterEach, expect, it } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
@@ -57,6 +58,52 @@ it.each([
   expect(md(editor)).toBe(expected);
 });
 
+it.each([
+  ["alpha", "4", "- [ ] alpha!"],
+  ["- alpha", "5", "alpha!"],
+  ["- alpha", "4", "- [ ] alpha!"],
+])("separates typing from the list shortcut on %s through undo and redo", async (source, digit, turned) => {
+  const { editor, view } = await open(source);
+  caretAfter(view, "alpha");
+  type(view, "!");
+  press(view, digit, { ctrlKey: true, altKey: true });
+  expect(md(editor)).toBe(turned);
+  type(view, "?");
+  for (const expected of [turned, source + "!", source]) {
+    expect(undo(view.state, view.dispatch)).toBe(true);
+    expect(md(editor)).toBe(expected);
+  }
+  for (const expected of [source + "!", turned, turned + "?"]) {
+    expect(redo(view.state, view.dispatch)).toBe(true);
+    expect(md(editor)).toBe(expected);
+  }
+});
+
+it("keeps the active end of a backward text selection when turning a bullet into a task", async () => {
+  const { view } = await open("- alpha\n- beta\n- gamma");
+  caretAfter(view, "beta");
+  const end = view.state.selection.head;
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, end, end - 3)));
+  press(view, "4", { ctrlKey: true, altKey: true });
+  const { selection, doc } = view.state;
+  expect(doc.textBetween(selection.from, selection.to)).toBe("eta");
+  expect(selection.head).toBe(selection.from);
+});
+
+it.each([
+  ["- alpha", "## alpha"],
+  ["- alpha\n- beta\n- gamma", "## alpha\n\n## beta\n\n## gamma"],
+])("turns the entire list after selecting all in %s", async (source, turned) => {
+  const { editor, view } = await open(source);
+  caretAfter(view, "alpha");
+  press(view, "a", { ctrlKey: true });
+  press(view, "a", { ctrlKey: true });
+  expect(view.state.selection).toBeInstanceOf(AllSelection);
+  press(view, "2", { ctrlKey: true, altKey: true });
+  expect(md(editor)).toBe(turned);
+  expect(view.state.selection).toBeInstanceOf(AllSelection);
+});
+
 it("Mod-Alt-7 makes the line a toggle", async () => {
   const { view } = await open("one");
   caretAt(view, 2);
@@ -76,6 +123,143 @@ it.each([
   // Mod-Alt-8 turns the whole quote into code, as the block menu does; never into a bulleted list.
   press(view, "8", { ctrlKey: true, altKey: true });
   expect(md(editor)).toMatch(/^```/);
+});
+
+// 2026-11-21 list commands spec, decision 7: in a list item, Mod-Alt-0…3 turn the item as the grip does. Milkdown's
+// own keys would set the item's line to a heading, which an item cannot start with, and did nothing.
+it.each([
+  ["0", "- a\n\nb\n\n- c"],
+  ["1", "- a\n\n# b\n\n- c"],
+  ["2", "- a\n\n## b\n\n- c"],
+  ["3", "- a\n\n### b\n\n- c"],
+])("Mod-Alt-%s in a list item turns the item, splitting its list", async (digit, expected) => {
+  const { editor, view } = await open("- a\n- b\n- c");
+  caretAt(view, 9);
+  expect(view.state.selection.$from.parent.type.name).toBe("paragraph");
+  expect(view.state.selection.$from.parent.textContent).toBe("b");
+  expect(press(view, digit, { ctrlKey: true, altKey: true }).defaultPrevented).toBe(true);
+  expect(md(editor)).toBe(expected);
+  press(view, "z", { ctrlKey: true });
+  expect(md(editor)).toBe("- a\n- b\n- c");
+});
+
+it("Mod-Alt-2 across two list items turns both, as the toolbar does", async () => {
+  const { editor, view } = await open("- one\n- two\n- three");
+  let first = -1;
+  let second = -1;
+  view.state.doc.descendants((node, pos) => {
+    if (node.isText && node.text === "one") first = pos;
+    if (node.isText && node.text === "two") second = pos;
+  });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, first, second + 3)));
+  expect(press(view, "2", { ctrlKey: true, altKey: true }).defaultPrevented).toBe(true);
+  expect(md(editor)).toBe("## one\n\n## two\n\n- three");
+  press(view, "z", { ctrlKey: true });
+  expect(md(editor)).toBe("- one\n- two\n- three");
+});
+
+it("one undo after a cross-item turn keeps typing made before it", async () => {
+  const { editor, view } = await open("- one\n- two");
+  caretAfter(view, "two");
+  type(view, "!");
+  let first = -1;
+  let second = -1;
+  view.state.doc.descendants((node, pos) => {
+    if (node.isText && node.text === "one") first = pos;
+    if (node.isText && node.text === "two!") second = pos;
+  });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, first, second + 4)));
+  press(view, "2", { ctrlKey: true, altKey: true });
+  expect(md(editor)).toBe("## one\n\n## two!");
+  press(view, "z", { ctrlKey: true });
+  expect(md(editor)).toBe("- one\n- two!");
+});
+
+it("one undo after typing right after a cross-item turn keeps the turn", async () => {
+  const { editor, view } = await open("- one\n- two\n- three");
+  let first = -1;
+  let second = -1;
+  view.state.doc.descendants((node, pos) => {
+    if (node.isText && node.text === "one") first = pos;
+    if (node.isText && node.text === "two") second = pos;
+  });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, first, second + 3)));
+  press(view, "2", { ctrlKey: true, altKey: true });
+  type(view, "Z");
+  press(view, "z", { ctrlKey: true });
+  expect(md(editor)).toBe("## one\n\n## two\n\n- three");
+});
+
+it.each([
+  ["a paragraph before the list", "P\n\n- one\n- two", "P", "one", "## P\n\n## one\n\n- two"],
+  ["a paragraph after the list", "- one\n- two\n\nP", "two", "P", "- one\n\n## two\n\n## P"],
+])("Mod-Alt-2 across %s turns both blocks from either side of the list", async (_name, source, firstText, lastText, expected) => {
+  const { editor, view } = await open(source);
+  let first = -1;
+  let last = -1;
+  view.state.doc.descendants((node, pos) => {
+    if (node.isText && node.text === firstText) first = pos;
+    if (node.isText && node.text === lastText) last = pos + lastText.length;
+  });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, first, last)));
+  expect(press(view, "2", { ctrlKey: true, altKey: true }).defaultPrevented).toBe(true);
+  expect(md(editor)).toBe(expected);
+});
+
+/** The caret after the first occurrence of `text`. */
+function caretAfter(view: EditorView, text: string) {
+  let at = -1;
+  view.state.doc.descendants((node, pos) => {
+    if (at < 0 && node.isText && node.text!.includes(text)) at = pos + node.text!.indexOf(text) + text.length;
+    return at < 0;
+  });
+  expect(at, `"${text}" is in the document`).toBeGreaterThanOrEqual(0);
+  caretAt(view, at);
+}
+
+// Only an item's first line is the item's: the turn keys claim it there, and one Mod-z takes the turn back.
+it.each([
+  ["a to-do item", "- [ ] a\n- [ ] b\n- [ ] c", "b", "1", "- [ ] a\n\n# b\n\n- [ ] c"],
+  ["a numbered item", "1. a\n2. b\n3. c", "b", "3", "1. a\n\n### b\n\n3. c"],
+  ["an item in a quote, which turns inside the quote", "> - a\n> - b", "b", "2", "> - a\n>\n> ## b"],
+])("Mod-Alt-n on the first line of %s turns the item, in one undo step", async (_name, source, text, digit, expected) => {
+  const { editor, view } = await open(source);
+  caretAfter(view, text);
+  expect(press(view, digit, { ctrlKey: true, altKey: true }).defaultPrevented).toBe(true);
+  expect(md(editor)).toBe(expected);
+  press(view, "z", { ctrlKey: true });
+  expect(md(editor)).toBe(source);
+});
+
+it("Mod-Alt-2 on an item with a nested list is claimed and changes nothing, as the grip refuses it", async () => {
+  const { editor, view } = await open("- a\n  - b\n- c");
+  caretAfter(view, "a");
+  expect(press(view, "2", { ctrlKey: true, altKey: true }).defaultPrevented).toBe(true);
+  expect(md(editor)).toBe("- a\n  - b\n- c");
+});
+
+// Past the item's first line the keys stay Milkdown's, as before the list commands spec.
+it.each([
+  ["a loose item's second paragraph", "- a\n\n  second", "second", "2", "- a\n\n  ## second"],
+  ["a code block in an item, to text", "- a\n\n  ```\n  x\n  ```", "x", "0", "- a\n\n  x"],
+  ["a code block in an item, to a heading", "- a\n\n  ```\n  x\n  ```", "x", "2", "- a\n\n  ## x"],
+])("Mod-Alt-n in %s stays Milkdown's, in one undo step", async (_name, source, text, digit, expected) => {
+  const { editor, view } = await open(source);
+  caretAfter(view, text);
+  press(view, digit, { ctrlKey: true, altKey: true });
+  expect(md(editor)).toBe(expected);
+  press(view, "z", { ctrlKey: true });
+  expect(md(editor)).toBe(source);
+});
+
+it("Mod-Alt-2 outside a list item stays Milkdown's: a paragraph in a quote becomes a heading in the quote", async () => {
+  const { editor, view } = await open("one\n\n> two");
+  caretAt(view, 2);
+  press(view, "2", { ctrlKey: true, altKey: true });
+  expect(md(editor)).toBe("## one\n\n> two");
+  caretAt(view, view.state.doc.content.size - 2);
+  press(view, "2", { ctrlKey: true, altKey: true });
+  expect(md(editor)).toBe("## one\n\n> ## two");
 });
 
 it("Mod-Enter in a to-do outside the document page (the composer) leaves it to save, unticked", async () => {

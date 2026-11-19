@@ -1,5 +1,5 @@
 import type { Node as ProseNode, NodeType } from "@milkdown/kit/prose/model";
-import { NodeSelection, Selection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
+import { AllSelection, NodeSelection, Selection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
 import { blockKind, canTurnInto, turnInto, type BlockKind, type EditorBlock } from "./block-actions";
 
 /**
@@ -60,7 +60,7 @@ function readRegion(doc: ProseNode, sequence: EditorBlock[], lo: number, hi: num
   const read = (node: ProseNode, pos: number) => {
     if (!isList(node)) { entries.push({ node, pos, key: null, number: null, first: false, join: false }); return; }
     lists.set(pos, { type: node.type, attrs: node.attrs, pos, end: pos + node.nodeSize });
-    const order = Number(node.attrs.order) || 1;
+    const order = Number(node.attrs.order ?? 1);
     node.forEach((item, offset, index) => entries.push({ node: item, pos: pos + 1 + offset, key: pos, number: order + index, first: index === 0, join: false }));
   };
   if (nested) read($first.parent, from);
@@ -225,7 +225,8 @@ export function turnBlocks(state: EditorState, blocks: EditorBlock[], into: Bloc
   if (!blocks.length || !blocks.every((block) => blockKind(block.node) === into || canTurnInto(block.node, into))) return null;
   const { nodes } = state.schema;
   const lines = blocks.every((block) => block.node.type === nodes.paragraph || block.node.type === nodes.heading || block.node.type === nodes.list_item);
-  if (LIST_TARGETS.has(into) && lines) {
+  // One item splits its list exactly as it does from the grip, even beside an item of the target kind.
+  if (blocks.length > 1 && LIST_TARGETS.has(into) && lines) {
     const { sequence, first, last } = locate(state, blocks);
     const region = readRegion(state.doc, sequence, first, last);
     const ordered = into === "ordered";
@@ -252,4 +253,42 @@ export function turnBlocks(state: EditorState, blocks: EditorBlock[], into: Bloc
   if (caret === null) return null;
   tr.setSelection(Selection.near(tr.doc.resolve(caret)));
   return tr;
+}
+
+/**
+ * The blocks of one sequence that the text selection's `from`…`to` touches (2026-11-21 list-commands spec, decision 6).
+ * Each end is in a chain of blocks, outermost first: its top-level block, then each list item around it. The sequence
+ * is the deepest one both ends are in, so a selection inside one item is that item, not its list, and one that runs from
+ * a nested item out to its parent's sibling is the two top-level items. An end at the very start of a later textblock
+ * touches none of its text, and does not take that block. Select all (which has no position inside a block) touches
+ * every top-level block in the document's sequence.
+ */
+export function blocksTouched(state: EditorState): EditorBlock[] {
+  const { doc, selection } = state;
+  // Select all holds no position inside a block: every top-level block of the document is touched.
+  if (selection instanceof AllSelection) return sequenceOf(doc, 0);
+  const { $from } = selection;
+  let { $to } = selection;
+  if (!selection.empty && $to.parentOffset === 0 && $to.pos > $from.end()) $to = doc.resolve(Math.max($from.pos, Selection.near(doc.resolve($to.pos - 1), -1).from));
+  // Each level is the block at that level and the list (or, for the top level, -1) whose sequence it belongs to.
+  const chain = ($pos: typeof $from) => {
+    const levels: { pos: number; sequence: number }[] = [];
+    for (let depth = 1; depth <= $pos.depth; depth++) {
+      const node = $pos.node(depth);
+      if (depth === 1 && !isList(node)) levels.push({ pos: $pos.before(1), sequence: -1 });
+      else if (node.type.name === "list_item") levels.push({ pos: $pos.before(depth), sequence: depth === 2 ? -1 : $pos.before(depth - 1) });
+    }
+    return levels;
+  };
+  const start = chain($from);
+  const end = chain($to);
+  let level = -1;
+  while (level + 1 < Math.min(start.length, end.length) && start[level + 1].sequence === end[level + 1].sequence) {
+    level++;
+    if (start[level].pos !== end[level].pos) break;
+  }
+  if (level < 0) return [];
+  const from = start[level].pos;
+  const to = end[level].pos;
+  return sequenceOf(doc, from).filter((block) => block.pos >= from && block.pos <= to);
 }

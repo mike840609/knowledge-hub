@@ -860,7 +860,8 @@ The rendered editor has two more things drawn on `document.body`, `fixed`, for
 the reason the `[[` list is: a control beside the block the pointer is on
 (`editor/block-gutter.ts`) and a list of blocks under the caret after `/` on an
 empty line, or after a space mid-line when a block matches what follows the `/`
-(`editor/slash-commands.ts`).
+(`editor/slash-commands.ts`). A list item's first line counts as a line for both
+(list-commands spec, decisions 1-4).
 
 **The editor keeps a 56px gutter on its left** (`.kh-editor-blocks`,
 `padding-left: 3.5rem` with `margin-left: -3.5rem`). It hangs left of the text,
@@ -885,12 +886,13 @@ cover text, the gutter alone shows them, so reading text never brings up a
 cover.
 
 The controls are two `size-6` icon buttons in muted text with the shared focus
-ring: one adds a block below (a new sibling item on a list) and, at the top
-level, opens the `/` list on it; one is dragged to move the block and clicked
+ring: one adds a block below (a new sibling item on a list) and opens the `/`
+list on it, at the top level and on an item alike; one is dragged to move the block and clicked
 for the block menu. The menu offers **Turn into** (Text, Heading 1–3, Bulleted
 list, Numbered list, To-do list, Quote, Code, Toggle, Callout), **Duplicate**,
 **Delete**, then a rule and **Move up** / **Move down**. Turn into is a second
-page of the same menu, not a nested popover: a conversion that would drop
+page of the same menu, not a nested popover, with the block's current kind
+marked and disabled: a conversion that would drop
 content — a several-item list into one heading, a quote with several paragraphs
 into one code block — is disabled rather than performed lossily; converting one
 list item splits the list around it (2026-11-17, below). Duplicate inserts the
@@ -928,6 +930,27 @@ matches a row's label or words anywhere, or one of its aliases by prefix —
 rows an alias matches come first, so `/h2` or `/ol` with Enter is the block it
 names (decision 16).
 
+In a list item the list answers as Turn into does. A choice made with the
+`/query` alone in the item turns the item (its own list kind keeps it, another
+list kind moves it into a list of its own, any other block splits the list
+around it); a choice made after text goes below the item at its level; Today's
+date and Page link write inline. An item with a nested list keeps it: a block
+that would drop it goes below the item and its nested list instead. A Divider
+brings an empty line after it and the caret goes there, at the top level and in
+an item alike, so the next key neither replaces the divider nor types into the
+next item; a Table keeps the caret in its first cell. The grip menu, the
+toolbar's Turn into, the `/` list and the turn keys (`Mod-Alt-0`…`8`, where
+`0`–`3` turn an item from its first line and are otherwise Milkdown's own, and
+`Mod-Shift-7`/`8`/`9`) end in the same turn and give the same result for the
+same item of a top-level list (`tests/unit/editor-turn-parity.test.ts`). Two
+places differ. The `/` list on an item with a nested list puts the block below,
+as above. And an item inside a quote, a callout or a toggle's body: there
+`Mod-Alt-0`…`3` and the toolbar turn the item, inside its container, while the
+grip reaches only the container; no parity is claimed there. A block that ends
+up inside a list item (a nested item turned, or a block below one) makes that
+item loose, so it is saved with blank lines between its children and reads
+back as written.
+
 `+` writes a visible `/` on the line it adds and opens the same list there,
 through the path a typed `/` takes: what is typed next is that `/`'s query, in
 sight, and behaves exactly as a typed `/query` does (decision 15, deviation).
@@ -957,9 +980,26 @@ move is the same one, and the caret keeps its place in the block's words. No col
 was added.
 
 **The selection toolbar and the link card** (editor Notion-parity spec,
-decisions 9-13; `editor/selection-toolbar.ts`). The toolbar holds Bold, Italic,
-Strikethrough, Inline code, Link, Heading 1-3, the two lists, Toggle and Clear
-formatting, each a `ghost` `sm` button that reads `aria-pressed` when active.
+decisions 9-13, amended by the list-commands spec, decisions 5-7;
+`editor/selection-toolbar.ts`). The toolbar opens with **Turn into**: a `ghost`
+`sm` button labelled with the selection's current kind ("Text", "Heading 2",
+"Bulleted list", …, "Mixed" across kinds) and a chevron. It opens the block
+menu's Turn into list on the block menu's surface — same entries, same order —
+with the current kind checked (`menuitemradio`, `aria-checked`). An entry is
+disabled where `canTurnInto` refuses it for a block the selection touches, or
+where every touched block already is that kind, so a list item leaves its list
+by Text; a click on a disabled entry does nothing and leaves the toolbar and the
+menu open. Turn into acts on the blocks the selection touches as the block-unit
+spec defines them (an item, not its list, wherever the list is, a quote, a
+callout or a toggle's body included; for a paragraph in a quote or a callout,
+the container as a whole, so a selection in one paragraph of a quote turns the
+whole quote; for a paragraph in a toggle's body, nothing: every entry is
+disabled), as one undo step, through the grip menu's own
+turn, and the same text stays selected afterwards. A vertical rule
+(`bg-kh-border`) follows, then Bold, Italic, Strikethrough, Inline code, Link
+and Clear formatting, each a `ghost` `sm` button that reads `aria-pressed` when
+active, and Comment last where commenting is offered. The heading, list and
+Toggle buttons the toolbar used to carry are gone into Turn into.
 Clear formatting takes every inline mark but a link off the selection (or, at a caret, the
 mark the next character would carry); a link goes by its card's Remove; `Mod-Shift-\` runs the same action
 (`Mod-\` alone stays the navigation toggle). It leaves the block type alone. `Mod-k` over a text
@@ -988,7 +1028,11 @@ or after a word character (`http://`, `12:30`). One undo step; the glyph is
 plain Markdown text.
 
 Layers: the controls sit at 30, under the app's popovers; the three menus and
-the drop line at 50. None of it is printed.
+the drop line at 50. The selection toolbar lives inside the document pane, whose
+`contain: layout` keeps it under the body's layers whatever its own `z-index`,
+and its Turn into menu hangs over the gutter's column: while that menu is open
+the block and table controls are hidden (`visibility: hidden`) rather than
+drawn over it. None of it is printed.
 
 Both rewrite the document through the rendered editor and are held to the
 wikilink rule (`tests/unit/editor-block-actions.test.ts` moves every case in
@@ -2055,3 +2099,15 @@ a block's line shows its controls (§10, "Block controls and the `/` list"). A
 chosen item and the items of a range take the chosen block's fill
 (`kh-bg-selected`, `sm` radius). No colour, radius, elevation or motion token
 was added.
+
+### List commands and Turn into (2026-11-21)
+
+`2026-11-21-list-commands-and-turn-into-design.md` lets `/` and `+` work in a
+list item as on a line, and gives the selection toolbar one Turn into menu in
+place of its heading, list and Toggle buttons (§10, "Block controls and the `/`
+list" and "The selection toolbar and the link card"). The toolbar now acts on
+block-unit blocks: a selection in a quote's paragraph turns the whole quote,
+where the old buttons changed only the paragraph, and in a toggle body's
+paragraph no entry is enabled; a selection in a list item turns that item,
+inside a container or not. While the toolbar's menu is open the block and table controls step
+aside. No colour, radius, elevation or motion token was added.
