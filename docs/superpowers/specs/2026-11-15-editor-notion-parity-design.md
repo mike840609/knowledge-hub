@@ -17,7 +17,8 @@ read it").
 - Underline, colour, `>` as a toggle: Markdown has no underline or colour, and
   `>` stays a quote.
 - Gutter controls showing over the text: they stay in the gutter (contract,
-  "Block controls").
+  "Block controls"). (Planned in `2026-11-21-block-unit-design.md`, decision 7:
+  the pointer over the text shows them, still in the gutter; not yet implemented.)
 - `Edit code` before an existing code block becomes editable: deliberate
   (`2026-10-20-reader-measure-and-heading-scale-design.md`, §100).
 - @ mentions, page width, captions, templates, databases, columns, embeds:
@@ -26,6 +27,8 @@ read it").
   range): deferred. This spec adds block selection for one block only.
   (Added 2026-11-20 for the keyboard: `2026-11-20-multi-block-selection-design.md`.)
 - A "Turn into" menu on the selection toolbar: the block menu has it.
+  (Planned in `2026-11-21-list-commands-and-turn-into-design.md`, decision 5, to
+  supersede this; not yet implemented.)
 - Callout icon or colour choice: a GitHub alert has a type, nothing else.
 - Page icon upload: no binary storage.
 
@@ -54,6 +57,8 @@ read it").
    (a node selection, drawn with `kh-bg-selected`). Escape again returns to the
    text; Backspace/Delete removes the block; typing replaces it; the arrows
    leave the selection as ProseMirror does.
+   (Planned in `2026-11-21-block-unit-design.md`, decision 1: in a list item
+   Escape selects the item; not yet implemented.)
 8. `Mod-a` first selects the current textblock's text; a second `Mod-a`
    selects the whole document. In an empty block the first press selects all.
 9. `Mod-k` with a non-empty text selection opens the selection toolbar's link

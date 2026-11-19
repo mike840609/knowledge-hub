@@ -1,13 +1,14 @@
 import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
+import { isInTable } from "@milkdown/kit/prose/tables";
 import { HeadingSlugger } from "@/shared/markdown/heading-slug";
 import { isBlockId } from "@/shared/markdown/remark-block-links";
 import { closeHistory } from "@milkdown/kit/prose/history";
 import { openBlockList } from "./slash-commands";
 import { blockKind, canTurnInto, headingText, deleteBlock, duplicateBlock, insertBlockBelow, moveBlock, siblingBlocks, topLevelBlocks, turnBlockInto, type BlockKind } from "./block-actions";
 
-function icon(kind: "plus" | "grip"): SVGSVGElement {
+export function icon(kind: "plus" | "grip"): SVGSVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("width", "16"); svg.setAttribute("height", "16"); svg.setAttribute("aria-hidden", "true");
   if (kind === "plus") {
@@ -60,8 +61,10 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
         return node ? DecorationSet.create(state.doc, [Decoration.node(pos, pos + node.nodeSize, { class: "kh-block-drag-source" })]) : null;
       },
       attributes: { class: "kh-editor-blocks", "aria-keyshortcuts": "Alt+F10", "aria-description": "Press Alt+F10 for block actions." },
-      handleKeyDown(_view, event) {
+      handleKeyDown(view, event) {
         if (event.key === "F10" && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.isComposing) {
+          // In a table cell the table's own controls take Alt+F10 (the row grip), whatever the plugin order.
+          if (view.editable && isInTable(view.state)) return false;
           const handled = focusControls?.() ?? false;
           if (handled) event.stopPropagation();
           return handled;
