@@ -32,8 +32,8 @@ const toast = mocks.toast;
 /** The hook needs a component to live in; this one hands its `moveNode` to the test. */
 const harness: { moveNode: TreeMutations["moveNode"] | null; reorderNode: TreeMutations["reorderNode"] | null } = { moveNode: null, reorderNode: null };
 
-function Harness() {
-  const mutations = useTreeMutations();
+function Harness({ workspaceId }: { workspaceId?: string }) {
+  const mutations = useTreeMutations(workspaceId);
   harness.moveNode = mutations.moveNode;
   harness.reorderNode = mutations.reorderNode;
   return null;
@@ -77,6 +77,12 @@ function reorder(nodeId = "n2") {
 }
 
 describe("source-scoped arrangement writes", () => {
+  it("refreshes the sidebar's explicit workspace after a move", async () => {
+    await act(async () => root.render(<Harness workspaceId="sidebar-workspace" />));
+    expect((await move(input)).ok).toBe(true);
+    expect(fetch).toHaveBeenCalledWith("/api/workspaces/sidebar-workspace/sources/s1/tree", expect.objectContaining({ cache: "no-store" }));
+  });
+
   it("keeps the source locked after PATCH until the authoritative tree is retrieved", async () => {
     let finishRead!: (response: Response) => void;
     const fetchTree = vi.fn()

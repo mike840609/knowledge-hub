@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { buttonClasses } from "@/components/ui/button";
 
 export function Drawer({
+  id,
   open,
   onOpenChange,
   title,
@@ -15,9 +16,11 @@ export function Drawer({
   modal = true,
   side = "right",
   surfaceClassName = "bg-kh-bg",
+  contentClassName = "overflow-y-auto px-4 py-3",
   onOpenChangeComplete,
   finalFocus,
 }: {
+  id?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: ReactNode;
@@ -26,15 +29,16 @@ export function Drawer({
   label?: string;
   modal?: boolean;
   surfaceClassName?: string;
+  contentClassName?: string;
   side?: "left" | "right";
   onOpenChangeComplete?: (open: boolean) => void;
-  finalFocus?: boolean;
+  finalFocus?: Dialog.Popup.Props["finalFocus"];
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange} onOpenChangeComplete={onOpenChangeComplete} modal={modal}>
       <Dialog.Portal>
         {modal ? <Dialog.Backdrop className="fixed inset-0 z-40 bg-kh-overlay transition-opacity duration-120 ease-out data-[starting-style]:opacity-0 data-[ending-style]:opacity-0" /> : null}
-        <Dialog.Popup finalFocus={finalFocus} className={`fixed inset-y-0 ${side === "left" ? "left-0 border-r data-[starting-style]:-translate-x-4 data-[ending-style]:-translate-x-4" : "right-0 border-l data-[starting-style]:translate-x-4 data-[ending-style]:translate-x-4"} z-50 flex w-80 max-w-[85vw] flex-col border-kh-border shadow-modal outline-none transition-[opacity,transform] duration-160 ease-out data-[starting-style]:opacity-0 data-[ending-style]:opacity-0 ${surfaceClassName}`}>
+        <Dialog.Popup {...(id ? { id } : {})} finalFocus={finalFocus} className={`fixed inset-y-0 ${side === "left" ? "left-0 border-r data-[starting-style]:-translate-x-4 data-[ending-style]:-translate-x-4" : "right-0 border-l data-[starting-style]:translate-x-4 data-[ending-style]:translate-x-4"} z-50 flex w-80 max-w-[85vw] flex-col border-kh-border shadow-modal outline-none transition-[opacity,transform] duration-160 ease-out data-[starting-style]:opacity-0 data-[ending-style]:opacity-0 ${surfaceClassName}`}>
           <div className="flex items-start justify-between gap-2 border-b border-kh-border px-4 py-3">
             <div className="min-w-0">
               <Dialog.Title className="truncate text-body font-semibold text-kh-text">
@@ -53,7 +57,7 @@ export function Drawer({
               <X className="h-4 w-4" aria-hidden="true" />
             </Dialog.Close>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">{children}</div>
+          <div className={`min-h-0 flex-1 ${contentClassName}`}>{children}</div>
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

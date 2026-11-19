@@ -1,11 +1,13 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/test";
 import { mkdir } from "node:fs/promises";
 
 test("knowledge navigation stays distinct from document content in both themes", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/w/0199f100-0000-7000-8000-000000000001/search?q=SWFP");
   await page.locator("a[data-search-result]").first().click();
-  const explorer = page.getByRole("complementary", { name: "Knowledge explorer", exact: true });
+  const primary = page.getByRole("navigation", { name: "Primary", exact: true });
+  const sidebar = page.locator("aside").filter({ has: primary });
+  const explorer = sidebar.getByRole("complementary", { name: "Knowledge explorer", exact: true });
   await expect(explorer).toBeVisible();
   await expect(explorer).toHaveAttribute("aria-busy", "false");
   await expect(page.getByRole("region", { name: "Document content" })).toBeVisible();
@@ -16,22 +18,28 @@ test("knowledge navigation stays distinct from document content in both themes",
     await page.getByRole("menuitemradio", { name: theme, exact: true }).click();
     await page.keyboard.press("Escape");
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme.toLowerCase());
-    const surfaces = await explorer.evaluate(el => {
-      const rail = document.querySelector('aside:not([aria-label="Knowledge explorer"])')!;
-      const pane = document.querySelector('[data-document-pane]')!;
-      return [rail, el, pane].map(node => getComputedStyle(node).backgroundColor);
+    const selected = explorer.getByRole("treeitem", { selected: true });
+    await expect(primary.locator('a[aria-current="page"]')).toHaveCount(0);
+    await expect(selected).toBeVisible();
+    const [navBg, explorerBg, paneBg, selectionBg] = await sidebar.evaluate(element => {
+      function surface(node: Element): string {
+        const color = getComputedStyle(node).backgroundColor;
+        return color === "rgba(0, 0, 0, 0)" && node.parentElement ? surface(node.parentElement) : color;
+      }
+      return [
+        element.querySelector('nav[aria-label="Primary"]')!,
+        element.querySelector('[aria-label="Knowledge explorer"]')!,
+        document.querySelector('[data-document-pane]')!,
+        element.querySelector('[aria-selected="true"]')!,
+      ].map(surface);
     });
-    expect(new Set(surfaces).size).toBe(3);
+    expect(navBg).toBe(explorerBg);
+    expect(explorerBg).not.toBe(paneBg);
+    expect(selectionBg).not.toBe(explorerBg);
     if (theme === "Dark") {
-      const brightness = surfaces.map(color => color.match(/\d+/g)!.slice(0, 3).reduce((sum, channel) => sum + Number(channel), 0));
-      expect(brightness[0]).toBeLessThan(brightness[1]);
-      expect(brightness[1]).toBeLessThan(brightness[2]);
+      const brightness = (color: string) => color.match(/\d+/g)!.slice(0, 3).reduce((sum, channel) => sum + Number(channel), 0);
+      expect(brightness(explorerBg)).toBeLessThan(brightness(paneBg));
     }
-    const selection = page.locator('nav[aria-label="Primary"] a[aria-current="page"]');
-    const selectedDocument = explorer.locator('[aria-selected="true"]');
-    await expect(selection).toBeVisible();
-    await expect(selectedDocument).toBeVisible();
-    expect(await selection.evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe(await selectedDocument.evaluate(el => getComputedStyle(el).backgroundColor));
     if (output) await page.screenshot({ path: `${output}/${theme.toLowerCase()}.png`, animations: "disabled" });
   }
 });

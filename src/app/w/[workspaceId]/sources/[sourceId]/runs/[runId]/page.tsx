@@ -1,4 +1,5 @@
 import { getSyncRunDetail } from "@/server/sync-reading";
+import { RefreshOnArrival } from "@/components/shell/refresh-on-arrival";
 import { SyncRunDetailView } from "@/components/sources/sync-run-detail";
 import { notFound } from "next/navigation";
 export default async function RunPage({
@@ -19,6 +20,7 @@ export default async function RunPage({
   if (!detail) notFound();
   return (
     <main className="kh-page pb-6">
+      <RefreshOnArrival pathname={`/w/${workspaceId}/sources/${sourceId}/runs/${runId}`} />
       <SyncRunDetailView detail={detail} />
     </main>
   );

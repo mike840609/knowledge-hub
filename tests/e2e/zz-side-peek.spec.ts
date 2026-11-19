@@ -130,7 +130,7 @@ async function homeWithDocument(page: Page) {
   const title = unique("Peek Home");
   const created = await apiDocument(page, workspaceId, title, `Body of ${title}.`);
   await page.goto(`/w/${workspaceId}/home`);
-  const homeRow = page.getByRole("link", { name: title }).first();
+  const homeRow = page.locator("#kh-workspace-main").getByRole("link", { name: title }).first();
   await expect(homeRow).toBeVisible(ROUND_TRIP);
   return { title, created, homeRow, home: page.url() };
 }
@@ -144,6 +144,24 @@ test("Home's Open in side peek opens the split beside Home", async ({ page }) =>
   await expect(sidePeek).toContainText(`Body of ${title}.`, ROUND_TRIP);
   expect(page.url()).toBe(home);
   await expect(page.getByRole("heading", { name: "Recent" })).toBeVisible();
+});
+
+test("the workspace tree opens a side peek beside Sources", async ({ page }) => {
+  const workspaceId = await mySpace(page);
+  const title = unique("Peek from Sources");
+  await apiDocument(page, workspaceId, title, `Body of ${title}.`);
+  const sources = `/w/${workspaceId}/sources`;
+  await page.goto(sources);
+
+  const tree = page.getByRole("navigation", { name: "Document tree", exact: true });
+  const notes = tree.getByRole("button", { name: "Notes", exact: true });
+  if (await notes.getAttribute("aria-expanded") === "false") await notes.click();
+  await tree.getByRole("treeitem", { name: title, exact: true }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Open in side peek" }).click();
+
+  await expect(page.getByTestId("side-peek")).toContainText(`Body of ${title}.`, ROUND_TRIP);
+  await expect(page.getByRole("heading", { name: "Sources", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(sources);
 });
 
 test("a narrow Home peeks in the drawer, and Open as full page leaves it", async ({ page }) => {

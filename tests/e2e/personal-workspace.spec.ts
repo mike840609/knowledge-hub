@@ -38,8 +38,8 @@ test("personal rollout: disabled teams, drafts across browsers, organize, export
   await resumed.getByRole("textbox", { name: "Markdown", exact: true }).fill("Persistent draft body\n\nSaved");
   expect((await savedDocument).ok()).toBe(true);
   await page.goto(`/w/${workspaceId}/home`);
-  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Knowledge" }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge(?:/|$)`), wait);
+  await page.getByRole("navigation", { name: "Document tree" }).locator(`a[href="${href}"]`).click();
+  await expect(page).toHaveURL(href, wait);
   await page.goto(`${href}?revision=1`);
   const content = page.getByRole("region", { name: "Document content", exact: true });
   await content.getByText("Compare revision 1 with current revision 3", { exact: true }).click();
@@ -49,9 +49,9 @@ test("personal rollout: disabled teams, drafts across browsers, organize, export
   await page.goto(`/w/${workspaceId}/home`);
   await page.screenshot({ path: testInfo.outputPath("personal-home.png"), fullPage: true });
   const favoriteResponse = page.waitForResponse(r => r.url().endsWith("/personal") && r.request().method() === "PUT");
-  await page.getByRole("button", { name: "Favorite: Personal lifecycle", exact: true }).first().click(); expect((await favoriteResponse).ok()).toBe(true);
+  await page.locator("#kh-workspace-main").getByRole("button", { name: "Favorite: Personal lifecycle", exact: true }).first().click(); expect((await favoriteResponse).ok()).toBe(true);
   await resumed.goto(`${new URL(page.url()).origin}/w/${workspaceId}/home`);
-  await expect(resumed.getByRole("button", { name: "Remove favorite: Personal lifecycle", exact: true }).first()).toBeVisible(wait);
+  await expect(resumed.locator("#kh-workspace-main").getByRole("button", { name: "Remove favorite: Personal lifecycle", exact: true }).first()).toBeVisible(wait);
   await page.getByRole("button", { name: "Home actions" }).click();
   const downloadPromise = page.waitForEvent("download"); await page.getByRole("menuitem", { name: "Export Markdown ZIP" }).click(); const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("my-space.zip"); const zipPath = (await download.path())!;

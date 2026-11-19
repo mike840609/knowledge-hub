@@ -1,6 +1,6 @@
 # Inbox: one entry in the rail
 
-Status: agreed with the user on 2026-10-31 (approach A, Linear's model: one entry). The Inbox page's list is superseded on 2026-11-04 by the discussion index; the single rail entry and badge stay.
+The user agreed to the single-entry approach on 2026-10-31. The discussion index replaced the Inbox list on 2026-11-04.
 
 ## Intent
 
@@ -16,14 +16,15 @@ choose for no reason. The 176px header also has no room for a third control
 
 ## Decision
 
-One entry: the PrimaryNav **Inbox** row and its unread badge. The header and
-topbar controls are removed.
+The [workspace sidebar](frontend-design-language.md#october-2026-remediation)
+places the **Inbox** link beside the collapse control on expanded desktop. The
+compact rail and Menu drawer place it first in Primary navigation.
 
 ## Goals
 
-- One Inbox control at every width; the navigation row is the only way in.
-- The unread count stays live on that row, including the collapsed rail.
-- The rail's header row returns to the wordmark and the collapse control.
+- One Inbox link at every sidebar width, opening the page directly.
+- A live unread badge on the Inbox link in each placement.
+- A full Search row below the workspace switcher.
 
 ## Non-goals
 
@@ -36,7 +37,7 @@ topbar controls are removed.
 
 - Two controls for one inbox, or an unnamed icon beside the wordmark.
 
-## Approaches considered
+## Original approaches
 
 - **A. Single Inbox (Linear)** — chosen. One row, one badge, no popover. The
   split view already makes reading an entry a click that does not leave the page,
@@ -50,7 +51,7 @@ topbar controls are removed.
   Cleanest rail, but the Inbox is a full page with follows and a split view; it
   would lose its place in navigation.
 
-## What changes
+## Original implementation
 
 - `src/components/shell/app-shell.tsx`: remove the `InboxPopover` import, the
   header render (expanded) and the `placement="compact"` block. The header is the

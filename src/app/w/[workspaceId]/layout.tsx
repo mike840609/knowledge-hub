@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { AppShell } from "@/components/shell/app-shell";
 import { foreignHubShareRedirect, REQUEST_PATH_HEADER } from "@/lib/share-paths";
 import { applicationServices } from "@/server/composition";
-import { getWorkspaceShellModel } from "@/server/knowledge-read";
+import { getWorkspaceKnowledgeSources, getWorkspaceShellModel } from "@/server/knowledge-read";
 
 export default async function WorkspaceLayout({
   params,
@@ -14,7 +14,10 @@ export default async function WorkspaceLayout({
   children: ReactNode;
 }) {
   const { workspaceId } = await params;
-  const model = await getWorkspaceShellModel(workspaceId);
+  const [model, sources] = await Promise.all([
+    getWorkspaceShellModel(workspaceId),
+    getWorkspaceKnowledgeSources(workspaceId),
+  ]);
   if (!model) {
     // A share's Hub reader URL copied from another person's Workspace opens in the caller's own; every other foreign path is a 404.
     const { personalWorkspace } = await applicationServices().establishTrustedCaller();
@@ -22,5 +25,5 @@ export default async function WorkspaceLayout({
     if (own && personalWorkspace.id !== workspaceId) redirect(own);
     notFound();
   }
-  return <AppShell key={workspaceId} model={model}>{children}</AppShell>;
+  return <AppShell key={workspaceId} model={model} sources={sources}>{children}</AppShell>;
 }

@@ -22,8 +22,6 @@ vi.mock("@/components/shell/use-workspace-authorization", () => ({
     },
   }),
 }));
-vi.mock("@/components/shell/use-inbox-unread", () => ({ useInboxUnread: () => 0 }));
-
 let root: Root;
 let container: HTMLElement;
 beforeEach(() => {

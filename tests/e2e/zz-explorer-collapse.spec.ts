@@ -1,54 +1,124 @@
-import { expect, test } from "./fixtures/test";
+import { expect, test as base } from "./fixtures/test";
 import { personalWorkspaceId } from "./fixtures/my-space";
 import { phase3Origin } from "./fixtures/phase3-identities";
 import { createReviewDocument } from "./fixtures/document-review";
 import { projectReviewBlocks } from "../../src/modules/knowledge/domain/review-anchor";
 
-// explorer-collapse spec, Acceptance.
-test("the explorer hides to a strip and comes back, focus following, and is remembered", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto(`/w/${await personalWorkspaceId(page)}/knowledge`);
-  const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
-  const hide = page.getByRole("button", { name: "Hide documents" });
-  const show = page.getByRole("button", { name: "Show documents" });
-  await expect(explorer).toBeVisible();
-  await expect(show).toHaveCount(0);
-  const before = (await explorer.boundingBox())!.width;
+const ROUND_TRIP = { timeout: 15_000 };
 
-  await hide.click();
+const test = base.extend<{
+  sidebarNote: { workspaceId: string; folderName: string; title: string; href: string };
+}>({
+  sidebarNote: async ({ page }, use) => {
+    const workspaceId = await personalWorkspaceId(page);
+    const stamp = crypto.randomUUID().slice(0, 8);
+    const folderName = `Sidebar folder ${stamp}`;
+    const title = `Sidebar note ${stamp}`;
+    const folder = await page.request.post(`/api/workspaces/${workspaceId}/folders`, { data: { name: folderName } });
+    expect(folder.status()).toBe(201);
+    const { treeNodeId } = await folder.json() as { treeNodeId: string };
+    let noteId: string | undefined;
+    try {
+      const note = await page.request.post(`/api/workspaces/${workspaceId}/documents`, {
+        data: { title, markdown: "A note in the workspace sidebar.", parentId: treeNodeId },
+      });
+      expect(note.status()).toBe(201);
+      const { documentId, sourceId } = await note.json() as { documentId: string; sourceId: string };
+      noteId = documentId;
+      await use({ workspaceId, folderName, title, href: `/w/${workspaceId}/knowledge/${sourceId}/${documentId}` });
+    } finally {
+      if (noteId) expect((await page.request.post(`/api/documents/${noteId}/archive`)).status()).toBe(200);
+      expect((await page.request.post(`/api/tree-nodes/${treeNodeId}/archive`)).status()).toBe(204);
+    }
+  },
+});
+
+test("one desktop sidebar collapses to a rail, keeps focus and remembers the choice", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/w/${await personalWorkspaceId(page)}/home`);
+  const primary = page.getByRole("navigation", { name: "Primary", exact: true });
+  const sidebar = page.locator("aside").filter({ has: primary });
+  const explorer = sidebar.getByRole("complementary", { name: "Knowledge explorer" });
+  const collapse = sidebar.getByRole("button", { name: "Collapse navigation", exact: true });
+  const expand = sidebar.getByRole("button", { name: "Expand navigation", exact: true });
+  const main = page.locator("#kh-workspace-main");
+  await expect(explorer).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Document tree", exact: true })).toHaveCount(1);
+  await expect(primary.getByRole("link", { name: "Knowledge", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^(Hide|Show) documents$/ })).toHaveCount(0);
+  await expect(sidebar).toHaveCSS("width", "272px");
+  await expect(main).toHaveCSS("width", "1168px");
+
+  await collapse.click();
   await expect(explorer).toBeHidden();
-  await expect(show).toBeVisible();
-  await expect(show).toBeFocused();
-  // The strip keeps 40px of the explorer's place; the rest goes to the content.
-  const strip = (await show.locator("xpath=../..").boundingBox())!;
-  expect(Math.round(strip.width)).toBe(40);
-  expect(before).toBeGreaterThan(strip.width + 200);
+  await expect(expand).toBeFocused();
+  await expect(primary.getByRole("link", { name: /^Inbox/ })).toBeVisible();
+  await expect(sidebar).toHaveCSS("width", "48px");
+  await expect(main).toHaveCSS("width", "1392px");
 
   await page.reload();
-  await expect(show).toBeVisible();
+  await expect(expand).toBeVisible();
   await expect(explorer).toBeHidden();
 
-  await show.click();
+  await expand.click();
   await expect(explorer).toBeVisible();
-  await expect(hide).toBeFocused();
-  await expect(show).toHaveCount(0);
+  await expect(collapse).toBeFocused();
+  await expect(page.getByRole("dialog", { name: "Menu", exact: true })).toHaveCount(0);
   await page.reload();
   await expect(explorer).toBeVisible();
 });
 
-test("the explorer keeps its tree while hidden: an open filter is still open when it is shown", async ({ page }) => {
+test("the sidebar shortcut moves focus to the rail and retains the Knowledge filter", async ({ page, sidebarNote }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto(`/w/${await personalWorkspaceId(page)}/knowledge`);
+  await page.goto(sidebarNote.href);
   await page.getByRole("button", { name: "Filter documents and sources" }).click();
-  const filter = page.locator("#tree-filter");
+  const filter = page.getByPlaceholder("Filter documents and sources");
   await expect(filter).toBeVisible();
-  await page.getByRole("button", { name: "Hide documents" }).click();
+  await filter.fill(sidebarNote.title);
+  await filter.press("ControlOrMeta+Backslash");
   await expect(filter).toBeHidden();
-  await page.getByRole("button", { name: "Show documents" }).click();
-  await expect(filter).toBeVisible();
+  const expand = page.getByRole("button", { name: "Expand navigation", exact: true });
+  await expect(expand).toBeFocused();
+  await expand.click();
+  await expect(filter).toHaveValue(sidebarNote.title);
 });
 
-test("at 1512px, with the primary rail and the explorer collapsed, outline, article and discussions stand side by side", async ({ page, request }) => {
+test("the same Knowledge tree and folder state follow navigation across workspace pages", async ({ page, sidebarNote }) => {
+  await page.setViewportSize({ width: 1512, height: 900 });
+  const workspace = `/w/${sidebarNote.workspaceId}`;
+  await page.goto(`${workspace}/home`);
+  const primary = page.getByRole("navigation", { name: "Primary", exact: true });
+  const tree = page.getByRole("navigation", { name: "Document tree", exact: true });
+  const notes = tree.getByRole("button", { name: "Notes", exact: true });
+  if (await notes.getAttribute("aria-expanded") === "false") await notes.click();
+  const folder = tree.getByRole("treeitem", { name: sidebarNote.folderName, exact: true });
+  const toggleFolder = folder.getByRole("button", { name: sidebarNote.folderName, exact: true });
+  const noteRow = folder.getByRole("treeitem", { name: sidebarNote.title, exact: true });
+  await expect(noteRow).toBeVisible(ROUND_TRIP);
+  const treeElement = await tree.elementHandle();
+  await toggleFolder.click();
+  await expect(folder).toHaveAttribute("aria-expanded", "false");
+
+  await page.getByRole("complementary", { name: "Workspace navigation", exact: true }).getByRole("link", { name: /^Inbox/ }).click();
+  await expect(page).toHaveURL(`${workspace}/inbox`, ROUND_TRIP);
+  await expect(folder).toHaveAttribute("aria-expanded", "false");
+  expect(await tree.evaluate((element, original) => element === original, treeElement)).toBe(true);
+
+  await toggleFolder.click();
+  await noteRow.getByRole("link", { name: sidebarNote.title, exact: true }).click();
+  await expect(page).toHaveURL(sidebarNote.href, ROUND_TRIP);
+  await expect(noteRow).toHaveAttribute("aria-current", "page");
+  expect(await tree.evaluate((element, original) => element === original, treeElement)).toBe(true);
+
+  await primary.getByRole("link", { name: "Sources", exact: true }).click();
+  await expect(page).toHaveURL(`${workspace}/sources`, ROUND_TRIP);
+  await expect(folder).toHaveAttribute("aria-expanded", "true");
+  await expect(noteRow).toBeVisible();
+  await expect(noteRow).not.toHaveAttribute("aria-current", "page");
+  expect(await tree.evaluate((element, original) => element === original, treeElement)).toBe(true);
+});
+
+test("at 1512px, the compact sidebar leaves room for outline, article and discussions", async ({ page, request }) => {
   const paragraphs = (from: number) => Array.from({ length: 12 }, (_, i) => `Paragraph ${from + i}: a clear recommendation with enough context for a colleague to review.`).join("\n\n");
   const markdown = `## Alpha\n\n${paragraphs(1)}\n\n## Beta\n\n${paragraphs(13)}\n`;
   const doc = await createReviewDocument(request, markdown);
@@ -65,11 +135,10 @@ test("at 1512px, with the primary rail and the explorer collapsed, outline, arti
   const rail = page.getByRole("complementary", { name: "Document comments" });
   const outline = page.getByRole("complementary", { name: "On this page" });
   await expect(rail).toBeVisible();
-  // With both open the pane is too narrow: the outline gives the discussions its place.
+  // With the sidebar expanded the outline yields space to the discussions.
   await expect(outline).toBeHidden();
 
   await page.getByRole("button", { name: "Collapse navigation" }).click();
-  await page.getByRole("button", { name: "Hide documents" }).click();
   const pane = page.getByRole("region", { name: "Document content" });
   await expect.poll(() => pane.evaluate((element) => element.clientWidth)).toBeGreaterThanOrEqual(1408);
   await expect(rail).toBeVisible();
@@ -82,11 +151,48 @@ test("at 1512px, with the primary rail and the explorer collapsed, outline, arti
   expect(await pane.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 });
 
-test("the narrow window's menu shows the explorer with no way to hide it", async ({ page }) => {
+test("the phone uses one Menu for primary navigation and Knowledge", async ({ page, sidebarNote }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`/w/${await personalWorkspaceId(page)}/knowledge`);
-  await page.getByRole("button", { name: "Open menu", exact: true }).click();
-  await expect(page.getByRole("complementary", { name: "Knowledge explorer" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Hide documents" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Show documents" })).toBeHidden();
+  const home = `/w/${sidebarNote.workspaceId}/home`;
+  await page.goto(home);
+  const trigger = page.getByRole("button", { name: "Open menu", exact: true });
+  const primary = page.getByRole("navigation", { name: "Primary", exact: true });
+  const tree = page.getByRole("navigation", { name: "Document tree", exact: true });
+  await expect(primary).toBeHidden();
+  await expect(tree).toBeHidden();
+
+  await trigger.click();
+  const menu = page.getByRole("dialog", { name: "Menu", exact: true });
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  await expect(menu.getByRole("navigation", { name: "Primary", exact: true }).getByRole("link", { name: "Home", exact: true })).toBeVisible();
+  await expect(menu.getByRole("navigation", { name: "Document tree", exact: true })).toBeVisible();
+  await expect(menu.getByRole("button", { name: /^(Collapse|Expand) navigation$/ })).toHaveCount(0);
+  const notes = tree.getByRole("button", { name: "Notes", exact: true });
+  if (await notes.getAttribute("aria-expanded") === "false") await notes.click();
+  const note = tree.getByRole("link", { name: sidebarNote.title, exact: true });
+
+  const [opened] = await Promise.all([
+    page.context().waitForEvent("page"),
+    note.click({ modifiers: ["ControlOrMeta"] }),
+  ]);
+  await expect(opened).toHaveURL(new URL(sidebarNote.href, page.url()).href, ROUND_TRIP);
+  await opened.close();
+  await expect(page).toHaveURL(home);
+  await expect(menu).toBeVisible();
+
+  await note.click();
+  await expect(page).toHaveURL(sidebarNote.href, ROUND_TRIP);
+  await expect(menu).toHaveCount(0);
+  await trigger.click();
+  await tree.getByRole("button", { name: `Actions for ${sidebarNote.title}`, exact: true }).click();
+  await page.getByRole("menuitem", { name: "Add to favorites", exact: true }).click();
+  await menu.getByRole("button", { name: "Favorite documents", exact: true }).click();
+  await page.getByRole("menuitem", { name: new RegExp(sidebarNote.title) }).click();
+  await expect(menu).toHaveCount(0);
+  await expect(page).toHaveURL(sidebarNote.href);
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await menu.getByRole("link", { name: /^Inbox/ }).click();
+  await expect(page).toHaveURL(`/w/${sidebarNote.workspaceId}/inbox`, ROUND_TRIP);
+  await expect(menu).toHaveCount(0);
 });

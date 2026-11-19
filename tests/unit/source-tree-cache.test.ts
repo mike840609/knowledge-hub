@@ -58,6 +58,18 @@ it('uses acknowledged server-seed metadata instead of an older committed snapsho
  expect(cache.snapshot()['s1']).toEqual({status:'loaded',tree:serverTree});
 });
 
+it('revalidates a committed tree when a refreshed workspace supplies headers only', async () => {
+ const committed = [{id:'n1',type:'folder',label:'Before rename',position:1,parentId:null,status:'ACTIVE'}] as const;
+ const renamed = [{...committed[0],label:'After rename'}];
+ const fetcher = vi.fn().mockResolvedValue(Response.json({tree:renamed}));
+ commitSourceTree('workspace-lazy-rename', 's1', [...committed]);
+ const cache = new SourceTreeCache('workspace-lazy-rename', [], fetcher);
+
+ await cache.ensure('s1');
+
+ expect(cache.snapshot()['s1']).toEqual({status:'loaded',tree:renamed});
+});
+
 it('stops shadowing newer authoritative server data with an expired committed snapshot', () => {
  vi.useFakeTimers();
  try {

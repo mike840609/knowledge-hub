@@ -8,14 +8,14 @@ import { PEEK_REQUEST_EVENT, type PeekRequest } from "./peek-request";
 import { useIsWide } from "./use-is-wide";
 
 /**
- * Answers requestPeek() for the page it wraps: a 50/50 split beside `children` from lg, the Drawer
- * below. Every page whose rows offer "Open in side peek" — the knowledge layout and Home — mounts one;
- * a page without one would offer an action that does nothing.
+ * Answers requestPeek() from the workspace's active page or shared sidebar:
+ * a 50/50 split beside `children` from lg, the Drawer below.
  */
 export function PeekHost({ children }: { children: ReactNode }) {
   const [request, setRequest] = useState<PeekRequest | null>(null);
   const isWide = useIsWide();
   const pathname = usePathname();
+  const previousPath = useRef(pathname);
   // "Open as full page": the pane grows left over the page while the route loads, and goes once the
   // growth has finished and the page has arrived — the route moved on *and* its content is no longer
   // the loading skeleton (`aria-busy`), which `loading.tsx` commits first — or never will move: the page
@@ -32,6 +32,11 @@ export function PeekHost({ children }: { children: ReactNode }) {
     setLeaving(false);
   }, []);
   const startLeaving = useCallback(() => setLeaving(true), []);
+  useEffect(() => {
+    if (previousPath.current === pathname) return;
+    previousPath.current = pathname;
+    if (!expanding) close();
+  }, [pathname, expanding, close]);
   const finishLeaving = useCallback(() => {
     close();
     const active = document.activeElement;

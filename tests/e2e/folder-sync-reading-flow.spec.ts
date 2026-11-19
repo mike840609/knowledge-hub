@@ -17,6 +17,9 @@ test("folder preview → durable result → revision-aware personal reading", as
   await expect(
     page.getByRole("heading", { name: "Folder synced" }),
   ).toBeVisible();
+  const workflowTree = page.getByRole("navigation", { name: "Document tree" })
+    .getByRole("region", { name: "Reading workflow documents" });
+  await expect(workflowTree).toBeVisible();
   const source = page.url().match(/sources\/([^/]+)\//)![1];
   await page.goto(`/w/${ws}/home`);
   await expect(page.getByRole("region", {name:"Recent", exact:true})).toBeVisible();
@@ -40,6 +43,9 @@ test("folder preview → durable result → revision-aware personal reading", as
     fixture: "reading-flow-v2",
   });
   await page.goto(`/w/${ws}/sources/imports/${second}`);
+  const workflowToggle = workflowTree.getByRole("button", { name: "Reading workflow", exact: true });
+  if (await workflowToggle.getAttribute("aria-expanded") === "false") await workflowToggle.click();
+  await expect(workflowTree.getByRole("link", { name: "Team guide", exact: true })).toBeVisible();
   await page
     .getByRole("button", { name: /View changes:/ })
     .first()
@@ -62,6 +68,8 @@ test("folder preview → durable result → revision-aware personal reading", as
   });
   await page.getByRole("button", { name: "Apply changes" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+  await expect(workflowTree.getByRole("link", { name: "Updated team guide", exact: true })).toBeVisible();
+  await expect(workflowTree.getByRole("link", { name: "Team guide", exact: true })).toHaveCount(0);
   await page.goto(`/w/${ws}/updates`);
   const article = page
     .getByRole("link", { name: /Updated team guide.*Unread/ })

@@ -5,7 +5,7 @@ import { WorkspaceAccessDeniedError } from "@/modules/workspaces/domain/errors";
 vi.mock("@/server/composition", () => ({ applicationServices: vi.fn() }));
 
 import { applicationServices } from "@/server/composition";
-import { getKnowledgeExplorerModel } from "@/server/knowledge-read";
+import { getKnowledgeExplorerModel, getWorkspaceKnowledgeSources } from "@/server/knowledge-read";
 import { getSourceListModel } from "@/server/source-read";
 
 type Services = ReturnType<typeof ApplicationServicesFn>;
@@ -45,6 +45,25 @@ function services(overrides: ExplorerReads = {}): Services {
 }
 
 beforeEach(() => vi.mocked(applicationServices).mockReset());
+
+it("loads only authorized source headers for the workspace sidebar", async () => {
+  const scoped = services({ listSources: async () => [
+    { ...source, name: "Zebra" },
+    { ...source, id: "another", name: "Archive", status: "ARCHIVED" },
+  ] });
+  vi.mocked(applicationServices).mockReturnValue(scoped);
+  const headers = await getWorkspaceKnowledgeSources(WORKSPACE_ID);
+  expect(headers?.map(({ name }) => name)).toEqual(["Archive", "Zebra"]);
+  expect(scoped.queries.listSources).toHaveBeenCalledWith({ identity: { id: "user" } }, WORKSPACE_ID, { includeArchived: true });
+  expect(scoped.queries.listTree).not.toHaveBeenCalled();
+});
+
+it("distinguishes an unavailable sidebar from an empty workspace", async () => {
+  vi.mocked(applicationServices).mockReturnValue(services({ listSources: async () => { throw new Error("connect ETIMEDOUT"); } }));
+  await expect(getWorkspaceKnowledgeSources(WORKSPACE_ID)).resolves.toBeNull();
+  vi.mocked(applicationServices).mockReturnValue(services({ listSources: async () => [] }));
+  await expect(getWorkspaceKnowledgeSources(WORKSPACE_ID)).resolves.toEqual([]);
+});
 
 it("rethrows a transient explorer read instead of reporting the source missing", async () => {
   vi.mocked(applicationServices).mockReturnValue(services({ listSources: async () => { throw new Error("connect ETIMEDOUT"); } }));

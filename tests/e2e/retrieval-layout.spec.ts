@@ -14,40 +14,32 @@ async function createNote(page: Page, workspaceId: string, title: string) {
   return { documentId: created.documentId, sourceId: created.sourceId, href: `/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}` };
 }
 
-/**
- * Retrieval-first layout: at 1024–1279 the explorer is a strip and a drawer,
- * not a 288px column; above 1280 it is inline again. Favorites and Recent each open from the explorer toolbar.
- */
-test("the explorer becomes a drawer between the narrow and wide desktop layouts", async ({ page }) => {
+test("Knowledge stays in the desktop sidebar at 1024px and moves to Menu below it", async ({ page }) => {
   const workspaceId = await mySpace(page);
   const title = unique("Retrieval drawer");
   const note = await createNote(page, workspaceId, title);
 
   await page.setViewportSize({ width: 1024, height: 800 });
   await page.goto(`/w/${workspaceId}/knowledge/${note.sourceId}`);
-  const strip = page.getByRole("button", { name: "Show documents", exact: true });
-  const stripTrigger = page.locator('button[aria-label="Show documents"]');
-  await expect(strip).toBeVisible(ROUND_TRIP);
-  await expect(strip).toHaveAttribute("aria-haspopup", "dialog");
-  await expect(stripTrigger).toHaveAttribute("aria-expanded", "false");
-  // The inline explorer is CSS-hidden at this width; the strip is the only door.
-  await expect(page.getByRole("complementary", { name: "Knowledge explorer" })).not.toBeVisible();
+  const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
+  const primary = page.getByRole("navigation", { name: "Primary", exact: true });
+  const sidebar = page.locator("aside").filter({ has: primary });
+  await expect(sidebar.getByRole("complementary", { name: "Knowledge explorer" })).toBeVisible(ROUND_TRIP);
+  await expect(sidebar).toHaveCSS("width", "272px");
+  await expect(explorer.getByRole("link", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
 
-  await strip.click();
-  const browse = page.getByRole("dialog", { name: "Browse", exact: true });
-  await expect(browse).toBeVisible(ROUND_TRIP);
-  // The modal makes the strip inert, so role lookup cannot see it while the drawer is open.
-  await expect(stripTrigger).toHaveAttribute("aria-expanded", "true");
-  await expect(browse.getByRole("complementary", { name: "Knowledge explorer" })).toBeVisible();
-  await browse.getByRole("link", { name: title, exact: true }).click();
+  await page.setViewportSize({ width: 1023, height: 800 });
+  await expect(explorer).toBeHidden();
+  await page.getByRole("button", { name: "Open menu", exact: true }).click();
+  const menu = page.getByRole("dialog", { name: "Menu", exact: true });
+  await expect(menu.getByRole("navigation", { name: "Primary", exact: true })).toBeVisible();
+  await menu.getByRole("link", { name: title, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${note.documentId}$`), ROUND_TRIP);
-  await expect(browse).toHaveCount(0);
-  await expect(stripTrigger).toHaveAttribute("aria-expanded", "false");
+  await expect(menu).toHaveCount(0);
 
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(`/w/${workspaceId}/knowledge/${note.sourceId}`);
-  await expect(page.getByRole("complementary", { name: "Knowledge explorer" })).toBeVisible(ROUND_TRIP);
-  await expect(page.getByRole("button", { name: "Show documents", exact: true })).toHaveCount(0);
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await expect(sidebar.getByRole("complementary", { name: "Knowledge explorer" })).toBeVisible(ROUND_TRIP);
+  await expect(page.getByRole("button", { name: "Open menu", exact: true })).toBeHidden();
 });
 
 test("Favorites and Recent open independently from adjacent toolbar buttons", async ({ page }) => {
@@ -79,8 +71,7 @@ test("Favorites and Recent open independently from adjacent toolbar buttons", as
   await expect(page.getByRole("menuitem").filter({ hasText: recentTitle })).toBeVisible(ROUND_TRIP);
 });
 
-// The explorer is what records an open, so it stays mounted where it is not shown: a document read at a width
-// without the inline explorer is still in Recent the next time the explorer is opened.
+// Articles opened while Knowledge is hidden still appear in Recent.
 for (const width of [1100, 390]) {
   test(`documents opened at ${width}px are recorded in Recent`, async ({ page }) => {
     const workspaceId = await mySpace(page);
@@ -89,10 +80,16 @@ for (const width of [1100, 390]) {
     const second = await createNote(page, workspaceId, unique("Recent second"));
 
     await page.setViewportSize({ width, height: 800 });
+    const mobile = width < 1024;
+    if (!mobile) {
+      await page.goto(`/w/${workspaceId}/home`);
+      await page.getByRole("button", { name: "Collapse navigation", exact: true }).click();
+    }
     await page.goto(first.href);
     await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(firstTitle, ROUND_TRIP);
+    await expect(page.getByRole("navigation", { name: "Document tree", exact: true })).toBeHidden();
     await page.goto(second.href);
-    await page.getByRole("button", { name: width < 1024 ? "Open menu" : "Show documents", exact: true }).click();
+    await page.getByRole("button", { name: mobile ? "Open menu" : "Expand navigation", exact: true }).click();
     await page.getByRole("button", { name: "Recent documents", exact: true }).click();
     const item = page.getByRole("menuitem").filter({ hasText: firstTitle });
     await expect(item).toBeVisible(ROUND_TRIP);
@@ -105,30 +102,28 @@ for (const width of [1100, 390]) {
 test("Recent menu is closed on drawer reopening and page reload", async ({ page }) => {
   const workspaceId = await mySpace(page);
   const read = await createNote(page, workspaceId, unique("Closed recent read"));
-  const note = await createNote(page, workspaceId, unique("Closed recent"));
   await page.setViewportSize({ width: 1100, height: 800 });
-  // Recent lists documents other than the one open, and only when it has one.
   await page.goto(read.href);
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toBeVisible(ROUND_TRIP);
-  await page.goto(note.href);
-  const strip = page.getByRole("button", { name: "Show documents", exact: true });
-  const browse = page.getByRole("dialog", { name: "Browse", exact: true });
-  const heading = (name: string) => browse.getByRole("button", { name, exact: true });
+  await page.goto(`/w/${workspaceId}/inbox`);
+  const expand = page.getByRole("button", { name: "Expand navigation", exact: true });
+  const menu = page.getByRole("dialog", { name: "Menu", exact: true });
+  const recent = menu.getByRole("button", { name: "Recent documents", exact: true });
 
-  await strip.click();
-  await heading("Recent documents").click();
-  await expect(heading("Recent documents")).toHaveAttribute("aria-expanded", "true");
+  await expand.click();
+  await recent.click();
+  await expect(recent).toHaveAttribute("aria-expanded", "true");
   await page.keyboard.press("Escape");
-  await expect(heading("Recent documents")).toHaveAttribute("aria-expanded", "false");
+  await expect(recent).toHaveAttribute("aria-expanded", "false");
   await page.keyboard.press("Escape");
-  await expect(browse).toHaveCount(0);
-  await expect(strip).toBeFocused();
+  await expect(menu).toHaveCount(0);
+  await expect(expand).toBeFocused();
 
-  await strip.click();
-  await expect(heading("Recent documents")).toHaveAttribute("aria-expanded", "false", ROUND_TRIP);
+  await expand.click();
+  await expect(recent).toHaveAttribute("aria-expanded", "false", ROUND_TRIP);
   await page.reload();
-  await strip.click();
-  await expect(heading("Recent documents")).toHaveAttribute("aria-expanded", "false", ROUND_TRIP);
+  await expand.click();
+  await expect(recent).toHaveAttribute("aria-expanded", "false", ROUND_TRIP);
 });
 
 test("the drawer closes when the page changes from outside it", async ({ page }) => {
@@ -138,22 +133,22 @@ test("the drawer closes when the page changes from outside it", async ({ page })
   const secondTitle = unique("Drawer route second");
   const second = await createNote(page, workspaceId, secondTitle);
 
-  await page.setViewportSize({ width: 1024, height: 800 });
+  await page.setViewportSize({ width: 900, height: 800 });
   await page.goto(first.href);
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(firstTitle, ROUND_TRIP);
 
-  const strip = page.getByRole("button", { name: "Show documents", exact: true });
-  const browse = page.getByRole("dialog", { name: "Browse", exact: true });
+  const trigger = page.getByRole("button", { name: "Open menu", exact: true });
+  const menu = page.getByRole("dialog", { name: "Menu", exact: true });
   // Reach the second document from the drawer, so both history entries are client-side.
-  await strip.click();
-  await browse.getByRole("link", { name: secondTitle, exact: true }).click();
+  await trigger.click();
+  await menu.getByRole("link", { name: secondTitle, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${second.documentId}$`), ROUND_TRIP);
 
-  await strip.click();
-  await expect(browse).toBeVisible(ROUND_TRIP);
+  await trigger.click();
+  await expect(menu).toBeVisible(ROUND_TRIP);
   // The palette, a search result, or the browser's Back change the page without touching the drawer.
   await page.goBack();
   await expect(page).toHaveURL(new RegExp(`${first.documentId}$`), ROUND_TRIP);
-  await expect(browse).toHaveCount(0, ROUND_TRIP);
-  await expect(strip).toHaveAttribute("aria-expanded", "false");
+  await expect(menu).toHaveCount(0, ROUND_TRIP);
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
 });

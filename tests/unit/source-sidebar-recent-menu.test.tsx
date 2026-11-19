@@ -36,7 +36,7 @@ let loadedTree = true;
 function Host() {
   return <SourceSidebar workspaceId="w" source={sources[0]} sources={sources}
     collections={loadedTree ? [{ source: sources[0], tree }] : []}
-    ensureTree={ensureTree} selectedDocumentId={selectedDocumentId} includeArchived={false} />;
+    ensureTree={ensureTree} selectedDocumentId={selectedDocumentId} />;
 }
 
 let cleanup: () => Promise<void>;

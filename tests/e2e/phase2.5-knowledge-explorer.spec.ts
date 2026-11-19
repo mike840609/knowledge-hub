@@ -45,7 +45,7 @@ test("renders the Document inside the Explorer with a compact header", async ({ 
 test.describe("narrow knowledge layout", () => {
   test.use({ viewport: { width: 900, height: 900 } });
 
-  test("uses Browse Drawer on narrow screens", async ({ page }) => {
+  test("uses the shared Menu and a separate document details drawer on narrow screens", async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`);
@@ -54,8 +54,7 @@ test.describe("narrow knowledge layout", () => {
     await page.getByRole("button", { name: "Open menu" }).click();
     await expect(page.getByRole("dialog", { name: "Menu" })).toBeVisible();
 
-    // The right-hand drawer covers the document toolbar at this width.
-    // Close it through its visible control before opening document details.
+    // Close Menu through its visible control before opening document details.
     await page.getByRole("dialog", { name: "Menu" }).getByRole("button", { name: "Close panel" }).click();
     await expect(page.getByRole("dialog", { name: "Menu" })).toHaveCount(0);
     await page.locator("main").getByRole("button", { name: "Details" }).click();
@@ -67,20 +66,29 @@ test.describe("narrow knowledge layout", () => {
 test("reading navigation separates collections from authoring and source management", async ({ page }) => {
   await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`, { waitUntil: "networkidle" });
   const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
-  await expect(explorer.getByRole("navigation", { name: "Document tree" })).toBeVisible();
+  const tree = explorer.getByRole("navigation", { name: "Document tree" });
+  await expect(tree).toBeVisible();
   await expect(explorer.getByRole("combobox")).toHaveCount(0);
   await expect(explorer.getByRole("button", { name: "New document" })).toHaveCount(0);
   await expect(explorer.locator('input[type="file"]')).toHaveCount(0);
   await expect(explorer.getByRole("link", { name: "Update from folder" })).toHaveCount(0);
   await expect(explorer.getByLabel("Show archived")).not.toBeVisible();
 
+  const treeElement = await tree.elementHandle();
+  const obsidian = tree.getByRole("button", { name: "Obsidian Wiki", exact: true });
+  await obsidian.click();
+  await expect(obsidian).toHaveAttribute("aria-expanded", "false");
+  await obsidian.click();
   await explorer.getByRole("button", { name: "Vendor Compliance Vault", exact: true }).click();
   await explorer.getByRole("link", { name: "Compliance Policy", exact: true }).click();
   await expect(page).toHaveURL(/\/knowledge\/0199f100-0000-7000-8000-000000000105\//);
   await expect(page.getByRole("heading", { name: "Compliance Policy", exact: true })).toBeVisible();
+  await expect(tree.getByRole("treeitem", { name: "Architecture", exact: true })).toBeVisible();
+  await expect(tree.getByRole("treeitem", { name: "Compliance Policy", exact: true })).toHaveAttribute("aria-current", "page");
+  expect(await tree.evaluate((element, original) => element === original, treeElement)).toBe(true);
 
   // A new document is made at once and opened in the editor; uploading a file is on the form.
-  await page.getByRole("link", { name: "Create document", exact: true }).click();
+  await explorer.getByRole("link", { name: "Create document", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/w/${WORKSPACE}/knowledge/[^/]+/[^/?#]+$`), { timeout: 15_000 });
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Untitled", { timeout: 15_000 });
   await page.goto(`/w/${WORKSPACE}/knowledge/new?compose`);

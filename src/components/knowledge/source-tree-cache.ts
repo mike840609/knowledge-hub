@@ -1,6 +1,6 @@
 import type { KnowledgeTreeItem, SourceView } from '@/modules/knowledge/application/knowledge-query-service';
 export type SourceCollection = { source: SourceView; tree: KnowledgeTreeItem[] };
-export type TreeLoadState = { status: 'loading' | 'error' } | { status: 'loaded'; tree: KnowledgeTreeItem[] };
+export type TreeLoadState = { status: 'loading' | 'error' } | { status: 'loaded'; tree: KnowledgeTreeItem[]; stale?: true };
 
 // A PATCH must publish the authoritative source, rather than waiting for an arbitrary
 // array change from the router: loading another source also recreates the sidebar's arrays.
@@ -61,18 +61,27 @@ export class SourceTreeCache {
   private controllers = new Set<AbortController>();
   private unsubscribeCommit: (() => void) | null = null;
   private disposed = false;
-  constructor(private workspaceId: string, seed: SourceCollection[], private fetcher: typeof fetch = (...args) => fetch(...args)) {
-    this.states = Object.fromEntries(seed.map(c => {
+  constructor(
+    private workspaceId: string,
+    seed: SourceCollection[],
+    private fetcher: typeof fetch = (...args) => fetch(...args),
+    retained: SourceCollection[] = [],
+  ) {
+    // Keep visible rows during a header-only refresh. Each tree is read again
+    // when requested, without turning collapsed sources into prefetches.
+    this.states = Object.fromEntries(retained.map(c => [c.source.id, { status: 'loaded', tree: c.tree, stale: true }]));
+    for (const c of seed) {
       const key = keyFor(workspaceId, c.source.id);
       const latest = committedTree(key);
       if (latest && equalTree(latest, c.tree)) {
         // This fresh RSC seed acknowledges the committed placement; use its
         // current labels/revisions/metadata, not the old committed copy.
         committed.delete(key);
-        return [c.source.id, { status: 'loaded', tree: c.tree }];
+        this.states[c.source.id] = { status: 'loaded', tree: c.tree };
+      } else {
+        this.states[c.source.id] = { status: 'loaded', tree: latest ?? c.tree };
       }
-      return [c.source.id, { status: 'loaded', tree: latest ?? c.tree }];
-    }));
+    }
   }
   snapshot = () => this.states;
   subscribe = (listener: () => void) => {
@@ -91,28 +100,32 @@ export class SourceTreeCache {
   };
   private put(id: string, state: TreeLoadState) {
     if (this.disposed) return;
-    const latest = committedTree(keyFor(this.workspaceId, id));
-    if (latest && state.status === 'loaded' && !equalTree(latest, state.tree)) {
-      state = { status: 'loaded', tree: latest };
-    }
     this.states = { ...this.states, [id]: state }; this.listeners.forEach(listener => listener());
   }
   ensure = (id: string): Promise<void> => {
     if (this.disposed) return Promise.resolve();
     const pending = this.pending.get(id); if (pending) return pending;
-    if (this.states[id]) return Promise.resolve();
-    const latest = committedTree(keyFor(this.workspaceId, id));
-    if (latest) { this.put(id, { status: 'loaded', tree: latest }); return Promise.resolve(); }
+    const existing = this.states[id];
+    if (existing && !(existing.status === 'loaded' && existing.stale)) return Promise.resolve();
+    const key = keyFor(this.workspaceId, id);
+    const committedAtStart = committedTree(key);
     const controller = new AbortController(); this.controllers.add(controller);
-    this.put(id, { status: 'loading' });
+    if (!existing) this.put(id, committedAtStart ? { status: 'loaded', tree: committedAtStart, stale: true } : { status: 'loading' });
+    const initialState = this.states[id];
     const work = (async () => {
       try {
         const response = await this.fetcher(`/api/workspaces/${this.workspaceId}/sources/${id}/tree`, { cache: 'no-store', signal: controller.signal });
         if (!response.ok) throw new Error('Tree unavailable');
         const body = await response.json();
         if (!Array.isArray(body.tree)) throw new Error('Invalid tree response');
-        this.put(id, { status: 'loaded', tree: body.tree });
-      } catch { if (!controller.signal.aborted) this.put(id, { status: 'error' }); }
+        if (this.states[id] !== initialState) return;
+        // A GET started after a commit is fresh. A commit during the GET wins
+        // over its older response, including while this cache has no listeners.
+        const latest = committedTree(key);
+        this.put(id, { status: 'loaded', tree: latest && latest !== committedAtStart ? latest : body.tree });
+      } catch {
+        if (!controller.signal.aborted && this.states[id] === initialState) this.put(id, { status: 'error' });
+      }
       finally { this.pending.delete(id); this.controllers.delete(controller); }
     })();
     this.pending.set(id, work); return work;

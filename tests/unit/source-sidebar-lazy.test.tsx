@@ -23,7 +23,7 @@ const sources=[{id:'a',name:'Alpha',status:'ACTIVE',ownership:'HUB_MANAGED',sour
 function Host(){
  const seed=useMemo(()=>[{source:sources[0],tree:[]}],[]);
  const trees=useSourceTrees('w',sources,seed);
- return <SourceSidebar workspaceId="w" source={sources[0]} sources={sources} collections={trees.collections} treeStates={trees.states} ensureTree={trees.ensure} retryTree={trees.retry} includeArchived />;
+ return <SourceSidebar workspaceId="w" source={sources[0]} sources={sources} collections={trees.collections} treeStates={trees.states} ensureTree={trees.ensure} retryTree={trees.retry} />;
 }
 let cleanup:()=>Promise<void>;
 afterEach(async()=>{await cleanup?.();vi.unstubAllGlobals();localStorage.clear();sessionStorage.clear();});

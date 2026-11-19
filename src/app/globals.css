@@ -1024,7 +1024,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 /* The editor's 56px block gutter hangs left of the text (`.kh-editor-blocks`), into the column's 24px padding
    and its left margin. Where the pane shows the outline rail on the right (60rem) and has not yet reached the
    left-hung outline (88rem), the rail's 224px slot leaves the column less than its reading width, so the margin
-   is 0 — at 1440px with both sidebars the pane is 976px, the column 752px, and the gutter had 24px. There the
+   is 0 — a 976px pane leaves a 752px column and 24px for the gutter. There the
    column's own left padding makes up what its margin lacks, up to 56px: `3.5rem - margin`, never below the 24px
    it has. It is the column, not the editor, so reading and editing keep one left edge; the text's right edge
    does not move. Each margin is the one the rules above give, in the same `100%` (padding resolves against the

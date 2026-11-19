@@ -20,12 +20,12 @@ type Collections = { source: SourceView; tree: KnowledgeTreeItem[] }[];
 const TOP = "top";
 
 /**
- * Mounted once by the knowledge layout, beside the share and folder-name dialogs, and asked for the
+ * Mounted once in the workspace, beside the share and folder-name dialogs, and asked for the
  * same way (`requestMove`). It has the sidebar's own trees, so the folders it lists are the ones the
  * reader can see — and what it offers is only that: the server decides what happens, and refuses a
  * destination archived or gone since this list was made, in words beside the list.
  */
-export function MoveDialogHost({ collections, ensureTree, retryTree, treeStates }: { collections: Collections; ensureTree?: (id: string) => Promise<void>; retryTree?: (id: string) => Promise<void>; treeStates?: Record<string, TreeLoadState> }) {
+export function MoveDialogHost({ workspaceId, collections, ensureTree, retryTree, treeStates }: { workspaceId: string; collections: Collections; ensureTree?: (id: string) => Promise<void>; retryTree?: (id: string) => Promise<void>; treeStates?: Record<string, TreeLoadState> }) {
   const [request, setRequest] = useState<MoveRequest | null>(null);
   useEffect(() => {
     const open = (event: Event) => {
@@ -37,11 +37,11 @@ export function MoveDialogHost({ collections, ensureTree, retryTree, treeStates 
   }, []);
   useEffect(() => { if (request) void ensureTree?.(request.sourceId); }, [request, ensureTree]);
   const state = request ? treeStates?.[request.sourceId] : undefined;
-  return <MoveDialog request={request} collections={collections} loading={!!ensureTree && !!request && (!state || state.status === "loading")} failed={state?.status === "error"} onRetry={() => { if (request) void retryTree?.(request.sourceId); }} onClose={() => setRequest(null)} />;
+  return <MoveDialog workspaceId={workspaceId} request={request} collections={collections} loading={!!ensureTree && !!request && (!state || state.status === "loading")} failed={state?.status === "error"} onRetry={() => { if (request) void retryTree?.(request.sourceId); }} onClose={() => setRequest(null)} />;
 }
 
-function MoveDialog({ request, collections, onClose, loading, failed, onRetry }: { request: MoveRequest | null; collections: Collections; onClose: () => void; loading?: boolean; failed?: boolean; onRetry?: () => void }) {
-  const mutations = useTreeMutations();
+function MoveDialog({ workspaceId, request, collections, onClose, loading, failed, onRetry }: { workspaceId: string; request: MoveRequest | null; collections: Collections; onClose: () => void; loading?: boolean; failed?: boolean; onRetry?: () => void }) {
+  const mutations = useTreeMutations(workspaceId);
   const errorId = useId();
   const [selected, setSelected] = useState<string | null>(null);
   const [query, setQuery] = useState("");

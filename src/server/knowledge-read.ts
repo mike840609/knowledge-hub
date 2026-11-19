@@ -126,8 +126,24 @@ export const getWorkspaceShellModel = cache(async (
   };
 });
 
+const loadWorkspaceSourceHeaders = cache(async (workspaceId: string, includeArchived: boolean): Promise<SourceView[]> => {
+  const services = applicationServices();
+  const { caller } = await services.establishTrustedCaller();
+  return sortSourcesByName(await services.queries.listSources(caller, workspaceId, { includeArchived }));
+});
+
+/** The workspace sidebar needs authorized source headers. Each source's tree is loaded on demand. */
+export async function getWorkspaceKnowledgeSources(workspaceId: string): Promise<SourceView[] | null> {
+  try {
+    return await loadWorkspaceSourceHeaders(workspaceId, true);
+  } catch {
+    // Keep other workspace surfaces usable while the sidebar offers to retry.
+    return null;
+  }
+}
+
 // Cached per request on primitive arguments (an options object would never match): a source layout
-// and the document page under it both ask for the same tree.
+// and the document page under it both ask for the same source and tree.
 const loadKnowledgeExplorerModel = cache(async (
   workspaceId: string,
   sourceId: string,
@@ -141,16 +157,15 @@ const loadKnowledgeExplorerModel = cache(async (
     const [workspaces, source, sources, tree] = await Promise.all([
       services.workspaces.listWorkspaces(caller),
       services.queries.getSource(caller, sourceId, { includeArchived }),
-      services.queries.listSources(caller, workspaceId, { includeArchived }),
+      loadWorkspaceSourceHeaders(workspaceId, includeArchived),
       services.queries.listTree(caller, sourceId, { includeArchived }),
     ]);
     if (!workspaces.some((workspace) => workspace.id === workspaceId)) return null;
     if (source.workspaceId !== workspaceId) return null;
     if (!sources.some((candidate) => candidate.id === sourceId)) return null;
-    const ordered = sortSourcesByName(sources);
     // Source headers are cheap; only the current source's tree enters the initial payload.
     const collections = [{ source, tree }];
-    return { sources: ordered, source, tree, collections, includeArchived };
+    return { sources, source, tree, collections, includeArchived };
   } catch (error) {
     if (isHiddenReadFailure(error)) return null;
     throw error;

@@ -65,7 +65,14 @@ const SEARCH_DEBOUNCE_MS = 180;
  * product's palette: mostly a way to get somewhere, plus the few things a
  * reader can actually do. It does not invent commands that do not exist.
  */
-export function QuickSearch({ workspaceId }: { workspaceId: string }) {
+export function QuickSearch({
+  workspaceId,
+  onOpen,
+}: {
+  workspaceId: string;
+  /** The navigation drawer's trigger if opening search dismisses that drawer. */
+  onOpen?: () => HTMLElement | null;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -85,9 +92,10 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   const [message, setMessage] = useState("");
   const opener = useRef<HTMLElement | null>(null);
   const openPalette = useCallback(() => {
-    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const active = document.activeElement;
+    opener.current = onOpen?.() ?? (active instanceof HTMLElement ? active : null);
     setOpen(true);
-  }, []);
+  }, [onOpen]);
   const trimmed = query.trim();
   const terms = useMemo(() => parseSearchQuery(trimmed).terms, [trimmed]);
   const allHref = `/w/${workspaceId}/search${trimmed ? `?q=${encodeURIComponent(trimmed)}` : ""}`;
