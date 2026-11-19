@@ -890,3 +890,43 @@ it("pasting across list items replaces the selected text through the last item's
   pasteClipboard(view, data);
   expect(md(editor)).toBe("- A\n- B\n- EF\n- G\n");
 });
+
+it("pasting over the full text of an ordered list keeps the target list start", async () => {
+  const source = await open("5. B\n");
+  escapeOn(source.view, "B");
+  const { data } = clipEvent(source.view, "copy");
+  const markdown = "8. CDEF\n9. D\n";
+  const { view, editor } = await open(markdown);
+  let from = 0;
+  let to = 0;
+  view.state.doc.descendants((node, pos) => {
+    if (node.text === "CDEF") from = pos;
+    if (node.text === "D") to = pos + 1;
+  });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, from, to)));
+  pasteClipboard(view, data);
+  expect(md(editor)).toBe("8. B\n");
+  expect(undo(view.state, view.dispatch)).toBe(true);
+  expect(md(editor)).toBe(markdown);
+  expect(view.state.selection).toEqual(TextSelection.create(view.state.doc, from, to));
+});
+
+it("pasting from an ordered item into a paragraph keeps the paragraph's unselected text outside the list", async () => {
+  const source = await open("5. B\n");
+  escapeOn(source.view, "B");
+  const { data } = clipEvent(source.view, "copy");
+  const markdown = "8. CDEF\n\nOUT\n";
+  const { view, editor } = await open(markdown);
+  let from = 0;
+  let to = 0;
+  view.state.doc.descendants((node, pos) => {
+    if (node.text === "CDEF") from = pos + 2;
+    if (node.text === "OUT") to = pos + 1;
+  });
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, from, to)));
+  pasteClipboard(view, data);
+  expect(md(editor)).toBe("8. CD\n9. B\n\nUT\n");
+  expect(undo(view.state, view.dispatch)).toBe(true);
+  expect(md(editor)).toBe(markdown);
+  expect(view.state.selection).toEqual(TextSelection.create(view.state.doc, from, to));
+});

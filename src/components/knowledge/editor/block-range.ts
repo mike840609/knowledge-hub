@@ -167,16 +167,14 @@ function pasteCopiedList(view: EditorView, event: ClipboardEvent, slice: Slice):
     while (depth > 0 && $from.node(depth).type.name !== "list_item") depth--;
     if (!depth || $from.node(depth - 1).type !== list.type) return false;
 
-    // Delete selected text first. The remaining text (possibly in a later item) and any nested
-    // children then sit at the insertion point, just as they do when pasting at a caret.
-    tr.deleteSelection();
-    const start = tr.selection.$from;
-    if (start.depth === depth + 1 && start.parentOffset === 0 && start.index(depth) === 0 &&
-        start.node(depth).type.name === "list_item" && start.node(depth - 1).type === list.type &&
-        (start.parent.content.size > 0 || start.node(depth).childCount > 1)) {
-      const at = start.before(depth);
-      tr.insert(at, list.content);
-      tr.setSelection(Selection.near(tr.doc.resolve(at + list.content.size)));
+    // Start at the item boundary to avoid leaving an empty first item. Fit the pasted
+    // items and the unselected suffix in one replacement so their wrappers can be kept.
+    if ($from.depth === depth + 1 && $from.parentOffset === 0 && $from.index(depth) === 0 &&
+        (!selection.empty || $from.parent.content.size > 0 || $from.node(depth).childCount > 1)) {
+      const from = $from.before(depth);
+      const to = selection.empty ? from : selection.to;
+      tr.replaceRange(from, to, items);
+      tr.setSelection(Selection.near(tr.doc.resolve(tr.mapping.map(to))));
     } else {
       tr.replaceSelection(items);
     }
