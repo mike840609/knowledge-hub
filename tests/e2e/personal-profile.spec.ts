@@ -6,6 +6,7 @@ import {stageReadingFolder} from "./fixtures/folder-reading";
 test("personal profile counts, detail links, themes and mobile layout",async({page,request},testInfo)=>{
  const errors:string[]=[];page.on("pageerror",error=>errors.push(error.message));
  const nav=await (await request.get("/api/workspaces")).json();const ws=nav.items.find((w:{type:string})=>w.type==="PERSONAL").id;
+ const main=page.locator("#kh-workspace-main");
  const detailCount=async(filter:string)=>{
   await page.goto(`/w/${ws}/profile/articles?filter=${filter}`);
   const text=await page.locator("main header p").filter({visible:true}).textContent();
@@ -38,11 +39,11 @@ test("personal profile counts, detail links, themes and mobile layout",async({pa
  const updated=await overview();
  expect(updated.articles).toBe(baseline.articles+9);expect(updated.folders).toBe(baseline.folders+4);expect(updated.browsed).toBe(baseline.browsed);
  expect(await detailCount("favorites")).toBe(baseline.favorites+1);
- await expect(page.getByRole("heading",{name:"Favorites",exact:true,level:1})).toBeVisible();await expect(page.getByRole("link",{name:/Dashboard favorite/})).toBeVisible();
+ await expect(main.getByRole("heading",{name:"Favorites",exact:true,level:1})).toBeVisible();await expect(main.getByRole("link",{name:/Dashboard favorite/})).toBeVisible();
  expect(await detailCount("unread")).toBe(baseline.unread+8);
  await expect(page.getByRole("heading",{name:"Unread updates",exact:true,level:1})).toBeVisible();
  const marked=page.waitForResponse(r=>r.url().endsWith("/read")&&r.request().method()==="POST");
- await page.getByRole("link",{name:/Team guide.*Work Wiki/}).click();expect((await marked).status()).toBe(204);
+ await main.getByRole("link",{name:/Team guide.*Work Wiki/}).click();expect((await marked).status()).toBe(204);
  const articleHref=page.url();
  expect(await detailCount("unread")).toBe(baseline.unread+7);
  expect((await overview()).browsed).toBe(baseline.browsed+1);
