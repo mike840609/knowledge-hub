@@ -102,7 +102,7 @@ export function DocumentHeader({
       <div data-pinned={pinned || undefined} className="z-10 bg-kh-bg lg:sticky lg:top-0">
       <div className="kh-reading-column kh-document-toolbar flex min-h-12 min-w-0 items-center justify-between gap-1 py-2 sm:gap-3">
         <DocumentBreadcrumb segments={breadcrumb} />
-        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        <div className="flex shrink-0 items-center gap-1">
           {editorActions}
           {onShareClick ? (
             <Tooltip label="Share link…">

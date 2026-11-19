@@ -28,6 +28,17 @@ async function fullWidthAction(page: Page) {
   return page.getByRole("menuitemcheckbox", { name: "Full width" });
 }
 
+async function expectActionsAtPaneRight(page: Page) {
+  const pane = page.getByRole("region", { name: "Document content", exact: true });
+  const actions = pane.getByRole("button", { name: "Document actions", exact: true });
+  await expect(actions).toBeVisible();
+  await expect.poll(() => actions.evaluate((button) => {
+    const content = button.closest(".kh-document-pane")!;
+    return Math.round(content.getBoundingClientRect().left + content.clientWidth - button.getBoundingClientRect().right);
+  })).toBe(24);
+  await expect.poll(() => pane.evaluate((content) => content.scrollWidth <= content.clientWidth)).toBe(true);
+}
+
 test.describe("page chrome", () => {
   test("the nearest folder stays readable beside desktop document actions", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -42,6 +53,7 @@ test.describe("page chrome", () => {
     const parent = await folder(nearest, ancestor);
     const title = "Roadmap for the next release and related decisions across the design and engineering teams";
     await openNote(page, "Some text.\n", title, parent);
+    await expectActionsAtPaneRight(page);
     const breadcrumb = page.getByRole("navigation", { name: "Breadcrumb" });
     const fits = (node: HTMLElement | SVGElement) => node.scrollWidth <= node.clientWidth;
     await expect(breadcrumb.getByText(nearest, { exact: true })).toBeVisible();
@@ -95,15 +107,20 @@ test.describe("page chrome", () => {
     const column = page.locator("[data-document-pane] article").locator("xpath=ancestor::div[contains(@class,'kh-reading-column')][1]");
     const width = () => column.evaluate((node) => node.getBoundingClientRect().width);
     const normal = await width();
+    await expectActionsAtPaneRight(page);
     const toggle = await fullWidthAction(page);
     await expect(toggle).toHaveAttribute("aria-checked", "false");
     await toggle.click();
     await expect.poll(width).toBeGreaterThan(normal + 100);
+    await expectActionsAtPaneRight(page);
     await page.reload();
     const stored = await fullWidthAction(page);
     await expect(stored).toHaveAttribute("aria-checked", "true", ROUND_TRIP);
     await stored.click();
     await expect.poll(width).toBeLessThan(normal + 5);
+    await page.getByRole("button", { name: "Details", exact: true }).click();
+    await expect(page.getByRole("complementary", { name: "Document details", exact: true })).toBeVisible();
+    await expectActionsAtPaneRight(page);
   });
 
   const columnWidth = (page: Page) =>
