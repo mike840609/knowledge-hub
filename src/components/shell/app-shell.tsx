@@ -64,6 +64,7 @@ function WorkspaceSidebarContent({
           identityEmpId={model.identityEmpId}
           workspaceId={workspaceId}
           compact={compact}
+          insightsHref={!compact && model.workspace.type === "PERSONAL" ? `/w/${workspaceId}/profile` : undefined}
         />
       </div>
     </>
@@ -188,7 +189,9 @@ export function AppShell({
     const trigger = desktopTrigger.current;
     const inboxFocused = active instanceof HTMLAnchorElement && active.pathname === inboxHref
       && active.closest("aside") === trigger?.closest("aside");
-    if (inboxFocused || (!navCollapsed && desktopKnowledgeSlot?.contains(active))) {
+    const compactDestinationFocused = navCollapsed && active instanceof HTMLElement
+      && active.hasAttribute("data-compact-destination") && active.closest("aside") === trigger?.closest("aside");
+    if (inboxFocused || compactDestinationFocused || (!navCollapsed && desktopKnowledgeSlot?.contains(active))) {
       trigger?.focus();
     }
     setNavCollapsed((collapsed) => !collapsed);
@@ -300,6 +303,7 @@ export function AppShell({
                   workspaceId={workspaceId}
                   sources={sources}
                   target={drawerOpen && drawerKnowledgeSlot ? drawerKnowledgeSlot : desktopKnowledgeSlot}
+                  navigationSurface={drawerOpen ? "drawer" : desktop && !compact ? "sidebar" : "hidden"}
                   onClick={closeDrawerForLink}
                 />
               )}

@@ -76,8 +76,9 @@ test.describe("links and paste", () => {
     await expect(page).toHaveTitle(new RegExp(`^${next} · `));
     await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText(next);
     // Leaving the page by a link in the app takes the name with it.
-    await page.getByRole("link", { name: "Graph", exact: true }).first().click();
+    await (await openKnowledgeDestinations(page)).getByRole("link", { name: "Graph", exact: true }).click();
     await expect(page).toHaveURL(/\/graph/, ROUND_TRIP);
     await expect(page).not.toHaveTitle(new RegExp(next));
   });
 });
+import { openKnowledgeDestinations } from "./fixtures/knowledge-destinations";

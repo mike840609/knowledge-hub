@@ -34,7 +34,8 @@ test("browses the persistent explorer with a stable canonical document URL", asy
   await expect(page.getByText("Knowledge Hub", { exact: true }).filter({ visible: true })).toBeVisible();
   await expect(page.getByLabel("Workspace: Query Master", { exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Document tree", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Sources" })).toBeVisible();
+  await expect((await openKnowledgeDestinations(page)).getByRole("link", { name: "Sources", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   // Legacy query-form controls are gone.
   await expect(page.getByRole("button", { name: "Apply", exact: true })).toHaveCount(0);
@@ -140,3 +141,4 @@ test("leaks no title or snippet on a direct unauthorized document URL", async ({
   await expect(page.getByText(SECRET_BODY, { exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Not found or no access" })).toBeVisible();
 });
+import { openKnowledgeDestinations } from "./fixtures/knowledge-destinations";

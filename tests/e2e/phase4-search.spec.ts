@@ -37,8 +37,9 @@ test("shows an empty state when nothing matches", async ({ page }) => {
 
 test("keeps archived mode on result links", async ({ page }) => {
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/search?q=${encodeURIComponent("請假")}&archived=1`);
-  const links = page.getByRole("link", { name: SEARCH_TITLE });
-  await expect(links.first()).toHaveAttribute("href", /includeArchived=true/);
+  // The persistent sidebar can show the same document without search filters.
+  const result = page.locator("a[data-search-result]").filter({ hasText: SEARCH_TITLE });
+  await expect(result).toHaveAttribute("href", /[?&]includeArchived=true(?:&|$)/);
 });
 
 test("moves through results with the keyboard", async ({ page }) => {

@@ -9,6 +9,7 @@ import { ActionIcon } from "@/components/actions/action-icon";
 import { rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
+import { KnowledgeDestinations, type KnowledgeNavigationSurface } from "@/components/shell/knowledge-destinations";
 import { MenuCheckboxItem, MenuContent, MenuItem, MenuRoot, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import type { TreeLoadState } from "./source-tree-cache";
 import { useSidebarShortcuts } from "./use-sidebar-shortcuts";
@@ -39,6 +40,8 @@ export type SourceSidebarProps = {
   ensureTree?: (id: string) => Promise<void>;
   retryTree?: (id: string) => Promise<void>;
   selectedDocumentId?: string;
+  onRetrySources?: () => void;
+  navigationSurface?: KnowledgeNavigationSurface;
 };
 
 function withoutArchivedSubtrees(items: KnowledgeTreeItem[]): KnowledgeTreeItem[] {
@@ -55,13 +58,13 @@ function withoutArchivedSubtrees(items: KnowledgeTreeItem[]): KnowledgeTreeItem[
   return visible.length === items.length ? items : visible;
 }
 
-export function SourceSidebar({ workspaceId, source, defaultSourceId, collections, sources, treeStates, ensureTree, retryTree, selectedDocumentId }: SourceSidebarProps) {
+export function SourceSidebar({ workspaceId, source, defaultSourceId, collections, sources, treeStates, ensureTree, retryTree, selectedDocumentId, onRetrySources, navigationSurface }: SourceSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { access, confirmed } = useWorkspaceAuthorization();
   // Only My Space's owner has links to be reminded of; the route refuses anyone else.
-  const canShareSources = confirmed && access.workspace.type === "PERSONAL" && access.isPersonalOwner;
+  const canShareSources = !onRetrySources && confirmed && access.workspace.type === "PERSONAL" && access.isPersonalOwner;
   const { folderIds: sharedFolderIds, sourceIds } = useSharedTargets(workspaceId, canShareSources);
   // The filter is work in progress rather than an arrangement, so it lasts
   // for the session: worth keeping across a refresh, not worth greeting
@@ -212,9 +215,9 @@ export function SourceSidebar({ workspaceId, source, defaultSourceId, collection
 
   return (
     <aside aria-label="Knowledge explorer" aria-busy={!sidebarReady} className="kh-sidebar-surface flex h-full min-h-0 min-w-0 flex-col gap-1 px-2 pt-1">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-1">
-        <h2 className="px-2 text-caption font-medium text-kh-text-muted">Knowledge</h2>
-        <div className="flex items-center gap-0.5">
+      <div className="flex min-w-0 shrink-0 items-center gap-x-1">
+        <KnowledgeDestinations workspaceId={workspaceId} surface={navigationSurface} />
+        {!onRetrySources && <div className="flex shrink-0 items-center gap-0.5">
           <MenuRoot>
             <MenuTrigger aria-label="Favorite documents" title="Favorite documents" className={buttonClasses({ variant: "ghost", icon: true })}>
               <Star size={16} aria-hidden="true" />
@@ -277,8 +280,14 @@ export function SourceSidebar({ workspaceId, source, defaultSourceId, collection
               </MenuCheckboxItem>
             </MenuContent>
           </MenuRoot>
-        </div>
+        </div>}
       </div>
+      {onRetrySources ? (
+        <p role="status" className="px-2 pt-1 text-body text-kh-text-muted">
+          Sources could not be loaded.{" "}
+          <button type="button" className="underline kh-focus-ring" onClick={onRetrySources}>Retry</button>
+        </p>
+      ) : <>
       {filterOpen ? <div className="shrink-0"><TreeFilter value={query} onChange={setQuery} onClose={closeFilter} /></div> : null}
       {/* `relative`: the tree's absolutely placed boxes (its `sr-only` live regions) are placed against this
           scroller and clipped by it. Placed against the page they made it taller than the window, and a
@@ -391,6 +400,7 @@ export function SourceSidebar({ workspaceId, source, defaultSourceId, collection
         })}
         {matches.length === 0 && needle ? <p role="status" className="px-2 py-3 text-body text-kh-text-muted">No matching documents.</p> : null}
       </nav>
+      </>}
     </aside>
   );
 }

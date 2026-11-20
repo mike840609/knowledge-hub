@@ -48,9 +48,20 @@ async function pickRecipient(scope: Locator, empId: string, name: string) {
   await expect(scope.getByRole("list", { name: "Selected people" }).getByText(name, { exact: true })).toBeVisible();
 }
 
-async function chooseSpecificPeople(page: Page) {
-  await page.locator("main").getByRole("button", { name: "Share link…" }).click();
+async function openShareDialog(page: Page) {
+  const trigger = page.locator("main").getByRole("button", { name: "Share link…" });
   const dialog = page.getByRole("dialog", { name: "Share link" });
+  // After a full navigation, the server-rendered button can accept a click
+  // before the dialog host is listening. Wait for the dialog, not just the click.
+  await expect(async () => {
+    if (!await dialog.isVisible()) await trigger.click({ timeout: 2_000 });
+    await expect(dialog).toBeVisible({ timeout: 1_000 });
+  }).toPass(ROUND_TRIP);
+  return dialog;
+}
+
+async function chooseSpecificPeople(page: Page) {
+  const dialog = await openShareDialog(page);
   await dialog.locator("label", { hasText: "Specific people" }).click();
   await expect(dialog.getByRole("radio", { name: /Specific people/ })).toBeChecked();
   return dialog;
@@ -133,8 +144,7 @@ test.describe("named-recipient share, end to end", () => {
 
     // The owner comes back to the dialog and removes A.
     await page.goto(`${owner}/w/${ownerWorkspace}/knowledge/${doc.sourceId}/${doc.documentId}`);
-    await page.locator("main").getByRole("button", { name: "Share link…" }).click();
-    const manage = page.getByRole("dialog", { name: "Share link" }).locator(`[data-share-link="/s/${token}"]`);
+    const manage = (await openShareDialog(page)).locator(`[data-share-link="/s/${token}"]`);
     await manage.getByRole("button", { name: "Manage people" }).click();
     await manage.getByRole("button", { name: "Remove Phase3 nonCreator from this link" }).click();
     await expect(manage).toContainText("1 person", ROUND_TRIP);

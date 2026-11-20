@@ -179,7 +179,10 @@ test('Sources support row keys and importing uses the shared field and folder tr
   const middle = async (locator: ReturnType<Page['locator']>) => { const box = (await locator.boundingBox())!; return box.y + box.height / 2; };
   expect(Math.abs(await middle(heading) - await middle(page.getByText('Knowledge Hub', { exact: true }).filter({ visible: true })))).toBeLessThanOrEqual(1);
   // Primary navigation is neutral; the document tree owns the accent selection.
-  await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Sources', exact: true })).toHaveCSS('background-color', 'rgb(236, 238, 242)');
+  const sourcesLink = (await openKnowledgeDestinations(page)).getByRole('link', { name: 'Sources', exact: true });
+  await expect(sourcesLink).toHaveAttribute('aria-current', 'page');
+  await expect(sourcesLink).toHaveCSS('background-color', 'rgb(236, 238, 242)');
+  await page.keyboard.press('Escape');
   const rows = page.locator('[data-list-row]');
   await expect(rows.nth(1)).toBeVisible();
   await rows.first().focus();
@@ -335,3 +338,4 @@ test('long explorer reveals the selected document after portal layout settles', 
     }
   }
 });
+import { openKnowledgeDestinations } from "./fixtures/knowledge-destinations";

@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { FeedbackReport } from "@/components/knowledge/feedback-report";
 import Link from "next/link";
 
-import { ChevronUp, Moon, Monitor, Rows3, Rows4, Sun, UserRound, Settings, CircleHelp, MessageSquareWarning } from "lucide-react";
+import { BarChart3, ChevronUp, Moon, Monitor, Rows3, Rows4, Sun, UserRound, Settings, CircleHelp, MessageSquareWarning } from "lucide-react";
 import {Tooltip} from "@/components/ui/tooltip";
 import { buttonClasses } from "@/components/ui/button";
 import {
@@ -28,7 +28,7 @@ import { useDensity, type Density } from "./use-density";
  * not belong in Settings either — that surface is workspace governance, and
  * the theme is a personal preference held in this browser.
  */
-export function UserMenu({ identityName, identityEmpId, workspaceId, compact = false, trigger = "account" }: { identityName: string; identityEmpId: string; workspaceId?: string; compact?: boolean; trigger?: "account" | "preferences" }) {
+export function UserMenu({ identityName, identityEmpId, workspaceId, compact = false, trigger = "account", insightsHref }: { identityName: string; identityEmpId: string; workspaceId?: string; compact?: boolean; trigger?: "account" | "preferences"; insightsHref?: string }) {
   const [reportOpen, setReportOpen] = useState(false);
   const accountRef = useRef<HTMLButtonElement>(null);
   const { theme, setTheme } = useTheme();
@@ -49,7 +49,7 @@ export function UserMenu({ identityName, identityEmpId, workspaceId, compact = f
     <MenuRoot>
       {/* The rail is compact, so a full name may still be cut off; the tooltip says it whole, expanded or not. */}
       {trigger === "account" ? <Tooltip label={identityName} side={compact ? "right" : "top"}>{accountTrigger}</Tooltip> : accountTrigger}
-      <MenuContent side="top" align="start" className="w-60">
+      <MenuContent side="top" align="start" className="w-60 max-h-[var(--available-height)] max-w-[var(--available-width)] overflow-y-auto">
         <MenuGroup>
           <MenuGroupLabel>Signed in as</MenuGroupLabel>
           <p className="truncate px-2 pb-1 text-body text-kh-text" title={identityName}>
@@ -98,7 +98,9 @@ export function UserMenu({ identityName, identityEmpId, workspaceId, compact = f
             </MenuRadioItem>
           </MenuRadioGroup>
         </MenuGroup>
-        {workspaceId ? <><MenuSeparator /><MenuItem render={<Link href="/help" />}><span className="flex items-center gap-2"><CircleHelp className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />Help &amp; guides</span></MenuItem></> : null}
+        {workspaceId || insightsHref ? <MenuSeparator /> : null}
+        {insightsHref ? <MenuItem render={<Link href={insightsHref} />}><BarChart3 className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />Insights</MenuItem> : null}
+        {workspaceId ? <MenuItem render={<Link href="/help" />}><span className="flex items-center gap-2"><CircleHelp className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />Help &amp; guides</span></MenuItem> : null}
         <MenuItem onClick={() => setReportOpen(true)}><span className="flex items-center gap-2"><MessageSquareWarning className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />Report a problem</span></MenuItem>
       </MenuContent>
     </MenuRoot>

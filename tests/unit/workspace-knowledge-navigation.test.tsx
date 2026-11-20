@@ -57,11 +57,11 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function render(headers: SourceView[] | null = sources, target: HTMLElement = desktop, workspaceId = "w") {
+async function render(headers: SourceView[] | null = sources, target: HTMLElement = desktop, workspaceId = "w", overrides: Partial<WorkspaceAccessView["actions"]> = {}) {
   const workspace = { id: workspaceId, name: "Workspace", type: "TEAM" as const, lifecycleState: "ACTIVE" as const };
   await act(async () => root.render(
     <WorkspaceAuthorizationContext.Provider value={{
-      access: { workspace, isPersonalOwner: false, actions, effectiveCapabilities: ["document.read"] },
+      access: { workspace, isPersonalOwner: false, actions: { ...actions, ...overrides }, effectiveCapabilities: ["document.read"] },
       navigation: { canCreateTeam: false, teamsOpen: true, items: [workspace] },
       confirmed: true,
       refresh: async () => {},
@@ -100,11 +100,55 @@ it("opens the active source and keeps one tree and its scroll position when movi
   await render(sources, drawer);
 
   expect(desktop.childElementCount).toBe(0);
-  expect(drawer.querySelector("nav")).toBe(tree);
+  expect(drawer.querySelector('nav[aria-label="Document tree"]')).toBe(tree);
   expect(tree.scrollTop).toBe(88);
   expect(tree.querySelector('[aria-current="page"]')).toBeNull();
   expect(requests).toEqual(["/api/workspaces/w/sources/beta/tree"]);
   expect(JSON.parse(localStorage.getItem("kh:document-shortcuts:w") ?? "{}").recent).toEqual(["beta:doc"]);
+});
+
+async function openDestinations(label: string) {
+  const trigger = [...desktop.querySelectorAll("button")].find((button) => button.textContent?.trim() === label);
+  expect(trigger).toBeDefined();
+  await act(async () => trigger!.click());
+  return trigger!;
+}
+
+it("keeps the Knowledge heading while source headers fail and recover", async () => {
+  navigation.pathname = "/w/w/graph";
+  const requests = mockTrees(() => Response.json({ tree: [] }));
+  await render(null);
+  const trigger = await openDestinations("Knowledge / Graph");
+  expect(document.querySelector('a[href="/w/w/graph"]')?.getAttribute("aria-current")).toBe("page");
+  expect(desktop.querySelector('[role="status"]')?.textContent).toContain("Sources could not be loaded");
+  await act(async () => [...desktop.querySelectorAll("button")].find((button) => button.textContent === "Retry")!.click());
+  expect(navigation.refresh).toHaveBeenCalledOnce();
+  expect(requests).toEqual([]);
+  await render([]);
+  expect(desktop.contains(trigger)).toBe(true);
+  expect(desktop.textContent).not.toContain("Sources could not be loaded");
+});
+
+it("uses the current workspace capabilities for Knowledge destinations", async () => {
+  await render([]);
+  await openDestinations("Knowledge");
+  expect(document.querySelector('a[href="/w/w/graph"]')).not.toBeNull();
+  expect(document.querySelector('a[href="/w/w/sources"]')).toBeNull();
+  expect(document.querySelector('a[href="/w/w/shares"]')).toBeNull();
+  navigation.pathname = "/w/next/sources/detail";
+  await render([], desktop, "next", { canInspectSources: true });
+  await openDestinations("Knowledge / Sources");
+  expect(document.querySelector('a[href="/w/next/sources"]')?.getAttribute("aria-current")).toBe("location");
+  expect(document.querySelector('a[href="/w/w/graph"]')).toBeNull();
+});
+
+it("does not match a similarly prefixed route", async () => {
+  navigation.pathname = "/w/w/sources-extra";
+  await render([], desktop, "w", { canInspectSources: true });
+  await openDestinations("Knowledge");
+  const link = document.querySelector('a[href="/w/w/sources"]');
+  expect(link).not.toBeNull();
+  expect(link?.hasAttribute("aria-current")).toBe(false);
 });
 
 it("fetches only Notes by default and refreshes its visible rows after a new header snapshot", async () => {
@@ -173,7 +217,7 @@ it("offers a shell refresh when the workspace source headers are unavailable", a
   await render(null);
 
   expect(desktop.querySelector('[role="status"]')?.textContent).toContain("Sources could not be loaded.");
-  await act(async () => desktop.querySelector("button")?.click());
+  await act(async () => desktop.querySelector<HTMLButtonElement>('[role="status"] button')?.click());
   expect(navigation.refresh).toHaveBeenCalledOnce();
   expect(requests).toEqual([]);
 });

@@ -78,9 +78,9 @@ test("the theme is chosen from the user menu and persists", async ({ page }) => 
 test("the rails' density is chosen from the user menu, sizes the rows, and persists", async ({ page }) => {
   await page.goto(KNOWLEDGE);
   const density = () => page.evaluate(() => document.documentElement.dataset.density ?? "(none)");
-  const graphRow = page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Graph" });
-  const rowHeight = async () => (await graphRow.boundingBox())?.height;
-  const fontSize = () => graphRow.evaluate((element) => getComputedStyle(element).fontSize);
+  const searchRow = page.getByRole("complementary", { name: "Workspace navigation", exact: true }).getByRole("button", { name: /^Search/ });
+  const rowHeight = async () => (await searchRow.boundingBox())?.height;
+  const fontSize = () => searchRow.evaluate((element) => getComputedStyle(element).fontSize);
 
   // Comfortable is the default, before anyone has chosen.
   expect(await density()).toBe("comfortable");

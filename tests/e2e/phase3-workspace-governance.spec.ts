@@ -85,6 +85,13 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       await grant(owner.context.request, id, "admin", "ADMIN");
       await grant(owner.context.request, id, "viewer", "VIEWER");
       await admin.page.goto(`/w/${id}/settings/groups`);
+      const workspaceSwitcher = (page: typeof admin.page) => page.getByRole("button", { name: /^Workspace: / });
+      await workspaceSwitcher(admin.page).click();
+      await expect(admin.page.getByRole("menuitem", { name: "Settings", exact: true })).toHaveAttribute("href", `/w/${id}/settings`);
+      await admin.page.keyboard.press("Escape");
+      await admin.page.getByRole("button", { name: "Collapse navigation", exact: true }).click();
+      await expect(admin.page.getByRole("navigation", { name: "Primary", exact: true }).getByRole("link", { name: "Settings", exact: true })).toHaveAttribute("href", `/w/${id}/settings`);
+      await admin.page.getByRole("button", { name: "Expand navigation", exact: true }).click();
       await admin.page.locator("summary").filter({hasText:"Add group mapping"}).click();
       await expectOptions(admin.page.getByLabel("New group role"), ["EDITOR", "VIEWER"]);
       await admin.page.goto(`/w/${id}/settings/members`);
@@ -96,12 +103,23 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       expect(denied.status()).toBe(403);
       await viewer.page.goto(`/w/${id}/knowledge`);
       await expect(viewer.page.getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
-      await expect(viewer.page.getByRole("link", { name: "Sources", exact: true })).toHaveCount(0);
+      const viewerSwitcher = workspaceSwitcher(viewer.page);
+      const mySpace = viewer.page.getByRole("menuitem", { name: "My Space", exact: true });
+      await viewerSwitcher.click();
+      await expect(mySpace).toBeVisible();
+      await expect(viewer.page.getByRole("menuitem", { name: "Settings", exact: true })).toHaveCount(0);
+      await mySpace.press("Escape");
+      await expect(viewerSwitcher).toHaveAttribute("aria-expanded", "false");
+      const viewerDestinations = await openKnowledgeDestinations(viewer.page);
+      await expect(viewerDestinations.getByRole("link", { name: "Graph", exact: true })).toBeVisible();
+      await expect(viewerDestinations.getByRole("link", { name: /^(Sources|Shares)$/ })).toHaveCount(0);
+      await viewer.page.keyboard.press("Escape");
       await expect(viewer.page.getByRole("link", { name: "Import knowledge" })).toHaveCount(0);
       await viewer.page.goto(`/w/${id}/sources/import`);
       await expect(viewer.page.locator('input[type="file"]')).toHaveCount(0);
       await viewer.page.goto("/");
       await viewer.page.getByLabel("Workspace: My Space", { exact: true }).click();
+      await expect(mySpace).toBeVisible();
       await expect(viewer.page.getByRole("menuitem", { name: "Create team", exact: true })).toHaveCount(0);
     } finally { await owner.context.close(); await admin.context.close(); await viewer.context.close(); }
   });
@@ -290,8 +308,9 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       await expect(owner.page.getByLabel("Archived workspace", { exact: true })).toBeVisible();
       release();
       await expect(owner.page.locator('input[type="file"]')).toHaveCount(0);
-      await expect(owner.page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Sources", exact: true })).toBeVisible();
+      await expect((await openKnowledgeDestinations(owner.page)).getByRole("link", { name: "Sources", exact: true })).toBeVisible();
     } finally { release(); await owner.context.close(); }
   });
 
 });
+import { openKnowledgeDestinations } from "./fixtures/knowledge-destinations";

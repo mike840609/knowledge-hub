@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Settings } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CreateTeamDialog } from "@/components/workspaces/create-team-dialog";
@@ -38,7 +39,7 @@ function displayName(entry: NavigationItem): string {
 // is 48px and the switcher is the name's first letter alone, with the name in a tooltip.
 export function WorkspaceSelector({ workspaceId, compact = false }: { workspaceId: string; compact?: boolean }) {
   const router = useRouter();
-  const { navigation, confirmed, refresh } = useWorkspaceAuthorization();
+  const { access, navigation, confirmed, refresh } = useWorkspaceAuthorization();
   const [creating, setCreating] = useState(false);
   if (!navigation.teamsOpen) return null;
 
@@ -104,6 +105,15 @@ export function WorkspaceSelector({ workspaceId, compact = false }: { workspaceI
                 : <MenuItem disabled>No archived teams</MenuItem>}
             </MenuContent>
           </MenuSub>
+          {!compact && access.actions.canOpenSettings && (
+            <>
+              <MenuSeparator />
+              <MenuItem render={<Link href={`/w/${workspaceId}/settings`} />}>
+                <Settings className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
+                Settings
+              </MenuItem>
+            </>
+          )}
           {navigation.canCreateTeam && (
             <>
               <MenuSeparator />

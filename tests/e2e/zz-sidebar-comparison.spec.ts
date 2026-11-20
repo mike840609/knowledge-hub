@@ -5,9 +5,10 @@ test("knowledge navigation stays distinct from document content in both themes",
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/w/0199f100-0000-7000-8000-000000000001/search?q=SWFP");
   await page.locator("a[data-search-result]").first().click();
-  const primary = page.getByRole("navigation", { name: "Primary", exact: true });
-  const sidebar = page.locator("aside").filter({ has: primary });
+  const sidebar = page.getByRole("complementary", { name: "Workspace navigation", exact: true });
+  const search = sidebar.getByRole("button", { name: "Search ⌘K", exact: true });
   const explorer = sidebar.getByRole("complementary", { name: "Knowledge explorer", exact: true });
+  await expect(sidebar.getByRole("navigation", { name: "Primary", exact: true })).toHaveCount(0);
   await expect(explorer).toBeVisible();
   await expect(explorer).toHaveAttribute("aria-busy", "false");
   await expect(page.getByRole("region", { name: "Document content" })).toBeVisible();
@@ -19,18 +20,18 @@ test("knowledge navigation stays distinct from document content in both themes",
     await page.keyboard.press("Escape");
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme.toLowerCase());
     const selected = explorer.getByRole("treeitem", { selected: true });
-    await expect(primary.locator('a[aria-current="page"]')).toHaveCount(0);
     await expect(selected).toBeVisible();
-    const [navBg, explorerBg, paneBg, selectionBg] = await sidebar.evaluate(element => {
+    const [navBg, explorerBg, paneBg, selectionBg] = await search.evaluate(element => {
       function surface(node: Element): string {
         const color = getComputedStyle(node).backgroundColor;
         return color === "rgba(0, 0, 0, 0)" && node.parentElement ? surface(node.parentElement) : color;
       }
+      const sidebar = element.closest("aside")!;
       return [
-        element.querySelector('nav[aria-label="Primary"]')!,
-        element.querySelector('[aria-label="Knowledge explorer"]')!,
+        element,
+        sidebar.querySelector('[aria-label="Knowledge explorer"]')!,
         document.querySelector('[data-document-pane]')!,
-        element.querySelector('[aria-selected="true"]')!,
+        sidebar.querySelector('[aria-selected="true"]')!,
       ].map(surface);
     });
     expect(navBg).toBe(explorerBg);

@@ -279,6 +279,9 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
             {favorites.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{favorites.map((doc, i) => documentRow(doc, { showSource: sourceChanges(favorites, i), stackProvenance: true }))}</ul>
               : <EmptyLine>Star a document to keep it here.</EmptyLine>}
           </Section>
+          <Section title="Tasks" action={<Link className="kh-control kh-focus-ring inline-flex min-h-8 items-center rounded-md text-body text-kh-link hover:underline" href={`/w/${workspaceId}/tasks`}>Open Tasks</Link>}>
+            <p className="px-3 text-caption text-kh-text-muted">Browse results from coding agents.</p>
+          </Section>
         </div>
       </div>
     </div>

@@ -115,9 +115,9 @@ test("Esc never discards a changed draft", async ({ page }) => {
   await expect(titleField).toHaveValue("Unsaved change");
 });
 
-/** The primary navigation, its button and its width: collapsed is the narrow rail, expanded the one with the labels. */
+/** The workspace sidebar, its button and its width in each state. */
 function navigation(page: Page) {
-  const rail = page.getByRole("navigation", { name: "Primary" }).locator("xpath=ancestor::aside");
+  const rail = page.getByRole("complementary", { name: "Workspace navigation", exact: true });
   return {
     rail,
     collapse: page.getByRole("button", { name: "Collapse navigation" }),
