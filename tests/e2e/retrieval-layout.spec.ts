@@ -102,27 +102,27 @@ for (const width of [1100, 390]) {
 test("Recent menu is closed on drawer reopening and page reload", async ({ page }) => {
   const workspaceId = await mySpace(page);
   const read = await createNote(page, workspaceId, unique("Closed recent read"));
-  await page.setViewportSize({ width: 1100, height: 800 });
+  await page.setViewportSize({ width: 900, height: 800 });
   await page.goto(read.href);
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toBeVisible(ROUND_TRIP);
   await page.goto(`/w/${workspaceId}/inbox`);
-  const expand = page.getByRole("button", { name: "Expand navigation", exact: true });
+  const trigger = page.getByRole("button", { name: "Open menu", exact: true });
   const menu = page.getByRole("dialog", { name: "Menu", exact: true });
   const recent = menu.getByRole("button", { name: "Recent documents", exact: true });
 
-  await expand.click();
+  await trigger.click();
   await recent.click();
   await expect(recent).toHaveAttribute("aria-expanded", "true");
   await page.keyboard.press("Escape");
   await expect(recent).toHaveAttribute("aria-expanded", "false");
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
-  await expect(expand).toBeFocused();
+  await expect(trigger).toBeFocused();
 
-  await expand.click();
+  await trigger.click();
   await expect(recent).toHaveAttribute("aria-expanded", "false", ROUND_TRIP);
   await page.reload();
-  await expand.click();
+  await trigger.click();
   await expect(recent).toHaveAttribute("aria-expanded", "false", ROUND_TRIP);
 });
 

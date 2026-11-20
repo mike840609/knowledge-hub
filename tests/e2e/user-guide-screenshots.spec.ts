@@ -170,7 +170,7 @@ test("capture user guide screenshots",async({page,request})=>{
       });
       expect(comment.status()).toBe(201);
 
-      await page.setViewportSize({width:1440,height:1000});
+      await page.setViewportSize({width:1512,height:1000});
       await page.goto(`/w/${ws}/inbox`);
       const rows=page.getByRole("list",{name:"Inbox discussions"}).getByRole("listitem");
       await expect(rows.first()).toBeVisible({timeout:15_000});
