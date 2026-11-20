@@ -314,12 +314,10 @@ test("the phone uses one Menu for primary navigation and Knowledge", async ({ pa
   if (await notes.getAttribute("aria-expanded") === "false") await notes.click();
   const note = tree.getByRole("link", { name: sidebarNote.title, exact: true });
 
-  const [opened] = await Promise.all([
-    page.context().waitForEvent("page"),
-    note.click({ modifiers: ["ControlOrMeta"] }),
-  ]);
-  await expect(opened).toHaveURL(new URL(sidebarNote.href, page.url()).href, ROUND_TRIP);
-  await opened.close();
+  // Modified clicks behave like links: no same-page navigation, and the
+  // drawer stays open. Opening the tab itself is covered once, in the
+  // destinations test above.
+  await note.click({ modifiers: ["ControlOrMeta"] });
   await expect(page).toHaveURL(home);
   await expect(menu).toBeVisible();
 

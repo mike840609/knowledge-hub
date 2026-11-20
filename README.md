@@ -7,7 +7,11 @@
   </picture>
 </h1>
 
-**Turn Markdown notes into a knowledge workspace you can read, connect, and share.**
+**Write, organize, and share Markdown notes. Open source and self-hosted.**
+
+[**Try the online demo**](https://knowledge-hub-pied.vercel.app/) (sign-in required) · [**Run locally**](#quick-start) · [**Self-host**](#deployment)
+
+Import an existing Markdown folder, including an LLM Wiki, or write from scratch in a Notion-inspired block editor. Search and link your notes, share pages for discussion, and export your content as Markdown.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/mike840609/knowledge-hub/phase2-dev-gate.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI)](https://github.com/mike840609/knowledge-hub/actions/workflows/phase2-dev-gate.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
@@ -22,95 +26,20 @@
 
 **English** · [繁體中文](README.zh-TW.md)
 
-[Quick start](#quick-start) · [Features](#features) · [Configuration](#configuration) · [Deployment](#deployment) · [Development](#development-and-testing) · [Contributing](CONTRIBUTING.md)
+[Features](#features) · [Configuration](#configuration) · [Development](#development-and-testing) · [Contributing](CONTRIBUTING.md)
 
 <br>
 
 <img src="docs/images/document-reader.jpg" alt="Markdown reader with explorer, outline, resolved links, and backlinks" width="900">
 
-<sub>The document reader: explorer, on-page outline, resolved wikilinks, backlinks, and a clear read-only cue for synced folders.</sub>
+<sub>The document reader: explorer, on-page outline, resolved wikilinks, backlinks, and a read-only cue for synced folders. This screenshot shows an earlier sidebar layout.</sub>
 
 </div>
 
 ---
 
-Knowledge Hub is an open-source, self-hosted knowledge workspace. Write notes in the browser, or import an existing Markdown folder or LLM Wiki. Find content through search, follow links and backlinks, explore a knowledge graph, discuss shared documents, and export what you need.
-
-Your content stays in plain Markdown — no particular note-taking app, wiki generator, or external knowledge platform required.
-
 > [!NOTE]
-> Knowledge Hub is at **0.1.0 and under active development**. The personal workspace, **My Space**, is available by default; Team workspace navigation and access are disabled by default and can be enabled by an administrator. Development uses a local demo identity, and production deployments must integrate a trusted identity provider — see [Deployment](#deployment).
-
-## Highlights
-
-- **Markdown in, Markdown out** — import folders with a reviewable Preview → Apply flow, and export individual files or a whole My Space as a ZIP.
-- **Connected knowledge** — `[[wikilinks]]`, relative `.md` links, backlinks, and workspace and local graphs.
-- **Fast retrieval** — workspace search with source, path and date filters, plus a `⌘K` / `Ctrl+K` palette.
-- **Share and discuss** — expiring, revocable read-only links for documents, folders and Sources, with passage-level discussions.
-- **Agent-ready** — Copy for Agent, and scoped read APIs that follow the same access rules as the web app.
-- **Self-hosted** — a Next.js server and MariaDB that you run and own.
-
-## Screenshots
-
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="docs/images/personal-home.jpg" alt="Home with recent documents, discussions, favorites, search, and a new-note action">
-      <p><b>Personal home</b> — drafts, recent documents, discussions and favorites, with Search and Create document in reach.</p>
-    </td>
-    <td width="50%" valign="top">
-      <img src="docs/images/search.jpg" alt="Search results for leave with source and path shown for each match">
-      <p><b>Search</b> — search the whole workspace and narrow results by source, path and update date.</p>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="docs/images/source-history.jpg" alt="Markdown folder source overview and sync history">
-      <p><b>Sources and sync history</b> — review a folder's ownership and history, then use <b>Update from folder</b> to select the source folder again and review changes. A Source can be shared as one link that never exposes its settings, history or assets.</p>
-    </td>
-    <td width="50%" valign="top">
-      <img src="docs/images/knowledge-graph.jpg" alt="Knowledge graph connecting the sample handbook and related notes">
-      <p><b>Knowledge graph</b> — explore links between documents, find a note, and filter by source or unresolved targets.</p>
-    </td>
-  </tr>
-</table>
-
-<sub>Captured on October 29, 2026 (Asia/Taipei) from a production build of commit <a href="https://github.com/mike840609/knowledge-hub/commit/ba699b4e37ed5fdc22f3633e468aff6ef5a1704d"><code>ba699b4e</code></a> at 1440 × 900, using a demo account, the bundled English sample wiki and synthetic notes. Below 1280px the explorer becomes a drawer; below 1024px navigation moves into the Menu drawer. See the <a href="docs/images/README.md">capture provenance</a>.</sub>
-
-## Features
-
-| Feature | What it provides |
-| --- | --- |
-| **Personal workspace** | My Space, Home, Inbox, personal notes, drafts, favorites, and recently read documents; reading history stays on the device |
-| **Inbox** | Unread updates and activity; at wide widths the selected discussion opens beside the list for reply, resolve and hide |
-| **Markdown editing** | Rendered editing and Markdown source modes, slash insertions, tables, toggles, callouts, code blocks, an outline, and keyboard shortcuts |
-| **Drafts and revisions** | Account-backed autosave, local recovery on failure, immutable revision history, comparison and restore, and stale-editor conflict checks |
-| **Import and sync** | Import a Markdown folder through Preview → Apply; select the folder again to review later changes; exclude paths, inspect source health, and rename a source |
-| **Organization** | Document and folder trees, move, rename, archive, and restore; source-managed content is read-only in the Hub |
-| **Search and retrieval** | Workspace search with source, path and date filters; quick search and recent documents in the `⌘K` / `Ctrl+K` palette; saved searches |
-| **Knowledge links** | `[[wikilinks]]`, relative `.md` links, backlinks, and workspace and local graphs |
-| **Discussions** | Owner discussions beside the passage, comments on shared pages, replies, resolve and hide, unread notifications, and followed discussions |
-| **Sharing** | Anonymous read-only My Space document links with expiry and revocation; permanent links named for chosen signed-in people; recipient-owned saved shares; owner moderation |
-| **Export** | Individual Markdown downloads and a My Space ZIP with directory structure and a stable ID/path manifest |
-| **Agent context** | Copy for Agent and workspace-scoped read/context APIs that follow the application's access rules, including discussions |
-| **Team workspaces** *(opt-in)* | Workspace administration, membership, roles and capabilities, external group mapping, and audit records |
-
-### Content ownership
-
-- **Folder Sync (`SOURCE_MANAGED`)** — the original folder is the source of truth. Edit the original Markdown files, generate a new preview, and apply it. The Hub does not edit synced content directly or watch your local folder in the background.
-- **Web Create / individual Upload (`HUB_MANAGED`)** — the Hub manages the content after creation or upload. Edit it in the browser; saving creates a new revision.
-
-A preview is a fixed, staged snapshot. Resolve blocking diagnostics before applying it. If the source version changes, Apply returns a conflict and you must generate a new preview.
-
-### Current limitations and future direction
-
-- Assets store metadata and references only; there is no binary attachment storage yet. Local images and attachments are not guaranteed to open online.
-- ZIP exports include the latest saved versions of archived documents, but exclude drafts, revision history, and attachment bytes. The limit is 64 MiB / 9,999 documents.
-- Documents use archive and restore for their lifecycle; there is no general end-user permanent deletion.
-- Search is keyword-based. An MCP server, semantic/hybrid retrieval, and advanced agent memory are future directions, not shipped features.
-- The default rollout opens My Space directly. Team workspaces and the workspace switcher appear when `KM_TEAM_WORKSPACES_ENABLED=true`. Production identity still requires its own configuration.
-- Discussion writes are separately gated by `KM_REVIEW_WRITES_ENABLED`. Existing discussion reads and owner moderation remain available when writes are off.
-- Hiding a discussion does not physically erase stored data.
+> Knowledge Hub is at **0.1.0 and under active development**. **My Space** is available by default; administrators can opt in to Team workspaces. Local development uses a demo identity. For a hosted instance, choose an identity setup under [Deployment](#deployment).
 
 ## Quick start
 
@@ -150,11 +79,84 @@ If pnpm is unavailable, run `rm -rf node_modules .next && npm ci` instead of `pn
 
 </details>
 
-### Your first workflow
+See [your first workflow](#your-first-workflow) for a sample wiki to try.
+
+## Highlights
+
+- **Markdown in, Markdown out** — import folders with a reviewable Preview → Apply flow, and export individual files or a whole My Space as a ZIP.
+- **Connected knowledge** — `[[wikilinks]]`, relative `.md` links, backlinks, and workspace and local graphs.
+- **Fast retrieval** — workspace search with source, path and date filters, plus a `⌘K` / `Ctrl+K` palette.
+- **Share and discuss** — expiring, revocable read-only links for documents, folders and Sources, with passage-level discussions.
+- **Agent-ready** — Copy for Agent, and scoped read APIs that follow the same access rules as the web app.
+- **Self-hosted** — a Next.js server and MariaDB that you run and own.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/personal-home.jpg" alt="Home with recent documents, discussions, favorites, search, and a new-note action">
+      <p><b>Personal home</b> — drafts, recent documents, discussions and favorites, with Search and Create document in reach.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/search.jpg" alt="Search results for leave with source and path shown for each match">
+      <p><b>Search</b> — search the whole workspace and narrow results by source, path and update date.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/source-history.jpg" alt="Markdown folder source overview and sync history">
+      <p><b>Sources and sync history</b> — review a folder's ownership and history, then use <b>Update from folder</b> to select the source folder again and review changes. A Source can be shared as one link that never exposes its settings, history or assets.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/knowledge-graph.jpg" alt="Knowledge graph connecting the sample handbook and related notes">
+      <p><b>Knowledge graph</b> — explore links between documents, find a note, and filter by source or unresolved targets.</p>
+    </td>
+  </tr>
+</table>
+
+<sub>Historical screenshots captured on October 29, 2026 (Asia/Taipei) from a production build of commit <a href="https://github.com/mike840609/knowledge-hub/commit/ba699b4e37ed5fdc22f3633e468aff6ef5a1704d"><code>ba699b4e</code></a> at 1440 × 900, using a demo account, the bundled English sample wiki and synthetic notes. The current sidebar may look different. See the <a href="docs/images/README.md">capture provenance</a>.</sub>
+
+## Features
+
+| Feature | What it provides |
+| --- | --- |
+| **Personal workspace** | My Space, Home, Inbox, personal notes, drafts, favorites, and recently read documents; reading history stays on the device |
+| **Inbox** | Unread updates and activity; at wide widths the selected discussion opens beside the list for reply, resolve and hide |
+| **Markdown editing** | Rendered editing and Markdown source modes, slash insertions, tables, toggles, callouts, code blocks, an outline, and keyboard shortcuts |
+| **Drafts and revisions** | Account-backed autosave, local recovery on failure, immutable revision history, comparison and restore, and stale-editor conflict checks |
+| **Import and sync** | Import a Markdown folder through Preview → Apply; select the folder again to review later changes; exclude paths, inspect source health, and rename a source |
+| **Organization** | Document and folder trees, move, rename, archive, and restore; source-managed content is read-only in the Hub |
+| **Search and retrieval** | Workspace search with source, path and date filters; quick search and recent documents in the `⌘K` / `Ctrl+K` palette; saved searches |
+| **Knowledge links** | `[[wikilinks]]`, relative `.md` links, backlinks, and workspace and local graphs |
+| **Discussions** | Owner discussions beside the passage, comments on shared pages, replies, resolve and hide, unread notifications, and followed discussions |
+| **Sharing** | Anonymous read-only My Space document links with expiry and revocation; permanent links named for chosen signed-in people; recipient-owned saved shares; owner moderation |
+| **Export** | Individual Markdown downloads and a My Space ZIP with directory structure and a stable ID/path manifest |
+| **Agent context** | Copy for Agent and workspace-scoped read/context APIs that follow the application's access rules, including discussions |
+| **Team workspaces** *(opt-in)* | Workspace administration, membership, roles and capabilities, external group mapping, and audit records |
+
+### Content ownership
+
+- **Folder Sync (`SOURCE_MANAGED`)** — the original folder is the source of truth. Edit the original Markdown files, generate a new preview, and apply it. The Hub does not edit synced content directly or watch your local folder in the background.
+- **Web Create / individual Upload (`HUB_MANAGED`)** — the Hub manages the content after creation or upload. Edit it in the browser; saving creates a new revision.
+
+A preview is a fixed, staged snapshot. Resolve blocking diagnostics before applying it. If the source version changes, Apply returns a conflict and you must generate a new preview.
+
+### Current limitations and future direction
+
+- Assets store metadata and references only; there is no binary attachment storage yet. Local images and attachments are not guaranteed to open online.
+- ZIP exports include the latest saved versions of archived documents, but exclude drafts, revision history, and attachment bytes. The limit is 64 MiB / 9,999 documents.
+- Documents use archive and restore for their lifecycle; there is no general end-user permanent deletion.
+- Search is keyword-based. An MCP server, semantic/hybrid retrieval, and advanced agent memory are future directions, not shipped features.
+- The default rollout opens My Space directly. Team workspaces and the workspace switcher appear when `KM_TEAM_WORKSPACES_ENABLED=true`. Production identity still requires its own configuration.
+- Discussion writes are separately gated by `KM_REVIEW_WRITES_ENABLED`. Existing discussion reads and owner moderation remain available when writes are off.
+- Hiding a discussion does not physically erase stored data.
+
+## Your first workflow
 
 1. Choose **Create document** to write a note, or **Import folder** to bring in a Markdown folder. The import page links to the folder format guide and offers **Try with a sample wiki**, which imports a ready-made folder (English or Traditional Chinese, from `public/sample-wiki/`) through the normal Preview → Apply flow.
 2. For imports, review additions, updates, archives, and diagnostics in Preview before applying.
-3. Use `[[Document title]]` in editable notes to link documents, then open **Graph** to explore relationships.
+3. Use `[[Document title]]` in editable notes to link documents, then choose **Knowledge ▾ → Graph** in the expanded sidebar to explore relationships.
 4. Save a note before creating a read-only share link or downloading its Markdown.
 5. When your local source changes, select the folder again and follow Preview → Apply.
 
@@ -203,12 +205,12 @@ npm run start
 ```
 
 > [!IMPORTANT]
-> **Complete identity integration before running in production.** `npm run start` runs in production mode, which rejects the default Local identity provider. `KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION` exists for testing and must not be used as a deployment method.
+> **Choose an identity setup before running in production.** The default Local provider is rejected in production unless `KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION` is explicitly enabled. That override is for testing or the documented single-operator Vercel setup only. Never enable it on a shared deployment.
 
 **Deployment paths**
 
-- **Single operator on Vercel** — follow the [Vercel + Layerbase runbook](docs/operations/vercel-layerbase.md). It keeps the local identity provider behind an optional site password, runs migrations during production builds, and disables preview deployments. Do not use it for a shared or company deployment.
-- **Public demo** — the same runbook documents [Google demo login](docs/operations/vercel-layerbase.md#google-demo-login): set `KM_IDENTITY_PROVIDER=google` and the `AUTH_*` variables. It is additive; the local and company-SSO paths are unchanged.
+- **Single operator on Vercel** — follow the [Vercel + Layerbase runbook](docs/operations/vercel-layerbase.md). It uses one configured Local identity, runs migrations during production builds, and disables preview deployments. The runbook strongly recommends a site password for a public URL. This is not a multi-user login setup.
+- **Hosted demo** — the online demo requires sign-in. To run the same demo login on your own instance, follow the [Google demo login steps](docs/operations/vercel-layerbase.md#google-demo-login) instead of enabling the Local override.
 - **Company SSO** — the application provides a generic `company-sso` adapter contract. Implement a trusted [`CompanySsoSessionReader`](src/modules/identity/ports/company-sso-session-reader.ts) and register it through [`configureCompanySsoSessionReader`](src/server/composition.ts) before application services are created. Setting `KM_IDENTITY_PROVIDER=company-sso` alone does not provide an OAuth/OIDC login page or identity service.
 
 <details>
