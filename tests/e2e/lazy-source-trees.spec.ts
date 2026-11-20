@@ -32,7 +32,7 @@ test("source trees load on expansion, retry failures and reuse loaded results", 
   await expect(other).toHaveAttribute("aria-expanded", "true");
   await expect(explorer.getByRole("treeitem", { name: "Compliance Policy", exact: true })).toBeVisible();
   expect(requests.filter(path => path === otherTree)).toHaveLength(2);
-  await explorer.getByRole("button", { name: "Filter documents and sources" }).click();
+  await explorer.getByRole("button", { name: "Filter tree: documents and sources" }).click();
   await explorer.getByPlaceholder("Filter documents and sources").fill("Runbooks");
   await expect(explorer.getByRole("treeitem", { name: "Runbooks", exact: true })).toBeVisible();
 });

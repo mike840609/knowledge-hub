@@ -42,7 +42,7 @@ test("Knowledge stays in the desktop sidebar at 1024px and moves to Menu below i
   await expect(page.getByRole("button", { name: "Open menu", exact: true })).toBeHidden();
 });
 
-test("Favorites and Recent open independently from adjacent toolbar buttons", async ({ page }) => {
+test("Favorites and Recent open independently from their sidebar controls", async ({ page }) => {
   const workspaceId = await mySpace(page);
   const recentTitle = unique("Retrieval recent");
   const favoriteTitle = unique("Retrieval favorite");
@@ -59,7 +59,7 @@ test("Favorites and Recent open independently from adjacent toolbar buttons", as
   await page.getByRole("button", { name: `Add to favorites: ${favoriteTitle}`, exact: true }).click();
 
   const favorites = page.getByRole("button", { name: "Favorite documents", exact: true });
-  const clock = page.getByRole("button", { name: "Recent documents", exact: true });
+  const clock = page.getByRole("button", { name: "View all recent documents", exact: true });
   await expect(page.getByRole("heading", { name: "Documents", exact: true })).toHaveCount(0);
   await expect(favorites).toHaveAttribute("aria-expanded", "false");
   await expect(clock).toHaveAttribute("aria-expanded", "false");
@@ -69,6 +69,10 @@ test("Favorites and Recent open independently from adjacent toolbar buttons", as
   await page.keyboard.press("Escape");
   await clock.click();
   await expect(page.getByRole("menuitem").filter({ hasText: recentTitle })).toBeVisible(ROUND_TRIP);
+  await page.keyboard.press("Escape");
+  const preview = page.getByRole("region", { name: "Recently opened", exact: true });
+  await preview.getByRole("link", { name: `Reopen ${recentTitle}`, exact: true }).click();
+  await expect(page).toHaveURL(recent.href, ROUND_TRIP);
 });
 
 // Articles opened while Knowledge is hidden still appear in Recent.
@@ -90,7 +94,7 @@ for (const width of [1100, 390]) {
     await expect(page.getByRole("navigation", { name: "Document tree", exact: true })).toBeHidden();
     await page.goto(second.href);
     await page.getByRole("button", { name: mobile ? "Open menu" : "Expand navigation", exact: true }).click();
-    await page.getByRole("button", { name: "Recent documents", exact: true }).click();
+    await page.getByRole("button", { name: "View all recent documents", exact: true }).click();
     const item = page.getByRole("menuitem").filter({ hasText: firstTitle });
     await expect(item).toBeVisible(ROUND_TRIP);
     await item.click();
@@ -106,9 +110,9 @@ test("Recent menu is closed on drawer reopening and page reload", async ({ page 
   await page.goto(read.href);
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toBeVisible(ROUND_TRIP);
   await page.goto(`/w/${workspaceId}/inbox`);
-  const expand = page.getByRole("button", { name: "Expand navigation", exact: true });
+  const expand = page.getByRole("button", { name: "Browse documents", exact: true });
   const menu = page.getByRole("dialog", { name: "Menu", exact: true });
-  const recent = menu.getByRole("button", { name: "Recent documents", exact: true });
+  const recent = menu.getByRole("button", { name: "View all recent documents", exact: true });
 
   await expand.click();
   await recent.click();

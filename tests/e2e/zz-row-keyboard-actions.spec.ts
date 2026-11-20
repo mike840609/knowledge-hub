@@ -151,7 +151,7 @@ test("with no row in focus, F leaves the document unchanged", async ({ page }) =
 test("a letter typed into the tree's filter stays in the filter", async ({ page }) => {
   await setUp(page);
   const before = page.url();
-  await page.getByRole("button", { name: "Filter documents and sources" }).click();
+  await page.getByRole("button", { name: "Filter tree: documents and sources" }).click();
   const filter = page.locator("#tree-filter");
   await filter.focus();
   await page.keyboard.type("efmrcjk");

@@ -450,7 +450,7 @@ test.describe("Alt+↑ and Alt+↓", () => {
     const [a, b] = [unique("Alpha"), unique("Bravo")];
     const { folder } = await folderOf(page, [a, b]);
     const requests = countTreeRequests(page);
-    await page.getByRole("button", { name: "Filter documents and sources" }).click();
+    await page.getByRole("button", { name: "Filter tree: documents and sources" }).click();
     await page.getByPlaceholder("Filter documents and sources").fill(a);
     await expect(row(page, a)).toBeVisible();
     await focusRow(row(page, a));
@@ -458,7 +458,7 @@ test.describe("Alt+↑ and Alt+↓", () => {
     await expect(saidAloud(page, "Clear the filter to reorder.")).toBeAttached();
     expect(requests()).toBe(0);
     // Cleared, the same key does what it says.
-    await page.getByRole("button", { name: "Filter documents and sources" }).click();
+    await page.getByRole("button", { name: "Filter tree: documents and sources" }).click();
     await focusRow(row(page, a));
     await page.keyboard.press("Alt+ArrowDown");
     await expectOrder(row(page, folder), [b, a]);

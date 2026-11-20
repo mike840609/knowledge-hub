@@ -329,7 +329,7 @@ test('long explorer reveals the selected document after portal layout settles', 
   const scroller = page.getByRole('navigation', { name: 'Document tree', exact: true });
   await scroller.evaluate(el => { el.scrollTop = 0; });
   await expect(row).not.toBeInViewport();
-  for (const name of ['Favorite documents', 'Recent documents']) {
+  for (const name of ['Favorite documents', 'View all recent documents']) {
     const toggle = page.getByRole('button', { name, exact: true });
     for (let i = 0; i < 2; i++) {
       await toggle.click();

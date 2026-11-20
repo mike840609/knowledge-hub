@@ -215,7 +215,7 @@ test("one desktop sidebar collapses to a rail, keeps focus and remembers the cho
 test("the sidebar shortcut moves focus to the rail and retains the Knowledge filter", async ({ page, sidebarNote }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(sidebarNote.href);
-  await page.getByRole("button", { name: "Filter documents and sources" }).click();
+  await page.getByRole("button", { name: "Filter tree: documents and sources" }).click();
   const filter = page.getByPlaceholder("Filter documents and sources");
   await expect(filter).toBeVisible();
   await filter.fill(sidebarNote.title);

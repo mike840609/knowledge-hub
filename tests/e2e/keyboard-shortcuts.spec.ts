@@ -47,7 +47,7 @@ test("C does not navigate away from the current document", async ({ page }) => {
 test("a letter typed into a field stays in the field", async ({ page }) => {
   await openArchitecture(page);
   const before = page.url();
-  await page.getByRole("button", { name: "Filter documents and sources" }).click();
+  await page.getByRole("button", { name: "Filter tree: documents and sources" }).click();
   const filter = page.locator("#tree-filter");
   await filter.focus();
   await page.keyboard.press("c");

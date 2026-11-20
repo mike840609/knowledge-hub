@@ -74,7 +74,7 @@ test("owner Inbox is a discussion index, one row per discussion, settled and fil
   expect(before).not.toBeNull();
   await expect(sidebar).toHaveCSS("width", "48px");
   await expect(pane).toHaveCSS("width", "1392px");
-  const expand = sidebar.getByRole("button", { name: "Expand navigation", exact: true });
+  const expand = sidebar.getByRole("button", { name: "Browse documents", exact: true });
   await expect(expand).toHaveAttribute("aria-haspopup", "dialog");
   await expect(expand).toHaveAttribute("aria-expanded", "false");
   await expand.click();

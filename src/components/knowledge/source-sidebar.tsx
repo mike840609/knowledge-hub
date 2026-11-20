@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { bufferTyping, plainClick } from "./typing-ahead";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, Plus, ListFilter, Star, Share2 } from "lucide-react";
+import { ChevronRight, FileText, LockKeyhole, MoreHorizontal, Plus, ListFilter, Star, Share2 } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
@@ -71,10 +71,14 @@ export function SourceSidebar({ workspaceId, source, defaultSourceId, collection
   // someone with a week later. Everything else below is a choice, and keeps.
   const [query, setQuery, queryReady] = usePersistedJson(`kh:tree-filter:${workspaceId}`, "", isString, "session");
   const [filterOpen, setFilterOpen, filterReady] = usePersistedJson(`kh:tree-filter-open:${workspaceId}`, false, isBoolean, "session");
+  const treeNav = useRef<HTMLElement>(null);
+  const beforeFilter = useRef<number | null>(null);
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
   const readOnlyDescriptionId = useId();
   const [expanded, setExpanded, expandedReady] = usePersistedJson<Record<string, boolean>>(`kh:tree-expanded:${workspaceId}`, {}, isBooleanRecord);
   const { shortcuts, update: updateShortcuts, ready: shortcutsReady } = useDocumentShortcuts(workspaceId);
+  const recentListId = useId();
+  const [recentExpanded, setRecentExpanded, recentReady] = usePersistedJson(`kh:recent-expanded:${workspaceId}`, true, isBoolean);
   const [recentMenuOpen, setRecentMenuOpen] = useState(false);
   const [recentMenuKeys, setRecentMenuKeys] = useState<string[] | null>(null);
   const sidebarReady = queryReady && filterReady && expandedReady && shortcutsReady;
@@ -159,6 +163,10 @@ export function SourceSidebar({ workspaceId, source, defaultSourceId, collection
   const runAction = useActionRunner({ onToggleFavorite: toggleFavorite, workspaceId });
   const mutations = useTreeMutations(workspaceId);
 
+  function shortcutHref(doc: { sourceId: string; documentId: string }) {
+    return `/w/${workspaceId}/knowledge/${doc.sourceId}/${doc.documentId}${showArchived ? "?includeArchived=true" : ""}`;
+  }
+
   function shortcutMenuItem(key: string) {
     const document = documents.get(key);
     if (!document) return null;
@@ -166,7 +174,7 @@ export function SourceSidebar({ workspaceId, source, defaultSourceId, collection
     return (
       <MenuItem
         key={key}
-        render={<Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} prefetch={selected ? false : undefined} aria-current={selected ? "page" : undefined} aria-describedby={document.ownership === "SOURCE_MANAGED" ? readOnlyDescriptionId : undefined} />}
+        render={<Link href={shortcutHref(document)} prefetch={selected ? false : undefined} aria-current={selected ? "page" : undefined} aria-describedby={document.ownership === "SOURCE_MANAGED" ? readOnlyDescriptionId : undefined} />}
         className={selected ? "bg-kh-bg-selected font-medium text-kh-selected-text" : ""}
       >
         {document.pageIcon ? <span className="shrink-0 text-body leading-none" aria-hidden="true">{document.pageIcon}</span> : <FileText size={14} className="shrink-0" aria-hidden="true" />}
@@ -207,6 +215,17 @@ export function SourceSidebar({ workspaceId, source, defaultSourceId, collection
     router.push(`${pathname}${params.size ? `?${params}` : ""}`);
   }
 
+  function changeFilter(value: string) {
+    if (value.trim() && !needle && treeNav.current) beforeFilter.current = treeNav.current.scrollTop;
+    setQuery(value);
+  }
+  useLayoutEffect(() => {
+    if (!needle && treeNav.current && beforeFilter.current !== null) {
+      treeNav.current.scrollTop = beforeFilter.current;
+      beforeFilter.current = null;
+    }
+  }, [needle]);
+
   function closeFilter() {
     setQuery("");
     setFilterOpen(false);
@@ -231,34 +250,17 @@ export function SourceSidebar({ workspaceId, source, defaultSourceId, collection
                 </> : favoriteKeys.length === 0 ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">No favorite documents</p> : null}
             </MenuContent>
           </MenuRoot>
-          <MenuRoot open={recentMenuOpen} onOpenChange={(open) => {
-            recentMenuPopulated.current = false;
-            setRecentMenuOpen(open);
-            setRecentMenuKeys(open && shortcutsReady ? [...shortcuts.recent] : null);
-          }}>
-            <MenuTrigger aria-label="Recent documents" title="Recent documents" className={buttonClasses({ variant: "ghost", icon: true })}>
-              <Clock3 size={16} aria-hidden="true" />
-            </MenuTrigger>
-            <MenuContent align="start" className="max-h-[min(24rem,60vh)] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain">
-              {recentCandidates.map(shortcutMenuItem)}
-              {recentLoading ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Loading recent documents…</p>
-                : recentMetadata.error ? <>
-                  <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Recent documents could not be loaded.</p>
-                  <MenuItem closeOnClick={false} onClick={recentMetadata.retry}>Retry</MenuItem>
-                </> : recentCandidates.length === 0 ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">No recent documents</p> : null}
-            </MenuContent>
-          </MenuRoot>
           <Tooltip label="Filter documents and sources">
             <button
               ref={filterTriggerRef}
               type="button"
-              aria-label="Filter documents and sources"
+              aria-label="Filter tree: documents and sources"
               aria-expanded={filterOpen}
               aria-controls={filterOpen ? "tree-filter" : undefined}
               onClick={() => filterOpen ? closeFilter() : setFilterOpen(true)}
-              className={buttonClasses({ variant: "ghost", icon: true, className: "aria-expanded:bg-kh-bg-hover aria-expanded:text-kh-text" })}
+              className={buttonClasses({ variant: "ghost", size: "sm", className: "aria-expanded:bg-kh-bg-hover aria-expanded:text-kh-text" })}
             >
-              <ListFilter size={16} aria-hidden="true" />
+              <ListFilter size={14} aria-hidden="true" /> Filter tree
             </button>
           </Tooltip>
           <MenuRoot>
@@ -288,12 +290,49 @@ export function SourceSidebar({ workspaceId, source, defaultSourceId, collection
           <button type="button" className="underline kh-focus-ring" onClick={onRetrySources}>Retry</button>
         </p>
       ) : <>
-      {filterOpen ? <div className="shrink-0"><TreeFilter value={query} onChange={setQuery} onClose={closeFilter} /></div> : null}
+      {filterOpen ? <div className="shrink-0"><TreeFilter value={query} onChange={changeFilter} onClose={closeFilter} /></div> : null}
       {/* `relative`: the tree's absolutely placed boxes (its `sr-only` live regions) are placed against this
           scroller and clipped by it. Placed against the page they made it taller than the window, and a
           scrollIntoView the pane could not satisfy scrolled the whole shell away. */}
-      <nav aria-label="Document tree" className="relative min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain">
+      <nav ref={treeNav} aria-label="Document tree" className="relative min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain">
         <span id={readOnlyDescriptionId} hidden>{READ_ONLY_DESCRIPTION}</span>
+        {!needle && <section aria-label="Recently opened">
+          <div className="flex items-center justify-between">
+            <button type="button" aria-expanded={recentExpanded} aria-controls={recentListId} onClick={() => setRecentExpanded(value => !value)} className="kh-control kh-rail-row flex items-center gap-1.5 rounded-md px-2 text-caption font-medium text-kh-text-muted hover:bg-kh-bg-hover kh-focus-ring">
+              <ChevronRight size={14} aria-hidden="true" className={`transition-transform duration-120 ${recentExpanded ? "rotate-90" : ""}`} />
+              Recently opened
+            </button>
+            <MenuRoot open={recentMenuOpen} onOpenChange={(open) => {
+              recentMenuPopulated.current = false;
+              setRecentMenuOpen(open);
+              setRecentMenuKeys(open && shortcutsReady ? [...shortcuts.recent] : null);
+            }}>
+              <MenuTrigger aria-label="View all recent documents" title="View all recent documents" className="kh-control kh-rail-row rounded-md px-2 text-caption text-kh-text-muted hover:bg-kh-bg-hover kh-focus-ring">
+                View all
+              </MenuTrigger>
+              <MenuContent align="start" className="max-h-[min(24rem,60vh)] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain">
+                {recentCandidates.map(shortcutMenuItem)}
+                {recentLoading ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Loading recent documents…</p>
+                  : recentMetadata.error ? <>
+                    <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Recent documents could not be loaded.</p>
+                    <MenuItem closeOnClick={false} onClick={recentMetadata.retry}>Retry</MenuItem>
+                  </> : recentCandidates.length === 0 ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">No recent documents</p> : null}
+              </MenuContent>
+            </MenuRoot>
+          </div>
+          <div id={recentListId} hidden={!recentExpanded}>
+            {recentReady && recentCandidates.slice(0, 3).map(key => {
+              const doc = documents.get(key)!;
+              const ambiguous = recentCandidates.some(other => other !== key && documents.get(other)?.label === doc.label);
+              return <Link key={key} href={shortcutHref(doc)} aria-label={`Reopen ${doc.label}${ambiguous ? " · " + doc.sourceName : ""}`} aria-describedby={doc.ownership === "SOURCE_MANAGED" ? readOnlyDescriptionId : undefined} className="kh-control kh-rail-row flex min-w-0 items-center gap-2 rounded-md pl-6 pr-2 kh-rail-text hover:bg-kh-bg-hover kh-focus-ring">
+                {doc.pageIcon ? <span aria-hidden="true">{doc.pageIcon}</span> : <FileText size={14} aria-hidden="true" className="shrink-0 text-kh-text-muted" />}
+                <span className="truncate">{doc.label}</span>
+                {ambiguous && <span className="ml-auto max-w-[40%] truncate text-caption text-kh-text-muted">{doc.sourceName}</span>}
+              </Link>;
+            })}
+            {recentReady && !recentLoading && !recentMetadata.error && recentCandidates.length === 0 && <p className="pl-6 text-caption text-kh-text-muted">No recent documents</p>}
+          </div>
+        </section>}
         {getStarted ? <SidebarGetStarted actions={getStarted} compact={pathname === `/w/${workspaceId}/knowledge`} /> : null}
         {!getStarted && !hasNotes && canCreate && (!needle || "notes".includes(needle)) ? (
           <div className="flex items-center justify-between pl-2">
@@ -317,16 +356,9 @@ export function SourceSidebar({ workspaceId, source, defaultSourceId, collection
             <section key={candidate.id} aria-label={`${candidate.name} documents`}>
               <RowContextMenu as="div" actions={sourceActions} onRun={runAction} className="kh-interactive-row group flex items-center gap-1">
                 <button type="button" aria-expanded={open} aria-controls={`collection-${candidate.id}`} aria-describedby={readOnly ? readOnlyDescriptionId : undefined} onClick={() => setExpanded((previous) => ({ ...previous, [candidate.id]: !open }))} title={readOnly ? `${candidate.name} · ${READ_ONLY_DESCRIPTION}` : candidate.name} className="group kh-control flex kh-rail-row min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left kh-rail-text font-medium text-kh-text kh-focus-ring">
-                  {/* One slot, Notion-style: the source's mark at rest, its chevron on hover (where hover exists) or keyboard focus. */}
-                  <span className="relative size-3.5 shrink-0 text-kh-text-muted" aria-hidden="true">
-                    {readOnly ? <LockKeyhole size={14} data-read-only-cue="" className="absolute inset-0 group-focus-visible:invisible [@media(hover:hover)_and_(pointer:fine)]:group-hover:invisible" /> : null}
-                    <ChevronRight
-                      size={14}
-                      data-expand-cue=""
-                      className={`invisible absolute inset-0 transition-transform duration-120 ease-out group-focus-visible:visible [@media(hover:hover)_and_(pointer:fine)]:group-hover:visible ${open ? "rotate-90" : ""}`}
-                    />
-                  </span>
+                  <ChevronRight size={14} aria-hidden="true" data-expand-cue="" className={`shrink-0 text-kh-text-muted transition-transform duration-120 ${open ? "rotate-90" : ""}`} />
                   <span className="truncate">{candidate.name}</span>
+                  {readOnly && <LockKeyhole size={13} aria-hidden="true" data-read-only-cue="" className="shrink-0 text-kh-text-muted" />}
                   {canShareSources && candidate.status === "ACTIVE" && sourceIds.has(candidate.id) ? <Share2 size={14} aria-label="Shared" className="shrink-0 text-kh-text-muted" /> : null}
                   {candidate.status === "ARCHIVED" ? <Status kind="archived" className="ml-auto text-caption font-normal text-kh-text-muted">Archived</Status> : null}
                 </button>

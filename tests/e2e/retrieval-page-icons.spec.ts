@@ -50,15 +50,15 @@ test("a page icon follows the document to Home, the palette, the explorer and se
   expect(await searchOption.textContent()).toContain("📌");
   await page.keyboard.press("Escape");
 
-  // Recent is an on-demand menu; visiting articles must not add a shifting list above the tree.
+  // The preview and the full menu both preserve the document icon.
   const otherTitle = unique("Icon parity other");
   const other = await createNote(page, workspaceId, otherTitle);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(other.href);
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(otherTitle, ROUND_TRIP);
   const explorer = page.getByRole("complementary", { name: "Knowledge explorer", exact: true });
-  await expect(explorer.getByRole("region", { name: "Recent documents", exact: true })).toHaveCount(0);
-  const clock = explorer.getByRole("button", { name: "Recent documents", exact: true });
+  await expect(explorer.getByRole("region", { name: "Recently opened", exact: true })).toBeVisible();
+  const clock = explorer.getByRole("button", { name: "View all recent documents", exact: true });
   await clock.focus();
   await page.keyboard.press("Enter");
   const recentMenu = page.getByRole("menu");
@@ -69,7 +69,7 @@ test("a page icon follows the document to Home, the palette, the explorer and se
   await expect(page).toHaveURL(note.href, ROUND_TRIP);
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(title, ROUND_TRIP);
   await expect(recentMenu).toBeHidden();
-  await expect(explorer.getByRole("region", { name: "Recent documents", exact: true })).toHaveCount(0);
+  await expect(explorer.getByRole("region", { name: "Recently opened", exact: true })).toBeVisible();
 
   // Reopening reflects the new history, and Escape returns focus to the clock.
   await clock.click();
@@ -81,10 +81,10 @@ test("a page icon follows the document to Home, the palette, the explorer and se
   // The same menu remains reachable from the Inbox's compact desktop rail.
   await page.setViewportSize({ width: 1100, height: 800 });
   await page.goto(`/w/${workspaceId}/inbox`);
-  await page.getByRole("button", { name: "Expand navigation", exact: true }).click();
+  await page.getByRole("button", { name: "Browse documents", exact: true }).click();
   const drawer = page.getByRole("dialog", { name: "Menu", exact: true });
   const drawerExplorer = drawer.getByRole("complementary", { name: "Knowledge explorer", exact: true });
-  const drawerClock = drawerExplorer.getByRole("button", { name: "Recent documents", exact: true });
+  const drawerClock = drawerExplorer.getByRole("button", { name: "View all recent documents", exact: true });
   await expect(drawerClock).toBeInViewport();
   const fits = await drawerExplorer.evaluate(element => {
     const bounds = element.getBoundingClientRect();

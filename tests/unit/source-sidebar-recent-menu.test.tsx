@@ -71,19 +71,22 @@ async function click(element: Element | null) {
     element!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
   });
 }
-function clock() { return document.querySelector('button[aria-label="Recent documents"]'); }
+function clock() { return document.querySelector('button[aria-label="View all recent documents"]'); }
 function star() { return document.querySelector('button[aria-label="Favorite documents"]'); }
 function menu() { return document.querySelector('[role="menu"]'); }
 function menuHrefs() { return [...(menu()?.querySelectorAll("a") ?? [])].map(link => link.getAttribute("href")); }
 const href = (id: number) => `/w/w/knowledge/a/d${id}`;
 const recent = ["a:d1", "a:d2", "a:d3", "a:d4", "a:d5", "a:d6"];
 
-it("keeps recents out of the tree and makes every eligible recent reachable from the clock", async () => {
+it("shows three recent links and makes every eligible recent reachable from View all", async () => {
   shortcuts.current.recent = recent;
   sources[0].ownership = "SOURCE_MANAGED";
   await mount();
-  expect(document.querySelector('section[aria-label="Recent documents"]')).toBeNull();
-  expect(document.querySelector('nav[aria-label="Document tree"]')?.textContent).not.toContain("Recent 1");
+  const preview = document.querySelector('section[aria-label="Recently opened"]')!;
+  expect([...preview.querySelectorAll("a")].map(link => link.getAttribute("href"))).toEqual([href(1), href(2), href(3)]);
+  await click(preview.querySelector("button[aria-controls]"));
+  expect(preview.querySelector("[hidden]")).not.toBeNull();
+  expect(localStorage.getItem("kh:recent-expanded:w")).toBe("false");
   await click(clock());
   expect(menuHrefs()).toEqual([href(1), href(2), href(3), href(4), href(5), href(6)]);
   const first = menu()!.querySelector("a")!;
@@ -130,10 +133,9 @@ it("preserves favorite, current-document, and unavailable-document exclusions", 
   expect(menuHrefs()).toEqual([href(1)]);
 });
 
-it("lists every favorite from the star next to the clock", async () => {
+it("lists every favorite from the star", async () => {
   shortcuts.current.favorites = recent;
   await mount();
-  expect(star()?.nextElementSibling).toBe(clock());
   expect(document.querySelector('nav[aria-label="Document tree"]')?.textContent).not.toContain("Recent 1");
   await click(star());
   expect(menuHrefs()).toEqual([href(1), href(2), href(3), href(4), href(5), href(6)]);

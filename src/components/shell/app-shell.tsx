@@ -219,7 +219,7 @@ export function AppShell({
     };
   }, [drawerId, toggleNavigation]);
 
-  const desktopToggleLabel = compact ? "Expand navigation" : "Collapse navigation";
+  const desktopToggleLabel = inboxCompact ? "Browse documents" : compact ? "Expand navigation" : "Collapse navigation";
   const content = (
     <main id="kh-workspace-main" tabIndex={-1} className="relative min-h-0 min-w-0 flex-1 overflow-y-auto bg-kh-bg outline-none has-[[data-document-pane]]:overflow-hidden">
       {authorization.revoked ? <p role="status">Workspace access changed. Returning to My Space…</p> : children}
@@ -274,9 +274,10 @@ export function AppShell({
                         aria-haspopup={inboxCompact ? "dialog" : undefined}
                         aria-expanded={inboxCompact ? drawerOpen : !compact}
                         aria-controls={inboxCompact ? (drawerOpen ? drawerId : undefined) : desktopNavId}
-                        className={buttonClasses({ variant: "ghost", icon: true, size: compact ? "md" : "sm" })}
+                        className={buttonClasses({ variant: "ghost", icon: true, size: compact ? "md" : "sm", className: inboxCompact ? "flex-col gap-0.5" : "" })}
                       >
                         {compact ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
+                        {inboxCompact && <span aria-hidden="true" className="text-micro leading-none">Browse</span>}
                       </button>
                     </Tooltip>
                   </div>

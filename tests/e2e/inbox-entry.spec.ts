@@ -61,7 +61,7 @@ test("entering Inbox at 1440px carries focus from the header to the rail", async
 test("opening the Inbox from its filtered view closes Menu and returns focus", async ({ page, request }) => {
   const doc = await createReviewDocument(request);
   const inbox = `${phase3Origin("reviewOwner")}/w/${doc.workspaceId}/inbox`;
-  for (const [width, opener] of [[1440, "Expand navigation"], [390, "Open menu"]] as const) {
+  for (const [width, opener] of [[1440, "Browse documents"], [390, "Open menu"]] as const) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${inbox}?kind=mention`);
     const trigger = page.getByRole("button", { name: opener, exact: true });

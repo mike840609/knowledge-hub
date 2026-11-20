@@ -24,7 +24,7 @@ test("a collapsed source stays collapsed across a reload", async ({ page }) => {
 
 test("the tree filter survives a reload but not a new session", async ({ page, context }) => {
   await page.goto(KNOWLEDGE);
-  await page.getByLabel("Filter documents and sources").click();
+  await page.getByRole("button", { name: "Filter tree: documents and sources" }).click();
   const field = page.getByPlaceholder(/filter/i);
   await field.fill("run");
   const tree = page.getByRole("tree", { name: "Knowledge tree" });
