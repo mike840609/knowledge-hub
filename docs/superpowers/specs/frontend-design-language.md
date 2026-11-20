@@ -729,9 +729,9 @@ does not). It acts from the composer's title and editor, since no field types
 it — the writer is who most wants the room — but a dialog or menu that is open,
 the palette included, keeps its keys. On a narrow window it opens the workspace
 Menu drawer; at 1024px and wider it collapses and expands the rail on every
-page, Inbox included. On Inbox, where the shortcut can flip the content between
-list and split, focus moves to the control before the flip. Escape closes the
-drawer.
+page, Inbox included. On Inbox the shortcut moves focus to the control; when
+that changes the list/split layout, the flip cannot drop focus to the page body.
+Escape closes the drawer.
 The composer keeps ⌘/ for the rendered/source switch and ⌘B for bold.
 
 The composer's title field, its rendered editor and its Markdown text are the
