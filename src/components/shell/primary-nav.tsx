@@ -3,20 +3,19 @@
 import { useWorkspaceAuthorization } from "./use-workspace-authorization";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { Ref } from "react";
 import { buttonClasses } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { BarChart3, Bot, Inbox, Settings, Home, type LucideIcon } from "lucide-react";
 import { knowledgeDestinations } from "./knowledge-destinations";
 
-type NavItem = { name: string; href: string; Icon: LucideIcon; badge?: number; label?: string; ref?: Ref<HTMLAnchorElement>; compactOnly?: boolean };
+type NavItem = { name: string; href: string; Icon: LucideIcon; badge?: number; label?: string; compactOnly?: boolean };
 
-function inboxItem(workspaceId: string, unread: number, ref?: Ref<HTMLAnchorElement>): NavItem {
-  return { name: "Inbox", href: `/w/${workspaceId}/inbox`, Icon: Inbox, badge: unread, label: unread > 0 ? `Inbox, ${unread} unread` : "Inbox", ref };
+function inboxItem(workspaceId: string, unread: number): NavItem {
+  return { name: "Inbox", href: `/w/${workspaceId}/inbox`, Icon: Inbox, badge: unread, label: unread > 0 ? `Inbox, ${unread} unread` : "Inbox" };
 }
 
 function NavigationLink({ item, pathname, appearance }: { item: NavItem; pathname: string; appearance: "row" | "rail" | "header" }) {
-  const { name, href, Icon, badge, label = name, ref } = item;
+  const { name, href, Icon, badge, label = name } = item;
   const selected = pathname === href || pathname.startsWith(`${href}/`);
   const header = appearance === "header";
   const iconOnly = appearance !== "row";
@@ -28,7 +27,7 @@ function NavigationLink({ item, pathname, appearance }: { item: NavItem; pathnam
     })
     : `kh-control flex kh-rail-row items-center rounded-md px-2 kh-rail-text transition kh-focus-ring ${iconOnly ? "relative justify-center" : "gap-2"} ${stateClasses}`;
   const link = (
-    <Link ref={ref} href={href} aria-current={selected ? (pathname === href ? "page" : "location") : undefined} aria-label={label} data-compact-destination={item.compactOnly || undefined} className={classes}>
+    <Link href={href} aria-current={selected ? (pathname === href ? "page" : "location") : undefined} aria-label={label} data-compact-destination={item.compactOnly || undefined} className={classes}>
       <Icon size={15} aria-hidden="true" />
       {iconOnly ? null : <span className="min-w-0 flex-1 truncate">{name}</span>}
       {badge ? (
@@ -46,27 +45,25 @@ function NavigationLink({ item, pathname, appearance }: { item: NavItem; pathnam
   return iconOnly ? <Tooltip label={label} side={header ? "bottom" : "right"}>{link}</Tooltip> : link;
 }
 
-export function InboxHeaderLink({ workspaceId, unread, ref }: { workspaceId: string; unread: number; ref?: Ref<HTMLAnchorElement> }) {
+export function InboxHeaderLink({ workspaceId, unread }: { workspaceId: string; unread: number }) {
   const pathname = usePathname();
-  return <NavigationLink item={inboxItem(workspaceId, unread, ref)} pathname={pathname} appearance="header" />;
+  return <NavigationLink item={inboxItem(workspaceId, unread)} pathname={pathname} appearance="header" />;
 }
 
 export function PrimaryNav({
   workspaceId,
   compact = false,
   inboxUnread,
-  inboxRef,
 }: {
   workspaceId: string;
   compact?: boolean;
   inboxUnread?: number;
-  inboxRef?: Ref<HTMLAnchorElement>;
 }) {
   const { access } = useWorkspaceAuthorization();
   const pathname = usePathname();
   const personal = access.workspace.type === "PERSONAL";
   const items: NavItem[] = [
-    ...(personal && inboxUnread !== undefined ? [inboxItem(workspaceId, inboxUnread, inboxRef)] : []),
+    ...(personal && inboxUnread !== undefined ? [inboxItem(workspaceId, inboxUnread)] : []),
     ...(personal ? [{ name: "Home", href: `/w/${workspaceId}/home`, Icon: Home }] : []),
     ...(compact ? knowledgeDestinations(workspaceId, access).map((item) => ({ ...item, compactOnly: true })) : []),
     ...(compact && personal ? [

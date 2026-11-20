@@ -59,6 +59,8 @@ surroundings matter.
   build framed the document in a bordered box under a second title line, cut
   off at the window's foot, with the page's actions above the pane.)
 
+**2026-11-20 amendment:** since #376 the workspace sidebar occupies 272px of the window, so the Inbox box at 1440px is about 73rem, not 79rem, and the plain list shows while the sidebar is expanded. Entering Inbox no longer collapses the sidebar; the split still appears whenever the box itself reaches 75rem, including after the reader collapses the sidebar.
+
 ## Selection
 
 - **Selection lives in the URL** as `?item=<eventId>`, written with

@@ -34,14 +34,12 @@ function WorkspaceSidebarContent({
   knowledgeSlot,
   compact = false,
   inboxUnread,
-  inboxRef,
   id,
 }: {
   model: WorkspaceShellModel;
   knowledgeSlot: Ref<HTMLDivElement>;
   compact?: boolean;
   inboxUnread?: number;
-  inboxRef?: Ref<HTMLAnchorElement>;
   id?: string;
 }) {
   const workspaceId = model.workspace.id;
@@ -54,7 +52,7 @@ function WorkspaceSidebarContent({
             <WorkspaceSelector workspaceId={workspaceId} compact={compact} />
             <SearchNavItem compact={compact} />
           </div>
-          <PrimaryNav workspaceId={workspaceId} compact={compact} inboxUnread={inboxUnread} inboxRef={inboxRef} />
+          <PrimaryNav workspaceId={workspaceId} compact={compact} inboxUnread={inboxUnread} />
         </div>
         <div ref={knowledgeSlot} hidden={compact} className="min-h-0 flex-1" />
       </div>
@@ -70,9 +68,6 @@ function WorkspaceSidebarContent({
     </>
   );
 }
-
-// Inbox can fit its 1200px split beside a 17rem sidebar from 1472px.
-const INBOX_INLINE_NAV_MIN_WIDTH = 1472;
 
 export function AppShell({
   model,
@@ -99,27 +94,15 @@ export function AppShell({
   const drawerId = useId();
   const desktopTrigger = useRef<HTMLButtonElement>(null);
   const mobileTrigger = useRef<HTMLButtonElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
   const navOpener = useRef<HTMLElement | null>(null);
   const restoreNavFocus = useRef(true);
-  const restoreInboxFocus = useRef(false);
   const desktop = useIsWide();
-  const inboxHasSidebarRoom = useIsWide(INBOX_INLINE_NAV_MIN_WIDTH);
   const inboxHref = `/w/${workspaceId}/inbox`;
-  const isInbox = pathname === inboxHref;
-  const inboxCompact = isInbox && !inboxHasSidebarRoom;
-  const compact = navCollapsed || inboxCompact;
-  const sidebarWidth = navCollapsed ? "w-12" : isInbox ? "w-12 min-[1472px]:w-[17rem]" : "w-[17rem]";
-  const usesDrawer = !desktop || inboxCompact;
+  const compact = navCollapsed;
+  const sidebarWidth = navCollapsed ? "w-12" : "w-[17rem]";
+  const usesDrawer = !desktop;
   const drawerOpen = usesDrawer && navOpen && !authorization.revoked;
-
-  // Entering Inbox or resizing can replace its focused desktop link in place.
-  const desktopInboxRef = useCallback((link: HTMLAnchorElement | null) => {
-    if (!link) return;
-    const doc = link.ownerDocument;
-    if (restoreInboxFocus.current && doc.activeElement === doc.body) link.focus({ preventScroll: true });
-    restoreInboxFocus.current = false;
-    return () => { restoreInboxFocus.current = doc.activeElement === link; };
-  }, []);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -189,13 +172,18 @@ export function AppShell({
     const trigger = desktopTrigger.current;
     const inboxFocused = active instanceof HTMLAnchorElement && active.pathname === inboxHref
       && active.closest("aside") === trigger?.closest("aside");
+    // Inbox is the one page whose content flips between a list and a split as
+    // the rail changes width. Move focus to the control first, so the focused
+    // list, filter or pane is not destroyed under the reader.
+    const inboxContentFocused = pathname === inboxHref && active instanceof HTMLElement
+      && (mainRef.current?.contains(active) ?? false);
     const compactDestinationFocused = navCollapsed && active instanceof HTMLElement
       && active.hasAttribute("data-compact-destination") && active.closest("aside") === trigger?.closest("aside");
-    if (inboxFocused || compactDestinationFocused || (!navCollapsed && desktopKnowledgeSlot?.contains(active))) {
+    if (inboxFocused || inboxContentFocused || compactDestinationFocused || (!navCollapsed && desktopKnowledgeSlot?.contains(active))) {
       trigger?.focus();
     }
     setNavCollapsed((collapsed) => !collapsed);
-  }, [desktopKnowledgeSlot, inboxHref, navCollapsed, setNavCollapsed]);
+  }, [desktopKnowledgeSlot, inboxHref, navCollapsed, pathname, setNavCollapsed]);
 
   const toggleNavigation = useCallback(() => {
     if (!usesDrawer) toggleNav();
@@ -221,7 +209,7 @@ export function AppShell({
 
   const desktopToggleLabel = compact ? "Expand navigation" : "Collapse navigation";
   const content = (
-    <main id="kh-workspace-main" tabIndex={-1} className="relative min-h-0 min-w-0 flex-1 overflow-y-auto bg-kh-bg outline-none has-[[data-document-pane]]:overflow-hidden">
+    <main ref={mainRef} id="kh-workspace-main" tabIndex={-1} className="relative min-h-0 min-w-0 flex-1 overflow-y-auto bg-kh-bg outline-none has-[[data-document-pane]]:overflow-hidden">
       {authorization.revoked ? <p role="status">Workspace access changed. Returning to My Space…</p> : children}
     </main>
   );
@@ -261,26 +249,25 @@ export function AppShell({
                       <>
                         <Image src="/icon.svg" width={20} height={20} alt="" className="shrink-0" />
                         <span className="min-w-0 flex-1 truncate text-caption font-semibold text-kh-text">Knowledge Hub</span>
-                        {inboxUnread !== undefined && <InboxHeaderLink ref={desktopInboxRef} workspaceId={workspaceId} unread={inboxUnread} />}
+                        {inboxUnread !== undefined && <InboxHeaderLink workspaceId={workspaceId} unread={inboxUnread} />}
                       </>
                     )}
                     <Tooltip label={desktopToggleLabel} shortcut={NAV_TOGGLE_SHORTCUT} side={compact ? "right" : "bottom"}>
                       <button
                         ref={desktopTrigger}
                         type="button"
-                        onClick={(event) => inboxCompact ? openNav(event.currentTarget) : toggleNav()}
+                        onClick={() => toggleNav()}
                         aria-label={desktopToggleLabel}
                         aria-keyshortcuts={NAV_TOGGLE_SHORTCUT}
-                        aria-haspopup={inboxCompact ? "dialog" : undefined}
-                        aria-expanded={inboxCompact ? drawerOpen : !compact}
-                        aria-controls={inboxCompact ? (drawerOpen ? drawerId : undefined) : desktopNavId}
+                        aria-expanded={!compact}
+                        aria-controls={desktopNavId}
                         className={buttonClasses({ variant: "ghost", icon: true, size: compact ? "md" : "sm" })}
                       >
                         {compact ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
                       </button>
                     </Tooltip>
                   </div>
-                  <WorkspaceSidebarContent model={model} knowledgeSlot={setDesktopKnowledgeSlot} compact={compact} inboxUnread={compact ? inboxUnread : undefined} inboxRef={desktopInboxRef} id={desktopNavId} />
+                  <WorkspaceSidebarContent model={model} knowledgeSlot={setDesktopKnowledgeSlot} compact={compact} inboxUnread={compact ? inboxUnread : undefined} id={desktopNavId} />
                 </aside>
                 {authorization.revoked ? content : <PeekHost>{content}</PeekHost>}
               </div>

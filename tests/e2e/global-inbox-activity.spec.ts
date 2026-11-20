@@ -26,7 +26,7 @@ test("owner Inbox is a discussion index, one row per discussion, settled and fil
   const title: string = (await (await request.get(`${owner}/api/documents/${doc.documentId}/peek?brief`)).json()).title;
 
   // The page opens on the whole index: one row for the discussion, no second count, the `All` tab.
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: 1512, height: 900 });
   await page.goto(`${owner}/w/${doc.workspaceId}/inbox`);
   await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
   await expect(page.getByText("Inbox ·")).toHaveCount(0);
@@ -66,34 +66,25 @@ test("owner Inbox is a discussion index, one row per discussion, settled and fil
   await expect(card.getByText("Inbox verification comment", { exact: true })).toBeVisible(LOADED);
   await expect(card.getByText("A second reader comment", { exact: true })).toBeVisible(LOADED);
 
-  // At 1440px, the menu overlays the compact sidebar without disturbing the selected discussion.
-  const sidebar = page.locator('aside:has(nav[aria-label="Primary"])');
+  // The desktop control collapses the rail in place: it is not a Menu, and the
+  // selected discussion stays selected.
+  const sidebar = page.getByRole("complementary", { name: "Workspace navigation" });
   const pane = page.locator('#kh-workspace-main');
   const discussion = pane.locator('section[aria-label="Selected discussion"]');
-  const before = await discussion.boundingBox();
-  expect(before).not.toBeNull();
-  await expect(sidebar).toHaveCSS("width", "48px");
-  await expect(pane).toHaveCSS("width", "1392px");
-  const expand = sidebar.getByRole("button", { name: "Expand navigation", exact: true });
-  await expect(expand).toHaveAttribute("aria-haspopup", "dialog");
-  await expect(expand).toHaveAttribute("aria-expanded", "false");
-  await expand.click();
+  await expect(sidebar).toHaveCSS("width", "272px");
+  await expect(pane).toHaveCSS("width", "1240px");
 
-  const menu = page.getByRole("dialog", { name: "Menu", exact: true });
-  await expect(menu.getByRole("button", { name: /^Workspace:/ })).toBeVisible();
-  await expect(menu.getByRole("button", { name: "Search ⌘K", exact: true })).toBeVisible();
-  await expect(menu.getByRole("navigation", { name: "Primary", exact: true })).toBeVisible();
-  await expect(menu.getByRole("navigation", { name: "Document tree", exact: true })).toBeVisible();
-  await expect(menu.getByRole("button", { name: /^Account:/ })).toBeVisible();
+  await sidebar.getByRole("button", { name: "Collapse navigation", exact: true }).click();
   await expect(sidebar).toHaveCSS("width", "48px");
-  await expect(pane).toHaveCSS("width", "1392px");
-  expect(await discussion.boundingBox()).toEqual(before);
+  await expect(pane).toHaveCSS("width", "1464px");
+  await expect(page.getByRole("dialog", { name: "Menu", exact: true })).toHaveCount(0);
+  await expect(discussion).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`[?&]item=${thread.id}(&|$)`));
 
-  await menu.getByRole("button", { name: "Close panel", exact: true }).click();
-  await expect(menu).toHaveCount(0);
-  await expect(expand).toBeFocused();
-  await expect(expand).toHaveAttribute("aria-expanded", "false");
-  expect(await discussion.boundingBox()).toEqual(before);
+  await sidebar.getByRole("button", { name: "Expand navigation", exact: true }).click();
+  await expect(sidebar).toHaveCSS("width", "272px");
+  await expect(page.getByRole("dialog", { name: "Menu", exact: true })).toHaveCount(0);
+  await expect(discussion).toBeVisible();
   await expect(rows.first().getByRole("link")).toHaveAttribute("aria-current", "true");
   await card.getByRole("button", { name: "Reply", exact: true }).click();
   await card.getByRole("textbox", { name: "Reply", exact: true }).fill("Answered from the Inbox");
