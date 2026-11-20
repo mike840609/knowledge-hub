@@ -134,12 +134,21 @@ test("Inbox keeps the desktop sidebar expanded", async ({ page, request }) => {
   await expect(page.getByRole("dialog", { name: "Menu", exact: true })).toHaveCount(0);
   await expect(inbox).toHaveAttribute("aria-current", "page");
   // The expanded sidebar leaves 1168px, so Inbox is the plain list.
-  await expect(page.getByText("Select a discussion", { exact: true })).toHaveCount(0);
+  await expect(page.locator("main.kh-page")).toBeVisible();
+  await expect(page.locator("main.grid")).toHaveCount(0);
+
+  // The control still collapses and expands in place at this width.
+  await sidebar.getByRole("button", { name: "Collapse navigation", exact: true }).click();
+  await expect(sidebar).toHaveCSS("width", "48px");
+  await sidebar.getByRole("button", { name: "Expand navigation", exact: true }).click();
+  await expect(sidebar).toHaveCSS("width", "272px");
 
   await page.goBack();
   await expect(page).toHaveURL(new RegExp(`/w/${doc.workspaceId}/home$`));
   await expect(sidebar).toHaveCSS("width", "272px");
   await expect(explorer).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Menu", exact: true })).toHaveCount(0);
+  await expect(inbox).not.toHaveAttribute("aria-current", "page");
 });
 
 test("Inbox keeps the desktop sidebar collapsed", async ({ page, request }) => {
@@ -159,6 +168,7 @@ test("Inbox keeps the desktop sidebar collapsed", async ({ page, request }) => {
   await expect(inbox).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("dialog", { name: "Menu", exact: true })).toHaveCount(0);
   // The collapsed rail leaves 1392px, so Inbox returns to its split layout.
+  await expect(page.locator("main.grid")).toBeVisible();
   await expect(page.getByText("Select a discussion", { exact: true })).toBeVisible();
 
   await sidebar.getByRole("button", { name: "Expand navigation", exact: true }).click();

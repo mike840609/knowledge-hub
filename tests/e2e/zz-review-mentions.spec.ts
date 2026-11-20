@@ -48,6 +48,7 @@ test("a reader mentions someone new on the shared page; the mention and the next
     .notifications.filter((notice: { threadId: string }) => notice.threadId === threadId);
   expect(await unread()).toEqual([expect.objectContaining({ kind: "MENTION", id: expect.stringMatching(/^mention:/), excerpt: body, authorName: "Phase3 viewer", linkAvailable: true })]);
   const workspaceId = await personalWorkspaceId(request, mentioned);
+  await page.setViewportSize({ width: 1512, height: 900 });
   await page.goto(`${mentioned}/w/${workspaceId}/inbox`);
   await expect(page.getByRole("link", { name: "Inbox, 1 unread", exact: true })).toBeVisible();
   const entry = page.getByRole("list", { name: "Inbox discussions" }).locator(`a[href="/s/${token}?thread=${threadId}"]`);

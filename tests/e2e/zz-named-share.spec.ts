@@ -131,7 +131,7 @@ test.describe("named-recipient share, end to end", () => {
     // B's Inbox mention opens the Hub reader at the discussion, never the anonymous /s/ page (a dead link for a NAMED share).
     const mentioned = phase3Origin(B);
     const atDiscussion = `/w/${mentionedWorkspace}/shares/${token}?thread=${threadId}`;
-    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.setViewportSize({ width: 1512, height: 900 });
     await page.goto(`${mentioned}/w/${mentionedWorkspace}/inbox`);
     const mention = page.getByRole("list", { name: "Inbox discussions" }).locator(`a[href="${atDiscussion}"]`);
     await expect(mention).toContainText("Mentioned you", ROUND_TRIP);

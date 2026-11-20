@@ -111,6 +111,12 @@ test("Recent menu is closed on drawer reopening and page reload", async ({ page 
   const recent = menu.getByRole("button", { name: "Recent documents", exact: true });
 
   await trigger.click();
+  await expect(menu.getByRole("button", { name: /^Workspace:/ })).toBeVisible();
+  await expect(menu.getByRole("button", { name: "Search ⌘K", exact: true })).toBeVisible();
+  await expect(menu.getByRole("navigation", { name: "Primary", exact: true })).toBeVisible();
+  await expect(menu.getByRole("navigation", { name: "Document tree", exact: true })).toBeVisible();
+  await expect(menu.getByRole("button", { name: /^Account:/ })).toBeVisible();
+  await expect(menu.getByRole("link", { name: /^Inbox/ })).toHaveAttribute("aria-current", "page");
   await recent.click();
   await expect(recent).toHaveAttribute("aria-expanded", "true");
   await page.keyboard.press("Escape");

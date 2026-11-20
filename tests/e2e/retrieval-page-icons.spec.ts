@@ -78,10 +78,10 @@ test("a page icon follows the document to Home, the palette, the explorer and se
   await expect(recentMenu).toBeHidden();
   await expect(clock).toBeFocused();
 
-  // The same menu remains reachable from the Inbox's compact desktop rail.
-  await page.setViewportSize({ width: 1100, height: 800 });
+  // The same menu remains reachable from Inbox in the phone Menu.
+  await page.setViewportSize({ width: 900, height: 800 });
   await page.goto(`/w/${workspaceId}/inbox`);
-  await page.getByRole("button", { name: "Expand navigation", exact: true }).click();
+  await page.getByRole("button", { name: "Open menu", exact: true }).click();
   const drawer = page.getByRole("dialog", { name: "Menu", exact: true });
   const drawerExplorer = drawer.getByRole("complementary", { name: "Knowledge explorer", exact: true });
   const drawerClock = drawerExplorer.getByRole("button", { name: "Recent documents", exact: true });

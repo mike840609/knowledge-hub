@@ -23,7 +23,7 @@ test("a reader's Inbox brings the owner's reply back to the discussion on the sh
   await page.goto(`${viewer}/`);
   await expect(page).toHaveURL(/\/w\/[^/]+\//);
   const workspaceId = new URL(page.url()).pathname.split("/")[2];
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: 1512, height: 900 });
   await page.goto(`${viewer}/w/${workspaceId}/inbox`);
   // Other tests' discussions reach this reader's Inbox too: this one is known by where it leads.
   const entry = page.getByRole("list", { name: "Inbox discussions" }).locator(`a[href="/s/${token}?thread=${thread.id}"]`);
