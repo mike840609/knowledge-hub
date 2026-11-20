@@ -68,7 +68,7 @@ test("owner Inbox is a discussion index, one row per discussion, settled and fil
 
   // The desktop control collapses the rail in place: it is not a Menu, and the
   // selected discussion stays selected.
-  const sidebar = page.locator('aside:has(nav[aria-label="Primary"])');
+  const sidebar = page.getByRole("complementary", { name: "Workspace navigation" });
   const pane = page.locator('#kh-workspace-main');
   const discussion = pane.locator('section[aria-label="Selected discussion"]');
   await expect(sidebar).toHaveCSS("width", "272px");

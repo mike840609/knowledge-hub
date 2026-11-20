@@ -727,8 +727,11 @@ the collapse button takes its `aria-keyshortcuts` from there, and the palette's
 a shortcut that carries a modifier, as `isSingleKeyShortcut` reads one that
 does not). It acts from the composer's title and editor, since no field types
 it — the writer is who most wants the room — but a dialog or menu that is open,
-the palette included, keeps its keys. On a narrow window or in compact Inbox
-layout, it opens the workspace Menu drawer. Escape closes the drawer.
+the palette included, keeps its keys. On a narrow window it opens the workspace
+Menu drawer; at 1024px and wider it collapses and expands the rail on every
+page, Inbox included. On Inbox, where the shortcut can flip the content between
+list and split, focus moves to the control before the flip. Escape closes the
+drawer.
 The composer keeps ⌘/ for the rendered/source switch and ⌘B for bold.
 
 The composer's title field, its rendered editor and its Markdown text are the

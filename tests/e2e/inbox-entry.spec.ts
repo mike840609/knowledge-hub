@@ -136,12 +136,21 @@ test("Inbox keeps the desktop sidebar expanded", async ({ page, request }) => {
   // The expanded sidebar leaves 1168px, so Inbox is the plain list.
   await expect(page.locator("main.kh-page")).toBeVisible();
   await expect(page.locator("main.grid")).toHaveCount(0);
+  const collapse = sidebar.getByRole("button", { name: "Collapse navigation", exact: true });
+  await expect(collapse).toBeVisible();
+  await expect(collapse).not.toHaveAttribute("aria-haspopup");
+  await expect(collapse).toHaveAttribute("aria-expanded", "true");
 
-  // The control still collapses and expands in place at this width.
-  await sidebar.getByRole("button", { name: "Collapse navigation", exact: true }).click();
+  // A keyboard reader inside the list keeps focus on the sidebar control when
+  // the list/split flip would remount the focused subtree.
+  const filters = page.getByRole("group", { name: "Inbox relationships" });
+  await filters.getByRole("button", { name: "All", exact: true }).focus();
+  await page.keyboard.press("ControlOrMeta+Backslash");
   await expect(sidebar).toHaveCSS("width", "48px");
-  await sidebar.getByRole("button", { name: "Expand navigation", exact: true }).click();
+  await expect(sidebar.getByRole("button", { name: "Expand navigation", exact: true })).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+Backslash");
   await expect(sidebar).toHaveCSS("width", "272px");
+  await expect(sidebar.getByRole("button", { name: "Collapse navigation", exact: true })).toBeFocused();
 
   await page.goBack();
   await expect(page).toHaveURL(new RegExp(`/w/${doc.workspaceId}/home$`));

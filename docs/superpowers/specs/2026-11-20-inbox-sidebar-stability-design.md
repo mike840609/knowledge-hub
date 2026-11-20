@@ -40,6 +40,9 @@ reader; content adapts to the room it is given.
   from 1472px with the sidebar expanded it is the split.
 - Remove the focus handoff refs that exist only for the forced placement switch.
   Keep the drawer's focus return and the existing keyboard-collapse handoff.
+- Pressing the sidebar shortcut while focus is inside Inbox moves focus to the
+  sidebar toggle before the list/split switch, so the remounted content never
+  drops keyboard focus to the page body.
 
 ## Rejected
 

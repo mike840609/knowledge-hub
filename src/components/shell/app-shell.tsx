@@ -94,6 +94,7 @@ export function AppShell({
   const drawerId = useId();
   const desktopTrigger = useRef<HTMLButtonElement>(null);
   const mobileTrigger = useRef<HTMLButtonElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
   const navOpener = useRef<HTMLElement | null>(null);
   const restoreNavFocus = useRef(true);
   const desktop = useIsWide();
@@ -171,13 +172,18 @@ export function AppShell({
     const trigger = desktopTrigger.current;
     const inboxFocused = active instanceof HTMLAnchorElement && active.pathname === inboxHref
       && active.closest("aside") === trigger?.closest("aside");
+    // Inbox is the one page whose content flips between a list and a split as
+    // the rail changes width. Move focus to the control first, so the focused
+    // list, filter or pane is not destroyed under the reader.
+    const inboxContentFocused = pathname === inboxHref && active instanceof HTMLElement
+      && (mainRef.current?.contains(active) ?? false);
     const compactDestinationFocused = navCollapsed && active instanceof HTMLElement
       && active.hasAttribute("data-compact-destination") && active.closest("aside") === trigger?.closest("aside");
-    if (inboxFocused || compactDestinationFocused || (!navCollapsed && desktopKnowledgeSlot?.contains(active))) {
+    if (inboxFocused || inboxContentFocused || compactDestinationFocused || (!navCollapsed && desktopKnowledgeSlot?.contains(active))) {
       trigger?.focus();
     }
     setNavCollapsed((collapsed) => !collapsed);
-  }, [desktopKnowledgeSlot, inboxHref, navCollapsed, setNavCollapsed]);
+  }, [desktopKnowledgeSlot, inboxHref, navCollapsed, pathname, setNavCollapsed]);
 
   const toggleNavigation = useCallback(() => {
     if (!usesDrawer) toggleNav();
@@ -203,7 +209,7 @@ export function AppShell({
 
   const desktopToggleLabel = compact ? "Expand navigation" : "Collapse navigation";
   const content = (
-    <main id="kh-workspace-main" tabIndex={-1} className="relative min-h-0 min-w-0 flex-1 overflow-y-auto bg-kh-bg outline-none has-[[data-document-pane]]:overflow-hidden">
+    <main ref={mainRef} id="kh-workspace-main" tabIndex={-1} className="relative min-h-0 min-w-0 flex-1 overflow-y-auto bg-kh-bg outline-none has-[[data-document-pane]]:overflow-hidden">
       {authorization.revoked ? <p role="status">Workspace access changed. Returning to My Space…</p> : children}
     </main>
   );
