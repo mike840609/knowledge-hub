@@ -7,7 +7,11 @@
   </picture>
 </h1>
 
-**將 Markdown 筆記變成可閱讀、可連結、可分享的知識空間。**
+**撰寫、整理與分享 Markdown 筆記。開源，支援自行部署。**
+
+[**試用線上示範**](https://knowledge-hub-pied.vercel.app/)（需登入） · [**在本機執行**](#快速開始) · [**自行部署**](#部署)
+
+你可以匯入既有的 Markdown 資料夾（包括 LLM Wiki），也可以用受 Notion 啟發的區塊編輯器從頭撰寫。搜尋、連結與分享筆記，和他人討論，再把內容匯出成 Markdown。
 
 [![CI](https://img.shields.io/github/actions/workflow/status/mike840609/knowledge-hub/phase2-dev-gate.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI)](https://github.com/mike840609/knowledge-hub/actions/workflows/phase2-dev-gate.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
@@ -22,7 +26,7 @@
 
 [English](README.md) · **繁體中文**
 
-[快速開始](#快速開始) · [功能](#功能) · [設定](#設定) · [部署](#部署) · [開發](#開發與測試) · [參與貢獻](CONTRIBUTING.zh-TW.md)
+[功能](#功能) · [設定](#設定) · [開發](#開發與測試) · [參與貢獻](CONTRIBUTING.zh-TW.md)
 
 <br>
 
@@ -34,83 +38,8 @@
 
 ---
 
-Knowledge Hub 是開源、可自行部署的知識工作空間。你可以直接在瀏覽器撰寫筆記，也可以匯入既有的 Markdown folder／LLM Wiki，透過搜尋、雙向連結與圖譜探索內容，在分享文件上討論，並匯出需要的內容。
-
-內容始終是純 Markdown，不需要綁定特定筆記軟體、Wiki generator 或外部知識平台。
-
 > [!NOTE]
-> 目前版本為 **0.1.0，持續開發中**。預設提供個人工作空間 **My Space**；Team workspace 的導覽與存取預設關閉，可由管理者開啟。開發模式使用本機示範身分，正式部署必須整合可信任的身分提供者，詳見[部署](#部署)。
-
-## 特色
-
-- **Markdown 進、Markdown 出**：以可檢查的 Preview → Apply 流程匯入資料夾，可匯出單篇或整個 My Space ZIP。
-- **知識互相連結**：`[[wikilink]]`、相對 `.md` 連結、反向連結，以及 Workspace／Local graph。
-- **快速檢索**：Workspace 搜尋支援來源、路徑與日期篩選，並有 `⌘K`／`Ctrl+K` 指令面板。
-- **分享與討論**：文件、資料夾與來源皆可建立可到期、可撤銷的唯讀連結，並在段落上討論。
-- **為 Agent 準備**：Copy for Agent，以及與網頁版遵循相同存取規則的範圍化讀取 API。
-- **自行部署**：Next.js server 加 MariaDB，由你掌控與擁有。
-
-## 介面預覽
-
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="docs/images/personal-home.jpg" alt="包含最近文件、討論、收藏、搜尋與新增筆記的 Home">
-      <p><b>個人首頁</b>：集中草稿、最近文件、討論與收藏，Search 與 Create document 就在手邊。</p>
-    </td>
-    <td width="50%" valign="top">
-      <img src="docs/images/search.jpg" alt="搜尋 leave 的結果，每筆顯示來源與原始路徑">
-      <p><b>搜尋</b>：搜尋整個工作空間，並依來源、路徑與更新日期縮小範圍。</p>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="docs/images/source-history.jpg" alt="Markdown folder 來源與同步紀錄">
-      <p><b>來源與同步歷史</b>：查看資料夾的來源管理方式與同步紀錄，再由 <b>Update from folder</b> 重新選取來源資料夾並檢查變更。來源可整個分享為一個連結，且不會公開其設定、歷史或資產。</p>
-    </td>
-    <td width="50%" valign="top">
-      <img src="docs/images/knowledge-graph.jpg" alt="連結範例手冊與相關筆記的知識圖譜">
-      <p><b>知識圖譜</b>：探索文件間的連結、查找筆記，並依來源或未解析目標篩選。</p>
-    </td>
-  </tr>
-</table>
-
-<sub>截圖於 2026 年 10 月 29 日（Asia/Taipei）從 commit <a href="https://github.com/mike840609/knowledge-hub/commit/ba699b4e37ed5fdc22f3633e468aff6ef5a1704d"><code>ba699b4e</code></a> 的 production build 以 1440 × 900 擷取，使用展示帳號、內附英文 sample wiki 與合成筆記。視窗窄於 1280px 時文件瀏覽器改為抽屜，窄於 1024px 時導覽移入 Menu 抽屜。詳見<a href="docs/images/README.md">截圖來源紀錄</a>。</sub>
-
-## 功能
-
-| 功能 | 說明 |
-| --- | --- |
-| **個人工作空間** | My Space、Home、Inbox、個人筆記、草稿、收藏與最近閱讀；最近閱讀保留於裝置 |
-| **Inbox** | 未讀更新與活動；視窗夠寬時，選取的討論會顯示在列表旁，可直接回覆、解決與隱藏 |
-| **Markdown 編輯** | 渲染式編輯與 Markdown 原始碼模式、slash 插入、表格、toggle、callout、程式碼區塊、文件大綱與鍵盤快捷鍵 |
-| **草稿與版本** | 帳號草稿自動保存、失敗時本機恢復副本、不可變版本歷史、版本比較與還原、過期編輯衝突檢查 |
-| **匯入與同步** | Markdown folder 經 Preview → Apply 匯入；再次選取來源資料夾檢查後續變更；可排除路徑、查看來源健康與重新命名來源 |
-| **文件整理** | 文件／資料夾樹、移動、更名、封存與還原；來源管理的內容在 Hub 內為唯讀 |
-| **搜尋與檢索** | Workspace 搜尋，支援來源、路徑與日期篩選；`⌘K`／`Ctrl+K` 快速搜尋與最近文件；可儲存搜尋 |
-| **知識連結** | `[[wikilink]]`、相對 `.md` 連結、Backlinks、Workspace／Local graph |
-| **討論** | 擁有者在段落旁討論、分享頁留言、回覆、解決與隱藏、未讀通知與追蹤中的討論 |
-| **分享** | My Space 匿名唯讀文件連結，可設期限與撤銷；只限指定已登入人員開啟的永久連結；收件者可將分享存到 Shares；擁有者可管理與隱藏留言 |
-| **匯出** | 單篇 Markdown 下載、My Space ZIP 匯出，保留目錄與穩定 ID/path manifest |
-| **Agent context** | Copy for Agent 與 Workspace 範圍的讀取／context API，沿用應用存取規則並包含討論 |
-| **Team workspace** *（需開啟）* | Workspace 管理、membership、角色與能力、外部群組映射及 audit |
-
-### 內容由誰管理？
-
-- **Folder Sync（`SOURCE_MANAGED`）**：原始資料夾是內容來源。請在原始 Markdown 檔案修改，再重新產生 Preview 並 Apply。Hub 不直接編輯同步內容，也不會在背景自動監控你的本機資料夾。
-- **Web Create／單篇 Upload（`HUB_MANAGED`）**：匯入或建立後由 Hub 管理，可在瀏覽器編輯，儲存時建立新 revision。
-
-Preview 是固定的 staged snapshot。阻擋性診斷必須先處理；若來源版本已變更，Apply 會回傳衝突，需重新產生 Preview。
-
-### 目前限制與未來方向
-
-- 資產目前只儲存 metadata／reference，尚無附件 binary 儲存服務；本機圖片與附件不保證能在線上開啟。
-- ZIP 匯出包含封存文件的最新已存版本，不包含草稿、版本歷史或附件 bytes；上限 64 MiB／9,999 份文件。
-- 文件以封存／還原管理生命週期，沒有一般使用者的永久刪除流程。
-- 搜尋目前以關鍵字為主。MCP server、semantic／hybrid retrieval 與進階 Agent memory 是未來方向，並非現有功能。
-- Team 預設顯示 **Coming soon**。開啟開關不等於完成正式部署的身分整合。
-- 討論寫入由 `KM_REVIEW_WRITES_ENABLED` 另外控制；關閉時仍可讀取既有討論及由擁有者管理留言。
-- 隱藏討論不等同實際刪除已儲存的資料。
+> 目前版本為 **0.1.0，持續開發中**。預設提供個人工作空間 **My Space**；管理者可選擇啟用 Team 工作空間。本機開發使用示範身分；若要架設站台，請參考[部署](#部署)選擇身分驗證方式。
 
 ## 快速開始
 
@@ -150,11 +79,84 @@ pnpm run dev
 
 </details>
 
-### 第一次使用
+想先用範例試試看？請參考[第一次使用](#第一次使用)。
+
+## 特色
+
+- **Markdown 進、Markdown 出**：以可檢查的 Preview → Apply 流程匯入資料夾，可匯出單篇或整個 My Space ZIP。
+- **知識互相連結**：`[[wikilink]]`、相對 `.md` 連結、反向連結，以及 Workspace／Local graph。
+- **快速檢索**：Workspace 搜尋支援來源、路徑與日期篩選，並有 `⌘K`／`Ctrl+K` 指令面板。
+- **分享與討論**：文件、資料夾與來源皆可建立可到期、可撤銷的唯讀連結，並在段落上討論。
+- **為 Agent 準備**：Copy for Agent，以及與網頁版遵循相同存取規則的範圍化讀取 API。
+- **自行部署**：Next.js server 加 MariaDB，由你掌控與擁有。
+
+## 介面預覽
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/personal-home.jpg" alt="包含最近文件、討論、收藏、搜尋與新增筆記的 Home">
+      <p><b>個人首頁</b>：集中草稿、最近文件、討論與收藏，Search 與 Create document 就在手邊。</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/search.jpg" alt="搜尋 leave 的結果，每筆顯示來源與原始路徑">
+      <p><b>搜尋</b>：搜尋整個工作空間，並依來源、路徑與更新日期縮小範圍。</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/source-history.jpg" alt="Markdown folder 來源與同步紀錄">
+      <p><b>來源與同步歷史</b>：查看資料夾的來源管理方式與同步紀錄，再由 <b>Update from folder</b> 重新選取來源資料夾並檢查變更。來源可整個分享為一個連結，且不會公開其設定、歷史或資產。</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/knowledge-graph.jpg" alt="連結範例手冊與相關筆記的知識圖譜">
+      <p><b>知識圖譜</b>：探索文件間的連結、查找筆記，並依來源或未解析目標篩選。</p>
+    </td>
+  </tr>
+</table>
+
+<sub>這組歷史截圖於 2026 年 10 月 29 日（Asia/Taipei）從 commit <a href="https://github.com/mike840609/knowledge-hub/commit/ba699b4e37ed5fdc22f3633e468aff6ef5a1704d"><code>ba699b4e</code></a> 的 production build 以 1440 × 900 擷取，使用展示帳號、內附英文 sample wiki 與合成筆記。目前的側欄可能與截圖不同。詳見<a href="docs/images/README.md">截圖來源紀錄</a>。</sub>
+
+## 功能
+
+| 功能 | 說明 |
+| --- | --- |
+| **個人工作空間** | My Space、Home、Inbox、個人筆記、草稿、收藏與最近閱讀；最近閱讀保留於裝置 |
+| **Inbox** | 未讀更新與活動；視窗夠寬時，選取的討論會顯示在列表旁，可直接回覆、解決與隱藏 |
+| **Markdown 編輯** | 渲染式編輯與 Markdown 原始碼模式、slash 插入、表格、toggle、callout、程式碼區塊、文件大綱與鍵盤快捷鍵 |
+| **草稿與版本** | 帳號草稿自動保存、失敗時本機恢復副本、不可變版本歷史、版本比較與還原、過期編輯衝突檢查 |
+| **匯入與同步** | Markdown folder 經 Preview → Apply 匯入；再次選取來源資料夾檢查後續變更；可排除路徑、查看來源健康與重新命名來源 |
+| **文件整理** | 文件／資料夾樹、移動、更名、封存與還原；來源管理的內容在 Hub 內為唯讀 |
+| **搜尋與檢索** | Workspace 搜尋，支援來源、路徑與日期篩選；`⌘K`／`Ctrl+K` 快速搜尋與最近文件；可儲存搜尋 |
+| **知識連結** | `[[wikilink]]`、相對 `.md` 連結、Backlinks、Workspace／Local graph |
+| **討論** | 擁有者在段落旁討論、分享頁留言、回覆、解決與隱藏、未讀通知與追蹤中的討論 |
+| **分享** | My Space 匿名唯讀文件連結，可設期限與撤銷；只限指定已登入人員開啟的永久連結；收件者可將分享存到 Shares；擁有者可管理與隱藏留言 |
+| **匯出** | 單篇 Markdown 下載、My Space ZIP 匯出，保留目錄與穩定 ID/path manifest |
+| **Agent context** | Copy for Agent 與 Workspace 範圍的讀取／context API，沿用應用存取規則並包含討論 |
+| **Team workspace** *（需開啟）* | Workspace 管理、membership、角色與能力、外部群組映射及 audit |
+
+### 內容由誰管理？
+
+- **Folder Sync（`SOURCE_MANAGED`）**：原始資料夾是內容來源。請在原始 Markdown 檔案修改，再重新產生 Preview 並 Apply。Hub 不直接編輯同步內容，也不會在背景自動監控你的本機資料夾。
+- **Web Create／單篇 Upload（`HUB_MANAGED`）**：匯入或建立後由 Hub 管理，可在瀏覽器編輯，儲存時建立新 revision。
+
+Preview 是固定的 staged snapshot。阻擋性診斷必須先處理；若來源版本已變更，Apply 會回傳衝突，需重新產生 Preview。
+
+### 目前限制與未來方向
+
+- 資產目前只儲存 metadata／reference，尚無附件 binary 儲存服務；本機圖片與附件不保證能在線上開啟。
+- ZIP 匯出包含封存文件的最新已存版本，不包含草稿、版本歷史或附件 bytes；上限 64 MiB／9,999 份文件。
+- 文件以封存／還原管理生命週期，沒有一般使用者的永久刪除流程。
+- 搜尋目前以關鍵字為主。MCP server、semantic／hybrid retrieval 與進階 Agent memory 是未來方向，並非現有功能。
+- 預設直接進入 My Space。設定 `KM_TEAM_WORKSPACES_ENABLED=true` 後才會顯示 Team 工作空間及工作空間切換器；正式部署仍須另行設定身分驗證。
+- 討論寫入由 `KM_REVIEW_WRITES_ENABLED` 另外控制；關閉時仍可讀取既有討論及由擁有者管理留言。
+- 隱藏討論不等同實際刪除已儲存的資料。
+
+## 第一次使用
 
 1. 選擇 **Create document** 建立筆記，或 **Import folder** 匯入 Markdown 資料夾。匯入頁面附有資料夾格式指南，也提供 **Try with a sample wiki**：可匯入一份現成的資料夾（英文或繁體中文，位於 `public/sample-wiki/`），並走一般的 Preview → Apply 流程。
 2. 匯入時檢查 Preview 的新增、更新、封存與診斷，再套用變更。
-3. 在可編輯的筆記中使用 `[[文件標題]]` 連結其他文件，再到 **Graph** 查看關係。
+3. 在可編輯的筆記中使用 `[[文件標題]]` 連結其他文件，再從展開側欄選擇 **Knowledge ▾ → Graph** 查看關係。
 4. 儲存筆記後才能建立唯讀分享連結或下載 Markdown。
 5. 本機來源有變動時，重新選取資料夾並走 Preview → Apply 流程。
 
@@ -203,12 +205,12 @@ npm run start
 ```
 
 > [!IMPORTANT]
-> **正式環境需要先完成身分整合。** `npm run start` 使用 production 模式，預設的 Local identity 會被拒絕。`KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION` 僅供測試，請勿作為部署方式。
+> **在正式環境執行前，請先選擇身分驗證方式。** 正式環境預設不接受本機身分（Local provider），除非明確啟用 `KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION`。這項覆寫設定僅供測試或下方所述的單人 Vercel 部署使用；共用部署請勿啟用。
 
 **部署方式**
 
-- **單人操作的 Vercel 部署**：參考 [Vercel + Layerbase runbook](docs/operations/vercel-layerbase.zh-TW.md)。這條路徑刻意保留 local identity 並以選用的站台密碼保護，於 production build 時執行 migration，同時關閉 preview deployment。請勿用於共用或公司部署。
-- **公開 demo**：同一份 runbook 記錄了 [Google demo login](docs/operations/vercel-layerbase.zh-TW.md#google-demo-login)：設定 `KM_IDENTITY_PROVIDER=google` 與 `AUTH_*` 變數即可。這是額外的 provider，local 與 company-SSO 路徑不受影響。
+- **單人操作的 Vercel 部署**：參考 [Vercel + Layerbase runbook](docs/operations/vercel-layerbase.zh-TW.md)。這條路徑使用單一預設身分，於 production build 時執行 migration，同時關閉 preview deployment。若網址對外公開，強烈建議加上站台密碼。這不是多人登入方案。
+- **線上示範**：需登入。若要在自己的站台使用同樣的示範登入方式，請依照 [Google 示範登入步驟](docs/operations/vercel-layerbase.zh-TW.md#google-demo-login)設定，不要開啟 Local 覆寫。
 - **公司 SSO**：應用提供通用的 `company-sso` adapter contract。部署者須實作可信任的 [`CompanySsoSessionReader`](src/modules/identity/ports/company-sso-session-reader.ts)，並在建立 application services 前以 [`configureCompanySsoSessionReader`](src/server/composition.ts) 接入。單純設定 `KM_IDENTITY_PROVIDER=company-sso` 不會自動提供 OAuth／OIDC 登入頁面或身分服務。
 
 <details>
@@ -285,7 +287,7 @@ make test-e2e          # 在隔離資料庫上建置 production 並執行 Playwr
 | 狀況 | 處理方式 |
 | --- | --- |
 | 資料庫連線失敗 | 確認 Docker 運行、`make db-logs` 與 `.env` 憑證。本機 DB 使用 3307，開發 Web 使用 3000，E2E 預設使用 3101。 |
-| Team 入口無法使用 | 預設為 **Coming soon**；設定 `KM_TEAM_WORKSPACES_ENABLED=true` 並重啟。 |
+| 找不到 Team 入口 | 個人模式預設隱藏工作空間切換器。設定 `KM_TEAM_WORKSPACES_ENABLED=true` 並重啟，即可啟用 Team 導覽。 |
 | production 身分錯誤 | Local identity 不提供正式部署登入；需接入 SSO session reader，或使用文件中的 Google demo provider。 |
 | 匯入無法 Apply | 先處理 Preview 的 blockers；409 版本衝突需重建 Preview，沒有 Force Apply。 |
 | 連結或圖譜缺少資料 | 確認 migrations 已完成，再執行 `make db-reindex-links`；同步文件的 wikilink 問題請回來源修改。 |
