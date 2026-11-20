@@ -32,7 +32,7 @@
 
 <img src="docs/images/document-reader.jpg" alt="包含文件瀏覽器、大綱、已解析連結與反向連結的 Markdown 閱讀頁" width="900">
 
-<sub>文件閱讀頁：文件瀏覽器、頁內大綱、已解析 wikilinks、反向連結，並清楚標示同步來源的唯讀狀態。</sub>
+<sub>文件閱讀頁：文件瀏覽器、頁內大綱、已解析的 Wikilink、反向連結，以及同步來源的唯讀標示。畫面中的側欄為舊版。</sub>
 
 </div>
 
@@ -209,7 +209,7 @@ npm run start
 
 **部署方式**
 
-- **單人操作的 Vercel 部署**：參考 [Vercel + Layerbase runbook](docs/operations/vercel-layerbase.zh-TW.md)。這條路徑使用單一預設身分，於 production build 時執行 migration，同時關閉 preview deployment。若網址對外公開，強烈建議加上站台密碼。這不是多人登入方案。
+- **單人操作的 Vercel 部署**：參考 [Vercel + Layerbase runbook](docs/operations/vercel-layerbase.zh-TW.md)。這條路徑使用一組預先設定的本機身分（Local identity），於 production build 時執行 migration，同時關閉 preview deployment。若網址對外公開，強烈建議加上站台密碼。這不是多人登入方案。
 - **線上示範**：需登入。若要在自己的站台使用同樣的示範登入方式，請依照 [Google 示範登入步驟](docs/operations/vercel-layerbase.zh-TW.md#google-demo-login)設定，不要開啟 Local 覆寫。
 - **公司 SSO**：應用提供通用的 `company-sso` adapter contract。部署者須實作可信任的 [`CompanySsoSessionReader`](src/modules/identity/ports/company-sso-session-reader.ts)，並在建立 application services 前以 [`configureCompanySsoSessionReader`](src/server/composition.ts) 接入。單純設定 `KM_IDENTITY_PROVIDER=company-sso` 不會自動提供 OAuth／OIDC 登入頁面或身分服務。
 

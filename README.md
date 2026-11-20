@@ -32,7 +32,7 @@ Import an existing Markdown folder, including an LLM Wiki, or write from scratch
 
 <img src="docs/images/document-reader.jpg" alt="Markdown reader with explorer, outline, resolved links, and backlinks" width="900">
 
-<sub>The document reader: explorer, on-page outline, resolved wikilinks, backlinks, and a clear read-only cue for synced folders.</sub>
+<sub>The document reader: explorer, on-page outline, resolved wikilinks, backlinks, and a read-only cue for synced folders. This screenshot shows an earlier sidebar layout.</sub>
 
 </div>
 
