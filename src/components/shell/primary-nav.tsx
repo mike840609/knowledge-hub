@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { buttonClasses } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { BarChart3, Bot, Inbox, Settings, Home, type LucideIcon } from "lucide-react";
-import { knowledgeDestinations } from "./knowledge-destinations";
+import { knowledgeDestinations, PageSwitch } from "./knowledge-destinations";
 
 type NavItem = { name: string; href: string; Icon: LucideIcon; badge?: number; label?: string; compactOnly?: boolean };
 
@@ -62,23 +62,32 @@ export function PrimaryNav({
   const { access } = useWorkspaceAuthorization();
   const pathname = usePathname();
   const personal = access.workspace.type === "PERSONAL";
+  const home: NavItem[] = personal ? [{ name: "Home", href: `/w/${workspaceId}/home`, Icon: Home }] : [];
+  if (!compact) {
+    // Expanded: Inbox (the drawer's row; the desktop header owns it otherwise), then the page switch.
+    return (
+      <nav aria-label="Primary" className="flex flex-col gap-1 p-2">
+        {personal && inboxUnread !== undefined ? <NavigationLink item={inboxItem(workspaceId, inboxUnread)} pathname={pathname} appearance="row" /> : null}
+        <PageSwitch items={[...home, ...knowledgeDestinations(workspaceId, access)]} pathname={pathname} />
+      </nav>
+    );
+  }
   const items: NavItem[] = [
     ...(personal && inboxUnread !== undefined ? [inboxItem(workspaceId, inboxUnread)] : []),
-    ...(personal ? [{ name: "Home", href: `/w/${workspaceId}/home`, Icon: Home }] : []),
-    ...(compact ? knowledgeDestinations(workspaceId, access).map((item) => ({ ...item, compactOnly: true })) : []),
-    ...(compact && personal ? [
+    ...home,
+    ...knowledgeDestinations(workspaceId, access).map((item) => ({ ...item, compactOnly: true })),
+    ...(personal ? [
       { name: "Tasks", href: `/w/${workspaceId}/tasks`, Icon: Bot, compactOnly: true },
       { name: "Insights", href: `/w/${workspaceId}/profile`, Icon: BarChart3, compactOnly: true },
     ] : []),
-    ...(compact && access.actions.canOpenSettings ? [{ name: "Settings", href: `/w/${workspaceId}/settings`, Icon: Settings, compactOnly: true }] : []),
+    ...(access.actions.canOpenSettings ? [{ name: "Settings", href: `/w/${workspaceId}/settings`, Icon: Settings, compactOnly: true }] : []),
   ];
-  if (items.length === 0) return null;
   // The current place is a neutral step above hover, not the accent: the accent marks what is selected in the
   // content (the explorer's document, a menu's row), and two accent blocks side by side competed for the eye.
   return (
     <nav aria-label="Primary" className="flex flex-col gap-0.5 p-2">
       {items.map((item) => (
-        <NavigationLink key={item.name} item={item} pathname={pathname} appearance={compact ? "rail" : "row"} />
+        <NavigationLink key={item.name} item={item} pathname={pathname} appearance="rail" />
       ))}
     </nav>
   );

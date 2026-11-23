@@ -107,48 +107,30 @@ it("opens the active source and keeps one tree and its scroll position when movi
   expect(JSON.parse(localStorage.getItem("kh:document-shortcuts:w") ?? "{}").recent).toEqual(["beta:doc"]);
 });
 
-async function openDestinations(label: string) {
-  const trigger = [...desktop.querySelectorAll("button")].find((button) => button.textContent?.trim() === label);
-  expect(trigger).toBeDefined();
-  await act(async () => trigger!.click());
-  return trigger!;
+function knowledgeHeading() {
+  const heading = [...desktop.querySelectorAll("h2")].find((h) => h.textContent === "Knowledge");
+  expect(heading).toBeDefined();
+  return heading!;
 }
 
 it("keeps the Knowledge heading while source headers fail and recover", async () => {
   navigation.pathname = "/w/w/graph";
   const requests = mockTrees(() => Response.json({ tree: [] }));
   await render(null);
-  const trigger = await openDestinations("Knowledge / Graph");
-  expect(document.querySelector('a[href="/w/w/graph"]')?.getAttribute("aria-current")).toBe("page");
+  const heading = knowledgeHeading();
   expect(desktop.querySelector('[role="status"]')?.textContent).toContain("Sources could not be loaded");
   await act(async () => [...desktop.querySelectorAll("button")].find((button) => button.textContent === "Retry")!.click());
   expect(navigation.refresh).toHaveBeenCalledOnce();
   expect(requests).toEqual([]);
   await render([]);
-  expect(desktop.contains(trigger)).toBe(true);
+  expect(desktop.contains(heading)).toBe(true);
   expect(desktop.textContent).not.toContain("Sources could not be loaded");
 });
 
-it("uses the current workspace capabilities for Knowledge destinations", async () => {
+it("leaves the page destinations to the primary navigation", async () => {
+  navigation.pathname = "/w/w/graph";
   await render([]);
-  await openDestinations("Knowledge");
-  expect(document.querySelector('a[href="/w/w/graph"]')).not.toBeNull();
-  expect(document.querySelector('a[href="/w/w/sources"]')).toBeNull();
-  expect(document.querySelector('a[href="/w/w/shares"]')).toBeNull();
-  navigation.pathname = "/w/next/sources/detail";
-  await render([], desktop, "next", { canInspectSources: true });
-  await openDestinations("Knowledge / Sources");
-  expect(document.querySelector('a[href="/w/next/sources"]')?.getAttribute("aria-current")).toBe("location");
-  expect(document.querySelector('a[href="/w/w/graph"]')).toBeNull();
-});
-
-it("does not match a similarly prefixed route", async () => {
-  navigation.pathname = "/w/w/sources-extra";
-  await render([], desktop, "w", { canInspectSources: true });
-  await openDestinations("Knowledge");
-  const link = document.querySelector('a[href="/w/w/sources"]');
-  expect(link).not.toBeNull();
-  expect(link?.hasAttribute("aria-current")).toBe(false);
+  expect(desktop.querySelector('a[href="/w/w/graph"]')).toBeNull();
 });
 
 it("fetches only Notes by default and refreshes its visible rows after a new header snapshot", async () => {

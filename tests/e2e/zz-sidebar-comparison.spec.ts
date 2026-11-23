@@ -8,7 +8,10 @@ test("knowledge navigation stays distinct from document content in both themes",
   const sidebar = page.getByRole("complementary", { name: "Workspace navigation", exact: true });
   const search = sidebar.getByRole("button", { name: "Search ⌘K", exact: true });
   const explorer = sidebar.getByRole("complementary", { name: "Knowledge explorer", exact: true });
-  await expect(sidebar.getByRole("navigation", { name: "Primary", exact: true })).toHaveCount(0);
+  // A team has no Home; its page switch starts at Graph.
+  const primary = sidebar.getByRole("navigation", { name: "Primary", exact: true });
+  await expect(primary.getByRole("link", { name: "Home", exact: true })).toHaveCount(0);
+  await expect(primary.getByRole("link", { name: "Graph", exact: true })).toBeVisible();
   await expect(explorer).toBeVisible();
   await expect(explorer).toHaveAttribute("aria-busy", "false");
   await expect(page.getByRole("region", { name: "Document content" })).toBeVisible();

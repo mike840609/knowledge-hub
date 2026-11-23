@@ -290,7 +290,6 @@ export function AppShell({
                   workspaceId={workspaceId}
                   sources={sources}
                   target={drawerOpen && drawerKnowledgeSlot ? drawerKnowledgeSlot : desktopKnowledgeSlot}
-                  navigationSurface={drawerOpen ? "drawer" : desktop && !compact ? "sidebar" : "hidden"}
                   onClick={closeDrawerForLink}
                 />
               )}
