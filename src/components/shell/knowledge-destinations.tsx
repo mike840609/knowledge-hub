@@ -46,7 +46,7 @@ export function KnowledgeDestinations({ workspaceId }: { workspaceId: string }) 
                 variant: "ghost",
                 icon: !current,
                 size: current ? "sm" : "md",
-                className: current ? "min-w-0 bg-kh-bg-hover text-kh-text hover:bg-kh-bg-hover" : "text-kh-text-muted hover:text-kh-text",
+                className: "min-w-0 aria-[current]:bg-kh-bg-hover aria-[current]:text-kh-text",
               })}
             >
               <Icon size={15} className="shrink-0" aria-hidden="true" />

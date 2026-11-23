@@ -181,7 +181,8 @@ test('Sources support row keys and importing uses the shared field and folder tr
   // Primary navigation is neutral; the document tree owns the accent selection.
   const sourcesLink = (await openKnowledgeDestinations(page)).getByRole('link', { name: 'Sources', exact: true });
   await expect(sourcesLink).toHaveAttribute('aria-current', 'page');
-  await expect(sourcesLink).toHaveCSS('background-color', 'rgb(236, 238, 242)');
+  // Inside the sidebar surface the neutral current fill is the stronger hover (`.kh-sidebar-surface`).
+  await expect(sourcesLink).toHaveCSS('background-color', 'rgb(228, 231, 236)');
   await page.keyboard.press('Escape');
   const rows = page.locator('[data-list-row]');
   await expect(rows.nth(1)).toBeVisible();
