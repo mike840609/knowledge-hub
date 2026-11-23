@@ -2,14 +2,11 @@
 
 import { Database, Network, Share2, type LucideIcon } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { buttonClasses } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { WorkspaceAccessView } from "@/server/workspace-admin";
-import { useWorkspaceAuthorization } from "./use-workspace-authorization";
 
-type Destination = {
-  name: "Graph" | "Sources" | "Shares";
+export type Destination = {
+  name: string;
   href: string;
   Icon: LucideIcon;
 };
@@ -18,44 +15,44 @@ export function knowledgeDestinations(workspaceId: string, access: WorkspaceAcce
   const prefix = `/w/${workspaceId}`;
   return [
     { name: "Graph", href: `${prefix}/graph`, Icon: Network },
-    ...(access.actions.canInspectSources ? [{ name: "Sources" as const, href: `${prefix}/sources`, Icon: Database }] : []),
+    ...(access.actions.canInspectSources ? [{ name: "Sources", href: `${prefix}/sources`, Icon: Database }] : []),
     ...(access.workspace.type === "PERSONAL" && access.actions.canSearch
-      ? [{ name: "Shares" as const, href: `${prefix}/shares`, Icon: Share2 }] : []),
+      ? [{ name: "Shares", href: `${prefix}/shares`, Icon: Share2 }] : []),
   ];
 }
 
+function currentness(pathname: string, href: string): "page" | "location" | undefined {
+  if (pathname === href) return "page";
+  return pathname.startsWith(`${href}/`) ? "location" : undefined;
+}
+
 /**
- * Graph, Sources and Shares as a row of icons in the Knowledge header. The one the reader is on also
- * shows its name; the others name themselves by tooltip and accessible name. They are always on screen,
- * where a disclosure hid them (2026-11-23-knowledge-destination-icons-design.md).
+ * The expanded sidebar's page switch: Home, Graph, Sources and Shares in one track under Search. The page the
+ * reader is on is a raised item with its icon and name; the others are icons, named by tooltip and accessible
+ * name. They are links, so on a page that is none of them (a document, Inbox, Settings) nothing is raised
+ * (2026-11-23-knowledge-destination-icons-design.md).
  */
-export function KnowledgeDestinations({ workspaceId }: { workspaceId: string }) {
-  const pathname = usePathname();
-  const { access } = useWorkspaceAuthorization();
+export function PageSwitch({ items, pathname }: { items: readonly Destination[]; pathname: string }) {
   return (
-    <nav aria-label="Knowledge destinations" className="min-w-0 flex-1">
-      <ul className="flex min-w-0 items-center gap-0.5">
-        {knowledgeDestinations(workspaceId, access).map(({ name, href, Icon }) => {
-          const current = pathname === href ? "page" : pathname.startsWith(`${href}/`) ? "location" : undefined;
-          const link = (
-            <Link
-              href={href}
-              aria-label={name}
-              aria-current={current}
-              className={buttonClasses({
-                variant: "ghost",
-                icon: !current,
-                size: current ? "sm" : "md",
-                className: "min-w-0 aria-[current]:bg-kh-bg-hover aria-[current]:text-kh-text",
-              })}
-            >
-              <Icon size={15} className="shrink-0" aria-hidden="true" />
-              {current ? <span className="truncate">{name}</span> : null}
-            </Link>
-          );
-          return <li key={href} className="min-w-0">{current ? link : <Tooltip label={name}>{link}</Tooltip>}</li>;
-        })}
-      </ul>
-    </nav>
+    <div className="flex min-w-0 items-center gap-0.5 rounded-lg bg-kh-switch-track p-0.5">
+      {items.map(({ name, href, Icon }) => {
+        const current = currentness(pathname, href);
+        const link = (
+          <Link
+            key={href}
+            href={href}
+            aria-label={name}
+            aria-current={current}
+            className={`kh-control kh-focus-ring flex h-7 min-w-0 items-center justify-center gap-1.5 rounded-md text-body-sm font-medium transition-colors ${
+              current ? "shrink-0 bg-kh-switch-thumb px-3 text-kh-text" : "flex-1 text-kh-text-muted hover:text-kh-text"
+            }`}
+          >
+            <Icon size={15} className="shrink-0" aria-hidden="true" />
+            {current ? <span className="truncate">{name}</span> : null}
+          </Link>
+        );
+        return current ? link : <Tooltip key={href} label={name}>{link}</Tooltip>;
+      })}
+    </div>
   );
 }

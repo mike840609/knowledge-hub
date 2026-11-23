@@ -10,27 +10,31 @@ const ROUND_TRIP = { timeout: 15_000 };
 testDestinations();
 
 function testDestinations() {
-  base("Knowledge destinations are on screen, naming only the current one", async ({ page }) => {
+  base("the page switch names only the current page and leaves the explorer its own heading", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     const workspace = `/w/${await personalWorkspaceId(page)}`;
     await page.goto(`${workspace}/home`);
     const primary = page.getByRole("navigation", { name: "Primary", exact: true });
-    const destinations = page.getByRole("navigation", { name: "Knowledge destinations", exact: true });
-    const graph = destinations.getByRole("link", { name: "Graph", exact: true });
-    await expect(primary.getByRole("link", { name: /^(Graph|Sources|Shares)$/ })).toHaveCount(0);
+    const graph = primary.getByRole("link", { name: "Graph", exact: true });
+    const home = primary.getByRole("link", { name: "Home", exact: true });
+    await expect(home).toHaveAttribute("aria-current", "page");
+    await expect(home).toHaveText("Home");
     for (const name of ["Graph", "Sources", "Shares"]) {
-      const link = destinations.getByRole("link", { name, exact: true });
+      const link = primary.getByRole("link", { name, exact: true });
       await expect(link).toBeVisible();
       await expect(link).toHaveText("");
       await expect(link).not.toHaveAttribute("aria-current");
     }
+    const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
+    await expect(explorer.getByRole("heading", { name: "Knowledge", exact: true })).toBeVisible();
+    await expect(explorer.getByRole("link", { name: /^(Graph|Sources|Shares)$/ })).toHaveCount(0);
     await graph.hover();
     await expect(page.getByText("Graph", { exact: true })).toBeVisible();
     await graph.click();
     await expect(page).toHaveURL(`${workspace}/graph`, ROUND_TRIP);
     await expect(graph).toHaveAttribute("aria-current", "page");
     await expect(graph).toHaveText("Graph");
-    await expect(destinations.getByRole("link", { name: "Sources", exact: true })).toHaveText("");
+    await expect(home).toHaveText("");
     await page.getByRole("button", { name: "Collapse navigation", exact: true }).click();
     for (const name of ["Graph", "Sources", "Shares"]) {
       await expect(primary.getByRole("link", { name, exact: true })).toHaveAttribute("href", `${workspace}/${name.toLowerCase()}`);
@@ -41,31 +45,29 @@ function testDestinations() {
   });
 
   for (const density of ["comfortable", "compact"] as const) {
-    base(`the named destination and the explorer's tools share one ${density} row`, async ({ page }) => {
+    base(`the current page's name fits the ${density} switch, which sits on one line`, async ({ page }) => {
       await page.setViewportSize({ width: 1440, height: 900 });
       const workspace = `/w/${await personalWorkspaceId(page)}`;
       await page.addInitScript((value) => localStorage.setItem("kh:density", value), density);
       await page.goto(`${workspace}/sources`);
-      const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
-      const sources = explorer.getByRole("link", { name: "Sources", exact: true });
+      const primary = page.getByRole("navigation", { name: "Primary", exact: true });
+      const sources = primary.getByRole("link", { name: "Sources", exact: true });
       await expect(sources).toHaveText("Sources");
-      const label = await sources.locator("span").evaluate((span) => span.scrollWidth <= span.clientWidth);
-      expect(label).toBe(true);
-      const nav = await explorer.getByRole("navigation", { name: "Knowledge destinations" }).boundingBox();
-      const options = await explorer.getByRole("button", { name: "Document options" }).boundingBox();
-      expect(Math.abs(nav!.y + nav!.height / 2 - (options!.y + options!.height / 2))).toBeLessThan(2);
+      expect(await sources.locator("span").evaluate((span) => span.scrollWidth <= span.clientWidth)).toBe(true);
+      const boxes = await Promise.all(["Home", "Graph", "Sources", "Shares"].map((name) => primary.getByRole("link", { name, exact: true }).boundingBox()));
+      for (const box of boxes) expect(Math.abs(box!.y - boxes[0]!.y)).toBeLessThan(1);
     });
   }
 
   base.describe("mobile sidebar destinations", () => {
     base.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
 
-    base("Knowledge destinations work in the touch drawer", async ({ page }) => {
+    base("the page switch works in the touch drawer", async ({ page }) => {
       const workspace = `/w/${await personalWorkspaceId(page)}`;
       await page.goto(`${workspace}/home`);
       await page.getByRole("button", { name: "Open menu", exact: true }).tap();
       const drawer = page.getByRole("dialog", { name: "Menu", exact: true });
-      const graph = drawer.getByRole("navigation", { name: "Knowledge destinations" }).getByRole("link", { name: "Graph" });
+      const graph = drawer.getByRole("navigation", { name: "Primary", exact: true }).getByRole("link", { name: "Graph", exact: true });
       const [newPage] = await Promise.all([
         page.context().waitForEvent("page"),
         graph.click({ modifiers: ["ControlOrMeta"] }),

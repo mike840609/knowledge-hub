@@ -120,6 +120,8 @@ const config: Config = {
         "kh-bg-explorer": "var(--kh-bg-explorer)",
         "kh-bg-hover": "var(--kh-bg-hover)",
         "kh-bg-hover-strong": "var(--kh-bg-hover-strong)",
+        "kh-switch-track": "var(--kh-switch-track)",
+        "kh-switch-thumb": "var(--kh-switch-thumb)",
         "kh-bg-selected": "var(--kh-bg-selected)",
         "kh-border": "var(--kh-border)",
         "kh-border-strong": "var(--kh-border-strong)",

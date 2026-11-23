@@ -19,5 +19,9 @@ for (const [theme, block] of [["light", css.split(":root {")[1].split("}")[0]], 
     it.each(["bg", "bg-hover"])("keeps the secondary control boundary visible on %s", background => {
       expect(contrast(token("border-strong"), token(background))).toBeGreaterThanOrEqual(3);
     });
+    it("keeps the page switch legible: the current name on its item, the other icons on the track", () => {
+      expect(contrast(token("text"), token("switch-thumb"))).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(token("text-muted"), token("switch-track"))).toBeGreaterThanOrEqual(3);
+    });
   });
 }
