@@ -10,28 +10,27 @@ const ROUND_TRIP = { timeout: 15_000 };
 testDestinations();
 
 function testDestinations() {
-  base("Knowledge destinations preserve location and do not add a row", async ({ page }) => {
+  base("Knowledge destinations are on screen, naming only the current one", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     const workspace = `/w/${await personalWorkspaceId(page)}`;
     await page.goto(`${workspace}/home`);
     const primary = page.getByRole("navigation", { name: "Primary", exact: true });
-    const disclosure = page.getByRole("navigation", { name: "Knowledge destinations", exact: true });
-    const trigger = page.getByRole("button", { name: "Knowledge", exact: true });
-    const graph = disclosure.getByRole("link", { name: "Graph" });
+    const destinations = page.getByRole("navigation", { name: "Knowledge destinations", exact: true });
+    const graph = destinations.getByRole("link", { name: "Graph", exact: true });
     await expect(primary.getByRole("link", { name: /^(Graph|Sources|Shares)$/ })).toHaveCount(0);
-    await trigger.focus();
-    await page.keyboard.press("Enter");
-    await page.keyboard.press("Tab");
-    await expect(graph).toBeFocused();
-    await page.keyboard.press("Escape");
-    await expect(trigger).toBeFocused();
-    await trigger.click();
+    for (const name of ["Graph", "Sources", "Shares"]) {
+      const link = destinations.getByRole("link", { name, exact: true });
+      await expect(link).toBeVisible();
+      await expect(link).toHaveText("");
+      await expect(link).not.toHaveAttribute("aria-current");
+    }
+    await graph.hover();
+    await expect(page.getByText("Graph", { exact: true })).toBeVisible();
     await graph.click();
     await expect(page).toHaveURL(`${workspace}/graph`, ROUND_TRIP);
-    await page.goto(`${workspace}/graph?orphans=1`);
-    await page.getByRole("button", { name: "Knowledge / Graph", exact: true }).click();
     await expect(graph).toHaveAttribute("aria-current", "page");
-    await page.keyboard.press("Escape");
+    await expect(graph).toHaveText("Graph");
+    await expect(destinations.getByRole("link", { name: "Sources", exact: true })).toHaveText("");
     await page.getByRole("button", { name: "Collapse navigation", exact: true }).click();
     for (const name of ["Graph", "Sources", "Shares"]) {
       await expect(primary.getByRole("link", { name, exact: true })).toHaveAttribute("href", `${workspace}/${name.toLowerCase()}`);
@@ -41,83 +40,32 @@ function testDestinations() {
     await expect(page.getByRole("button", { name: "Collapse navigation", exact: true })).toBeFocused();
   });
 
-  base("browser history does not reopen Knowledge destinations", async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    const workspace = `/w/${await personalWorkspaceId(page)}`;
-    await page.goto(`${workspace}/graph`);
-    await page.getByRole("navigation", { name: "Primary", exact: true }).getByRole("link", { name: "Home", exact: true }).click();
-    const trigger = page.getByRole("button", { name: "Knowledge", exact: true });
-    const popup = page.getByRole("navigation", { name: "Knowledge destinations", exact: true, includeHidden: true });
-    await trigger.click();
-    await expect(popup).toBeVisible();
-    await page.goBack();
-    await expect(page.getByRole("button", { name: "Knowledge / Graph", exact: true })).toBeVisible();
-    await expect(popup).toBeHidden();
-    await page.goForward();
-    await expect(trigger).toHaveAttribute("aria-expanded", "false");
-    await expect(popup).toBeHidden();
-  });
-
-  for (const mode of ["collapse", "resize"] as const) {
-    base(`Knowledge destinations close when desktop navigation ${mode}s`, async ({ page }) => {
+  for (const density of ["comfortable", "compact"] as const) {
+    base(`the named destination and the explorer's tools share one ${density} row`, async ({ page }) => {
       await page.setViewportSize({ width: 1440, height: 900 });
       const workspace = `/w/${await personalWorkspaceId(page)}`;
-      await page.goto(`${workspace}/home`);
-      const trigger = page.getByRole("button", { name: "Knowledge", exact: true });
-      const popup = page.getByRole("navigation", { name: "Knowledge destinations", exact: true, includeHidden: true });
-      await trigger.click();
-      await expect(popup).toBeVisible();
-      if (mode === "collapse") {
-        await expect(trigger).toBeFocused();
-        await page.keyboard.press("ControlOrMeta+Backslash");
-        await expect(page.getByRole("button", { name: "Expand navigation", exact: true })).toBeFocused();
-      } else {
-        await page.setViewportSize({ width: 390, height: 844 });
-        await expect(page.getByRole("button", { name: "Open menu", exact: true })).toBeVisible();
-      }
-      await expect(popup).toBeHidden();
+      await page.addInitScript((value) => localStorage.setItem("kh:density", value), density);
+      await page.goto(`${workspace}/sources`);
+      const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
+      const sources = explorer.getByRole("link", { name: "Sources", exact: true });
+      await expect(sources).toHaveText("Sources");
+      const label = await sources.locator("span").evaluate((span) => span.scrollWidth <= span.clientWidth);
+      expect(label).toBe(true);
+      const nav = await explorer.getByRole("navigation", { name: "Knowledge destinations" }).boundingBox();
+      const options = await explorer.getByRole("button", { name: "Document options" }).boundingBox();
+      expect(Math.abs(nav!.y + nav!.height / 2 - (options!.y + options!.height / 2))).toBeLessThan(2);
     });
   }
 
   base.describe("mobile sidebar destinations", () => {
     base.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
-    for (const [route, name] of [["home", "Knowledge"], ["sources", "Knowledge / Sources"]]) {
-      base(`the ${route} Knowledge label fits in the touch drawer`, async ({ page }) => {
-        const workspace = `/w/${await personalWorkspaceId(page)}`;
-        await page.addInitScript(() => localStorage.setItem("kh:density", "compact"));
-        await page.goto(`${workspace}/${route}`);
-        await page.getByRole("button", { name: "Open menu", exact: true }).tap();
-        const drawer = page.getByRole("dialog", { name: "Menu", exact: true });
-        const trigger = drawer.getByRole("button", { name, exact: true });
-        const { textFits, height } = await trigger.evaluate((button) => {
-          const text = button.querySelector("span")!;
-          const range = document.createRange();
-          range.selectNodeContents(text);
-          const bounds = text.getBoundingClientRect();
-          return {
-            textFits: [...range.getClientRects()].every((line) => line.right <= bounds.right + 1),
-            height: button.getBoundingClientRect().height,
-          };
-        });
-        expect(textFits).toBe(true);
-        expect(height).toBe(40);
-      });
-    }
 
     base("Knowledge destinations work in the touch drawer", async ({ page }) => {
       const workspace = `/w/${await personalWorkspaceId(page)}`;
       await page.goto(`${workspace}/home`);
       await page.getByRole("button", { name: "Open menu", exact: true }).tap();
       const drawer = page.getByRole("dialog", { name: "Menu", exact: true });
-      const trigger = drawer.getByRole("button", { name: "Knowledge", exact: true });
-      const graph = page.getByRole("navigation", { name: "Knowledge destinations" }).getByRole("link", { name: "Graph" });
-      await trigger.tap();
-      await expect(graph).toBeVisible();
-      await page.keyboard.press("Escape");
-      await expect(graph).toBeHidden();
-      await expect(drawer).toBeVisible();
-      await expect(trigger).toBeFocused();
-      await trigger.tap();
+      const graph = drawer.getByRole("navigation", { name: "Knowledge destinations" }).getByRole("link", { name: "Graph" });
       const [newPage] = await Promise.all([
         page.context().waitForEvent("page"),
         graph.click({ modifiers: ["ControlOrMeta"] }),
@@ -127,25 +75,6 @@ function testDestinations() {
       await graph.tap();
       await expect(page).toHaveURL(`${workspace}/graph`, ROUND_TRIP);
       await expect(drawer).toBeHidden();
-    });
-
-    base("closing the drawer with the sidebar shortcut also closes Knowledge destinations", async ({ page }) => {
-      const workspace = `/w/${await personalWorkspaceId(page)}`;
-      await page.goto(`${workspace}/home`);
-      const opener = page.getByRole("button", { name: "Open menu", exact: true });
-      const drawer = page.getByRole("dialog", { name: "Menu", exact: true });
-      const trigger = drawer.getByRole("button", { name: "Knowledge", exact: true });
-      const popup = page.getByRole("navigation", { name: "Knowledge destinations", exact: true, includeHidden: true });
-      await opener.tap();
-      await trigger.click();
-      await expect(popup).toBeVisible();
-      await trigger.focus();
-      await page.keyboard.press("ControlOrMeta+Backslash");
-      await expect(drawer).toBeHidden();
-      await expect(popup).toBeHidden();
-      await expect(opener).toBeFocused();
-      await opener.tap();
-      await expect(trigger).toHaveAttribute("aria-expanded", "false");
     });
   });
 }

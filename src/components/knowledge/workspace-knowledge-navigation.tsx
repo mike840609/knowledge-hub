@@ -4,7 +4,6 @@ import { useLayoutEffect, useRef, useState, type MouseEventHandler } from "react
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import type { SourceView } from "@/modules/knowledge/application/knowledge-query-service";
-import type { KnowledgeNavigationSurface } from "@/components/shell/knowledge-destinations";
 import { FolderNameDialogHost } from "./folder-name-dialog";
 import { MoveDialogHost } from "./move-dialog";
 import { ShareLinkDialogHost } from "./share-link-dialog";
@@ -15,7 +14,6 @@ type WorkspaceKnowledgeNavigationProps = {
   workspaceId: string;
   sources: SourceView[] | null;
   target: HTMLElement | null;
-  navigationSurface?: KnowledgeNavigationSurface;
   onClick?: MouseEventHandler<HTMLDivElement>;
 };
 
@@ -25,7 +23,7 @@ export function WorkspaceKnowledgeNavigation(props: WorkspaceKnowledgeNavigation
   return <WorkspaceKnowledge key={props.workspaceId} {...props} />;
 }
 
-function WorkspaceKnowledge({ workspaceId, sources, target, navigationSurface, onClick }: WorkspaceKnowledgeNavigationProps) {
+function WorkspaceKnowledge({ workspaceId, sources, target, onClick }: WorkspaceKnowledgeNavigationProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [portal, setPortal] = useState<HTMLDivElement | null>(null);
@@ -77,7 +75,6 @@ function WorkspaceKnowledge({ workspaceId, sources, target, navigationSurface, o
               ensureTree={sources === null ? undefined : trees.ensure}
               retryTree={trees.retry}
               onRetrySources={sources === null ? () => router.refresh() : undefined}
-              navigationSurface={navigationSurface}
             />
         </div>,
         portal,

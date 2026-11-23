@@ -107,37 +107,37 @@ it("opens the active source and keeps one tree and its scroll position when movi
   expect(JSON.parse(localStorage.getItem("kh:document-shortcuts:w") ?? "{}").recent).toEqual(["beta:doc"]);
 });
 
-async function openDestinations(label: string) {
-  const trigger = [...desktop.querySelectorAll("button")].find((button) => button.textContent?.trim() === label);
-  expect(trigger).toBeDefined();
-  await act(async () => trigger!.click());
-  return trigger!;
+function destinations() {
+  const nav = desktop.querySelector('nav[aria-label="Knowledge destinations"]');
+  expect(nav).not.toBeNull();
+  return nav!;
 }
 
 it("keeps the Knowledge heading while source headers fail and recover", async () => {
   navigation.pathname = "/w/w/graph";
   const requests = mockTrees(() => Response.json({ tree: [] }));
   await render(null);
-  const trigger = await openDestinations("Knowledge / Graph");
-  expect(document.querySelector('a[href="/w/w/graph"]')?.getAttribute("aria-current")).toBe("page");
+  const nav = destinations();
+  const graph = nav.querySelector('a[href="/w/w/graph"]');
+  expect(graph?.getAttribute("aria-current")).toBe("page");
+  expect(graph?.textContent).toBe("Graph");
   expect(desktop.querySelector('[role="status"]')?.textContent).toContain("Sources could not be loaded");
   await act(async () => [...desktop.querySelectorAll("button")].find((button) => button.textContent === "Retry")!.click());
   expect(navigation.refresh).toHaveBeenCalledOnce();
   expect(requests).toEqual([]);
   await render([]);
-  expect(desktop.contains(trigger)).toBe(true);
+  expect(desktop.contains(nav)).toBe(true);
   expect(desktop.textContent).not.toContain("Sources could not be loaded");
 });
 
 it("uses the current workspace capabilities for Knowledge destinations", async () => {
   await render([]);
-  await openDestinations("Knowledge");
-  expect(document.querySelector('a[href="/w/w/graph"]')).not.toBeNull();
+  expect(destinations().querySelector('a[href="/w/w/graph"]')?.textContent).toBe("");
   expect(document.querySelector('a[href="/w/w/sources"]')).toBeNull();
   expect(document.querySelector('a[href="/w/w/shares"]')).toBeNull();
   navigation.pathname = "/w/next/sources/detail";
   await render([], desktop, "next", { canInspectSources: true });
-  await openDestinations("Knowledge / Sources");
+  expect(destinations().querySelector('a[href="/w/next/sources"]')?.textContent).toBe("Sources");
   expect(document.querySelector('a[href="/w/next/sources"]')?.getAttribute("aria-current")).toBe("location");
   expect(document.querySelector('a[href="/w/w/graph"]')).toBeNull();
 });
@@ -145,7 +145,6 @@ it("uses the current workspace capabilities for Knowledge destinations", async (
 it("does not match a similarly prefixed route", async () => {
   navigation.pathname = "/w/w/sources-extra";
   await render([], desktop, "w", { canInspectSources: true });
-  await openDestinations("Knowledge");
   const link = document.querySelector('a[href="/w/w/sources"]');
   expect(link).not.toBeNull();
   expect(link?.hasAttribute("aria-current")).toBe(false);

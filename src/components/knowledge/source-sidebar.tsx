@@ -9,7 +9,7 @@ import { ActionIcon } from "@/components/actions/action-icon";
 import { rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
-import { KnowledgeDestinations, type KnowledgeNavigationSurface } from "@/components/shell/knowledge-destinations";
+import { KnowledgeDestinations } from "@/components/shell/knowledge-destinations";
 import { MenuCheckboxItem, MenuContent, MenuItem, MenuRoot, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import type { TreeLoadState } from "./source-tree-cache";
 import { useSidebarShortcuts } from "./use-sidebar-shortcuts";
@@ -41,7 +41,6 @@ export type SourceSidebarProps = {
   retryTree?: (id: string) => Promise<void>;
   selectedDocumentId?: string;
   onRetrySources?: () => void;
-  navigationSurface?: KnowledgeNavigationSurface;
 };
 
 function withoutArchivedSubtrees(items: KnowledgeTreeItem[]): KnowledgeTreeItem[] {
@@ -58,7 +57,7 @@ function withoutArchivedSubtrees(items: KnowledgeTreeItem[]): KnowledgeTreeItem[
   return visible.length === items.length ? items : visible;
 }
 
-export function SourceSidebar({ workspaceId, source, defaultSourceId, collections, sources, treeStates, ensureTree, retryTree, selectedDocumentId, onRetrySources, navigationSurface }: SourceSidebarProps) {
+export function SourceSidebar({ workspaceId, source, defaultSourceId, collections, sources, treeStates, ensureTree, retryTree, selectedDocumentId, onRetrySources }: SourceSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -216,7 +215,7 @@ export function SourceSidebar({ workspaceId, source, defaultSourceId, collection
   return (
     <aside aria-label="Knowledge explorer" aria-busy={!sidebarReady} className="kh-sidebar-surface flex h-full min-h-0 min-w-0 flex-col gap-1 px-2 pt-1">
       <div className="flex min-w-0 shrink-0 items-center gap-x-1">
-        <KnowledgeDestinations workspaceId={workspaceId} surface={navigationSurface} />
+        <KnowledgeDestinations workspaceId={workspaceId} />
         {!onRetrySources && <div className="flex shrink-0 items-center gap-0.5">
           <MenuRoot>
             <MenuTrigger aria-label="Favorite documents" title="Favorite documents" className={buttonClasses({ variant: "ghost", icon: true })}>
