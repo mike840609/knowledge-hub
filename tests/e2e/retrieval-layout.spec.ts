@@ -7,6 +7,14 @@ function unique(label: string) {
   return `${label}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
+// A visit is stored once the explorer knows the document, a moment after the title shows.
+// Leaving before then is leaving before it was recorded.
+async function expectRecorded(page: Page, workspaceId: string, documentId: string) {
+  await expect.poll(() => page.evaluate(({ key, id }) =>
+    (JSON.parse(localStorage.getItem(key) ?? "{}").recent ?? []).some((value: string) => value.endsWith(`:${id}`)),
+  { key: `kh:document-shortcuts:${workspaceId}`, id: documentId }), ROUND_TRIP).toBe(true);
+}
+
 async function createNote(page: Page, workspaceId: string, title: string) {
   const response = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title, markdown: "Some words." } });
   expect(response.ok()).toBe(true);
@@ -52,9 +60,7 @@ test("Favorites and Recent open independently from adjacent toolbar buttons", as
   // Reading one document puts it in Recent; starring the other puts it in Favorites.
   await page.goto(recent.href);
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(recentTitle, ROUND_TRIP);
-  await expect.poll(() => page.evaluate(({ key, id }) =>
-    (JSON.parse(localStorage.getItem(key) ?? "{}").recent ?? []).some((value: string) => value.endsWith(`:${id}`)),
-  { key: `kh:document-shortcuts:${workspaceId}`, id: recent.documentId }), ROUND_TRIP).toBe(true);
+  await expectRecorded(page, workspaceId, recent.documentId);
   await page.goto(favorite.href);
   await page.getByRole("button", { name: `Add to favorites: ${favoriteTitle}`, exact: true }).click();
 
@@ -88,6 +94,7 @@ for (const width of [1100, 390]) {
     await page.goto(first.href);
     await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(firstTitle, ROUND_TRIP);
     await expect(page.getByRole("navigation", { name: "Document tree", exact: true })).toBeHidden();
+    await expectRecorded(page, workspaceId, first.documentId);
     await page.goto(second.href);
     await page.getByRole("button", { name: mobile ? "Open menu" : "Expand navigation", exact: true }).click();
     await page.getByRole("button", { name: "Recent documents", exact: true }).click();
