@@ -114,7 +114,7 @@ export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, in
     if (!request.current || request.current.body !== body) request.current = { body, key: crypto.randomUUID() };
     setBusy(true); setError(undefined); setExpired(false);
     const { mentions, mentionLinkId } = mention.collect(body);
-    try { await onSubmit(body, request.current.key, mentions, mentionLinkId); setBody(""); discard(); mention.reset(); request.current = null; if (label === "Reply") setExpanded(false); } catch (failure) { setError(reviewSendFailure(label, failure)); setExpired(signInExpired(failure)); } finally { setBusy(false); }
+    try { await onSubmit(body, request.current.key, mentions, mentionLinkId); setBody(""); discard(); mention.reset(); request.current = null; if (label === "Reply") setExpanded(false); } catch (failure) { if (failure instanceof ReviewRequestError && failure.code === "IDEMPOTENCY_KEY_REUSED") request.current = null; setError(reviewSendFailure(label, failure)); setExpired(signInExpired(failure)); } finally { setBusy(false); }
   }}>
     {/* 6,000 UTF-16 units: the limit is 3,000 characters, and a character outside the BMP (an emoji) is two units. The counter and the send button hold the 3,000. */}
     <div className="relative"><Textarea {...mention.field} aria-label={label} placeholder={label === "Reply" ? "Reply…" : "Add a comment…"} rows={2} autoFocus className="!min-h-20 resize-y" value={body} disabled={busy} onChange={event => { keep(event.target.value); mention.track(); }} required maxLength={6000} />{mention.list}</div>

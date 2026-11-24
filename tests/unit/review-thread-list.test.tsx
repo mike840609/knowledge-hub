@@ -127,7 +127,7 @@ function type(textarea: HTMLTextAreaElement, value: string) {
   act(() => { setter.call(textarea, value); textarea.dispatchEvent(new Event("input", { bubbles: true })); });
 }
 
-function renderForm(onSubmit: (body: string) => Promise<void> = async () => {}) {
+function renderForm(onSubmit: (body: string, key: string) => Promise<void> = async () => {}) {
   act(() => {
     root = createRoot(host);
     root.render(createElement(ReviewReplyForm, { draftKey: reviewDraftKey("reply", "t1"), onSubmit }));
@@ -209,6 +209,21 @@ test("a failed send says what failed and what to do, as an error", async () => {
   expect(alert.className).toContain("text-kh-danger");
   expect(alert.querySelector("svg")).not.toBeNull();
   expect(host.querySelector("textarea")?.value).toBe("Lost?");
+});
+
+test("after the service says the send key was reused, Try again sends a fresh key", async () => {
+  sessionStorage.clear();
+  const keys: string[] = [];
+  renderForm(async (_body: string, key: string) => {
+    keys.push(key);
+    if (keys.length === 1) throw new ReviewRequestError("The idempotency key was already used for a different request.", 409, "IDEMPOTENCY_KEY_REUSED");
+  });
+  act(() => { buttons("Reply")[0].click(); });
+  type(host.querySelector("textarea")!, "Again");
+  await act(async () => { host.querySelector("form")!.requestSubmit(); });
+  await act(async () => { host.querySelector("form")!.requestSubmit(); });
+  expect(keys).toHaveLength(2);
+  expect(keys[1]).not.toBe(keys[0]);
 });
 
 test.each([
