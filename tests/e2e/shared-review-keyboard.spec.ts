@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { devices, type Page } from "@playwright/test";
 import { expect, test } from "./fixtures/test";
 import { phase3NoSessionOrigin, phase3Origin } from "./fixtures/phase3-identities";
 import { createReviewDocument } from "./fixtures/document-review";
@@ -63,6 +63,8 @@ test("the paragraph buttons are one tab stop: arrows move within them, Tab leave
   await ready(page);
   await expect(page.getByRole("toolbar", { name: "Paragraph comments" })).toHaveAttribute("aria-orientation", "vertical");
   await tabIn(page, button(page, "Paragraph 0 of a long document."));
+  // Its focus ring is drawn inside it, so it neither touches the first letter nor leaves the padding.
+  expect(await button(page, "Paragraph 0 of a long document.").evaluate(element => getComputedStyle(element).boxShadow)).toContain("inset");
   await page.keyboard.press("End");
   await expect(button(page, "Paragraph 39 of a long document.")).toBeFocused();
   await page.keyboard.press("ArrowUp");
@@ -81,4 +83,31 @@ test("a reader who may not write is offered no paragraph button", async ({ page,
   await page.goto(`${phase3NoSessionOrigin()}${doc.links[0].path}`);
   await ready(page);
   await expect(page.locator(".kh-block-comment-zone")).toHaveCount(0);
+});
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const { defaultBrowserType, ...iphone } = devices["iPhone 13"];
+test.describe("on a touch phone", () => {
+  test.use(iphone);
+
+  test("the paragraph's button stays in the article's padding and leaves the text's left edge to the text", async ({ page, request }) => {
+    const doc = await createReviewDocument(request, MARKDOWN);
+    await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
+    await ready(page);
+    const paragraph = page.locator("[data-review-document] p").first();
+    const first = button(page, "A first passage to review.");
+    await paragraph.tap();
+    await expect(first).toHaveCSS("opacity", "1");
+    const [box, text, article] = [(await first.boundingBox())!, (await paragraph.boundingBox())!, (await page.locator("[data-review-document]").boundingBox())!];
+    expect(box.width).toBe(24);
+    expect(box.x).toBeGreaterThanOrEqual(article.x - 0.5);
+    expect(box.x + box.width).toBeLessThanOrEqual(text.x + 0.5);
+    // A touch on the first letters is the text's, not the button's; just above or below the button is still the button's.
+    const hit = (x: number, y: number) => page.evaluate(([px, py]) => { const element = document.elementFromPoint(px, py); return element?.closest("button")?.getAttribute("aria-label") ?? element?.tagName; }, [x, y]);
+    expect(await hit(text.x + 4, box.y + box.height / 2)).toBe("P");
+    expect(await hit(box.x + box.width / 2, box.y - 6)).toBe("Comment on paragraph: A first passage to review.");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await first.tap();
+    await expect(page.getByRole("dialog", { name: "Comments" }).getByRole("textbox", { name: "Add comment" })).toBeVisible();
+  });
 });
