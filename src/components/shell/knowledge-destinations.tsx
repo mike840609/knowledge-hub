@@ -37,21 +37,29 @@ export function PageSwitch({ items, pathname }: { items: readonly Destination[];
     <div className="flex min-w-0 items-center gap-0.5 rounded-lg bg-kh-switch-track p-0.5">
       {items.map(({ name, href, Icon }) => {
         const current = currentness(pathname, href);
-        const link = (
-          <Link
-            key={href}
-            href={href}
-            aria-label={name}
-            aria-current={current}
-            className={`kh-control kh-focus-ring flex h-7 min-w-0 items-center justify-center gap-1.5 rounded-md text-body-sm font-medium transition-colors ${
-              current ? "shrink-0 bg-kh-switch-thumb px-3 text-kh-text" : "flex-1 text-kh-text-muted hover:text-kh-text"
-            }`}
-          >
-            <Icon size={15} className="shrink-0" aria-hidden="true" />
-            {current ? <span className="truncate">{name}</span> : null}
-          </Link>
+        // One element per item whatever the page: the thumb and label animate in place instead of remounting.
+        return (
+          <Tooltip key={href} label={name}>
+            <Link
+              href={href}
+              aria-label={name}
+              aria-current={current}
+              style={{ flexGrow: current ? 3 : 1 }}
+              className={`kh-control kh-focus-ring flex h-7 min-w-0 basis-0 items-center justify-center rounded-md px-2 text-body-sm font-medium transition-[flex-grow,background-color,color] duration-160 ease-out ${
+                current ? "bg-kh-switch-thumb text-kh-text" : "text-kh-text-muted hover:text-kh-text"
+              }`}
+            >
+              <Icon size={15} className="shrink-0" aria-hidden="true" />
+              <span
+                aria-hidden="true"
+                style={{ gridTemplateColumns: current ? "1fr" : "0fr", marginLeft: current ? 6 : 0, opacity: current ? 1 : 0 }}
+                className="grid min-w-0 transition-[grid-template-columns,margin-left,opacity] duration-160 ease-out"
+              >
+                <span className="truncate">{name}</span>
+              </span>
+            </Link>
+          </Tooltip>
         );
-        return current ? link : <Tooltip key={href} label={name}>{link}</Tooltip>;
       })}
     </div>
   );

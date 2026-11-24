@@ -96,10 +96,12 @@ describe("the expanded page switch", () => {
     state.pathname = "/w/w1/graph";
     render();
     expect(link("/w/w1/graph").getAttribute("aria-current")).toBe("page");
+    const shown = (href: string) => link(href).querySelector<HTMLElement>("span")!.style.opacity === "1";
     expect(link("/w/w1/graph").textContent).toBe("Graph");
+    expect(shown("/w/w1/graph")).toBe(true);
     for (const href of ["/w/w1/home", "/w/w1/sources", "/w/w1/shares"]) {
       expect(link(href).hasAttribute("aria-current"), href).toBe(false);
-      expect(link(href).textContent, href).toBe("");
+      expect(shown(href), href).toBe(false);
     }
   });
 
