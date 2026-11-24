@@ -89,6 +89,8 @@ test('an existing link can be edited without removing it, and removed explicitly
   await expect(page.locator('[data-autosave-status]')).toHaveAttribute('data-autosave-status', 'saved', { timeout: 15_000 });
   await page.reload();
   await expect(link).toHaveAttribute('href', 'https://example.com/new');
+  // A selection made before the editor re-hydrates is dropped, and the toolbar never opens.
+  await expect(editor).toBeEditable({ timeout: 15_000 });
   await selectLink();
   await expect(toolbar).toBeVisible();
   await toolbar.getByRole('button', { name: 'Link', exact: true }).click();
