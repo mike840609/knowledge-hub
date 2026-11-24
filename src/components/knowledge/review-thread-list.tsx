@@ -11,6 +11,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { compareReviewPassages, useReviewRailLayout, type RailCard } from "./review-rail-layout";
+import { revealReviewCard } from "./review-rail-mode";
 import { matchesShortcut } from "@/lib/shortcut-keys";
 import { linkify } from "@/lib/linkify";
 import { Popover } from "@base-ui-components/react/popover";
@@ -128,7 +129,7 @@ export function ReviewNextButtons({ threads, activeThreadId, onActivate, filter,
     // The card is drawn, and placed beside its passage, after this render.
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const card = Array.from(document.querySelectorAll<HTMLElement>("[data-review-thread]")).find(item => item.dataset.reviewThread === threadId && item.getClientRects().length > 0);
-      card?.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      if (card) revealReviewCard(card, "center", window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
     }));
   }
   // Always drawn, disabled when there is nowhere to go: a row appearing or leaving would move the cards under the pointer.

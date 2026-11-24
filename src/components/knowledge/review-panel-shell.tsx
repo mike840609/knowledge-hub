@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, type ReactNode } from "react";
 import { Drawer } from "@/components/ui/drawer";
+import { revealReviewCard } from "./review-rail-mode";
 
 /** `inline`: the discussions are a rail beside the article (`review-rail-mode.ts`); otherwise they open as a drawer. */
 export function ReviewPanelShell({ children, open, inline: wide, onOpenChange, returnFocus }: { children: ReactNode; open: boolean; inline: boolean; onOpenChange: (open: boolean) => void; returnFocus: () => void }) {
@@ -18,6 +19,9 @@ export function ReviewPanelShell({ children, open, inline: wide, onOpenChange, r
           const section = Array.from(document.querySelectorAll<HTMLElement>("[data-review-thread]"))
             .find(element => element.dataset.reviewThread === id && element.getClientRects().length > 0);
           section?.focus({ preventScroll: true });
+          // Placed level with its passage, a card near the top of the window sits under the rail's
+          // pinned toolbar; scroll only as far as it takes to show it whole.
+          if (section) revealReviewCard(section, "nearest");
           pendingThread.current = null;
         }));
       }
