@@ -131,19 +131,28 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
   const [restored, setRestored] = useState(false);
   const discardDraft = useCallback(() => { removeStored("session", draftKey); removeStored("session", anchorKey); setRestored(false); }, [draftKey, anchorKey]);
   useEffect(() => { if (selection.chosen) writeStored("session", anchorKey, JSON.stringify(selection.chosen)); }, [selection.chosen, anchorKey]);
+  // Taken (and forgotten) as soon as a signed-in reader's first reading arrives, whether or not they
+  // may comment now, so it cannot open a composer later, unasked; an anonymous reader's stays for their sign-in.
+  const keptSignIn = useRef<ReturnType<typeof parseSignIn> | undefined>(undefined);
+  useEffect(() => {
+    if (!result || result.callerUserId === null || keptSignIn.current !== undefined) return;
+    const kept = parseSignIn(readStored("session", signInKey));
+    removeStored("session", signInKey);
+    // Only a reader who may comment on the reading they came back to has it restored.
+    keptSignIn.current = canComment ? kept : null;
+  }, [result, canComment, signInKey]);
   const restoreChecked = useRef(false);
   useEffect(() => {
     if (restoreChecked.current || !result || !canComment) return;
     restoreChecked.current = true;
     const anchor = parseStoredAnchor(readStored("session", anchorKey));
-    const signedIn = parseSignIn(readStored("session", signInKey));
-    removeStored("session", signInKey);
+    const signedIn = keptSignIn.current;
     if (anchor && readStored("session", draftKey)?.trim()) { selection.choose(anchor); setRestored(true); setOpen(true); return; }
     discardDraft();
     // Back from signing in: the composer opens on the passage, if it is still there as it was; if not, nothing is said.
     const root = readingRef.current?.querySelector<HTMLElement>("[data-review-document]");
     if (signedIn && signedIn.revisionId === revisionId && root && createReviewRangeResolver(root, markdown)(signedIn.anchor)) { selection.choose(signedIn.anchor); setOpen(true); }
-  }, [result, canComment, anchorKey, draftKey, signInKey, revisionId, markdown, selection, discardDraft, setOpen]);
+  }, [result, canComment, anchorKey, draftKey, revisionId, markdown, selection, discardDraft, setOpen]);
   // Only a signed-in reader who may write is offered `@`: the candidate route refuses anyone else.
   const mentionScope = result?.writesEnabled && !anonymous ? scope : undefined;
   const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} signInHref={signInHref} draftKey={draftKey} restored={restored} mentionScope={mentionScope} onCancel={() => { discardDraft(); selection.clear(); }} onSubmit={async (body, idempotencyKey, mentions) => {

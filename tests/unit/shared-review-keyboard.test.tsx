@@ -114,11 +114,26 @@ describe("a passage chosen before signing in", () => {
     expect(window.sessionStorage.getItem(key)).toBeNull();
   });
 
+  it("is forgotten when a signed-in reader cannot comment yet, and opens nothing once they can", async () => {
+    window.sessionStorage.setItem(key, JSON.stringify({ revisionId: "r1", anchor: anchor("Second") }));
+    discussion = { threads: [], revisionId: "r1", writesEnabled: false, callerUserId: "u1" };
+    await render();
+    expect(window.sessionStorage.getItem(key)).toBeNull();
+    // Writes switched on later: the next reading shows the panel, not a composer nobody asked for.
+    discussion = { threads: [], revisionId: "r1", writesEnabled: true, callerUserId: "u1" };
+    const refresh = Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-label="Refresh comments"]')).at(-1)!;
+    await act(async () => { refresh.click(); });
+    expect(paragraphButtons().length).toBeGreaterThan(0);
+    expect(quote()).toBeNull();
+  });
+
   it("opens nothing for a reader still not signed in", async () => {
     window.sessionStorage.setItem(key, JSON.stringify({ revisionId: "r1", anchor: anchor("Second") }));
     discussion = { threads: [], revisionId: "r1", writesEnabled: false, callerUserId: null };
     await render();
     expect(quote()).toBeNull();
+    // Kept for when they come back signed in.
+    expect(window.sessionStorage.getItem(key)).not.toBeNull();
   });
 
   it("offers an anonymous reader sign-in once, not also a line saying the same", async () => {
