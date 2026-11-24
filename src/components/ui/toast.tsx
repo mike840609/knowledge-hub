@@ -150,7 +150,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         onMouseLeave={() => { held.current = false; }}
         onFocusCapture={() => { held.current = true; }}
         onBlurCapture={() => { held.current = false; }}
-        className="pointer-events-none fixed bottom-4 right-4 z-[70] flex max-w-panel flex-col items-end"
+        className="pointer-events-none fixed bottom-4 right-4 z-toast flex max-w-panel flex-col items-end"
       >
         {toast ? (
           <div

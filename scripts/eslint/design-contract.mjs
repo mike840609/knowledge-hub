@@ -1,4 +1,4 @@
-/** Geometry may be arbitrary; type, rhythm and surface tokens may not. */
+/** Geometry may be arbitrary; type, rhythm, surface and stacking tokens may not. */
 export const designContractRule = {
   meta: { type: "problem", schema: [], messages: {
     token: "Use a named design token instead of {{utility}} (design contract §3).",
@@ -7,7 +7,7 @@ export const designContractRule = {
   create(context) {
     const check = (node, value) => {
       if (typeof value !== "string") return;
-      const pattern = /\b(?:text|rounded(?:-[trblse]{1,2})?|shadow|duration|ease|p[trblxyse]?|m[trblxyse]?|gap(?:-[xy])?|space-[xy])-\[[^\]]+\]/g;
+      const pattern = /\b(?:text|rounded(?:-[trblse]{1,2})?|shadow|duration|ease|p[trblxyse]?|m[trblxyse]?|gap(?:-[xy])?|space-[xy]|z)-\[[^\]]+\]/g;
       for (const match of value.matchAll(pattern)) context.report({ node, messageId: "token", data: { utility: match[0] } });
     };
     const fieldExceptions = [

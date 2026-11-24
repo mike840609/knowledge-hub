@@ -30,7 +30,7 @@ export function DocumentPreviewLink({ documentId, href, title, note, className, 
   return <Tooltip.Root open={open} onOpenChange={value => { setOpen(value); setPreview(null); setFailed(false); }}>
     <Tooltip.Trigger render={<Link href={href} prefetch={false} className={className} />} delay={400}>{children}</Tooltip.Trigger>
     <Tooltip.Portal>
-      <Tooltip.Positioner side="bottom" align="start" sideOffset={8} className="z-[80]">
+      <Tooltip.Positioner side="bottom" align="start" sideOffset={8} className="z-tooltip">
         <Tooltip.Popup className="max-w-[min(22rem,90vw)] rounded-lg border border-kh-border bg-kh-bg-raised p-3 text-body-sm text-kh-text shadow-popover transition-[opacity,transform] duration-120 ease-out data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0">
           <span className="block font-semibold">{preview?.title ?? title}</span>
           {note ? <span className="block text-kh-text-muted">{note}</span> : null}

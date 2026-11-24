@@ -335,7 +335,7 @@ function MentionCard({ text, people }: { text: string; people: readonly Mentione
       onClick={event => event.stopPropagation()} render={<button type="button" />}
       className="font-medium text-kh-link kh-focus-ring">{text}</Popover.Trigger>
     <Popover.Portal>
-      <Popover.Positioner side="bottom" align="start" sideOffset={4} className="z-[80]">
+      <Popover.Positioner side="bottom" align="start" sideOffset={4} className="z-tooltip">
         <Popover.Popup data-mention-card="" initialFocus={false} onClick={event => event.stopPropagation()}
           className={"flex max-w-[18rem] break-words flex-col gap-2 rounded-lg border border-kh-border bg-kh-bg p-3 text-body-sm text-kh-text shadow-popover outline-none " +
             "transition-[opacity,transform] duration-120 ease-out data-[starting-style]:opacity-0 data-[ending-style]:opacity-0"}>

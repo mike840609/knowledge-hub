@@ -82,10 +82,10 @@ Tailwind emits no ordinary utility for a value the replaced scales do not name:
 radius token. Tailwind still compiles arbitrary values, including `text-[13px]`;
 replacing a scale does not disable that feature.
 
-ESLint `design/contract` rejects arbitrary type, radius, elevation, motion and
-spacing utilities in both literals and template strings. Widths/heights/insets
-used for pane geometry, viewports and truncation may be arbitrary. Native form
-fields must use Input/Select/Textarea; hidden pickers, native checkboxes and
+ESLint `design/contract` rejects arbitrary type, radius, elevation, motion,
+spacing and stacking (`z-[…]`) utilities in both literals and template
+strings. Widths/heights/insets used for pane geometry, viewports and truncation
+may be arbitrary. Native form fields must use Input/Select/Textarea; hidden pickers, native checkboxes and
 radio controls are allowed. Unframed composer, palette, tree-filter and move
 search surfaces are explicit exceptions in `scripts/eslint/design-contract.mjs`.
 New exceptions require a concrete reason here and in the rule.
@@ -101,6 +101,7 @@ together, and say what job the new token does that no existing one covers.
 | Type (document) | `reading`, `subheading`, `display`, `page-title` | rendered Markdown uses `display` 24 / `heading` 20 / `subheading` 17 / `reading` 15 semibold for `h4`–`h6` (`h6` muted): none smaller than the text under it (`2026-10-20-reader-measure-and-heading-scale-design.md`). `page-title` (32/40) is the page's own name — the document title in its header, the composer title field and the public share header — never a heading inside the article, so the page reads as a page and lists keep their 14px titles. |
 | Radius | `sm`, `md`, `lg`, `xl` | see §5 |
 | Elevation | `popover`, `modal` | floating surfaces only |
+| Stacking | `palette`, `toast`, `tooltip`, `lightbox-backdrop`, `lightbox` (60–100) | layers above Tailwind's `z-10`–`z-50`; see §6 |
 | Border | `border`, `border-strong` | see §6 |
 | Syntax colour | `--kh-syntax-{keyword,string,number,comment,function,type,variable,meta}` | fenced code in the reader and on a shared page; see §8 |
 | Chart colour | `--kh-chart-1`, `--kh-chart-1-hover`, `--kh-chart-2`, `--kh-chart-3` | series marks in data displays (Insights); see §8 |
@@ -173,6 +174,25 @@ the widest thing in the chrome.
 `border-strong` is validated against **every** surface it can sit on, not just
 the canvas — `subtle` and `sunken` are the tight cases and a value chosen
 against the canvas alone will fail them.
+
+Stacking is a ladder too, in the order the layers sit. Tailwind's `z-10`–`z-50`
+are kept (the `zIndex` scale is extended, not replaced): sticky bars, inline
+popups and toolbars at 10–30, a dialog's backdrop at 40, and menus, drawers and
+dialogs at 50. Everything above them is named:
+
+```text
+z-palette            60   the ⌘K palette, over its own z-50 backdrop
+z-toast              70   the toast region, above any dialog
+z-tooltip            80   tooltips and the cards a hover opens (link preview, mention)
+z-lightbox-backdrop  90   an enlarged document image's backdrop
+z-lightbox          100   the enlarged image itself, above everything
+```
+
+A new layer takes a name here and in the config, not a number in a component.
+ESLint holds class strings to that; raw CSS in `globals.css` is not checked, and
+keeps two local values that sit inside the ladder: `z-index: 1` for an element
+raised over its siblings in its own stacking context, and `31` for the table's grips and add button, one
+step above the block gutter's 30.
 
 Cards are intentionally rare. Prefer:
 
@@ -428,6 +448,10 @@ which §8 rules out; a note and an important are neutral and told apart by
 glyph, word and the weight of their line. Should a sixth kind be wanted, it
 takes one of these rows' colours rather than a new one.
 
+The line on the left is a quote's shape and belongs to the document. A note in
+the product's own UI (the import guide's, a composer notice) is a box instead:
+`border`, `bg-subtle`, `md` radius, no coloured edge.
+
 ### HTML in a document
 
 The reader draws seven HTML tags as what they mean and shows every other as
@@ -520,8 +544,8 @@ button that opens it larger: a `Dialog` with the image's `alt` as its title, zoo
 from 100% to 300% in steps of 50%, a link to the file itself, and Close. Escape
 closes it and focus returns to the image. An image the author put inside a link
 keeps that link and is not a button — one destination per image. A blocked or
-missing image is the placeholder it was, and opens nothing. No token was added;
-the dialog sits at `z-[90]`/`z-[100]`, above the page's other layers.
+missing image is the placeholder it was, and opens nothing. The dialog sits at
+`z-lightbox-backdrop`/`z-lightbox`, above the page's other layers (§6).
 
 A table is a region of its own that scrolls both ways (`.kh-markdown-table`):
 
@@ -614,6 +638,11 @@ once.
 Line heights are this product's own. The reference sets 15px at 1.6 for
 marketing prose; the document scale here is looser because it serves a longer
 measure.
+
+Headings `h1`–`h3` wrap balanced (`text-wrap: balance`, one base rule in
+`globals.css`), so a title that breaks does not leave one word on its last line.
+Not on everything, which has a cost, and not in the rendered editor (`.kh-editor`)
+or on a title field, where rebalancing would move text under the caret.
 
 The typeface is loaded, not inherited from the platform — the default sans
 varies most at the 11–14px sizes this UI lives in. Timestamps and figures that

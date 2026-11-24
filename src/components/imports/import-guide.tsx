@@ -20,7 +20,7 @@ function Block({ block, caption }: { block: GuideBlock; caption: string }): Reac
     case "p":
       return <p className="mt-2 text-body text-kh-text-secondary"><Inline text={block.text} /></p>;
     case "note":
-      return <p className="mt-2 rounded-md border-l-2 border-kh-primary bg-kh-bg-subtle px-3 py-2 text-body font-medium text-kh-text"><Inline text={block.text} /></p>;
+      return <p className="mt-2 rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body font-medium text-kh-text"><Inline text={block.text} /></p>;
     case "ul":
     case "ol": {
       const List = block.kind;

@@ -44,7 +44,7 @@ export function Tooltip({
     <BaseTooltip.Root>
       <BaseTooltip.Trigger render={children} />
       <BaseTooltip.Portal>
-        <BaseTooltip.Positioner side={side} sideOffset={6} className="z-[80]">
+        <BaseTooltip.Positioner side={side} sideOffset={6} className="z-tooltip">
           <BaseTooltip.Popup
             className={
               "pointer-events-none flex items-center gap-2 rounded-lg border border-kh-border bg-kh-bg-raised px-2 py-1 " +

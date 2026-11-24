@@ -346,7 +346,7 @@ export function QuickSearch({
       }}>
         <Dialog.Portal>
           <Dialog.Backdrop className={dialogBackdropClasses("z-50")} />
-          <Dialog.Popup finalFocus={() => !isBuffering()} className={`${dialogSurfaceClasses} top-[min(14vh,120px)] z-[60] flex max-h-[75vh] flex-col overflow-hidden ${split ? "h-[75vh] w-[min(1080px,calc(100vw-48px))]" : "w-[min(640px,calc(100vw-24px))]"}`}>
+          <Dialog.Popup finalFocus={() => !isBuffering()} className={`${dialogSurfaceClasses} top-[min(14vh,120px)] z-palette flex max-h-[75vh] flex-col overflow-hidden ${split ? "h-[75vh] w-[min(1080px,calc(100vw-48px))]" : "w-[min(640px,calc(100vw-24px))]"}`}>
             <Dialog.Title className="sr-only">Search and actions</Dialog.Title>
             <div className="flex items-center gap-3 border-b border-kh-border px-4">
               <Search className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />

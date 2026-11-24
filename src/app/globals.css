@@ -148,6 +148,15 @@ body {
   }
 }
 
+@layer base {
+  /* Headlines wrap balanced (contract §9). Only h1–h3, since balancing has a cost; not inside the
+     rendered editor, where it would reflow text under the caret. Zero specificity, so any utility
+     (`truncate`) still wins. */
+  :where(h1, h2, h3):where(:not(.kh-editor *)) {
+    @apply text-balance;
+  }
+}
+
 a { color: inherit; }
 
 ::selection { background: var(--kh-highlight); color: var(--kh-text); }

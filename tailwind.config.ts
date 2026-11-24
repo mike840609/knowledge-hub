@@ -3,7 +3,7 @@ import type { Config } from "tailwindcss";
 /**
  * Design tokens. The scales below are *replaced*, not extended, so the only
  * ordinary utilities that compile are the ones named here. Arbitrary values
- * still compile; ESLint design/contract enforces type, radius and rhythm tokens.
+ * still compile; ESLint design/contract enforces type, radius, rhythm and z-index tokens.
  *
  * Contract and rationale: docs/superpowers/specs/frontend-design-language.md
  */
@@ -112,6 +112,16 @@ const config: Config = {
     gap: { ...rhythm }, // gap-x-*/gap-y-* read this scale too
     space: { ...rhythm },
     extend: {
+      // Stacking layers above Tailwind's 0–50, named by what sits there, in the
+      // order they stack (contract §6). Extended, not replaced: z-10…z-50 stay
+      // for sticky bars, menus and dialogs.
+      zIndex: {
+        palette: "60", // the ⌘K palette, over its own z-50 backdrop
+        toast: "70",
+        tooltip: "80", // tooltips and the cards a hover opens: link preview, mention
+        "lightbox-backdrop": "90", // an enlarged document image, above everything
+        lightbox: "100",
+      },
       colors: {
         "kh-bg": "var(--kh-bg)",
         "kh-bg-raised": "var(--kh-bg-raised)",

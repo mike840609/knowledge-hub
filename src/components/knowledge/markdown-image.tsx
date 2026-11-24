@@ -60,8 +60,8 @@ export function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
         {thumbnail}
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Backdrop className={dialogBackdropClasses("z-[90]")} />
-        <Dialog.Popup className={dialogPopupClasses("!z-[100] flex max-h-[94dvh] w-[94vw] flex-col")}>
+        <Dialog.Backdrop className={dialogBackdropClasses("z-lightbox-backdrop")} />
+        <Dialog.Popup className={dialogPopupClasses("!z-lightbox flex max-h-[94dvh] w-[94vw] flex-col")}>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <Dialog.Title className="min-w-0 break-words text-title font-semibold">{alt || "Image preview"}</Dialog.Title>
             <div className="flex flex-wrap items-center gap-2">
