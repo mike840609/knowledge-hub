@@ -9,12 +9,11 @@ const MARKDOWN = "A first passage to review.\n\nA second paragraph here.";
 const button = (page: Page, text: string) => page.getByRole("button", { name: `Comment on paragraph: ${text}`, exact: true });
 const ready = (page: Page) => expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
 
-/** Tabs from the title until `target` has focus, as a keyboard reader would. */
-async function tabTo(page: Page, target: ReturnType<typeof button>) {
-  // From the skip link's target, the title: the next stops are the paragraphs' buttons.
+/** One Tab from the title (the skip link's target) reaches the paragraph buttons: they are one stop. */
+async function tabIn(page: Page, first: ReturnType<typeof button>) {
   await page.locator('[id="shared-content:skip"]').focus();
-  for (let step = 0; step < 3 && !(await target.evaluate(element => element === document.activeElement)); step++) await page.keyboard.press("Tab");
-  await expect(target).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(first).toBeFocused();
 }
 
 test("a keyboard reader comments on a paragraph beside the open rail, without selecting text", async ({ page, request }) => {
@@ -24,7 +23,9 @@ test("a keyboard reader comments on a paragraph beside the open rail, without se
   await ready(page);
   await page.getByRole("button", { name: /^Show comments/ }).click();
   const second = button(page, "A second paragraph here.");
-  await tabTo(page, second);
+  await tabIn(page, button(page, "A first passage to review."));
+  await page.keyboard.press("ArrowDown");
+  await expect(second).toBeFocused();
   // Shown while it has the keyboard's focus, in the article's left padding: the text keeps its place.
   await expect(second).toHaveCSS("opacity", "1");
   const paragraph = page.locator("[data-review-document]").getByText("A second paragraph here.", { exact: true });
@@ -49,10 +50,29 @@ test("on a phone the paragraph's button opens the composer in the drawer, focuse
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
   await ready(page);
   const first = button(page, "A first passage to review.");
-  await tabTo(page, first);
+  await tabIn(page, first);
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog", { name: "Comments" }).getByRole("textbox", { name: "Add comment" })).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
+
+test("the paragraph buttons are one tab stop: arrows move within them, Tab leaves", async ({ page, request }) => {
+  const doc = await createReviewDocument(request, Array.from({ length: 40 }, (_, index) => `Paragraph ${index} of a long document.`).join("\n\n"));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
+  await ready(page);
+  await expect(page.getByRole("toolbar", { name: "Paragraph comments" })).toHaveAttribute("aria-orientation", "vertical");
+  await tabIn(page, button(page, "Paragraph 0 of a long document."));
+  await page.keyboard.press("End");
+  await expect(button(page, "Paragraph 39 of a long document.")).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(button(page, "Paragraph 38 of a long document.")).toBeFocused();
+  // One Tab leaves all forty behind.
+  await page.keyboard.press("Tab");
+  expect(await page.evaluate(() => !!document.activeElement && !document.activeElement.closest('[role="toolbar"]'))).toBe(true);
+  // Shift+Tab comes back to the one last focused.
+  await page.keyboard.press("Shift+Tab");
+  await expect(button(page, "Paragraph 38 of a long document.")).toBeFocused();
 });
 
 test("a reader who may not write is offered no paragraph button", async ({ page, request }) => {
