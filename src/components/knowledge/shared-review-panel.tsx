@@ -143,6 +143,12 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
   }} />;
   // Beside its passage where the discussions are a rail; at the top of the drawer, which covers the passage, where they are not.
   const draft = composer && inline && !revisionChanged ? { anchor: selection.chosen!, composer } : undefined;
+  // What the notice asks for, offered beside it: a reload reads the document as it is now, and an
+  // unsent comment or reply is kept across it (2026-10-21 amendment).
+  const changedNotice = () => <>
+    <p role="status" className="text-body-sm">Document changed. Refresh this page before selecting or locating a passage. You can still reply to existing comments.</p>
+    <Button type="button" variant="soft" className="mt-2" onClick={() => window.location.reload()}><RefreshCw className="size-4" aria-hidden="true" />Refresh page</Button>
+  </>;
   return <>
     <div className={`sticky top-0 z-20 border-b border-kh-border bg-kh-bg ${wide ? "kh-share-folder-bar" : ""}`}>
       <div className={wide ? "flex h-14 items-center gap-2 px-4" : "kh-review-entry kh-reading-column relative flex min-h-14 items-center justify-between gap-3 py-2"}>
@@ -162,7 +168,7 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
     </div>
     {!open && (error || revisionChanged) && <div className="kh-reading-column py-3">
       {error && <p role="status" className="text-body-sm">{error} <Button type="button" variant="ghost" aria-label="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" />Retry</Button></p>}
-      {revisionChanged && <p role="status" className="text-body-sm">Document changed. Refresh this page before selecting or locating a passage. You can still reply to existing comments.</p>}
+      {revisionChanged && changedNotice()}
     </div>}
     <div className="kh-review-document" data-review-ready={result || error ? "" : undefined} data-review-open={open ? "" : undefined} data-review-inline={inline ? "" : undefined}>
       <div ref={readingRef} className="kh-review-reading">
@@ -200,12 +206,12 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
         <div className="flex shrink-0 items-center gap-1"><Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" disabled={refreshing} onClick={() => void load()}><RefreshCw className={`size-4 ${refreshing ? "motion-safe:animate-spin" : ""}`} aria-hidden="true" /></Button></Tooltip><span className="kh-review-rail-only"><Tooltip label="Close comments"><Button type="button" variant="ghost" icon aria-label="Close comments" onClick={() => changeOpen(false)}><X className="size-4" aria-hidden="true" /></Button></Tooltip></span></div>
       </div>
       {result && result.threads.length > 0 && <ReviewNextButtons threads={result.threads} activeThreadId={activeThreadId} onActivate={setActiveThreadId} filter={filter} onFilterChange={setFilter} />}
-      {error && <p role="status" className="mt-3 text-body-sm">{error}</p>}
+      {error && <div className="mt-3"><p role="status" className="text-body-sm">{error}</p><Button type="button" variant="ghost" className="-ml-3" disabled={refreshing} onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" />Retry</Button></div>}
       {!result && !error && <p role="status" className="mt-3 text-body-sm text-kh-text-muted">Loading comments…</p>}
       {refreshing && <p role="status" className="mt-3 text-caption text-kh-text-muted">Updating…</p>}
       {selection.refusal && <p role="status" className="mt-3 text-body-sm">{selection.refusal}</p>}
       {result && <div className="mt-3">
-        {revisionChanged && <p role="status" className="mb-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage. You can still reply to existing comments.</p>}
+        {revisionChanged && <div className="mb-3">{changedNotice()}</div>}
         {/* The one thing a reader does here that an owner does not, on a row of its own. */}
         {canComment && <div className="mb-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={() => { if (!inline) { focusArticleAfterClose.current = true; changeOpen(false); return; } selection.capture(); }}><MessageSquarePlus className="size-4" aria-hidden="true" />{inline ? "Comment on selected text" : "Close comments and select text"}</Button>{inline && !selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
         {!result.writesEnabled && <p className="mb-3 text-body-sm text-kh-text-muted">{result.callerUserId === null ? "Sign in to add a comment." : "Adding comments is currently disabled."}</p>}

@@ -1764,7 +1764,7 @@ confirm button names the act ("Discard changes"), not "OK". A dialog inside a
 form is rendered beside it, not in it: React events bubble through a portal to
 the component that rendered it, and the form's keys are not the dialog's. The
 composer's Cancel is the first user, and the draft is still cleared only on the
-discard answer.
+discard answer. A review comment box's Cancel, holding written words, asks the same way (inline review spec, 2026-11-24).
 
 Error and not-found states take their shape from `StatusMessage` — heading,
 one line, optional action — so that a new boundary cannot invent a fourth

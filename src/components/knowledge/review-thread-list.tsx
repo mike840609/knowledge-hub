@@ -5,7 +5,7 @@ import type { OwnerReviewThreadView, ReviewAnchor, ReviewThreadView } from "@/mo
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Timestamp } from "@/components/ui/timestamp";
 import { Textarea } from "@/components/ui/textarea";
-import { Bell, BellDot, BellOff, Check, ChevronDown, CircleArrowDown, MoreHorizontal } from "lucide-react";
+import { Bell, BellDot, BellOff, Check, ChevronDown, CircleAlert, CircleArrowDown, MoreHorizontal } from "lucide-react";
 import { MenuRoot, MenuTrigger, MenuContent, MenuItem, MenuRadioGroup, MenuRadioItem } from "@/components/ui/menu";
 import { buttonClasses } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,17 @@ export async function reviewRequest<T>(url: string, body?: unknown): Promise<T> 
  */
 export const reviewDraftKey = (kind: "reply" | "new", id: string) => `kh:review-draft:${kind}:${id}`;
 
+/**
+ * What a failed send says: what did not happen, why, and what to do. A dropped connection throws a
+ * bare `TypeError` whose words ("Failed to fetch") mean nothing to a reader.
+ */
+export function reviewSendFailure(label: string, failure: unknown): string {
+  const what = label === "Add comment" ? "Couldn't post your comment." : label === "Reply" ? "Couldn't send your reply." : "Couldn't save your changes.";
+  const why = failure instanceof TypeError || !(failure instanceof Error) ? "Check your connection and try again." : failure.message;
+  // A reason that already says what to do (sign in, try again) or that nothing will help is left as it is.
+  return /try again|sign in|no longer available|unavailable/i.test(why) ? `${what} ${why}` : `${what} ${why} Try again.`;
+}
+
 export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, initial = "", submitLabel = label, onCancel, submitDisabled = false, cancelOnEscape = false, draftKey, mentionScope }: { /** `mentions`: who the sent text names, picked from the `@` list; `mentionLinkId`: the owner's link they are reached through. */ onSubmit: (body: string, key: string, mentions: string[], mentionLinkId?: string) => Promise<void>; label?: string; /** Changes when the card's own Reply was pressed: open the form. */ openRequest?: number; /** An edit starts from what the comment says. */ initial?: string; submitLabel?: string; onCancel?: () => void; submitDisabled?: boolean; cancelOnEscape?: boolean; /** Keeps the unsent text (`reviewDraftKey`). */ draftKey?: string; /** Offers the `@` list; absent for an edit, which never adds a mention. */ mentionScope?: MentionScope }) {
   const [body, setBody] = useState(() => (draftKey && readStored("session", draftKey)) || initial);
   // A reply someone had started is open again, as they left it.
@@ -54,27 +65,34 @@ export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, in
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const request = useRef<{ body: string; key: string } | null>(null);
+  // Cancelling words someone wrote cannot be undone, so it is asked first (design language §15).
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+  const cancel = () => { discard(); setBody(initial); mention.reset(); if (onCancel) onCancel(); else setExpanded(false); };
+  const requestCancel = () => { if (body.trim() && body !== initial) setConfirmingDiscard(true); else cancel(); };
   if (!expanded) return <Button type="button" variant="ghost" className="-ml-3 mt-3" onClick={() => setExpanded(true)}>Reply</Button>;
-  return <form className="mt-3 space-y-2" onKeyDown={event => {
+  return <><form className="mt-3 space-y-2" onKeyDown={event => {
     // Through the form's own button, so the key does nothing the button would not.
     if (matchesShortcut(event.nativeEvent, SUBMIT_SHORTCUT)) { event.preventDefault(); event.currentTarget.querySelector<HTMLButtonElement>('button[type="submit"]:not(:disabled)')?.click(); return; }
     if (event.key !== "Escape") return;
     // Esc never closes the rail from here, and never discards: it leaves only an edit nothing was changed in.
     event.preventDefault(); event.stopPropagation();
-    if (onCancel && !busy && (cancelOnEscape || body === initial)) onCancel();
+    if (onCancel && !busy && (cancelOnEscape || body === initial)) requestCancel();
   }} onSubmit={async event => {
     event.preventDefault(); if (busy || submitDisabled || !body.trim()) return;
     if (!request.current || request.current.body !== body) request.current = { body, key: crypto.randomUUID() };
     setBusy(true); setError(undefined);
     const { mentions, mentionLinkId } = mention.collect(body);
-    try { await onSubmit(body, request.current.key, mentions, mentionLinkId); setBody(""); discard(); mention.reset(); request.current = null; if (label === "Reply") setExpanded(false); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not save comment."); } finally { setBusy(false); }
+    try { await onSubmit(body, request.current.key, mentions, mentionLinkId); setBody(""); discard(); mention.reset(); request.current = null; if (label === "Reply") setExpanded(false); } catch (failure) { setError(reviewSendFailure(label, failure)); } finally { setBusy(false); }
   }}>
+    {/* 6,000 UTF-16 units: the limit is 3,000 characters, and a character outside the BMP (an emoji) is two units. The counter and the send button hold the 3,000. */}
     <div className="relative"><Textarea {...mention.field} aria-label={label} placeholder={label === "Reply" ? "Reply…" : "Add a comment…"} rows={2} autoFocus className="!min-h-20 resize-y" value={body} disabled={busy} onChange={event => { keep(event.target.value); mention.track(); }} required maxLength={6000} />{mention.list}</div>
     {[...body].length >= 2700 && <p className="text-caption text-kh-text-muted">{[...body].length}/3,000</p>}
-    {error && <p role="alert" className="text-body-sm">{error}</p>}
+    {error && <p role="alert" className="flex items-start gap-1.5 text-body-sm text-kh-danger"><CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" /><span>{error}</span></p>}
     {mention.linkChoice}
-    <div className="flex justify-end gap-1">{(label === "Reply" || onCancel) && <Button type="button" variant="ghost" disabled={busy} onClick={() => { discard(); setBody(initial); mention.reset(); if (onCancel) onCancel(); else setExpanded(false); }}>Cancel</Button>}<Tooltip label={submitLabel} shortcut={SUBMIT_SHORTCUT}><Button type="submit" aria-keyshortcuts={SUBMIT_SHORTCUT} disabled={busy || submitDisabled || !body.trim() || [...body].length > 3000}>{busy ? "Saving…" : submitLabel}</Button></Tooltip></div>
-  </form>;
+    <div className="flex justify-end gap-1">{(label === "Reply" || onCancel) && <Button type="button" variant="ghost" disabled={busy} onClick={requestCancel}>Cancel</Button>}<Tooltip label={submitLabel} shortcut={SUBMIT_SHORTCUT}><Button type="submit" aria-keyshortcuts={SUBMIT_SHORTCUT} disabled={busy || submitDisabled || !body.trim() || [...body].length > 3000}>{busy ? "Saving…" : submitLabel}</Button></Tooltip></div>
+  </form>
+  {/* Beside the form, not in it; and its keys stop here, so Escape answers the question without also closing the rail. */}
+  <span className="contents" onKeyDown={event => event.stopPropagation()}><ConfirmDialog open={confirmingDiscard} onOpenChange={setConfirmingDiscard} title={label === "Add comment" ? "Discard this comment?" : label === "Reply" ? "Discard this reply?" : "Discard your changes?"} description="What you wrote will be lost." confirmLabel={label === "Add comment" ? "Discard comment" : label === "Reply" ? "Discard reply" : "Discard changes"} cancelLabel="Keep writing" onConfirm={cancel} /></span></>;
 }
 
 export type ReviewFilter = "ALL" | "OPEN" | "RESOLVED";

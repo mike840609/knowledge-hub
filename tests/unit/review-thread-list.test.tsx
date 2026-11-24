@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { ReviewReplyForm, ReviewThreadList, reviewDraftKey } from "@/components/knowledge/review-thread-list";
+import { ReviewReplyForm, ReviewThreadList, reviewDraftKey, reviewSendFailure } from "@/components/knowledge/review-thread-list";
 import { splitMentions } from "@/modules/knowledge/domain/mention-text";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -163,10 +163,58 @@ test("sending or cancelling a reply forgets its draft", async () => {
   expect(sessionStorage.getItem(reviewDraftKey("reply", "t1"))).toBeNull();
   act(() => { buttons("Reply")[0].click(); });
   type(host.querySelector("textarea")!, "Never mind");
+  // Words written are asked about before they go (below); discarding them forgets the draft.
   act(() => { buttons("Cancel")[0].click(); });
+  act(() => { documentButtons("Discard reply")[0].click(); });
   expect(sessionStorage.getItem(reviewDraftKey("reply", "t1"))).toBeNull();
   remount();
   expect(host.querySelector("textarea")).toBeNull();
+});
+
+/** Buttons anywhere in the document: a confirmation is portalled out of the host. */
+function documentButtons(name: string) {
+  return Array.from(document.body.querySelectorAll("button")).filter(button => button.textContent === name);
+}
+
+test("Cancel on written words asks first, and Keep writing keeps them", async () => {
+  sessionStorage.clear();
+  renderForm();
+  act(() => { buttons("Reply")[0].click(); });
+  type(host.querySelector("textarea")!, "Worth keeping");
+  act(() => { buttons("Cancel")[0].click(); });
+  expect(document.body.textContent).toContain("Discard this reply?");
+  act(() => { documentButtons("Keep writing")[0].click(); });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  expect(host.querySelector("textarea")?.value).toBe("Worth keeping");
+  expect(sessionStorage.getItem(reviewDraftKey("reply", "t1"))).toBe("Worth keeping");
+});
+
+test("Cancel on an empty reply closes it without asking", () => {
+  sessionStorage.clear();
+  renderForm();
+  act(() => { buttons("Reply")[0].click(); });
+  act(() => { buttons("Cancel")[0].click(); });
+  expect(document.body.textContent).not.toContain("Discard this reply?");
+  expect(host.querySelector("textarea")).toBeNull();
+});
+
+test("a failed send says what failed and what to do, as an error", async () => {
+  sessionStorage.clear();
+  renderForm(async () => { throw new Error("The comment could not be updated."); });
+  act(() => { buttons("Reply")[0].click(); });
+  type(host.querySelector("textarea")!, "Lost?");
+  await act(async () => { host.querySelector("form")!.requestSubmit(); });
+  const alert = host.querySelector<HTMLElement>('[role="alert"]')!;
+  expect(alert.textContent).toBe("Couldn't send your reply. The comment could not be updated. Try again.");
+  expect(alert.className).toContain("text-kh-danger");
+  expect(alert.querySelector("svg")).not.toBeNull();
+  expect(host.querySelector("textarea")?.value).toBe("Lost?");
+});
+
+test("a failed send names a dropped connection in words a reader can act on", () => {
+  expect(reviewSendFailure("Add comment", new TypeError("Failed to fetch"))).toBe("Couldn't post your comment. Check your connection and try again.");
+  expect(reviewSendFailure("Add comment", new Error("This comment or share link is no longer available."))).toBe("Couldn't post your comment. This comment or share link is no longer available.");
+  expect(reviewSendFailure("Edit comment", new Error("Too long."))).toBe("Couldn't save your changes. Too long. Try again.");
 });
 
 test("a collapsed card says it holds an unsent reply", () => {
