@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./fixtures/test";
-import { personalWorkspaceId as mySpace } from "./fixtures/my-space";
+import { personalWorkspaceId as mySpace, recordedAsRecent } from "./fixtures/my-space";
 
 const ROUND_TRIP = { timeout: 15_000 };
 
@@ -28,6 +28,7 @@ test("a page icon follows the document to Home, the palette, the explorer and se
   // Reading it records it in Recent on this device.
   await page.goto(note.href);
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(title, ROUND_TRIP);
+  await recordedAsRecent(page, note.documentId);
 
   // Home: the Recent row is the whole row, icon included.
   await page.goto(`/w/${workspaceId}/home`);

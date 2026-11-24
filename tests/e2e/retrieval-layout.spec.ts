@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./fixtures/test";
-import { personalWorkspaceId as mySpace } from "./fixtures/my-space";
+import { personalWorkspaceId as mySpace, recordedAsRecent } from "./fixtures/my-space";
 
 const ROUND_TRIP = { timeout: 15_000 };
 
@@ -88,6 +88,7 @@ for (const width of [1100, 390]) {
     await page.goto(first.href);
     await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(firstTitle, ROUND_TRIP);
     await expect(page.getByRole("navigation", { name: "Document tree", exact: true })).toBeHidden();
+    await recordedAsRecent(page, first.documentId);
     await page.goto(second.href);
     await page.getByRole("button", { name: mobile ? "Open menu" : "Expand navigation", exact: true }).click();
     await page.getByRole("button", { name: "Recent documents", exact: true }).click();
