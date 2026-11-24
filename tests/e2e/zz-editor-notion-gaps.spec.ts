@@ -54,6 +54,8 @@ test.describe("the 2026-11-17 Notion gaps", () => {
     const url = await createNote(page, workspaceId, unique("Nested"), "- First\n- Second\n- Third\n");
     const surface = await openEditor(page, url);
     await surface.getByText("Second", { exact: true }).click();
+    // The block menu opens at the caret: wait until the click has put it in "Second".
+    await expect.poll(() => page.evaluate(() => window.getSelection()?.anchorNode?.textContent)).toBe("Second");
     await page.keyboard.press("Alt+F10");
     await page.getByRole("button", { name: "Move block" }).click();
     await page.getByRole("menuitem", { name: "Duplicate" }).click();
