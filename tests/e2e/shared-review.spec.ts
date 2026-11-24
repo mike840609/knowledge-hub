@@ -56,7 +56,9 @@ test("anonymous readers see comments but cannot create or reply, even without an
     await openReviewDiscussions(page);
     await expect(page.locator("[data-review-document]")).toContainText("bold");
     await expect(page.locator("[data-review-thread]")).toContainText("Visible without signing in");
-    await expect(page.getByText("Sign in to add a comment.", { exact: true })).toBeVisible();
+    // Sign-in is offered once, as the action, not also as a line saying the same.
+    await expect(page.getByRole("link", { name: "Sign in to comment", exact: true }).filter({ visible: true })).toHaveCount(1);
+    await expect(page.getByText("Sign in to add a comment.", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Comment on selection" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Reply", exact: true })).toHaveCount(0);
   }
@@ -100,6 +102,34 @@ test("signing in to comment comes back to the shared page, where the reader can 
   await expect(page.getByRole("link", { name: "Sign in to comment" })).toHaveCount(0);
   await selectPassage(page);
   await expect(page.getByRole("button", { name: "Comment on selection" })).toBeVisible();
+});
+
+test("a passage chosen before signing in is waiting in the composer on return", async ({ page, request }) => {
+  const doc = await createReviewDocument(request, "A first passage to review.\n\nA second paragraph here.");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${phase3NoSessionOrigin()}${doc.links[0].path}`);
+  await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
+  await selectPassage(page, "first passage");
+  await page.locator(".kh-selection-bubble").getByRole("link", { name: "Sign in to comment" }).click();
+  await page.waitForURL(/\?returnTo=/);
+  // Kept in this tab only. In production sign-in returns to the same origin; here the signed-in
+  // persona is another origin, so what the tab kept is carried across by hand.
+  const kept = await page.evaluate(() => JSON.stringify(Object.fromEntries(Object.entries(sessionStorage).filter(([key]) => key.endsWith(":sign-in")))));
+  expect(Object.keys(JSON.parse(kept))).toHaveLength(1);
+  const viewer = phase3Origin("viewer");
+  await page.goto(`${viewer}/s/not-a-token`);
+  await page.evaluate(entries => { for (const [key, value] of Object.entries(JSON.parse(entries) as Record<string, string>)) sessionStorage.setItem(key, value); }, kept);
+  await page.goto(`${viewer}${doc.links[0].path}`);
+  const box = page.getByRole("textbox", { name: "Add comment" });
+  await expect(box).toBeFocused();
+  await expect(page.locator("[data-review-rail] [data-review-draft] blockquote")).toHaveText("first passage");
+  await box.fill("After signing in");
+  await page.getByRole("button", { name: "Add comment", exact: true }).click();
+  await expect(page.locator("[data-review-rail] [data-review-thread]").filter({ hasText: "After signing in" })).toHaveCount(1);
+  // Used once: a reload opens no composer.
+  await page.reload();
+  await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
+  await expect(box).toHaveCount(0);
 });
 
 function postThread(request: APIRequestContext, doc: Awaited<ReturnType<typeof createReviewDocument>>, block: number, exact: string, prefix: string, suffix: string, body: string) {

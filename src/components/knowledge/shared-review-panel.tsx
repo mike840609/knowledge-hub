@@ -10,7 +10,7 @@ import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewDraftKey, 
 import { ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
 import { ReviewPanelShell } from "./review-panel-shell";
 import { ReviewBlockComment } from "./review-block-comment";
-import { COMMENT_HINT, focusReviewAnchor, selectionAnchorInBlock } from "./review-selection";
+import { COMMENT_HINT, createReviewRangeResolver, focusReviewAnchor, selectionAnchorInBlock } from "./review-selection";
 import { ReviewPassageMarkers } from "./review-passage-markers";
 import { reviewRailInline, useReviewRailInline, useReviewRailOpen } from "./review-rail-mode";
 import { awaitingReader, newComments, parseDismissed, sharedDismissedKey } from "./review-auto-open";
@@ -124,6 +124,10 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
   // An unsent new comment is kept with its passage, so a reload brings both back (spec amendment 2026-10-21).
   const draftKey = reviewDraftKey("new", kept);
   const anchorKey = `${draftKey}:anchor`;
+  // The passage an anonymous reader chose before leaving to sign in, with the revision it was chosen
+  // in. Only what this tab shows itself on return: the comment is still the signed-in reader's write,
+  // judged by the service as any other.
+  const signInKey = `${draftKey}:sign-in`;
   const [restored, setRestored] = useState(false);
   const discardDraft = useCallback(() => { removeStored("session", draftKey); removeStored("session", anchorKey); setRestored(false); }, [draftKey, anchorKey]);
   useEffect(() => { if (selection.chosen) writeStored("session", anchorKey, JSON.stringify(selection.chosen)); }, [selection.chosen, anchorKey]);
@@ -132,9 +136,14 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
     if (restoreChecked.current || !result || !canComment) return;
     restoreChecked.current = true;
     const anchor = parseStoredAnchor(readStored("session", anchorKey));
-    if (anchor && readStored("session", draftKey)?.trim()) { selection.choose(anchor); setRestored(true); setOpen(true); }
-    else discardDraft();
-  }, [result, canComment, anchorKey, draftKey, selection, discardDraft]);
+    const signedIn = parseSignIn(readStored("session", signInKey));
+    removeStored("session", signInKey);
+    if (anchor && readStored("session", draftKey)?.trim()) { selection.choose(anchor); setRestored(true); setOpen(true); return; }
+    discardDraft();
+    // Back from signing in: the composer opens on the passage, if it is still there as it was; if not, nothing is said.
+    const root = readingRef.current?.querySelector<HTMLElement>("[data-review-document]");
+    if (signedIn && signedIn.revisionId === revisionId && root && createReviewRangeResolver(root, markdown)(signedIn.anchor)) { selection.choose(signedIn.anchor); setOpen(true); }
+  }, [result, canComment, anchorKey, draftKey, signInKey, revisionId, markdown, selection, discardDraft, setOpen]);
   // Only a signed-in reader who may write is offered `@`: the candidate route refuses anyone else.
   const mentionScope = result?.writesEnabled && !anonymous ? scope : undefined;
   const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} draftKey={draftKey} restored={restored} mentionScope={mentionScope} onCancel={() => { discardDraft(); selection.clear(); }} onSubmit={async (body, idempotencyKey, mentions) => {
@@ -185,7 +194,10 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
           changeOpen(true);
           return resolved === anchor;
         }} />}
-        {anonymous && !revisionChanged && <ReviewSelectionBubble place={selection.place} ready={selection.ready} signInHref={signInHref} onComment={() => undefined} />}
+        {anonymous && !revisionChanged && <ReviewSelectionBubble place={selection.place} ready={selection.ready} signInHref={signInHref} onComment={() => {
+          const anchor = selection.peek();
+          if (anchor) writeStored("session", signInKey, JSON.stringify({ revisionId, anchor }));
+        }} />}
         <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={revisionChanged ? undefined : result?.threads} />
       </div>
       <aside id="shared-document-discussions" className="kh-review-panel" aria-label="Document comments" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && reviewRailInline()) changeOpen(false); }}>
@@ -214,7 +226,8 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
         {revisionChanged && <div className="mb-3">{changedNotice()}</div>}
         {/* The one thing a reader does here that an owner does not, on a row of its own. */}
         {canComment && <div className="mb-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={() => { if (!inline) { focusArticleAfterClose.current = true; changeOpen(false); return; } selection.capture(); }}><MessageSquarePlus className="size-4" aria-hidden="true" />{inline ? "Comment on selected text" : "Close comments and select text"}</Button>{inline && !selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
-        {!result.writesEnabled && <p className="mb-3 text-body-sm text-kh-text-muted">{result.callerUserId === null ? "Sign in to add a comment." : "Adding comments is currently disabled."}</p>}
+        {/* An anonymous reader is offered sign-in once, as the button below, not also as a line saying the same. */}
+        {!result.writesEnabled && !anonymous && <p className="mb-3 text-body-sm text-kh-text-muted">Adding comments is currently disabled.</p>}
         {anonymous && <div className="mb-3"><a href={signInHref} className={buttonClasses({ variant: "soft" })}><LogIn className="size-4" aria-hidden="true" />Sign in to comment</a></div>}
       </div>}
       </div>
@@ -229,6 +242,17 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
       </aside>
     </div>
   </>;
+}
+
+/** A passage kept across signing in, with the revision it was chosen in; anything else is nothing. */
+function parseSignIn(stored: string | null): { revisionId: string; anchor: ReviewAnchor } | null {
+  try {
+    const value = JSON.parse(stored ?? "") as { revisionId?: unknown; anchor?: unknown } | null;
+    const anchor = parseStoredAnchor(JSON.stringify(value?.anchor ?? null));
+    return value && typeof value.revisionId === "string" && anchor ? { revisionId: value.revisionId, anchor } : null;
+  } catch {
+    return null;
+  }
 }
 
 /** A kept passage, read back as the anchor it was; anything else is no draft. The service checks it again on send. */

@@ -87,3 +87,45 @@ describe("the passage being commented on", () => {
     expect(registry.has("document-review-draft")).toBe(false);
   });
 });
+
+describe("a passage chosen before signing in", () => {
+  const key = "kh:review-draft:new:tok:sign-in";
+  const anchor = (exact: string, blockPath = [1]) => ({ schemaVersion: 1, blockPath, blockKind: "paragraph", startUtf16: 0, endUtf16: exact.length, exact, prefix: "", suffix: "" });
+  const quote = () => container.querySelector(".kh-review-composer blockquote")?.textContent ?? null;
+
+  it("opens the composer on it once the reader is back signed in", async () => {
+    window.sessionStorage.setItem(key, JSON.stringify({ revisionId: "r1", anchor: anchor("Second") }));
+    discussion = { threads: [], revisionId: "r1", writesEnabled: true, callerUserId: "u1" };
+    await render();
+    expect(quote()).toBe("Second");
+    expect(window.sessionStorage.getItem(key)).toBeNull();
+  });
+
+  it.each([
+    ["the document has changed since", { revisionId: "r0", anchor: anchor("Second") }],
+    ["the passage is no longer there as it was", { revisionId: "r1", anchor: anchor("Gone") }],
+    ["what was kept is not a passage", { revisionId: "r1", anchor: { exact: 3 } }],
+  ])("is let go quietly when %s", async (_why, kept) => {
+    window.sessionStorage.setItem(key, JSON.stringify(kept));
+    discussion = { threads: [], revisionId: "r1", writesEnabled: true, callerUserId: "u1" };
+    await render();
+    expect(quote()).toBeNull();
+    expect(container.querySelector('[role="status"]')?.textContent ?? "").not.toContain("Restored");
+    expect(window.sessionStorage.getItem(key)).toBeNull();
+  });
+
+  it("opens nothing for a reader still not signed in", async () => {
+    window.sessionStorage.setItem(key, JSON.stringify({ revisionId: "r1", anchor: anchor("Second") }));
+    discussion = { threads: [], revisionId: "r1", writesEnabled: false, callerUserId: null };
+    await render();
+    expect(quote()).toBeNull();
+  });
+
+  it("offers an anonymous reader sign-in once, not also a line saying the same", async () => {
+    discussion = { threads: [], revisionId: "r1", writesEnabled: false, callerUserId: null };
+    await render();
+    const panel = container.querySelector("#shared-document-discussions")!;
+    expect(panel.textContent).not.toContain("Sign in to add a comment.");
+    expect(Array.from(panel.querySelectorAll("a")).filter(link => link.textContent === "Sign in to comment")).toHaveLength(1);
+  });
+});

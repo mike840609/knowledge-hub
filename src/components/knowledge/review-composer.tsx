@@ -55,6 +55,8 @@ export function useReviewSelection(readingRef: RefObject<HTMLElement | null>, ma
     remember();
     return () => { window.clearTimeout(timer); document.removeEventListener("selectionchange", remember); };
   }, [read, readingRef]);
+  /** What `capture` would take, without taking it. */
+  const peek = useCallback(() => window.getSelection()?.isCollapsed === false ? read().anchor ?? null : pending.current, [read]);
   const capture = useCallback(() => {
     const reading = read();
     const anchor = window.getSelection()?.isCollapsed === false ? reading.anchor ?? null : pending.current;
@@ -63,7 +65,7 @@ export function useReviewSelection(readingRef: RefObject<HTMLElement | null>, ma
     return anchor;
   }, [read]);
   const choose = useCallback((anchor: ReviewAnchor) => { pending.current = anchor; setChosen(anchor); setRefusal(undefined); }, []);
-  return { ready, hint, chosen, refusal, place, capture, clear, choose };
+  return { ready, hint, chosen, refusal, place, capture, clear, choose, peek };
 }
 
 type SelectionPlace = { top: number; bottom: number; left: number };
@@ -83,14 +85,15 @@ function placeOf(box: HTMLElement | null, selection: Selection | null): Selectio
  * first line, or below it where the line is at the top of the article. The selection stays: the
  * button takes no focus from a pointer.
  */
-/** `signInHref`: the reader may not comment yet; a chosen passage offers sign-in in place of Comment. */
+/** `signInHref`: the reader may not comment yet; a chosen passage offers sign-in in place of Comment,
+ * and `onComment` is called as the reader leaves to sign in, to keep the passage for their return. */
 export function ReviewSelectionBubble({ place, ready, hint, onComment, signInHref }: { place: SelectionPlace | null; ready: boolean; hint?: string; onComment: () => void; signInHref?: string }) {
   if (!place || (!ready && !hint)) return null;
   const above = place.top >= 40;
   const style = { top: above ? place.top - 8 : place.bottom + 8, left: Math.max(0, place.left), transform: above ? "translateY(-100%)" : undefined };
   return <div className="kh-selection-bubble absolute z-20 rounded-md border border-kh-border bg-kh-bg shadow-popover" style={style}>
     {ready && signInHref
-      ? <a href={signInHref} className={buttonClasses({ variant: "ghost" })} onPointerDown={event => event.preventDefault()}><LogIn className="size-4" aria-hidden="true" />Sign in to comment</a>
+      ? <a href={signInHref} className={buttonClasses({ variant: "ghost" })} onPointerDown={event => event.preventDefault()} onClick={onComment}><LogIn className="size-4" aria-hidden="true" />Sign in to comment</a>
       : ready
       ? <Button type="button" variant="ghost" aria-label="Comment on selection" onPointerDown={event => event.preventDefault()} onClick={onComment}><MessageSquarePlus className="size-4" aria-hidden="true" />Comment</Button>
       : <p role="status" className="max-w-xs px-3 py-2 text-body-sm text-kh-text-muted">{hint}</p>}
