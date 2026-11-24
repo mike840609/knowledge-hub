@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SharedReviewPanel } from "@/components/knowledge/shared-review-panel";
 
 /**
@@ -48,4 +48,42 @@ it.each([
   discussion = answer;
   await render();
   expect(paragraphButtons()).toHaveLength(0);
+});
+
+describe("the passage being commented on", () => {
+  let registry: Map<string, { ranges: Range[] }>;
+  beforeEach(() => {
+    registry = new Map();
+    vi.stubGlobal("CSS", { highlights: registry });
+    vi.stubGlobal("Highlight", class { ranges: Range[]; constructor(...ranges: Range[]) { this.ranges = ranges; } });
+    discussion = { threads: [], revisionId: "r1", writesEnabled: true, callerUserId: "u1" };
+  });
+  const cancel = () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent === "Cancel")!;
+
+  it("is marked while the composer is open, and unmarked when it is cancelled", async () => {
+    await render();
+    expect(registry.has("document-review-draft")).toBe(false);
+    await act(async () => { paragraphButtons()[0].click(); });
+    expect(registry.get("document-review-draft")?.ranges.map(range => range.toString())).toEqual(["First paragraph."]);
+    await act(async () => { cancel().click(); });
+    expect(registry.has("document-review-draft")).toBe(false);
+  });
+
+  it("is unmarked once the comment is sent", async () => {
+    await render();
+    await act(async () => { paragraphButtons()[0].click(); });
+    const field = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Add comment']")!;
+    await act(async () => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(field, "Sent"); field.dispatchEvent(new Event("input", { bubbles: true })); });
+    await act(async () => { field.form!.requestSubmit(); });
+    expect(registry.has("document-review-draft")).toBe(false);
+  });
+
+  it("is unmarked when the panel goes", async () => {
+    await render();
+    await act(async () => { paragraphButtons()[1].click(); });
+    expect(registry.get("document-review-draft")?.ranges.map(range => range.toString())).toEqual(["Second paragraph."]);
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    expect(registry.has("document-review-draft")).toBe(false);
+  });
 });

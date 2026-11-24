@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ReviewAnchor, ReviewThreadView } from "@/modules/knowledge/domain/document-review";
-import { useReviewHighlights } from "./review-highlights";
+import { useReviewDraftHighlight, useReviewHighlights } from "./review-highlights";
 import { LogIn, RefreshCw, MessageSquare, MessageSquarePlus, X } from "lucide-react";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -88,6 +88,7 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
   }, [activeThreadId, seeing, scope]);
   useReviewHighlights(markdown, revisionChanged ? undefined : result?.threads, activeThreadId);
   const selection = useReviewSelection(readingRef, markdown, `${token}:${revisionId}`);
+  useReviewDraftHighlight(readingRef, revisionChanged ? null : selection.chosen, markdown);
   // A newer reading, held back while it would move the cards: the reader chooses when to see it.
   const [arrived, setArrived] = useState<{ result: DiscussionResult; count: number }>();
   // A read again keeps what is shown, says it is updating, and on failure says so beside it.

@@ -1,7 +1,7 @@
 "use client";
 import { useReviewDomVersion } from "./review-dom-version";
-import { useEffect } from "react";
-import type { ReviewThreadView, OwnerReviewThreadView } from "@/modules/knowledge/domain/document-review";
+import { useEffect, type RefObject } from "react";
+import type { ReviewAnchor, ReviewThreadView, OwnerReviewThreadView } from "@/modules/knowledge/domain/document-review";
 import { EXPAND_CODE_BLOCK } from "./code-block";
 import { createReviewRangeResolver } from "./review-selection";
 import { reviewRailInline } from "./review-rail-mode";
@@ -52,4 +52,20 @@ export function useReviewHighlights(markdown: string, threads?: (ReviewThreadVie
     root.addEventListener("pointerup", focusDiscussion);
     return () => { root.removeEventListener("pointerup", focusDiscussion); registry?.delete("document-review"); registry?.delete("document-review-active"); };
   }, [markdown, threads, activeThreadId, domVersion]);
+}
+
+/** The passage a new comment is being written about, marked while its composer is open: pressing
+ * Comment empties the browser's own selection, and nothing else would say what is being remarked on.
+ * Unmarked when the composer closes (sent, cancelled, or the panel gone). */
+export function useReviewDraftHighlight(readingRef: RefObject<HTMLElement | null>, anchor: ReviewAnchor | null | undefined, markdown: string) {
+  const domVersion = useReviewDomVersion();
+  useEffect(() => {
+    const registry = (globalThis.CSS as typeof CSS & { highlights?: Map<string, unknown> })?.highlights;
+    const HighlightClass = (globalThis as typeof globalThis & { Highlight?: new (...ranges: Range[]) => unknown }).Highlight;
+    const root = readingRef.current?.querySelector<HTMLElement>("[data-review-document]");
+    const range = root && anchor ? createReviewRangeResolver(root, markdown)(anchor) : null;
+    if (registry && HighlightClass && range) registry.set("document-review-draft", new HighlightClass(range));
+    else registry?.delete("document-review-draft");
+    return () => { registry?.delete("document-review-draft"); };
+  }, [readingRef, anchor, markdown, domVersion]);
 }

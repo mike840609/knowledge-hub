@@ -33,8 +33,12 @@ test("a keyboard reader comments on a paragraph beside the open rail, without se
   await page.keyboard.press("Enter");
   const box = page.getByRole("textbox", { name: "Add comment" });
   await expect(box).toBeFocused();
+  // The passage stays marked while the comment is written, and only then.
+  const draftText = () => page.evaluate(() => Array.from((CSS as unknown as { highlights: Map<string, Set<Range>> }).highlights.get("document-review-draft") ?? []).map(range => range.toString()));
+  await expect.poll(draftText).toEqual(["A second paragraph here."]);
   await page.keyboard.type("Said from the keyboard");
   await page.keyboard.press("Control+Enter");
+  await expect.poll(draftText).toEqual([]);
   await expect(page.locator("[data-review-rail] [data-review-thread]").filter({ hasText: "Said from the keyboard" })).toHaveCount(1);
   await expect(page.locator("[data-review-rail] [data-review-thread]").filter({ hasText: "Said from the keyboard" }).locator("blockquote")).toHaveText("A second paragraph here.");
 });
