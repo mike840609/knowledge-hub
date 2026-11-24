@@ -79,7 +79,7 @@ export function OutlineRail({ entries, activeSlug }: { entries: readonly Outline
     // Stuck clear of the document's breadcrumb, which a wide screen pins to the top of the pane (48px).
     <aside
       aria-label="On this page"
-      className="sticky top-8 max-h-[calc(100vh-8rem)] overflow-y-auto overscroll-contain py-6 pr-4"
+      className="sticky top-8 max-h-[calc(100vh-8rem)] supports-[max-height:100dvh]:max-h-[calc(100dvh-8rem)] overflow-y-auto overscroll-contain py-6 pr-4"
     >
       <h2 className="mb-2 text-caption text-kh-text-muted">On this page</h2>
       <OutlineList entries={entries} activeSlug={activeSlug} />

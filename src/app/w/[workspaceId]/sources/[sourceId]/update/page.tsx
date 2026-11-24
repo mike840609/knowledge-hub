@@ -15,7 +15,7 @@ export default async function WorkspaceSourceUpdatePage({
   const importLimits = importRuntimeConfig().limits;
   if (!model || !isFolderSyncable(model.source)) {
     return (
-      <main className="flex min-h-screen flex-col justify-center">
+      <main className="flex min-h-screen supports-[min-height:100dvh]:min-h-dvh flex-col justify-center">
         <StatusMessage
           title="Not found or no access"
           description="This content does not exist or you do not have access to it."

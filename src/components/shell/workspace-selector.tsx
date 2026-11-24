@@ -55,7 +55,7 @@ export function WorkspaceSelector({ workspaceId, compact = false }: { workspaceI
     return (
       <MenuItem
         key={entry.id}
-        onClick={() => router.push(`/w/${entry.id}/knowledge`)}
+        render={<Link href={`/w/${entry.id}/knowledge`} prefetch={false} aria-current={selected ? "location" : undefined} />}
         className={selected ? "bg-kh-bg-selected font-medium text-kh-selected-text" : ""}
       >
         <span className="min-w-0 flex-1 truncate" title={name}>{name}</span>

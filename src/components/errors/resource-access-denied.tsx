@@ -4,7 +4,7 @@ import { StatusMessage } from "@/components/ui/status-message";
 
 export function ResourceAccessDenied({ backHref }: { backHref: string }): React.JSX.Element {
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen supports-[min-height:100dvh]:min-h-dvh">
       <StatusMessage
         title="Access denied"
         description="This import session exists, but you no longer have permission to access its Workspace."

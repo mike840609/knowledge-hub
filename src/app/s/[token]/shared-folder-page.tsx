@@ -30,7 +30,7 @@ export function SharedFolderPage({ token, shared, platformEntry, signInHref, pag
   // In the shell the page is its scroll pane's content, not a window: layout containment holds the
   // tree's fixed rail inside it rather than over the shell's own navigation.
   const Root = platformEntry === null ? "div" : "main";
-  const rootClass = `kh-share-page kh-share-folder bg-kh-bg ${platformEntry === null ? "min-h-full [contain:layout]" : "min-h-screen"}`;
+  const rootClass = `kh-share-page kh-share-folder bg-kh-bg ${platformEntry === null ? "min-h-full [contain:layout]" : "min-h-screen supports-[min-height:100dvh]:min-h-dvh"}`;
   const crumbs = document ? [shared.rootName, ...document.path.map((ancestor) => ancestor.name), document.title] : [shared.rootName];
   const tree = <SharedFolderTree token={token} nodes={shared.tree} currentDocumentId={document?.documentId ?? null} rootName={shared.rootName} rootKind={shared.kind} pagePath={pagePath} />;
   const lead = (
