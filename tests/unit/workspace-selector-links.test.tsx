@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 
 const push = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {}, push }) }));
-vi.mock("next/link", () => ({ default: ({ children, onClick, prefetch, ...props }: React.ComponentProps<"a"> & { prefetch?: boolean }) => { void prefetch; return <a {...props} onClick={(event) => { onClick?.(event); event.preventDefault(); }}>{children}</a>; } }));
+vi.mock("next/link", () => ({ default: ({ children, onClick, prefetch, ...props }: React.ComponentProps<"a"> & { prefetch?: boolean }) => <a {...props} data-prefetch={String(prefetch)} onClick={(event) => { onClick?.(event); event.preventDefault(); }}>{children}</a> }));
 vi.mock("@/components/ui/tooltip", () => ({ Tooltip: ({ children }: { children: React.ReactNode }) => children }));
 vi.mock("@/components/shell/use-workspace-authorization", () => ({
   useWorkspaceAuthorization: () => ({
@@ -54,6 +54,7 @@ it("renders each workspace as a menu item link to that workspace's knowledge", a
     ["Team", "/w/team/knowledge"],
   ]);
   expect(links.map((link) => link.getAttribute("aria-current"))).toEqual(["location", null]);
+  expect(links.map((link) => link.getAttribute("data-prefetch"))).toEqual(["false", "false"]);
 
   // Following the link closes the menu, and navigation is the anchor's, not router.push.
   await click(links[1]);
