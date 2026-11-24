@@ -929,6 +929,15 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 }
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-folder-body > footer,
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) > footer { max-width: calc(theme("maxWidth.reading") + 320px); }
+/* The pinned bar's left edge follows the column, so the brand stays over the title, but its right
+   edge stays where it was: it widens by as much as the column moved. Moved whole, Comments slid up
+   to 110px left at 1280px and the pointer that opened the rail was left over Download, where a
+   second click to close it downloaded the document. Both properties slide on the same beat, so the
+   right edge holds still through the slide too. */
+.kh-share-page .kh-review-entry { transition: margin-inline-start 120ms ease-out, max-width 120ms ease-out; }
+.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-review-entry {
+  max-width: calc(theme("maxWidth.reading") + max(0px, calc((100% - theme("maxWidth.reading")) / 2)) - max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.reading") - 320px))));
+}
 /* The outline hangs off the column's left edge where the centred column leaves room for it (82rem:
    224px, a w-52 rail and its edge), else it is a disclosure above the Comments row. With the
    comments rail open the column keeps its left edge only while the window holds column + rail +

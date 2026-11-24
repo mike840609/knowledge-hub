@@ -147,8 +147,9 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
     <div className={`sticky top-0 z-20 border-b border-kh-border bg-kh-bg ${wide ? "kh-share-folder-bar" : ""}`}>
       <div className={wide ? "flex h-14 items-center gap-2 px-4" : "kh-review-entry kh-reading-column relative flex min-h-14 items-center justify-between gap-3 py-2"}>
         {brand}
-        {/* -me-3 takes back the last button's padding, so its label ends on the column's edge as the brand starts on it. */}
-        <div className={wide ? "-me-3 ml-auto flex shrink-0 items-center gap-1" : "-me-3 flex min-w-0 items-center justify-end gap-1"}>
+        {/* -me-3 takes back the last button's padding, so its label ends on the column's edge as the brand starts on it.
+            ml-auto keeps the actions on the right where there is no brand (the Hub's reader), so they stay put when the rail opens. */}
+        <div className={wide ? "-me-3 ml-auto flex shrink-0 items-center gap-1" : "-me-3 ml-auto flex min-w-0 items-center justify-end gap-1"}>
           <span aria-live="polite">{arrived && <Button type="button" variant="soft" onClick={showArrived} className="kh-pop-in max-sm:px-2"><span className="max-sm:hidden">{arrived.count === 1 ? "1 new comment" : `${arrived.count} new comments`}</span><span className="sm:hidden">{arrived.count} new</span></Button>}</span>
           <Button ref={entryRef} type="button" variant="ghost" aria-label={`${open ? "Hide comments" : "Show comments"}${result ? `, ${result.threads.length} comments` : ""}${allResolved ? ", all resolved" : ""}`} aria-expanded={open} aria-controls="shared-document-discussions" onPointerDown={event => event.preventDefault()} onClick={toggle} className="max-sm:gap-1 max-sm:px-2">
             <MessageSquare className="size-4" aria-hidden="true" />
