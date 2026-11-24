@@ -19,6 +19,20 @@ Tab from the title. Before, focus skips past the article (no stop in it); after,
 | ![Desktop, Enter: nothing to comment on](2026-11-24-shared-review-ux/fix1-desktop-enter-before.png) | ![Desktop, Enter: the composer opens on the paragraph, focused](2026-11-24-shared-review-ux/fix1-desktop-enter-after.png) |
 | ![Phone, Tab from the title](2026-11-24-shared-review-ux/fix1-phone-before.png) | ![Phone, Tab from the title: the paragraph's button is focused](2026-11-24-shared-review-ux/fix1-phone-after.png) |
 
+### 1a. Review follow-up: one tab stop, and the padding on touch
+
+After review, the paragraph buttons became one tab stop (a vertical toolbar with a roving tabindex;
+see the keyboard e2e). On a touch screen the shared page's button now stays 24px wide inside the
+article's padding instead of the owner's 40px, which reached into the text, and its focus ring is
+drawn inside it. *Before* here is the branch at `c98ffb6` (before that fix), *after* is `0182b46`;
+the touch shots emulate an iPhone 13 (`hasTouch`, `isMobile`, DPR 3) after a tap on the paragraph.
+
+| | Before | After |
+|---|---|---|
+| Touch, tapped | ![The 40px button overlaps the first letter](2026-11-24-shared-review-ux/fix7-touch-before.png) | ![The button stays in the padding](2026-11-24-shared-review-ux/fix7-touch-after.png) |
+| Focus ring, 1280 | ![Ring outside the button, touching the first letter](2026-11-24-shared-review-ux/fix7-ring-1280-before.png) | ![Ring inside the button](2026-11-24-shared-review-ux/fix7-ring-1280-after.png) |
+| Focus ring, 390 | ![Ring cut off at the window edge](2026-11-24-shared-review-ux/fix7-ring-390-before.png) | ![Ring whole, inside the button](2026-11-24-shared-review-ux/fix7-ring-390-after.png) |
+
 ## 2. The passage stays marked while the comment is written
 
 | Before | After |
@@ -62,6 +76,10 @@ origin by hand (one origin in production; separate ports in the e2e harness).
 | ![The card's quote and author line under the toolbar](2026-11-24-shared-review-ux/fix6-next-open-before.png) | ![The card below the toolbar, whole](2026-11-24-shared-review-ux/fix6-next-open-after.png) |
 
 ## Checks
+
+Re-run after the review follow-up commits (`c98ffb6`..`0182b46`): typecheck exit 0; `npm run lint`
+exit 0; unit 420 files, 5672 tests passed; the e2e command below plus the touch and tab-stop cases,
+exit 0, 92 passed (plus 3 screenshot tests). The first run's results follow.
 
 | Check | Command | Result |
 |---|---|---|
