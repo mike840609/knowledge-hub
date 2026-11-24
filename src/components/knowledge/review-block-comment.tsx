@@ -48,9 +48,13 @@ export function ReviewBlockComment({ readingRef, markdown, chosen, onChoose }: {
     };
     const paragraphAt = (event: PointerEvent) => event.target instanceof Element
       ? event.target.closest<HTMLElement>("p[data-review-path],li[data-review-para]") : null;
+    // The button stands beside its paragraph, not on it: crossing the gap to it must not take it
+    // away. A pointer keeps the last paragraph it was over until it is over another, or leaves.
     const point = (event: PointerEvent) => {
-      if (event.pointerType !== "touch" && event.pointerType !== "pen") setHovered(paragraphAt(event));
+      const paragraph = event.pointerType !== "touch" && event.pointerType !== "pen" ? paragraphAt(event) : null;
+      if (paragraph) setHovered(paragraph);
     };
+    const leave = (event: PointerEvent) => { if (event.pointerType !== "touch" && event.pointerType !== "pen") setHovered(null); };
     let pending: { pointerId: number; x: number; y: number; element: HTMLElement | null } | null = null;
     let revealTimer: number | undefined;
     const touchDown = (event: PointerEvent) => {
@@ -70,6 +74,7 @@ export function ReviewBlockComment({ readingRef, markdown, chosen, onChoose }: {
       revealTimer = window.setTimeout(() => { if (element?.isConnected) setHovered(element); }, 0);
     };
     article.addEventListener("pointerover", point);
+    reading.addEventListener("pointerleave", leave);
     article.addEventListener("pointerdown", touchDown);
     window.addEventListener("pointermove", touchMove, true);
     window.addEventListener("pointerup", touchUp, true);
@@ -81,6 +86,7 @@ export function ReviewBlockComment({ readingRef, markdown, chosen, onChoose }: {
       observer.disconnect();
       window.clearTimeout(revealTimer);
       article.removeEventListener("pointerover", point);
+      reading.removeEventListener("pointerleave", leave);
       article.removeEventListener("pointerdown", touchDown);
       window.removeEventListener("pointermove", touchMove, true);
       window.removeEventListener("pointerup", touchUp, true);

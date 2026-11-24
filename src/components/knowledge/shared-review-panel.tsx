@@ -9,7 +9,8 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewDraftKey, reviewRequest, type ReviewFilter } from "./review-thread-list";
 import { ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
 import { ReviewPanelShell } from "./review-panel-shell";
-import { COMMENT_HINT, focusReviewAnchor } from "./review-selection";
+import { ReviewBlockComment } from "./review-block-comment";
+import { COMMENT_HINT, focusReviewAnchor, selectionAnchorInBlock } from "./review-selection";
 import { ReviewPassageMarkers } from "./review-passage-markers";
 import { reviewRailInline, useReviewRailInline, useReviewRailOpen } from "./review-rail-mode";
 import { awaitingReader, newComments, parseDismissed, sharedDismissedKey } from "./review-auto-open";
@@ -34,7 +35,7 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
   // The drawer's CTA closes the drawer to free the text; focus follows it back to the article, not the entry button.
   const focusArticleAfterClose = useRef(false);
   // Every way the rail opens and closes holds the reader's place.
-  const [open, setOpen] = useReviewRailOpen(readingRef);
+  const [open, setOpen, holdAt] = useReviewRailOpen(readingRef);
   const inline = useReviewRailInline();
   const [filter, setFilter] = useState<ReviewFilter>("ALL");
   const shown = useRef<DiscussionResult | undefined>(undefined);
@@ -165,6 +166,17 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
       <div ref={readingRef} className="kh-review-reading">
         {children}
         {canComment && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={() => { selection.capture(); changeOpen(true); }} />}
+        {/* The keyboard's way in: read-only text cannot be selected without a pointer, so each paragraph
+            has the owner's Comment button, offered only to a reader who may write. What is selected
+            inside the paragraph narrows it, as on the owner's page. */}
+        {canComment && <ReviewBlockComment readingRef={readingRef} markdown={markdown} chosen={selection.chosen} onChoose={(anchor, element) => {
+          holdAt(element);
+          const root = readingRef.current?.querySelector<HTMLElement>("[data-review-document]");
+          const resolved = (root && selectionAnchorInBlock(root, markdown, anchor, window.getSelection())) ?? anchor;
+          selection.choose(resolved);
+          changeOpen(true);
+          return resolved === anchor;
+        }} />}
         {anonymous && !revisionChanged && <ReviewSelectionBubble place={selection.place} ready={selection.ready} signInHref={signInHref} onComment={() => undefined} />}
         <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={revisionChanged ? undefined : result?.threads} />
       </div>

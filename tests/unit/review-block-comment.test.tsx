@@ -104,3 +104,15 @@ test("scrolling a touch over a paragraph does not reveal its comment action", as
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
   expect(first.parentElement!.hasAttribute("data-hovered")).toBe(false);
 });
+
+test("a pointer crossing from its paragraph to the button beside it keeps the button shown, until it leaves the reading box", () => {
+  const [first] = buttons(() => true);
+  const article = reading.querySelector("article")!;
+  act(() => { paragraphs()[0].dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" })); });
+  expect(first.parentElement!.hasAttribute("data-hovered")).toBe(true);
+  // The gap between paragraph and button is the article's own box.
+  act(() => { article.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" })); });
+  expect(first.parentElement!.hasAttribute("data-hovered")).toBe(true);
+  act(() => { reading.dispatchEvent(new PointerEvent("pointerleave", { pointerType: "mouse" })); });
+  expect(first.parentElement!.hasAttribute("data-hovered")).toBe(false);
+});

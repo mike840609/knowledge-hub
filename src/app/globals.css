@@ -868,6 +868,13 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-block-comment-button { min-width: 40px; min-height: 40px; }
 }
 .kh-review-document[data-review-inline][data-review-open] .kh-block-comment-controls { display: none; }
+/* A shared page has no column padding beyond the article's right edge (on a phone it is the window's
+   edge) and the article's own right margin holds the passage markers, so there the buttons stand in
+   the article's 24px left padding. Nothing beside an open rail claims that, and the reader cannot
+   select read-only text from the keyboard, so they stay with the rail open (inline review spec,
+   2026-11-24 amendment). */
+.kh-share-page .kh-block-comment-zone { inset-inline-start: 0; }
+.kh-share-page .kh-review-document[data-review-inline][data-review-open] .kh-block-comment-controls { display: block; }
 .kh-comment-block-selected { background-color: var(--kh-bg-selected); border-radius: theme("borderRadius.sm"); outline: 2px solid var(--kh-bg-selected); }
 @media print { .kh-block-comment-controls { display: none; } }
 .kh-review-panel { display: none; }
