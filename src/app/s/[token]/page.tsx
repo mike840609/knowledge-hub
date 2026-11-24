@@ -78,7 +78,7 @@ export default async function SharedPage(props: SharedPageProps) {
   // The public /s/* routes are exempt from that login challenge.
   const entry = platformEntry(`/s/${token}/open`);
   return (
-    <main className="kh-share-page min-h-screen bg-kh-bg">
+    <main className="kh-share-page min-h-screen supports-[min-height:100dvh]:min-h-dvh bg-kh-bg">
       <SharedSkipLink />
       {/* One pinned bar, then the title: the brand, Comments, Download, Save and Open share a row. Download, Save and Open show one word each (their full names stay for assistive technology), and on a phone only their icons. */}
       <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={signInHref(`/s/${token}`)}

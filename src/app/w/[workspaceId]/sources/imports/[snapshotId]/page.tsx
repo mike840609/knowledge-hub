@@ -29,7 +29,7 @@ export default async function WorkspaceSourceImportPreviewPage({
   // context only. A mismatch gets the same inaccessible/not-found treatment.
   if (preview.workspaceId !== workspaceId) notFound();
   return (
-    <main className="kh-page min-h-screen pb-6">
+    <main className="kh-page min-h-screen supports-[min-height:100dvh]:min-h-dvh pb-6">
       <PageHeader location="Sources" locationHref={`/w/${workspaceId}/sources`} title="Import preview" />
       <p className="mt-1 text-body text-kh-text-muted">
         Review changes before applying. Resolve blockers to continue.

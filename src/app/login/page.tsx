@@ -29,7 +29,7 @@ export default async function LoginPage({
   }
 
   return (
-    <main className="kh-page flex min-h-screen items-center justify-center">
+    <main className="kh-page flex min-h-screen supports-[min-height:100dvh]:min-h-dvh items-center justify-center">
       <section className="w-full max-w-md rounded-lg border border-kh-border bg-kh-bg p-6">
         <h1 className="text-title font-semibold text-kh-text">Sign in to Knowledge Hub</h1>
         <p className="mt-2 text-body text-kh-text-muted">

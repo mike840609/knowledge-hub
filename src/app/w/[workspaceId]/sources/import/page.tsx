@@ -16,7 +16,7 @@ export default async function WorkspaceSourceImportPage({
   const importLimits = importRuntimeConfig().limits;
   if (!model) {
     return (
-      <main className="flex min-h-screen flex-col justify-center">
+      <main className="flex min-h-screen supports-[min-height:100dvh]:min-h-dvh flex-col justify-center">
         <StatusMessage
           title="No workspace access"
           description="You do not have access to this workspace, or it no longer exists."
