@@ -22,19 +22,19 @@ function testDestinations() {
     for (const name of ["Graph", "Sources", "Shares"]) {
       const link = primary.getByRole("link", { name, exact: true });
       await expect(link).toBeVisible();
-      await expect(link).toHaveText("");
+      await expect(link.locator("span[aria-hidden]")).toHaveCSS("opacity", "0");
       await expect(link).not.toHaveAttribute("aria-current");
     }
     const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
     await expect(explorer.getByRole("heading", { name: "Knowledge", exact: true })).toBeVisible();
     await expect(explorer.getByRole("link", { name: /^(Graph|Sources|Shares)$/ })).toHaveCount(0);
     await graph.hover();
-    await expect(page.getByText("Graph", { exact: true })).toBeVisible();
+    await expect(page.getByText("Graph", { exact: true }).last()).toBeVisible(); // the tooltip portals last, after the hidden label
     await graph.click();
     await expect(page).toHaveURL(`${workspace}/graph`, ROUND_TRIP);
     await expect(graph).toHaveAttribute("aria-current", "page");
     await expect(graph).toHaveText("Graph");
-    await expect(home).toHaveText("");
+    await expect(home.locator("span[aria-hidden]")).toHaveCSS("opacity", "0");
     await page.getByRole("button", { name: "Collapse navigation", exact: true }).click();
     for (const name of ["Graph", "Sources", "Shares"]) {
       await expect(primary.getByRole("link", { name, exact: true })).toHaveAttribute("href", `${workspace}/${name.toLowerCase()}`);
@@ -53,7 +53,8 @@ function testDestinations() {
       const primary = page.getByRole("navigation", { name: "Primary", exact: true });
       const sources = primary.getByRole("link", { name: "Sources", exact: true });
       await expect(sources).toHaveText("Sources");
-      expect(await sources.locator("span").evaluate((span) => span.scrollWidth <= span.clientWidth)).toBe(true);
+      // The label grows in over 160ms; read it once settled.
+      await expect.poll(() => sources.locator("span.truncate").evaluate((span) => span.scrollWidth <= span.clientWidth)).toBe(true);
       const boxes = await Promise.all(["Home", "Graph", "Sources", "Shares"].map((name) => primary.getByRole("link", { name, exact: true }).boundingBox()));
       for (const box of boxes) expect(Math.abs(box!.y - boxes[0]!.y)).toBeLessThan(1);
     });
