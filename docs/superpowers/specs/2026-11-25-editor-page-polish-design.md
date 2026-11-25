@@ -56,7 +56,7 @@ same function as the reader's, so a future divergence fails a test.
 The editor and the reader already share `MARKDOWN_PROSE`, whose headings are `display` 24 /
 `heading` 20 / `subheading` 17 / `reading` 15, as the contract says: there is no mapping bug. The two
 levels read as one because both were semibold with 24px and 20px above. Within the existing tokens:
-H2 takes 32px above it (`mt-8`) and H3 is `font-medium`, so a section starts with air and a
+H2 keeps 24px above it (`mt-6`, the top of the margin ladder) and H3 takes 16px (`mt-4`, was 20) and is `font-medium`, so a section starts with air and a
 sub-section is lighter. No token is added. It applies to the reader too, since the two are one class
 by contract.
 
@@ -104,3 +104,9 @@ Two more causes of the handoff shift were found by measuring each block before a
   node. `tests/unit/editor-title-meta.test.ts`.
 - The meta line is drawn once and the outline disclosure is reset inside prose; see the reader chrome spec's
   "Review fixes".
+
+## Review round 3
+
+Decision 4 first gave H2 `mt-8`, which is not on the replaced margin ladder (0–6) and compiled to nothing, so every H2
+lost its room above it. H2 keeps `mt-6` and H3 moves to `mt-4`, which keeps the intent within the existing tokens.
+`tests/unit/markdown-prose.test.ts` now checks every margin and padding step in `MARKDOWN_PROSE` against the scales.

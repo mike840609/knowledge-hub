@@ -37,8 +37,8 @@ describe("the heading scale", () => {
   it("tells h3 from h2 by weight and by the room above", () => {
     expect(classes).toContain("[&_h3]:font-medium");
     expect(classes).not.toContain("[&_h3]:font-semibold");
-    expect(classes).toContain("[&_h2]:mt-8");
-    expect(classes).toContain("[&_h3]:mt-5");
+    expect(classes).toContain("[&_h2]:mt-6");
+    expect(classes).toContain("[&_h3]:mt-4");
   });
 
   it("hangs a to-do's native box in the gutter, as the editor's drawn box is", () => {
@@ -68,4 +68,13 @@ describe("inline code", () => {
     expect(classes.filter((name) => name.startsWith("[&_code]"))).toEqual([]);
     expect(classes).toContain("[&_:not(pre)>code]:px-1");
   });
+});
+
+// The margin and padding scales are replaced (tailwind.config.ts): a step not on the ladder, like `mt-8`, compiles to
+// nothing, and a class-string test alone would not notice (editor page polish, review round 3).
+it("uses only margin and padding steps the replaced scales define", () => {
+  const theme = config.theme as { margin: Record<string, string>; padding: Record<string, string> };
+  const spacing = classes.map(name => name.split(":").pop()!).map(name => /^-?(m|p)[trblxy]?-(.+)$/.exec(name)).filter(match => match !== null);
+  expect(spacing.length).toBeGreaterThan(10);
+  for (const [name, kind, step] of spacing) expect(Object.keys(kind === "m" ? theme.margin : theme.padding), name).toContain(step);
 });

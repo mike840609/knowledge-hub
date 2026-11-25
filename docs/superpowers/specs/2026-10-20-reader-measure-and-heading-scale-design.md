@@ -121,5 +121,5 @@ Acceptance: `tests/e2e/zz-reader-chrome.spec.ts`.
 
 The table's sizes stand (24 / 20 / 17 / 15); the editor and the reader share `MARKDOWN_PROSE`, so
 there was no mapping drift to fix. Two steps of 3px, both semibold, read as one level in the editor.
-`h2` now takes `mt-8` (32px above, was 24) and `h3` is `font-medium` (was semibold); no token is
+`h2` keeps `mt-6` (24px above), `h3` takes `mt-4` (16px, was 20) and `h3` is `font-medium` (was semibold); no token is
 added (`2026-11-25-editor-page-polish-design.md`, decision 4).
