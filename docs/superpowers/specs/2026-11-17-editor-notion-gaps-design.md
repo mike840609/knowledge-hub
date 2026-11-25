@@ -70,7 +70,9 @@ editor must write a wikilink back as it read it").
 - Row and column drag reorder in a table: Markdown-preserving but needs its own
   drag design in a table that already scrolls.
 - Header-row toggle: no Markdown state (decision 3).
-- The earlier deferred list: @ mentions, page width, images and captions,
+- The earlier deferred list: @ mentions (now in scope for pages and dates; see
+  `2026-11-25-editor-at-mentions-design.md`, which also records why people are
+  not offered), page width, images and captions,
   columns, embeds, cover, real-time collaboration.
 
 ## Amendment (2026-11-18, PR 367)
