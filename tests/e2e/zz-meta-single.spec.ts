@@ -44,6 +44,10 @@ test("recovered changes show one meta line", async ({ page }) => {
   await page.goto(url);
   await expect(composer(page).getByRole("status").filter({ hasText: "changed while you were away" })).toBeVisible(ROUND_TRIP);
   await expect(meta(page)).toHaveCount(1);
+  // A recovery shows the article, so the line sits under its `# Title`, not in the header above the notices.
+  const line = page.locator("main [data-review-document] [data-document-meta]");
+  await expect(line).toHaveCount(1);
+  expect(await line.evaluate(node => !!(node.closest("[data-review-document]")!.querySelector("h1")!.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
 });
 
 test("the disclosure in the article is the rail's list, in the reader and in the editor", async ({ page }) => {

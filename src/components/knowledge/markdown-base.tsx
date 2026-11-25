@@ -22,6 +22,10 @@ import { MARKDOWN_PROSE } from "./markdown-prose";
 import type { RenderedLinks } from "./rendered-links";
 import { remarkKnowledgeLinks, WIKILINK_ANCHOR, WIKILINK_FRAGMENT, WIKILINK_TARGET } from "./remark-knowledge-links";
 
+/** At module scope, so a client re-render keeps each table (its sideways scroll, its focus); and without react-markdown's
+ * `node`, so the hast subtree is not serialised into the RSC payload. */
+const ReaderTable = ({ children }: { children?: ReactNode }) => <MarkdownTable>{children}</MarkdownTable>;
+
 function isExternalHref(href: string): boolean {
   return href.startsWith("http://") || href.startsWith("https://") || href.startsWith("//");
 }
@@ -247,7 +251,7 @@ export function MarkdownBase({
           img: ({ src, alt }: DetailedHTMLProps<ImgHTMLAttributes<HTMLImageElement>, HTMLImageElement>) => (
             <MarkdownImage src={typeof src === "string" ? src : undefined} alt={alt} />
           ),
-          table: ({ children }) => <MarkdownTable>{children}</MarkdownTable>,
+          table: ReaderTable,
           blockquote: MarkdownQuote,
           details: MarkdownDetails,
           summary: MarkdownSummary,

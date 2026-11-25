@@ -632,7 +632,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     inspectorData={{ ...detail.inspectorData, revisions, selectedRevisionNo: revisions.find(item => item.id === savedRevision)?.revisionNo ?? detail.inspectorData.selectedRevisionNo }}
     breadcrumb={[...detail.breadcrumb.slice(0, -1), { label: displayTitle }]} outline={outline}
     contentOwnsTitle={markdownOpensWithHeading(content.markdown)}
-    metaInArticle={markdownOpensWithHeading(content.markdown) && !source && !failed && !recovery}
+    metaInArticle={markdownOpensWithHeading(content.markdown) && !source && !failed}
     wordCount={words}
     editHint={showEditHint ? "Click anywhere in the text to edit." : undefined}
     editorActions={<><AutosaveIndicator state={status} attention={attention} />{markdownToggle}</>}

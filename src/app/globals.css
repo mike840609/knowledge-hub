@@ -588,12 +588,12 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 
   /* A page whose Markdown opens with `# Title` has its title in the article, not the header, so pointing at that title
      reveals "Add icon" as pointing at the header does (editor page polish, review fixes). */
-  .kh-document-pane:has(h1:first-child:hover) [data-page-icon-add] {
+  .kh-document-pane:has(:is(.ProseMirror, article > div) > h1:first-child:hover) [data-page-icon-add] {
     opacity: 1;
   }
 
   /* The disclosure sits inside the article's prose (reader and editor), whose list rules would otherwise reach its
-     list: three classes of specificity beat `[&_ol]:…` and `[&_li]:…`, so it is the same list the rail draws. */
+     list: one class and two types (0,1,2) beat `[&_ol]:…` and `[&_li]:…`, so it is the same list the rail draws. */
   .kh-outline-inline nav ol {
     @apply m-0 list-none p-0;
   }

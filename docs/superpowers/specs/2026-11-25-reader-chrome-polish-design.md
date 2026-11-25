@@ -78,7 +78,9 @@ A review of the branch found these; each has a test that failed before.
 - **The disclosure is not prose.** `.kh-outline-inline nav ol|li` resets list style, padding and margins at a
   specificity that beats `MARKDOWN_PROSE`'s `[&_ol]` / `[&_li]`; the outline's links carry `data-outline-link`, which
   the editor's `.kh-editor a:not(...)` rule excludes, so they keep the rail's muted colour, weight and no underline.
-- **Add icon is reachable by mouse** on a note that opens with `# Title`: `.kh-document-pane:has(h1:first-child:hover)
-  [data-page-icon-add]` shows it, beside the header's own `group-hover/header`.
+- **Add icon is reachable by mouse** on a note that opens with `# Title`: `.kh-document-pane:has(:is(.ProseMirror,
+  article > div) > h1:first-child:hover) [data-page-icon-add]` shows it, beside the header's own `group-hover/header`.
+  Only the article's opening title counts: an `#` that opens a quote, a list item or a comment does not.
 - A table no longer receives react-markdown's `node` (it serialised each table's hast into the RSC payload), and the
-  Read only popover has an accessible name ("Read only").
+  Read only popover has an accessible name ("Read only"). The table wrapper is a module-level component, so a
+  client re-render (the peek pane's active heading as it scrolls) keeps a table's sideways scroll and focus.

@@ -1,4 +1,4 @@
-import type { Root } from "mdast";
+import type { Paragraph, Root } from "mdast";
 import { SKIP, visit } from "unist-util-visit";
 
 const BR = /^<br\s*\/?>$/i;
@@ -44,7 +44,7 @@ export function remarkKnownHtml() {
       // A `<br />` standing as a block is the editor's empty paragraph: read it back as one, so the reader
       // gives it the paragraph's height and the page does not jump when the editor takes over.
       if (BR.test(html)) parent.children[index] = BLOCK_PARENTS.has(parent.type)
-        ? ({ type: "paragraph", children: [{ type: "break" }] } as never)
+        ? ({ type: "paragraph", children: [{ type: "break" }] } satisfies Paragraph)
         : { type: "break" };
       else if (COMMENT.test(html)) {
         parent.children.splice(index, 1);
