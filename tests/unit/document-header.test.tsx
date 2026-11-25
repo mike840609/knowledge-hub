@@ -129,3 +129,16 @@ it("separates the edit hint from the update time", async () => {
     await act(async () => root.unmount());
   }
 });
+
+// Editor page polish spec, decision 1: the line is the same before and after the editor takes the hint
+// away, so the count is always there and the hint only follows it.
+it("shows the word count with the edit hint, and the hint after it", async () => {
+  const { host, root } = await renderHeader({ editHint: "Click anywhere in the text to edit.", wordCount: 87 });
+  try {
+    const text = host.querySelector("time")!.parentElement!.textContent ?? "";
+    expect(text).toContain("87 words");
+    expect(text.indexOf("87 words")).toBeLessThan(text.indexOf("Click anywhere"));
+  } finally {
+    await act(async () => root.unmount());
+  }
+});

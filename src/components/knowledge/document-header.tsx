@@ -48,7 +48,7 @@ export function DocumentHeader({
   editorActions?: ReactNode;
   /** A first-visit cue that the text itself is the editor; kept in the metadata row, not the article. */
   editHint?: ReactNode;
-  /** Words on the page, shown beside when it was updated, once the edit hint has gone (both on one line would wrap a phone-width header, and the layout must not move when the hint goes); omitted where it is not counted. */
+  /** Words on the page, shown beside when it was updated, always, ahead of the edit hint (the hint is not drawn below `sm`, where both would wrap, and its going moves nothing); omitted where it is not counted. */
   wordCount?: number;
   /** The Full width setting; a header drawn beside another document page (the side peek) leaves it to that page. */
   showFullWidth?: boolean;
@@ -167,7 +167,7 @@ export function DocumentHeader({
         </div>
       </div>
       </div>
-      <header ref={headerRef}>
+      <header ref={headerRef} className="group/header">
         <div className="kh-reading-column pb-3">
           {beforeTitle}
           {titleControl ? (
@@ -194,19 +194,21 @@ export function DocumentHeader({
             ) : null}
             {status === "ARCHIVED" ? <Badge variant="warning">Archived</Badge> : null}
             <time dateTime={new Date(updatedAt).toISOString()} title={formatDateTime(updatedAt, zone)}>Updated {relative}</time>
-            {wordCount && !editHint ? <>
+            {wordCount ? <>
               <span aria-hidden="true" className="text-kh-text-faint">·</span>
               <span className="sr-only">, </span>
               <span className="tabular-nums">{wordCount.toLocaleString("en-US")} {wordCount === 1 ? "word" : "words"}</span>
             </> : null}
-            {editHint ? <>
+            {editHint ? <span className="hidden items-center gap-x-2 sm:inline-flex">
               {/* The meta line is a row of separate facts; without a separator "10 days ago"
                   and the hint after it read as one sentence. `gap` is not text, so copy/paste
-                  and speech both need a real one: a dot for the eye, a comma for AT. */}
+                  and speech both need a real one: a dot for the eye, a comma for AT. The count
+                  is always there and the hint follows it, so the hint going moves nothing already
+                  on the line; below `sm` there is no room for both on one line, and the hint is not drawn. */}
               <span aria-hidden="true" className="text-kh-text-faint">·</span>
               <span className="sr-only">, </span>
               <span>{editHint}</span>
-            </> : null}
+            </span> : null}
             {linkSummary ? (
               // The padding makes a 24px target (WCAG 2.5.8) and the negative
               // margins give it back, so a document with links is not a row taller

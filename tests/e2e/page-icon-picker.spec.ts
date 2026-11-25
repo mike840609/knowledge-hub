@@ -14,6 +14,27 @@ async function openNote(page: Page) {
   return page.locator("main");
 }
 
+test("a page with no icon shows none until the header is pointed at or focused", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const main = await openNote(page);
+  const trigger = main.getByRole("button", { name: "Add page icon", exact: true });
+  // The control exists (and so is a tab stop) but draws nothing at rest, as the read-only page draws nothing.
+  await expect(trigger).toHaveCount(1);
+  await expect(trigger).toHaveCSS("opacity", "0");
+  await expect(main.locator("[data-page-icon]")).toHaveCount(0);
+  const rest = await main.getByRole("textbox", { name: "Title", exact: true }).boundingBox();
+  await main.locator("header").hover();
+  await expect(trigger).toHaveCSS("opacity", "1");
+  await expect(trigger).toContainText("Add icon");
+  // Showing it moves nothing.
+  expect((await main.getByRole("textbox", { name: "Title", exact: true }).boundingBox())!.y).toBeCloseTo(rest!.y, 0);
+  await page.mouse.move(5, 5);
+  await expect(trigger).toHaveCSS("opacity", "0");
+  // Keyboard: focus alone shows it.
+  await trigger.focus();
+  await expect(trigger).toHaveCSS("opacity", "1");
+});
+
 test("the page icon picker searches in English and Chinese and is driven by keys", async ({ page }) => {
   const main = await openNote(page);
   const trigger = main.getByRole("button", { name: "Add page icon", exact: true });

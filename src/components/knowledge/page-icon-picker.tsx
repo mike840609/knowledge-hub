@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Popover } from "@base-ui-components/react/popover";
-import { FileText, ImagePlus } from "lucide-react";
+import { ImagePlus } from "lucide-react";
 import { EMOJI_GROUPS, searchEmoji, type Emoji } from "@/lib/emoji-catalog";
 import { governanceRequest } from "@/components/workspaces/governance-error";
 import { Input } from "@/components/ui/input";
@@ -124,24 +124,21 @@ export function PageIconPicker({
   }
 
   return (
-    <div className="mt-2">
+    // A page with no icon shows none (as the read-only page does): the row is kept so that the add
+    // affordance, revealed on pointing at the header or on focus, moves nothing (page-polish spec, decision 2).
+    <div className={current ? "mt-2" : "flex h-8 items-end"}>
       <Popover.Root open={open} onOpenChange={setOpen}>
         <Popover.Trigger
           type="button"
           aria-label={current ? "Change page icon" : "Add page icon"}
-          className="kh-focus-ring group inline-flex h-10 min-w-10 items-center gap-1.5 rounded-md px-1 text-kh-text-muted transition-colors hover:bg-kh-bg-hover hover:text-kh-text aria-expanded:bg-kh-bg-hover aria-expanded:text-kh-text"
+          className={`kh-focus-ring group inline-flex items-center gap-1.5 rounded-md px-1 text-kh-text-muted transition-colors hover:bg-kh-bg-hover hover:text-kh-text aria-expanded:bg-kh-bg-hover aria-expanded:text-kh-text ${current ? "h-10 min-w-10" : "h-7 opacity-0 focus-visible:opacity-100 aria-expanded:opacity-100 group-hover/header:opacity-100 group-focus-within/header:opacity-100 [@media(hover:none)]:opacity-100"}`}
         >
           {current ? (
             <span data-page-icon className="select-none text-display leading-8" aria-hidden="true">{current}</span>
           ) : (
-            // The document's mark at rest; the labelled add affordance on hover
-            // (where hover exists) or focus, as Notion reveals it.
             <>
-              <FileText className="h-5 w-5 shrink-0 group-focus-visible:hidden [@media(hover:hover)_and_(pointer:fine)]:group-hover:hidden" aria-hidden="true" />
-              <span className="hidden items-center gap-1.5 group-focus-visible:inline-flex [@media(hover:hover)_and_(pointer:fine)]:group-hover:inline-flex" aria-hidden="true">
-                <ImagePlus className="h-5 w-5" />
-                <span className="text-body-sm">Add icon</span>
-              </span>
+              <ImagePlus className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="text-body-sm" aria-hidden="true">Add icon</span>
             </>
           )}
         </Popover.Trigger>
