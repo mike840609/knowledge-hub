@@ -99,6 +99,12 @@ Nothing stored changes: GFM tables, alignment in the delimiter row.
   every table one header row, so the former empty header row left the column
   actions with no cells to read.
 
+## Amendment (2026-11-25)
+
+A table no longer scrolls (frontend-design-language, "Images and tables in a
+document"): it is shown whole in the editor too. A column can no longer scroll
+out of the table, so its grip hides only where the document pane clips it.
+
 ## Verification
 
 - `tests/unit/editor-table-actions.test.ts`, through the rendered editor:
