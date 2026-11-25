@@ -286,7 +286,7 @@ export function tableActions() {
       document.body.appendChild(dropLine);
       interface TableDrag {
         kind: "row" | "column"; tablePos: number; from: number; caretColumn: number;
-        startX: number; startY: number; active: boolean; cancelled: boolean; boundary: number | null; doc: ProseNode; marked: Element[];
+        pointerId: number; startX: number; startY: number; active: boolean; cancelled: boolean; boundary: number | null; doc: ProseNode; marked: Element[];
       }
       let drag: TableDrag | null = null;
       let suppressClick = false;
@@ -313,6 +313,17 @@ export function tableActions() {
           }
         }
         if (rects.length === 0) return null;
+        // What the writer can see of the table: its own (scrolling) box, the document pane and the viewport.
+        const pane = tableDom.closest(".kh-document-pane")?.getBoundingClientRect();
+        const visible = {
+          left: Math.max(tableRect.left, pane?.left ?? 0, 0), right: Math.min(tableRect.right, pane?.right ?? Infinity, window.innerWidth),
+          top: Math.max(tableRect.top, pane?.top ?? 0, 0), bottom: Math.min(tableRect.bottom, pane?.bottom ?? Infinity, window.innerHeight),
+        };
+        const shown = rects.map(rect => state.kind === "row"
+          ? rect.bottom > visible.top && rect.top < visible.bottom
+          : rect.right > visible.left && rect.left < visible.right);
+        const first = shown.indexOf(true), last = shown.lastIndexOf(true);
+        if (first < 0) return null;
         const point = state.kind === "row" ? y : x;
         let boundary = rects.length;
         for (let index = 0; index < rects.length; index++) {
@@ -320,11 +331,14 @@ export function tableActions() {
           if (point < mid) { boundary = index; break; }
         }
         // GFM has one header row, and it stays first: nothing lands above it.
+        // Only a boundary of a row or column the writer can see: a drop never lands among hidden ones.
+        boundary = Math.min(Math.max(boundary, first), last + 1);
         if (state.kind === "row") boundary = Math.max(boundary, 1);
         const edge = boundary < rects.length ? rects[boundary] : rects[rects.length - 1];
+        const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), high);
         const line = state.kind === "row"
-          ? new DOMRect(tableRect.left, boundary < rects.length ? edge.top : edge.bottom, tableRect.width, 2)
-          : new DOMRect(boundary < rects.length ? edge.left : edge.right, tableRect.top, 2, tableRect.height);
+          ? new DOMRect(visible.left, clamp(boundary < rects.length ? edge.top : edge.bottom, visible.top, visible.bottom), visible.right - visible.left, 2)
+          : new DOMRect(clamp(boundary < rects.length ? edge.left : edge.right, visible.left, visible.right), visible.top, 2, visible.bottom - visible.top);
         return { boundary, line };
       }
 
@@ -381,12 +395,12 @@ export function tableActions() {
         suppressClick = true;
         setTimeout(() => { suppressClick = false; }, 0);
         const inPlace = state.boundary === null || state.boundary === state.from || state.boundary === state.from + 1;
-        if (finish && !state.cancelled && !inPlace && view.state.doc === state.doc) moveTo(state, state.boundary!);
+        if (finish && !state.cancelled && !inPlace && !view.composing && view.state.doc === state.doc) moveTo(state, state.boundary!);
         if (!destroyed) position();
       }
       function onDragMove(event: PointerEvent) {
         const state = drag;
-        if (!state) return;
+        if (!state || event.pointerId !== state.pointerId) return;
         if (!state.active) {
           if (Math.hypot(event.clientX - state.startX, event.clientY - state.startY) < DRAG_THRESHOLD) return;
           state.active = true;
@@ -420,21 +434,21 @@ export function tableActions() {
         dropLine.style.width = `${at.line.width}px`; dropLine.style.height = state.kind === "column" ? `${at.line.height}px` : "";
         dropLine.hidden = false;
       }
-      function onDragUp() { endDrag(true); }
-      function onDragCancel() { endDrag(false); }
+      function onDragUp(event: PointerEvent) { if (event.pointerId === drag?.pointerId) endDrag(true); }
+      function onDragCancel(event: PointerEvent) { if (event.pointerId === drag?.pointerId) endDrag(false); }
       function onDragKey(event: KeyboardEvent) {
         if (event.key !== "Escape" || !drag?.active) return;
         event.preventDefault(); event.stopPropagation();
         cancelDrag();
       }
       function startDrag(kind: "row" | "column", event: PointerEvent) {
-        if (event.button !== 0 || !view.editable || drag) return;
+        if (event.button !== 0 || !view.editable || view.composing || drag) return;
         const target = targetCell();
         // The header row stays the header: its grip opens a menu and nothing more.
         if (!target || (kind === "row" && target.row === 0)) return;
         drag = {
           kind, tablePos: target.tablePos, from: kind === "row" ? target.row : target.column, caretColumn: target.column,
-          startX: event.clientX, startY: event.clientY, active: false, cancelled: false, boundary: null, doc: view.state.doc, marked: [],
+          pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, active: false, cancelled: false, boundary: null, doc: view.state.doc, marked: [],
         };
         document.addEventListener("pointermove", onDragMove, true);
         document.addEventListener("pointerup", onDragUp, true);
@@ -595,7 +609,8 @@ export function tableActions() {
       };
       const onPointerLeave = (event: PointerEvent) => {
         const to = event.relatedTarget as Node | null;
-        if (inControls(to) || (to as Element | null)?.closest?.(".kh-block-gutter")) return;
+        // A drag keeps its grips where they were until it ends.
+        if (drag || inControls(to) || (to as Element | null)?.closest?.(".kh-block-gutter")) return;
         pointerInside = false;
         if (menu.hidden) { hovered = null; position(); }
       };

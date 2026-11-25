@@ -200,3 +200,15 @@ it("removes its drop line when the editor is destroyed", async () => {
   editors.pop();
   expect(document.querySelector(".kh-table-drop-line")).toBeNull();
 });
+it("in a table scrolled in its box, the line stays on the table and a drop lands only among the rows in view", async () => {
+  // Box 0-90; header plus four body rows at 30px each, so rows 4 and 5 (90-150) are scrolled out of view.
+  const { editor, view } = await open("| A |\n| - |\n| r1 |\n| r2 |\n| r3 |\n| r4 |");
+  caretIn(view, "r1");
+  drag(grip("Row 2 actions"), [[10, 40], [10, 140]], false);
+  const top = Number.parseFloat(line().style.top);
+  expect(line().hidden).toBe(false);
+  expect(top).toBeGreaterThanOrEqual(0);
+  expect(top).toBeLessThanOrEqual(90);
+  pointer("pointerup", document, 10, 140);
+  expect(table(editor).map(row => row[0])).toEqual(["A", "r2", "r1", "r3", "r4"]);
+});

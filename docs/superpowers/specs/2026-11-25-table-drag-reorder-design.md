@@ -83,6 +83,13 @@ spec adds the drag. Nothing stored changes: GFM tables, one delimiter row.
   existing Move row up/down semantics"; no such menu entries exist, so
   decision 3 sets the rule from the header row's existing one.
 
+- Review (2026-11-25): a drop is chosen only among the rows or columns the writer
+  can see — the table's own box, the document pane and the viewport — and the line
+  is held inside that visible part. In a table scrolled in its box, a pointer past
+  its edge used to draw the line over the next block and drop among hidden rows.
+  A drag follows the one pointer that began it, keeps its grips still until it
+  ends, and does not begin or drop during IME composition.
+
 ## Verification
 
 - `tests/unit/editor-table-drag.test.ts`, through the rendered editor, with
