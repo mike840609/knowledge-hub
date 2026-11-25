@@ -116,3 +116,24 @@ it("names the drawer's comment button for what it does: close and select", async
   expect(button).toBeDefined();
   expect(button!.hasAttribute("aria-label")).toBe(false);
 });
+
+it("offers Retry inside the open panel when the discussions could not be read", async () => {
+  const answer = pendingFetch();
+  await render();
+  await answer(json({ error: { message: "x" } }, 503));
+  const panel = container.querySelector("#shared-document-discussions")!;
+  const retry = Array.from(panel.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent === "Retry");
+  expect(retry).toBeDefined();
+  await act(async () => { retry!.click(); });
+  expect(loading()).toBe(true);
+  expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
+});
+
+it("offers to refresh the page where it says the document changed", async () => {
+  const answer = pendingFetch();
+  await render();
+  await answer(json({ threads: [], revisionId: "r2", writesEnabled: true, callerUserId: "u1" }));
+  const refresh = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).filter(button => button.textContent === "Refresh page");
+  // Beside the notice above the article and beside the one in the panel.
+  expect(refresh).toHaveLength(2);
+});

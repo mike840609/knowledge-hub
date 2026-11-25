@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { ReviewReplyForm, ReviewThreadList, reviewDraftKey } from "@/components/knowledge/review-thread-list";
+import { ReviewReplyForm, ReviewRequestError, ReviewThreadList, reviewDraftKey, reviewSendFailure } from "@/components/knowledge/review-thread-list";
 import { splitMentions } from "@/modules/knowledge/domain/mention-text";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -127,7 +127,7 @@ function type(textarea: HTMLTextAreaElement, value: string) {
   act(() => { setter.call(textarea, value); textarea.dispatchEvent(new Event("input", { bubbles: true })); });
 }
 
-function renderForm(onSubmit: (body: string) => Promise<void> = async () => {}) {
+function renderForm(onSubmit: (body: string, key: string) => Promise<void> = async () => {}) {
   act(() => {
     root = createRoot(host);
     root.render(createElement(ReviewReplyForm, { draftKey: reviewDraftKey("reply", "t1"), onSubmit }));
@@ -163,10 +163,97 @@ test("sending or cancelling a reply forgets its draft", async () => {
   expect(sessionStorage.getItem(reviewDraftKey("reply", "t1"))).toBeNull();
   act(() => { buttons("Reply")[0].click(); });
   type(host.querySelector("textarea")!, "Never mind");
+  // Words written are asked about before they go (below); discarding them forgets the draft.
   act(() => { buttons("Cancel")[0].click(); });
+  act(() => { documentButtons("Discard reply")[0].click(); });
   expect(sessionStorage.getItem(reviewDraftKey("reply", "t1"))).toBeNull();
   remount();
   expect(host.querySelector("textarea")).toBeNull();
+});
+
+/** Buttons anywhere in the document: a confirmation is portalled out of the host. */
+function documentButtons(name: string) {
+  return Array.from(document.body.querySelectorAll("button")).filter(button => button.textContent === name);
+}
+
+test("Cancel on written words asks first, and Keep writing keeps them", async () => {
+  sessionStorage.clear();
+  renderForm();
+  act(() => { buttons("Reply")[0].click(); });
+  type(host.querySelector("textarea")!, "Worth keeping");
+  act(() => { buttons("Cancel")[0].click(); });
+  expect(document.body.textContent).toContain("Discard this reply?");
+  act(() => { documentButtons("Keep writing")[0].click(); });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  expect(host.querySelector("textarea")?.value).toBe("Worth keeping");
+  expect(sessionStorage.getItem(reviewDraftKey("reply", "t1"))).toBe("Worth keeping");
+});
+
+test("Cancel on an empty reply closes it without asking", () => {
+  sessionStorage.clear();
+  renderForm();
+  act(() => { buttons("Reply")[0].click(); });
+  act(() => { buttons("Cancel")[0].click(); });
+  expect(document.body.textContent).not.toContain("Discard this reply?");
+  expect(host.querySelector("textarea")).toBeNull();
+});
+
+test("a failed send says what failed and what to do, as an error", async () => {
+  sessionStorage.clear();
+  renderForm(async () => { throw new ReviewRequestError("An unexpected error occurred.", 500, "INTERNAL_ERROR"); });
+  act(() => { buttons("Reply")[0].click(); });
+  type(host.querySelector("textarea")!, "Lost?");
+  await act(async () => { host.querySelector("form")!.requestSubmit(); });
+  const alert = host.querySelector<HTMLElement>('[role="alert"]')!;
+  expect(alert.textContent).toBe("Couldn't send your reply. An unexpected error occurred. Try again.");
+  expect(alert.className).toContain("text-kh-danger");
+  expect(alert.querySelector("svg")).not.toBeNull();
+  expect(host.querySelector("textarea")?.value).toBe("Lost?");
+});
+
+test("after the service says the send key was reused, Try again sends a fresh key", async () => {
+  sessionStorage.clear();
+  const keys: string[] = [];
+  renderForm(async (_body: string, key: string) => {
+    keys.push(key);
+    if (keys.length === 1) throw new ReviewRequestError("The idempotency key was already used for a different request.", 409, "IDEMPOTENCY_KEY_REUSED");
+  });
+  act(() => { buttons("Reply")[0].click(); });
+  type(host.querySelector("textarea")!, "Again");
+  await act(async () => { host.querySelector("form")!.requestSubmit(); });
+  await act(async () => { host.querySelector("form")!.requestSubmit(); });
+  expect(keys).toHaveLength(2);
+  expect(keys[1]).not.toBe(keys[0]);
+});
+
+test.each([
+  ["no answer", new ReviewRequestError("Check your connection.", 0, "NETWORK"), "Couldn't post your comment. Check your connection. Try again."],
+  ["a server failure", new ReviewRequestError("Comments are unavailable. You can still read the document.", 503, "AUTH_UNAVAILABLE"), "Couldn't post your comment. Comments are unavailable. You can still read the document. Try again."],
+  ["a reused send key", new ReviewRequestError("The idempotency key was already used for a different request.", 409, "IDEMPOTENCY_KEY_REUSED"), "Couldn't post your comment. Try again."],
+  ["a changed document", new ReviewRequestError("Refresh the document before selecting a passage.", 409, "STALE_DOCUMENT_REVISION"), "Couldn't post your comment. Refresh the document before selecting a passage."],
+  ["a limit reached", new ReviewRequestError("Too many comments. Wait and send later.", 429, "REVIEW_RATE_LIMIT"), "Couldn't post your comment. Too many comments. Wait and send later."],
+  ["writes switched off", new ReviewRequestError("Adding comments is disabled.", 403, "REVIEW_WRITES_DISABLED"), "Couldn't post your comment. Adding comments is disabled."],
+  ["an expired sign-in", new ReviewRequestError("Your sign-in has expired. Sign in again.", 401, "AUTH_REQUIRED"), "Couldn't post your comment. Your sign-in has expired. Sign in again."],
+  ["a redirect", new ReviewRequestError("Your sign-in has expired. Sign in again.", 0, "REDIRECTED"), "Couldn't post your comment. Your sign-in has expired. Sign in again."],
+  ["the caller's own refusal", new Error("Wait for the document to finish saving before commenting."), "Couldn't post your comment. Wait for the document to finish saving before commenting."],
+  ["something that is not an error", "nope", "Couldn't post your comment. Try again."],
+])("a failed send after %s says what to do, offering Try again only where it helps", (_case, failure, said) => {
+  expect(reviewSendFailure("Add comment", failure)).toBe(said);
+});
+
+test("an expired sign-in offers the way to sign in again, where the page has one; the text stays", async () => {
+  sessionStorage.clear();
+  act(() => {
+    root = createRoot(host);
+    root.render(createElement(ReviewReplyForm, { draftKey: reviewDraftKey("reply", "t1"), signInHref: "/?returnTo=%2Fs%2Ftok", onSubmit: async () => { throw new ReviewRequestError("Your sign-in has expired. Sign in again.", 0, "REDIRECTED"); } }));
+  });
+  act(() => { buttons("Reply")[0].click(); });
+  type(host.querySelector("textarea")!, "Kept");
+  await act(async () => { host.querySelector("form")!.requestSubmit(); });
+  const link = host.querySelector<HTMLAnchorElement>('[role="alert"] a')!;
+  expect(link.textContent).toBe("Sign in");
+  expect(link.getAttribute("href")).toBe("/?returnTo=%2Fs%2Ftok");
+  expect(sessionStorage.getItem(reviewDraftKey("reply", "t1"))).toBe("Kept");
 });
 
 test("a collapsed card says it holds an unsent reply", () => {

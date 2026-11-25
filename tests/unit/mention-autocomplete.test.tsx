@@ -129,6 +129,13 @@ test("Tab picks too, and the name goes in at the caret, not at the end", async (
   expect(textarea.value).toBe("@林美  tail");
 });
 
+/** Answers the form's "Discard …?" question (inline review spec, 2026-11-24): it is portalled out of the host. */
+function discardAnswer() {
+  const button = Array.from(document.body.querySelectorAll("button")).find(candidate => candidate.textContent?.startsWith("Discard "));
+  expect(button).toBeDefined();
+  act(() => { button!.click(); });
+}
+
 test("Esc closes the list and leaves the form open", async () => {
   stubFetch();
   const cancelled = vi.fn();
@@ -138,8 +145,10 @@ test("Esc closes the list and leaves the form open", async () => {
   expect(listbox()).toBeNull();
   expect(cancelled).not.toHaveBeenCalled();
   expect(host.querySelector("textarea")).not.toBeNull();
-  // A second Esc is the form's again.
+  // A second Esc is the form's again: with words written, it asks before they go.
   key(textarea, "Escape");
+  expect(cancelled).not.toHaveBeenCalled();
+  discardAnswer();
   expect(cancelled).toHaveBeenCalledTimes(1);
 });
 
@@ -154,6 +163,7 @@ test("Esc closes the \"No one found\" note first, then is the form's, as before"
   expect(cancelled).not.toHaveBeenCalled();
   expect(host.textContent).not.toContain("No one found.");
   key(textarea, "Escape");
+  discardAnswer();
   expect(cancelled).toHaveBeenCalledTimes(1);
 });
 

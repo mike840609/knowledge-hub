@@ -9,14 +9,13 @@ import { readStored, removeStored, writeStored } from "@/components/shell/use-pe
 import { awaitingOwner, dismissedKey, opensOnArrival, parseDismissed } from "./review-auto-open";
 import { useShareCommentUnread } from "./share-comment-notifications";
 import { useReviewEntry } from "./review-entry";
-import { useReviewHighlights } from "./review-highlights";
+import { useReviewDraftHighlight, useReviewHighlights } from "./review-highlights";
 import { ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
 import { ReviewPanelShell } from "./review-panel-shell";
 import { ReviewBlockComment } from "./review-block-comment";
 import { ReviewPassageMarkers } from "./review-passage-markers";
 import { reviewRailInline, useReviewRailInline, useReviewRailOpen } from "./review-rail-mode";
 import { InlineReviewContext, type CaptureReviewAnchor, type PreparedReviewComment } from "./inline-review-context";
-import { useReviewDomVersion } from "./review-dom-version";
 import { COMMENT_HINT, createReviewRangeResolver, focusReviewAnchor, revealReviewAnchor, selectionAnchorInBlock } from "./review-selection";
 import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewRequest, type ReviewFilter } from "./review-thread-list";
 
@@ -54,7 +53,6 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const returnPassage = useRef<(() => void) | null>(null);
   // The drawer's CTA closes the drawer to free the text; focus follows it back to the article, not the entry button.
   const focusArticleAfterClose = useRef(false);
-  const domVersion = useReviewDomVersion();
   const canRequest = !!prepareComment && !!result?.writesEnabled && !readOnly && !revisionChanged && commentAvailable;
   const canRequestSelection = canRequest && selection.ready && !selection.chosen;
   const savePrepared = useCallback(async (comment: PreparedReviewComment, version: number) => {
@@ -69,15 +67,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     }
   }, []);
   useEffect(() => () => { requestVersion.current++; }, [documentId]);
-  useEffect(() => {
-    const registry = (globalThis.CSS as typeof CSS & { highlights?: Map<string, unknown> })?.highlights;
-    const HighlightClass = (globalThis as typeof globalThis & { Highlight?: new (...ranges: Range[]) => unknown }).Highlight;
-    const root = readingRef.current?.querySelector<HTMLElement>("[data-review-document]");
-    const range = root && selection.chosen && prepared ? createReviewRangeResolver(root, prepared.markdown)(selection.chosen) : null;
-    if (registry && HighlightClass && range) registry.set("document-review-draft", new HighlightClass(range));
-    else registry?.delete("document-review-draft");
-    return () => { registry?.delete("document-review-draft"); };
-  }, [selection.chosen, prepared, domVersion]);
+  useReviewDraftHighlight(readingRef, prepared ? selection.chosen : null, prepared?.markdown ?? markdown);
   const canComment = !!result?.writesEnabled && !readOnly && !revisionChanged && !contentPending;
   const base = `/api/documents/${documentId}/review-threads`;
   const { unreadCount, unreadThreadIds, markRead } = useShareCommentUnread(documentId);

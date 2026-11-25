@@ -104,3 +104,55 @@ test("scrolling a touch over a paragraph does not reveal its comment action", as
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
   expect(first.parentElement!.hasAttribute("data-hovered")).toBe(false);
 });
+
+test("a pointer crossing from its paragraph to the button beside it keeps the button shown, until it leaves the reading box", () => {
+  const [first] = buttons(() => true);
+  const article = reading.querySelector("article")!;
+  act(() => { paragraphs()[0].dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" })); });
+  expect(first.parentElement!.hasAttribute("data-hovered")).toBe(true);
+  // The gap between paragraph and button is the article's own box.
+  act(() => { article.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" })); });
+  expect(first.parentElement!.hasAttribute("data-hovered")).toBe(true);
+  act(() => { reading.dispatchEvent(new PointerEvent("pointerleave", { pointerType: "mouse" })); });
+  expect(first.parentElement!.hasAttribute("data-hovered")).toBe(false);
+});
+
+test("the paragraph buttons are one tab stop in a named vertical toolbar, and the arrows move between them", () => {
+  reading.querySelector("article")!.insertAdjacentHTML("beforeend", `<p data-review-path="2">Third paragraph here.</p>`);
+  act(() => {
+    root = createRoot(host);
+    root.render(createElement(ReviewBlockComment, { readingRef: { current: reading }, markdown: `${markdown}\n\nThird paragraph here.`, chosen: null, onChoose: () => true }));
+  });
+  const toolbar = host.querySelector('[role="toolbar"]')!;
+  expect(toolbar.getAttribute("aria-label")).toBe("Paragraph comments");
+  expect(toolbar.getAttribute("aria-orientation")).toBe("vertical");
+  const all = Array.from(host.querySelectorAll<HTMLButtonElement>("button"));
+  const stops = () => all.map(button => button.tabIndex);
+  expect(stops()).toEqual([0, -1, -1]);
+  const press = (key: string) => act(() => { document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true })); });
+  act(() => all[0].focus());
+  press("ArrowDown");
+  expect(document.activeElement).toBe(all[1]);
+  expect(stops()).toEqual([-1, 0, -1]);
+  press("End");
+  expect(document.activeElement).toBe(all[2]);
+  press("ArrowDown");
+  expect(document.activeElement).toBe(all[2]);
+  press("Home");
+  expect(document.activeElement).toBe(all[0]);
+  press("ArrowUp");
+  expect(document.activeElement).toBe(all[0]);
+  // Tab leaves from the last one focused, and comes back to it.
+  act(() => all[1].focus());
+  act(() => all[1].blur());
+  expect(stops()).toEqual([-1, 0, -1]);
+});
+
+test("while a paragraph's comment is open, the tab stop is that paragraph's button", () => {
+  const anchors: ReviewAnchor[] = [];
+  const [first] = buttons(anchor => { anchors.push(anchor); return true; });
+  act(() => first.click());
+  act(() => root!.render(createElement(ReviewBlockComment, { readingRef: { current: reading }, markdown, chosen: { ...anchors[0], blockPath: [1] }, onChoose: () => true })));
+  const all = Array.from(host.querySelectorAll<HTMLButtonElement>("button"));
+  expect(all.map(button => [button.disabled, button.tabIndex])).toEqual([[true, -1], [false, 0]]);
+});

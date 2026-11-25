@@ -5,12 +5,13 @@ import type { OwnerReviewThreadView, ReviewAnchor, ReviewThreadView } from "@/mo
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Timestamp } from "@/components/ui/timestamp";
 import { Textarea } from "@/components/ui/textarea";
-import { Bell, BellDot, BellOff, Check, ChevronDown, CircleArrowDown, MoreHorizontal } from "lucide-react";
+import { Bell, BellDot, BellOff, Check, ChevronDown, CircleAlert, CircleArrowDown, MoreHorizontal } from "lucide-react";
 import { MenuRoot, MenuTrigger, MenuContent, MenuItem, MenuRadioGroup, MenuRadioItem } from "@/components/ui/menu";
 import { buttonClasses } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { compareReviewPassages, useReviewRailLayout, type RailCard } from "./review-rail-layout";
+import { revealReviewCard } from "./review-rail-mode";
 import { matchesShortcut } from "@/lib/shortcut-keys";
 import { linkify } from "@/lib/linkify";
 import { Popover } from "@base-ui-components/react/popover";
@@ -21,13 +22,32 @@ import { useMentionAutocomplete, type MentionScope } from "./mention-autocomplet
 /** Sends what is written, as it saves a document in the composer. Enter alone stays a line of the comment. */
 const SUBMIT_SHORTCUT = "Meta+Enter Control+Enter";
 
+/**
+ * A refused or failed review request: what it says, and what kind of failure it was, so a form can
+ * say whether trying again would help. `status` 0 is a request that got no answer (the network) or
+ * was answered with a redirect, which is never followed (`code` "REDIRECTED").
+ */
+export class ReviewRequestError extends Error {
+  constructor(message: string, readonly status: number, readonly code?: string) { super(message); this.name = "ReviewRequestError"; }
+}
+
+/** The session behind a write ran out: a 401, or a redirect (a gateway sending the request to sign in). */
+const SIGN_IN_EXPIRED = "Your sign-in has expired. Sign in again.";
+
 export async function reviewRequest<T>(url: string, body?: unknown): Promise<T> {
-  const response = await fetch(url, { method: body === undefined ? "GET" : "POST", credentials: "same-origin", cache: "no-store", referrerPolicy: "origin", redirect: "error", headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  if (!response.headers.get("content-type")?.includes("application/json")) throw new Error("Comment service returned an unexpected response. Refresh and try again.");
+  let response: Response;
+  try {
+    // A redirect is never followed (inline review spec §4.5): "manual" hands it back unread, as `opaqueredirect`.
+    response = await fetch(url, { method: body === undefined ? "GET" : "POST", credentials: "same-origin", cache: "no-store", referrerPolicy: "origin", redirect: "manual", headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  } catch {
+    throw new ReviewRequestError("Check your connection.", 0, "NETWORK");
+  }
+  if (response.type === "opaqueredirect" || (response.status >= 300 && response.status < 400)) throw new ReviewRequestError(SIGN_IN_EXPIRED, 0, "REDIRECTED");
+  if (!response.headers.get("content-type")?.includes("application/json")) throw new ReviewRequestError("Comment service returned an unexpected response. Refresh and try again.", response.status, "UNEXPECTED_RESPONSE");
   const result = await response.json();
   if (!response.ok) {
-    const error = new Error(response.status === 401 ? "Sign in to add a comment. Company sign-in is currently unavailable here." : response.status === 503 ? "Comments are unavailable. You can still read the document." : response.status === 404 ? "This comment or share link is no longer available." : result.error?.message ?? result.message ?? "The comment could not be updated.");
-    throw error;
+    const code: string | undefined = result.error?.code;
+    throw new ReviewRequestError(response.status === 401 ? SIGN_IN_EXPIRED : response.status === 503 ? "Comments are unavailable. You can still read the document." : response.status === 404 ? "This comment or share link is no longer available." : result.error?.message ?? result.message ?? "The comment could not be updated.", response.status, code);
   }
   return result as T;
 }
@@ -39,7 +59,29 @@ export async function reviewRequest<T>(url: string, body?: unknown): Promise<T> 
  */
 export const reviewDraftKey = (kind: "reply" | "new", id: string) => `kh:review-draft:${kind}:${id}`;
 
-export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, initial = "", submitLabel = label, onCancel, submitDisabled = false, cancelOnEscape = false, draftKey, mentionScope }: { /** `mentions`: who the sent text names, picked from the `@` list; `mentionLinkId`: the owner's link they are reached through. */ onSubmit: (body: string, key: string, mentions: string[], mentionLinkId?: string) => Promise<void>; label?: string; /** Changes when the card's own Reply was pressed: open the form. */ openRequest?: number; /** An edit starts from what the comment says. */ initial?: string; submitLabel?: string; onCancel?: () => void; submitDisabled?: boolean; cancelOnEscape?: boolean; /** Keeps the unsent text (`reviewDraftKey`). */ draftKey?: string; /** Offers the `@` list; absent for an edit, which never adds a mention. */ mentionScope?: MentionScope }) {
+/**
+ * What a failed send says: what did not happen, why, and whether trying again would help. Only a
+ * request that got no answer, a server failure (5xx) or a reused send key (409
+ * `IDEMPOTENCY_KEY_REUSED`, which a resend with a fresh key clears) is offered "Try again."; a
+ * refusal the same request would meet again (a changed document, a limit, a closed discussion,
+ * writes switched off) is said as the service says it. An expired sign-in says to sign in again.
+ */
+export function reviewSendFailure(label: string, failure: unknown): string {
+  const what = label === "Add comment" ? "Couldn't post your comment." : label === "Reply" ? "Couldn't send your reply." : "Couldn't save your changes.";
+  if (failure instanceof ReviewRequestError) {
+    if (failure.status === 401 || failure.code === "REDIRECTED") return `${what} ${SIGN_IN_EXPIRED}`;
+    if (failure.code === "IDEMPOTENCY_KEY_REUSED") return `${what} Try again.`;
+    if (failure.status === 0 || failure.status >= 500) return /try again/i.test(failure.message) ? `${what} ${failure.message}` : `${what} ${failure.message} Try again.`;
+    return `${what} ${failure.message}`;
+  }
+  // The caller's own refusal (the owner's document still saving) says what to do; anything else is unknown.
+  return failure instanceof Error && failure.message ? `${what} ${failure.message}` : `${what} Try again.`;
+}
+
+/** Whether a failure is an expired sign-in, for which the form offers the way to sign in again. */
+const signInExpired = (failure: unknown) => failure instanceof ReviewRequestError && (failure.status === 401 || failure.code === "REDIRECTED");
+
+export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, initial = "", submitLabel = label, onCancel, submitDisabled = false, cancelOnEscape = false, draftKey, mentionScope, signInHref }: { /** Where a reader whose sign-in expired signs in again, where the page has such a place. */ signInHref?: string; /** `mentions`: who the sent text names, picked from the `@` list; `mentionLinkId`: the owner's link they are reached through. */ onSubmit: (body: string, key: string, mentions: string[], mentionLinkId?: string) => Promise<void>; label?: string; /** Changes when the card's own Reply was pressed: open the form. */ openRequest?: number; /** An edit starts from what the comment says. */ initial?: string; submitLabel?: string; onCancel?: () => void; submitDisabled?: boolean; cancelOnEscape?: boolean; /** Keeps the unsent text (`reviewDraftKey`). */ draftKey?: string; /** Offers the `@` list; absent for an edit, which never adds a mention. */ mentionScope?: MentionScope }) {
   const [body, setBody] = useState(() => (draftKey && readStored("session", draftKey)) || initial);
   // A reply someone had started is open again, as they left it.
   const [expanded, setExpanded] = useState(() => label !== "Reply" || !!(draftKey && readStored("session", draftKey)));
@@ -53,28 +95,36 @@ export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, in
   useEffect(() => { if (openRequest > 0) setExpanded(true); }, [openRequest]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [expired, setExpired] = useState(false);
   const request = useRef<{ body: string; key: string } | null>(null);
+  // Cancelling words someone wrote cannot be undone, so it is asked first (design language §15).
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+  const cancel = () => { discard(); setBody(initial); mention.reset(); if (onCancel) onCancel(); else setExpanded(false); };
+  const requestCancel = () => { if (body.trim() && body !== initial) setConfirmingDiscard(true); else cancel(); };
   if (!expanded) return <Button type="button" variant="ghost" className="-ml-3 mt-3" onClick={() => setExpanded(true)}>Reply</Button>;
-  return <form className="mt-3 space-y-2" onKeyDown={event => {
+  return <><form className="mt-3 space-y-2" onKeyDown={event => {
     // Through the form's own button, so the key does nothing the button would not.
     if (matchesShortcut(event.nativeEvent, SUBMIT_SHORTCUT)) { event.preventDefault(); event.currentTarget.querySelector<HTMLButtonElement>('button[type="submit"]:not(:disabled)')?.click(); return; }
     if (event.key !== "Escape") return;
     // Esc never closes the rail from here, and never discards: it leaves only an edit nothing was changed in.
     event.preventDefault(); event.stopPropagation();
-    if (onCancel && !busy && (cancelOnEscape || body === initial)) onCancel();
+    if (onCancel && !busy && (cancelOnEscape || body === initial)) requestCancel();
   }} onSubmit={async event => {
     event.preventDefault(); if (busy || submitDisabled || !body.trim()) return;
     if (!request.current || request.current.body !== body) request.current = { body, key: crypto.randomUUID() };
-    setBusy(true); setError(undefined);
+    setBusy(true); setError(undefined); setExpired(false);
     const { mentions, mentionLinkId } = mention.collect(body);
-    try { await onSubmit(body, request.current.key, mentions, mentionLinkId); setBody(""); discard(); mention.reset(); request.current = null; if (label === "Reply") setExpanded(false); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not save comment."); } finally { setBusy(false); }
+    try { await onSubmit(body, request.current.key, mentions, mentionLinkId); setBody(""); discard(); mention.reset(); request.current = null; if (label === "Reply") setExpanded(false); } catch (failure) { if (failure instanceof ReviewRequestError && failure.code === "IDEMPOTENCY_KEY_REUSED") request.current = null; setError(reviewSendFailure(label, failure)); setExpired(signInExpired(failure)); } finally { setBusy(false); }
   }}>
+    {/* 6,000 UTF-16 units: the limit is 3,000 characters, and a character outside the BMP (an emoji) is two units. The counter and the send button hold the 3,000. */}
     <div className="relative"><Textarea {...mention.field} aria-label={label} placeholder={label === "Reply" ? "Reply…" : "Add a comment…"} rows={2} autoFocus className="!min-h-20 resize-y" value={body} disabled={busy} onChange={event => { keep(event.target.value); mention.track(); }} required maxLength={6000} />{mention.list}</div>
     {[...body].length >= 2700 && <p className="text-caption text-kh-text-muted">{[...body].length}/3,000</p>}
-    {error && <p role="alert" className="text-body-sm">{error}</p>}
+    {error && <p role="alert" className="flex items-start gap-1.5 text-body-sm text-kh-danger"><CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" /><span>{error}{expired && signInHref && <> <a href={signInHref} className="font-medium text-kh-link underline decoration-kh-link underline-offset-2 kh-focus-ring">Sign in</a></>}</span></p>}
     {mention.linkChoice}
-    <div className="flex justify-end gap-1">{(label === "Reply" || onCancel) && <Button type="button" variant="ghost" disabled={busy} onClick={() => { discard(); setBody(initial); mention.reset(); if (onCancel) onCancel(); else setExpanded(false); }}>Cancel</Button>}<Tooltip label={submitLabel} shortcut={SUBMIT_SHORTCUT}><Button type="submit" aria-keyshortcuts={SUBMIT_SHORTCUT} disabled={busy || submitDisabled || !body.trim() || [...body].length > 3000}>{busy ? "Saving…" : submitLabel}</Button></Tooltip></div>
-  </form>;
+    <div className="flex justify-end gap-1">{(label === "Reply" || onCancel) && <Button type="button" variant="ghost" disabled={busy} onClick={requestCancel}>Cancel</Button>}<Tooltip label={submitLabel} shortcut={SUBMIT_SHORTCUT}><Button type="submit" aria-keyshortcuts={SUBMIT_SHORTCUT} disabled={busy || submitDisabled || !body.trim() || [...body].length > 3000}>{busy ? "Saving…" : submitLabel}</Button></Tooltip></div>
+  </form>
+  {/* Beside the form, not in it; and its keys stop here, so Escape answers the question without also closing the rail. */}
+  <span className="contents" onKeyDown={event => event.stopPropagation()}><ConfirmDialog open={confirmingDiscard} onOpenChange={setConfirmingDiscard} title={label === "Add comment" ? "Discard this comment?" : label === "Reply" ? "Discard this reply?" : "Discard your changes?"} description="What you wrote will be lost." confirmLabel={label === "Add comment" ? "Discard comment" : label === "Reply" ? "Discard reply" : "Discard changes"} cancelLabel="Keep writing" onConfirm={cancel} /></span></>;
 }
 
 export type ReviewFilter = "ALL" | "OPEN" | "RESOLVED";
@@ -110,7 +160,7 @@ export function ReviewNextButtons({ threads, activeThreadId, onActivate, filter,
     // The card is drawn, and placed beside its passage, after this render.
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const card = Array.from(document.querySelectorAll<HTMLElement>("[data-review-thread]")).find(item => item.dataset.reviewThread === threadId && item.getClientRects().length > 0);
-      card?.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      if (card) revealReviewCard(card, "center", window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
     }));
   }
   // Always drawn, disabled when there is nowhere to go: a row appearing or leaving would move the cards under the pointer.
@@ -120,7 +170,9 @@ export function ReviewNextButtons({ threads, activeThreadId, onActivate, filter,
   </div>;
 }
 
-export function ReviewThreadList({ threads, writesEnabled, reply, moderate, author, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange, draft, signInHref, unreadThreadIds, follow, mentionScope, emptyHint = "Select text in the document to start a comment." }: {
+export function ReviewThreadList({ threads, writesEnabled, reply, moderate, author, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange, draft, signInHref, reauthHref, unreadThreadIds, follow, mentionScope, emptyHint = "Select text in the document to start a comment." }: {
+  /** Where a signed-in reader whose sign-in expired signs in again (a reply or edit offers it on that failure). */
+  reauthHref?: string;
   threads: (ReviewThreadView | OwnerReviewThreadView)[];
   writesEnabled: boolean;
   emptyHint?: string;
@@ -247,7 +299,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
           {comment.deleted
             ? <p className="text-kh-text-muted">Comment deleted by author</p>
             : editing === comment.id && canEdit && !compact
-              ? <ReviewReplyForm label="Edit comment" submitLabel="Save" initial={comment.body} onCancel={() => setEditing(undefined)} onSubmit={async body => { await author!.edit(thread.id, comment.id, body); setEditing(undefined); }} />
+              ? <ReviewReplyForm label="Edit comment" submitLabel="Save" signInHref={reauthHref} initial={comment.body} onCancel={() => setEditing(undefined)} onSubmit={async body => { await author!.edit(thread.id, comment.id, body); setEditing(undefined); }} />
               : <CommentBody body={comment.body} compact={compact} mentions={comment.mentions} onClamped={index === 0 ? value => setClamped(previous => previous[thread.id] === value ? previous : { ...previous, [thread.id]: value }) : undefined} />}
           </div>
         </li>; })}</ol>
@@ -268,7 +320,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
           event.stopPropagation(); setBusy(true); setError(undefined);
           try { await follow(thread.id, !thread.following); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not update following."); } finally { setBusy(false); }
         }}>{thread.following ? <BellOff className="size-4" aria-hidden="true" /> : <Bell className="size-4" aria-hidden="true" />}{thread.following ? "Unfollow" : "Follow replies"}</Button></div>}
-        {canReply && <div hidden={compact}><ReviewReplyForm draftKey={reviewDraftKey("reply", thread.id)} openRequest={replyRequest?.threadId === thread.id ? replyRequest.nonce : 0} mentionScope={mentionScope} onSubmit={(body, key, mentions, mentionLinkId) => reply(thread.id, body, key, mentions, mentionLinkId)} /></div>}
+        {canReply && <div hidden={compact}><ReviewReplyForm signInHref={reauthHref} draftKey={reviewDraftKey("reply", thread.id)} openRequest={replyRequest?.threadId === thread.id ? replyRequest.nonce : 0} mentionScope={mentionScope} onSubmit={(body, key, mentions, mentionLinkId) => reply(thread.id, body, key, mentions, mentionLinkId)} /></div>}
         </div></div>
       </section>;
       });

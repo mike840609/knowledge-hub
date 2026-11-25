@@ -2,14 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ReviewAnchor, ReviewThreadView } from "@/modules/knowledge/domain/document-review";
-import { useReviewHighlights } from "./review-highlights";
+import { useReviewDraftHighlight, useReviewHighlights } from "./review-highlights";
 import { LogIn, RefreshCw, MessageSquare, MessageSquarePlus, X } from "lucide-react";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewDraftKey, reviewRequest, type ReviewFilter } from "./review-thread-list";
 import { ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
 import { ReviewPanelShell } from "./review-panel-shell";
-import { COMMENT_HINT, focusReviewAnchor } from "./review-selection";
+import { ReviewBlockComment } from "./review-block-comment";
+import { COMMENT_HINT, createReviewRangeResolver, focusReviewAnchor, selectionAnchorInBlock } from "./review-selection";
 import { ReviewPassageMarkers } from "./review-passage-markers";
 import { reviewRailInline, useReviewRailInline, useReviewRailOpen } from "./review-rail-mode";
 import { awaitingReader, newComments, parseDismissed, sharedDismissedKey } from "./review-auto-open";
@@ -34,7 +35,7 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
   // The drawer's CTA closes the drawer to free the text; focus follows it back to the article, not the entry button.
   const focusArticleAfterClose = useRef(false);
   // Every way the rail opens and closes holds the reader's place.
-  const [open, setOpen] = useReviewRailOpen(readingRef);
+  const [open, setOpen, holdAt] = useReviewRailOpen(readingRef);
   const inline = useReviewRailInline();
   const [filter, setFilter] = useState<ReviewFilter>("ALL");
   const shown = useRef<DiscussionResult | undefined>(undefined);
@@ -87,6 +88,7 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
   }, [activeThreadId, seeing, scope]);
   useReviewHighlights(markdown, revisionChanged ? undefined : result?.threads, activeThreadId);
   const selection = useReviewSelection(readingRef, markdown, `${token}:${revisionId}`);
+  useReviewDraftHighlight(readingRef, revisionChanged ? null : selection.chosen, markdown);
   // A newer reading, held back while it would move the cards: the reader chooses when to see it.
   const [arrived, setArrived] = useState<{ result: DiscussionResult; count: number }>();
   // A read again keeps what is shown, says it is updating, and on failure says so beside it.
@@ -122,31 +124,56 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
   // An unsent new comment is kept with its passage, so a reload brings both back (spec amendment 2026-10-21).
   const draftKey = reviewDraftKey("new", kept);
   const anchorKey = `${draftKey}:anchor`;
+  // The passage an anonymous reader chose before leaving to sign in, with the revision it was chosen
+  // in. Only what this tab shows itself on return: the comment is still the signed-in reader's write,
+  // judged by the service as any other.
+  const signInKey = `${draftKey}:sign-in`;
   const [restored, setRestored] = useState(false);
   const discardDraft = useCallback(() => { removeStored("session", draftKey); removeStored("session", anchorKey); setRestored(false); }, [draftKey, anchorKey]);
   useEffect(() => { if (selection.chosen) writeStored("session", anchorKey, JSON.stringify(selection.chosen)); }, [selection.chosen, anchorKey]);
+  // Taken (and forgotten) as soon as a signed-in reader's first reading arrives, whether or not they
+  // may comment now, so it cannot open a composer later, unasked; an anonymous reader's stays for their sign-in.
+  const keptSignIn = useRef<ReturnType<typeof parseSignIn> | undefined>(undefined);
+  useEffect(() => {
+    if (!result || result.callerUserId === null || keptSignIn.current !== undefined) return;
+    const kept = parseSignIn(readStored("session", signInKey));
+    removeStored("session", signInKey);
+    // Only a reader who may comment on the reading they came back to has it restored.
+    keptSignIn.current = canComment ? kept : null;
+  }, [result, canComment, signInKey]);
   const restoreChecked = useRef(false);
   useEffect(() => {
     if (restoreChecked.current || !result || !canComment) return;
     restoreChecked.current = true;
     const anchor = parseStoredAnchor(readStored("session", anchorKey));
-    if (anchor && readStored("session", draftKey)?.trim()) { selection.choose(anchor); setRestored(true); setOpen(true); }
-    else discardDraft();
-  }, [result, canComment, anchorKey, draftKey, selection, discardDraft]);
+    const signedIn = keptSignIn.current;
+    if (anchor && readStored("session", draftKey)?.trim()) { selection.choose(anchor); setRestored(true); setOpen(true); return; }
+    discardDraft();
+    // Back from signing in: the composer opens on the passage, if it is still there as it was; if not, nothing is said.
+    const root = readingRef.current?.querySelector<HTMLElement>("[data-review-document]");
+    if (signedIn && signedIn.revisionId === revisionId && root && createReviewRangeResolver(root, markdown)(signedIn.anchor)) { selection.choose(signedIn.anchor); setOpen(true); }
+  }, [result, canComment, anchorKey, draftKey, revisionId, markdown, selection, discardDraft, setOpen]);
   // Only a signed-in reader who may write is offered `@`: the candidate route refuses anyone else.
   const mentionScope = result?.writesEnabled && !anonymous ? scope : undefined;
-  const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} draftKey={draftKey} restored={restored} mentionScope={mentionScope} onCancel={() => { discardDraft(); selection.clear(); }} onSubmit={async (body, idempotencyKey, mentions) => {
+  const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} signInHref={signInHref} draftKey={draftKey} restored={restored} mentionScope={mentionScope} onCancel={() => { discardDraft(); selection.clear(); }} onSubmit={async (body, idempotencyKey, mentions) => {
     const created = await reviewRequest<{ id: string }>("/api/share-review/threads", { ...scope, expectedRevisionId: revisionId, anchor: selection.chosen, body, idempotencyKey, ...(mentions.length ? { mentions } : {}) });
     discardDraft(); selection.clear(); setFilter(current => current === "RESOLVED" ? "OPEN" : current); setActiveThreadId(created.id); await load();
   }} />;
   // Beside its passage where the discussions are a rail; at the top of the drawer, which covers the passage, where they are not.
   const draft = composer && inline && !revisionChanged ? { anchor: selection.chosen!, composer } : undefined;
+  // What the notice asks for, offered beside it: a reload reads the document as it is now, and an
+  // unsent comment or reply is kept across it (2026-10-21 amendment).
+  const changedNotice = () => <>
+    <p role="status" className="text-body-sm">Document changed. Refresh this page before selecting or locating a passage. You can still reply to existing comments.</p>
+    <Button type="button" variant="soft" className="mt-2" onClick={() => window.location.reload()}><RefreshCw className="size-4" aria-hidden="true" />Refresh page</Button>
+  </>;
   return <>
     <div className={`sticky top-0 z-20 border-b border-kh-border bg-kh-bg ${wide ? "kh-share-folder-bar" : ""}`}>
       <div className={wide ? "flex h-14 items-center gap-2 px-4" : "kh-review-entry kh-reading-column relative flex min-h-14 items-center justify-between gap-3 py-2"}>
         {brand}
-        {/* -me-3 takes back the last button's padding, so its label ends on the column's edge as the brand starts on it. */}
-        <div className={wide ? "-me-3 ml-auto flex shrink-0 items-center gap-1" : "-me-3 flex min-w-0 items-center justify-end gap-1"}>
+        {/* -me-3 takes back the last button's padding, so its label ends on the column's edge as the brand starts on it.
+            ml-auto keeps the actions on the right where there is no brand (the Hub's reader), so they stay put when the rail opens. */}
+        <div className={wide ? "-me-3 ml-auto flex shrink-0 items-center gap-1" : "-me-3 ml-auto flex min-w-0 items-center justify-end gap-1"}>
           <span aria-live="polite">{arrived && <Button type="button" variant="soft" onClick={showArrived} className="kh-pop-in max-sm:px-2"><span className="max-sm:hidden">{arrived.count === 1 ? "1 new comment" : `${arrived.count} new comments`}</span><span className="sm:hidden">{arrived.count} new</span></Button>}</span>
           <Button ref={entryRef} type="button" variant="ghost" aria-label={`${open ? "Hide comments" : "Show comments"}${result ? `, ${result.threads.length} comments` : ""}${allResolved ? ", all resolved" : ""}`} aria-expanded={open} aria-controls="shared-document-discussions" onPointerDown={event => event.preventDefault()} onClick={toggle} className="max-sm:gap-1 max-sm:px-2">
             <MessageSquare className="size-4" aria-hidden="true" />
@@ -159,13 +186,27 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
     </div>
     {!open && (error || revisionChanged) && <div className="kh-reading-column py-3">
       {error && <p role="status" className="text-body-sm">{error} <Button type="button" variant="ghost" aria-label="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" />Retry</Button></p>}
-      {revisionChanged && <p role="status" className="text-body-sm">Document changed. Refresh this page before selecting or locating a passage. You can still reply to existing comments.</p>}
+      {revisionChanged && changedNotice()}
     </div>}
     <div className="kh-review-document" data-review-ready={result || error ? "" : undefined} data-review-open={open ? "" : undefined} data-review-inline={inline ? "" : undefined}>
       <div ref={readingRef} className="kh-review-reading">
         {children}
         {canComment && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={() => { selection.capture(); changeOpen(true); }} />}
-        {anonymous && !revisionChanged && <ReviewSelectionBubble place={selection.place} ready={selection.ready} signInHref={signInHref} onComment={() => undefined} />}
+        {/* The keyboard's way in: read-only text cannot be selected without a pointer, so each paragraph
+            has the owner's Comment button, offered only to a reader who may write. What is selected
+            inside the paragraph narrows it, as on the owner's page. */}
+        {canComment && <ReviewBlockComment readingRef={readingRef} markdown={markdown} chosen={selection.chosen} onChoose={(anchor, element) => {
+          holdAt(element);
+          const root = readingRef.current?.querySelector<HTMLElement>("[data-review-document]");
+          const resolved = (root && selectionAnchorInBlock(root, markdown, anchor, window.getSelection())) ?? anchor;
+          selection.choose(resolved);
+          changeOpen(true);
+          return resolved === anchor;
+        }} />}
+        {anonymous && !revisionChanged && <ReviewSelectionBubble place={selection.place} ready={selection.ready} signInHref={signInHref} onComment={() => {
+          const anchor = selection.peek();
+          if (anchor) writeStored("session", signInKey, JSON.stringify({ revisionId, anchor }));
+        }} />}
         <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={revisionChanged ? undefined : result?.threads} />
       </div>
       <aside id="shared-document-discussions" className="kh-review-panel" aria-label="Document comments" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && reviewRailInline()) changeOpen(false); }}>
@@ -186,20 +227,21 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
         <div className="flex shrink-0 items-center gap-1"><Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" disabled={refreshing} onClick={() => void load()}><RefreshCw className={`size-4 ${refreshing ? "motion-safe:animate-spin" : ""}`} aria-hidden="true" /></Button></Tooltip><span className="kh-review-rail-only"><Tooltip label="Close comments"><Button type="button" variant="ghost" icon aria-label="Close comments" onClick={() => changeOpen(false)}><X className="size-4" aria-hidden="true" /></Button></Tooltip></span></div>
       </div>
       {result && result.threads.length > 0 && <ReviewNextButtons threads={result.threads} activeThreadId={activeThreadId} onActivate={setActiveThreadId} filter={filter} onFilterChange={setFilter} />}
-      {error && <p role="status" className="mt-3 text-body-sm">{error}</p>}
+      {error && <div className="mt-3"><p role="status" className="text-body-sm">{error}</p><Button type="button" variant="ghost" className="-ml-3" disabled={refreshing} onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" />Retry</Button></div>}
       {!result && !error && <p role="status" className="mt-3 text-body-sm text-kh-text-muted">Loading comments…</p>}
       {refreshing && <p role="status" className="mt-3 text-caption text-kh-text-muted">Updating…</p>}
       {selection.refusal && <p role="status" className="mt-3 text-body-sm">{selection.refusal}</p>}
       {result && <div className="mt-3">
-        {revisionChanged && <p role="status" className="mb-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage. You can still reply to existing comments.</p>}
+        {revisionChanged && <div className="mb-3">{changedNotice()}</div>}
         {/* The one thing a reader does here that an owner does not, on a row of its own. */}
         {canComment && <div className="mb-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={() => { if (!inline) { focusArticleAfterClose.current = true; changeOpen(false); return; } selection.capture(); }}><MessageSquarePlus className="size-4" aria-hidden="true" />{inline ? "Comment on selected text" : "Close comments and select text"}</Button>{inline && !selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
-        {!result.writesEnabled && <p className="mb-3 text-body-sm text-kh-text-muted">{result.callerUserId === null ? "Sign in to add a comment." : "Adding comments is currently disabled."}</p>}
+        {/* An anonymous reader is offered sign-in once, as the button below, not also as a line saying the same. */}
+        {!result.writesEnabled && !anonymous && <p className="mb-3 text-body-sm text-kh-text-muted">Adding comments is currently disabled.</p>}
         {anonymous && <div className="mb-3"><a href={signInHref} className={buttonClasses({ variant: "soft" })}><LogIn className="size-4" aria-hidden="true" />Sign in to comment</a></div>}
       </div>}
       </div>
       {!draft && composer}
-      {result && <ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId} focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }} threads={result.threads} writesEnabled={result.writesEnabled} signInHref={anonymous ? signInHref : undefined}
+      {result && <ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId} focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }} threads={result.threads} writesEnabled={result.writesEnabled} signInHref={anonymous ? signInHref : undefined} reauthHref={anonymous ? undefined : signInHref}
         follow={anonymous ? undefined : async (threadId, next) => { await reviewRequest(`/api/share-review/threads/${threadId}/follow`, { ...scope, following: next }); await load(); }} mentionScope={mentionScope} reply={async (threadId, body, idempotencyKey, mentions) => { await reviewRequest(`/api/share-review/threads/${threadId}/replies`, { ...scope, body, idempotencyKey, ...(mentions.length ? { mentions } : {}) }); await load(); }}
         author={result.callerUserId === null ? undefined : {
           edit: async (threadId, commentId, body) => { await reviewRequest(`/api/share-review/threads/${threadId}/comments/${commentId}/body`, { ...scope, body }); await load(); },
@@ -209,6 +251,17 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
       </aside>
     </div>
   </>;
+}
+
+/** A passage kept across signing in, with the revision it was chosen in; anything else is nothing. */
+function parseSignIn(stored: string | null): { revisionId: string; anchor: ReviewAnchor } | null {
+  try {
+    const value = JSON.parse(stored ?? "") as { revisionId?: unknown; anchor?: unknown } | null;
+    const anchor = parseStoredAnchor(JSON.stringify(value?.anchor ?? null));
+    return value && typeof value.revisionId === "string" && anchor ? { revisionId: value.revisionId, anchor } : null;
+  } catch {
+    return null;
+  }
 }
 
 /** A kept passage, read back as the anchor it was; anything else is no draft. The service checks it again on send. */

@@ -96,3 +96,20 @@ export function useReviewRailOpen(readingRef: RefObject<HTMLElement | null>) {
   }, []);
   return [open, change, holdAt] as const;
 }
+
+/**
+ * Brings a rail card into sight below the rail's pinned toolbar. Scrolled as any element is, the
+ * card's quote and author line ended under the toolbar (name, filter, Next open, Comment on
+ * selected text), which is pinned over the top of the rail. `block` as `scrollIntoView` takes it;
+ * a card too tall to fit below the toolbar is shown from its top.
+ */
+export function revealReviewCard(card: HTMLElement, block: "center" | "nearest", behavior: ScrollBehavior = "auto") {
+  // A card glides to its new place (120ms): measure where it ends, not where it is mid-glide.
+  card.getAnimations?.().forEach(animation => animation.finish());
+  const toolbar = card.closest(".kh-review-panel")?.querySelector<HTMLElement>(".kh-review-toolbar");
+  const style = toolbar ? getComputedStyle(toolbar) : null;
+  // 12px: the rail's gap between cards.
+  const clearance = toolbar && style?.position === "sticky" ? (parseFloat(style.top) || 0) + toolbar.offsetHeight + 12 : 0;
+  card.style.scrollMarginTop = `${clearance}px`;
+  card.scrollIntoView({ block: card.offsetHeight <= window.innerHeight - clearance ? block : "start", behavior });
+}

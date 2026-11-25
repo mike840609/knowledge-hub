@@ -28,6 +28,10 @@ export function ReviewBlockComment({ readingRef, markdown, chosen, onChoose }: {
   const [blocks, setBlocks] = useState<{ element: HTMLElement; anchor: ReviewAnchor; top: number; height: number }[]>([]);
   const selected = useRef<HTMLElement | null>(null);
   const [hovered, setHovered] = useState<HTMLElement | null>(null);
+  // One tab stop for all of them (a roving tabindex): a long document's paragraphs would otherwise
+  // be as many stops between the article and what follows it. The arrows move between them.
+  const [current, setCurrent] = useState<string>();
+  const buttons = useRef(new Map<string, HTMLButtonElement>());
   useEffect(() => {
     const reading = readingRef.current;
     const article = reading?.querySelector<HTMLElement>("[data-review-document]");
@@ -48,9 +52,13 @@ export function ReviewBlockComment({ readingRef, markdown, chosen, onChoose }: {
     };
     const paragraphAt = (event: PointerEvent) => event.target instanceof Element
       ? event.target.closest<HTMLElement>("p[data-review-path],li[data-review-para]") : null;
+    // The button stands beside its paragraph, not on it: crossing the gap to it must not take it
+    // away. A pointer keeps the last paragraph it was over until it is over another, or leaves.
     const point = (event: PointerEvent) => {
-      if (event.pointerType !== "touch" && event.pointerType !== "pen") setHovered(paragraphAt(event));
+      const paragraph = event.pointerType !== "touch" && event.pointerType !== "pen" ? paragraphAt(event) : null;
+      if (paragraph) setHovered(paragraph);
     };
+    const leave = (event: PointerEvent) => { if (event.pointerType !== "touch" && event.pointerType !== "pen") setHovered(null); };
     let pending: { pointerId: number; x: number; y: number; element: HTMLElement | null } | null = null;
     let revealTimer: number | undefined;
     const touchDown = (event: PointerEvent) => {
@@ -70,6 +78,7 @@ export function ReviewBlockComment({ readingRef, markdown, chosen, onChoose }: {
       revealTimer = window.setTimeout(() => { if (element?.isConnected) setHovered(element); }, 0);
     };
     article.addEventListener("pointerover", point);
+    reading.addEventListener("pointerleave", leave);
     article.addEventListener("pointerdown", touchDown);
     window.addEventListener("pointermove", touchMove, true);
     window.addEventListener("pointerup", touchUp, true);
@@ -81,6 +90,7 @@ export function ReviewBlockComment({ readingRef, markdown, chosen, onChoose }: {
       observer.disconnect();
       window.clearTimeout(revealTimer);
       article.removeEventListener("pointerover", point);
+      reading.removeEventListener("pointerleave", leave);
       article.removeEventListener("pointerdown", touchDown);
       window.removeEventListener("pointermove", touchMove, true);
       window.removeEventListener("pointerup", touchUp, true);
@@ -94,10 +104,26 @@ export function ReviewBlockComment({ readingRef, markdown, chosen, onChoose }: {
     }
   }, [chosen]);
   useEffect(() => () => { if (selected.current) setReviewBlockSelected(selected.current, false); }, [markdown]);
-  return <div className="kh-block-comment-controls pointer-events-none absolute inset-0" aria-label="Paragraph comments">
-    {blocks.map(({ element, anchor, top, height }) => <div key={anchor.blockPath.join(".")}
+  const keyOf = (anchor: ReviewAnchor) => anchor.blockPath.join(".");
+  const enabled = blocks.filter(({ anchor }) => !chosen || keyOf(chosen) === keyOf(anchor)).map(({ anchor }) => keyOf(anchor));
+  // The stop is the last one focused, while it can take focus; else the first that can.
+  const stop = current && enabled.includes(current) ? current : enabled[0];
+  const move = (key: string | undefined) => { if (!key) return; setCurrent(key); buttons.current.get(key)?.focus(); };
+  return <div className="kh-block-comment-controls pointer-events-none absolute inset-0" role={blocks.length ? "toolbar" : undefined} aria-orientation={blocks.length ? "vertical" : undefined} aria-label={blocks.length ? "Paragraph comments" : undefined}
+    onKeyDown={event => {
+      const at = enabled.indexOf((event.target as HTMLElement).dataset.reviewBlock ?? "");
+      if (at < 0) return;
+      const next = event.key === "ArrowDown" ? enabled[Math.min(at + 1, enabled.length - 1)] : event.key === "ArrowUp" ? enabled[Math.max(at - 1, 0)]
+        : event.key === "Home" ? enabled[0] : event.key === "End" ? enabled[enabled.length - 1] : undefined;
+      if (!next) return;
+      event.preventDefault();
+      move(next);
+    }}>
+    {blocks.map(({ element, anchor, top, height }) => <div key={keyOf(anchor)}
       className="kh-block-comment-zone absolute" data-hovered={hovered === element ? "" : undefined} style={{ top, height }}>
-      <button type="button" disabled={!!chosen && chosen.blockPath.join(".") !== anchor.blockPath.join(".")} aria-label={`Comment on paragraph: ${anchor.exact.slice(0, 80)}`}
+      <button type="button" ref={button => { if (button) buttons.current.set(keyOf(anchor), button); else buttons.current.delete(keyOf(anchor)); }} data-review-block={keyOf(anchor)}
+        tabIndex={keyOf(anchor) === stop ? 0 : -1} onFocus={() => setCurrent(keyOf(anchor))}
+        disabled={!!chosen && keyOf(chosen) !== keyOf(anchor)} aria-label={`Comment on paragraph: ${anchor.exact.slice(0, 80)}`}
         className="kh-block-comment-button kh-focus-ring flex size-6 items-center justify-center rounded-sm text-kh-text-muted hover:bg-kh-bg-selected hover:text-kh-selected-text"
         onPointerDown={event => event.preventDefault()}
         onClick={() => {
