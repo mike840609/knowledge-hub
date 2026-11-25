@@ -105,6 +105,52 @@ describe("the expanded page switch", () => {
     }
   });
 
+  it("raises the clicked page at once and leaves aria-current on the page still showing", () => {
+    const nav = () => act(() => root.render(createElement(PrimaryNav, { workspaceId: "w1" })));
+    const raised = (href: string) => link(href).querySelector<HTMLElement>("span")!.style.opacity === "1";
+    container.addEventListener("click", (event) => event.preventDefault());
+    nav();
+    act(() => link("/w/w1/graph").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 })));
+    expect(raised("/w/w1/graph")).toBe(true);
+    expect(raised("/w/w1/home")).toBe(false);
+    expect(link("/w/w1/home").getAttribute("aria-current")).toBe("page");
+    expect(link("/w/w1/graph").hasAttribute("aria-current")).toBe(false);
+    // A modified click opens elsewhere and moves nothing here.
+    act(() => link("/w/w1/sources").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0, metaKey: true })));
+    expect(raised("/w/w1/sources")).toBe(false);
+    // Once the route commits, the real page decides again.
+    state.pathname = "/w/w1/shares";
+    nav();
+    expect(raised("/w/w1/shares")).toBe(true);
+    expect(raised("/w/w1/graph")).toBe(false);
+  });
+
+  it("drops the raise once the route has moved, even when Back returns to the page it was clicked on", () => {
+    const nav = () => act(() => root.render(createElement(PrimaryNav, { workspaceId: "w1" })));
+    const raised = (href: string) => link(href).querySelector<HTMLElement>("span")!.style.opacity === "1";
+    container.addEventListener("click", (event) => event.preventDefault());
+    nav();
+    act(() => link("/w/w1/graph").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 })));
+    state.pathname = "/w/w1/graph";
+    nav();
+    state.pathname = "/w/w1/home";
+    nav();
+    expect(raised("/w/w1/home")).toBe(true);
+    expect(raised("/w/w1/graph")).toBe(false);
+  });
+
+  it("takes the raise back when the reader clicks the page still showing", () => {
+    const nav = () => act(() => root.render(createElement(PrimaryNav, { workspaceId: "w1" })));
+    const raised = (href: string) => link(href).querySelector<HTMLElement>("span")!.style.opacity === "1";
+    const click = (href: string) => act(() => link(href).dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 })));
+    container.addEventListener("click", (event) => event.preventDefault());
+    nav();
+    click("/w/w1/graph");
+    click("/w/w1/home");
+    expect(raised("/w/w1/home")).toBe(true);
+    expect(raised("/w/w1/graph")).toBe(false);
+  });
+
   it("marks a page below a destination as its location", () => {
     state.pathname = "/w/w1/sources/detail";
     render();

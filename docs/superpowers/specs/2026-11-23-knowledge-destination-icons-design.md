@@ -21,6 +21,13 @@ switch of their own under Search, and gives the explorer back a plain heading.
   as before (exact path, or a path below it; `/sources-extra` is not Sources). On a page that
   is none of them — a document, Inbox, Tasks, Settings — nothing is raised and the switch is
   four icons on the track.
+- **Raised on click (amended 2026-11-24).** A plain click raises the clicked item at once,
+  before the route commits, since a dynamic page can take a server round trip. It is
+  appearance only: `aria-current` stays on the page showing. The raise is dropped when the
+  route changes, and clicking the page still showing takes it back there; a modified click
+  (new tab) raises nothing. Loading boundaries for Home, Sources and Shares were tried for
+  the same lag and withdrawn: under one, a page's own `notFound()` streams as HTTP 200, and
+  the named-recipient share spec requires the Hub reader's 404.
 - **Which items.** Home for a personal workspace; then `knowledgeDestinations` unchanged:
   Graph always, Sources with `canInspectSources`, Shares in a personal workspace with search.
   A team sees Graph and, with the right, Sources.
@@ -57,6 +64,7 @@ a panel — the tree below stays the same on every page.
 ## Verification
 
 `tests/unit/primary-nav-tasks.test.tsx` (order, current name, location, nothing raised,
+raised on click and dropped on route change or a click on the current page,
 capabilities, team), `tests/unit/workspace-knowledge-navigation.test.tsx` (the heading),
 `tests/unit/button-contrast.test.ts`; `tests/e2e/zz-explorer-collapse.spec.ts` (names, one
 line at both densities, collapsed rail, touch drawer) and the specs that open a page through
