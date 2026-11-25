@@ -77,7 +77,8 @@ Nothing stored changes: GFM tables, alignment in the delimiter row.
 
 ## Out of scope, recorded
 
-- Dragging rows or columns by their grips: still deferred (2026-11-17).
+- Dragging rows or columns by their grips: deferred here (2026-11-17), now
+  designed in `2026-11-25-table-drag-reorder-design.md`.
 - Selecting several cells, rows or columns from a grip, with colour or
   background for them. Markdown has no cell colour.
 - A header-row or header-column toggle: no Markdown state (2026-11-17 decision 3).

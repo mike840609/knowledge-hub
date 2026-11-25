@@ -68,7 +68,8 @@ editor must write a wikilink back as it read it").
   amendment below.)
 - Multi-block selection: deferred by the 2026-11-15 spec.
 - Row and column drag reorder in a table: Markdown-preserving but needs its own
-  drag design in a table that already scrolls.
+  drag design in a table that already scrolls. (Designed 2026-11-25:
+  `2026-11-25-table-drag-reorder-design.md`.)
 - Header-row toggle: no Markdown state (decision 3).
 - The earlier deferred list: @ mentions, page width, images and captions,
   columns, embeds, cover, real-time collaboration.
