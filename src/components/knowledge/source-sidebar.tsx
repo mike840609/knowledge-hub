@@ -13,6 +13,7 @@ import { MenuCheckboxItem, MenuContent, MenuItem, MenuRoot, MenuSeparator, MenuT
 import type { TreeLoadState } from "./source-tree-cache";
 import { useSidebarShortcuts } from "./use-sidebar-shortcuts";
 import { KnowledgeTree } from "./knowledge-tree";
+import { TreeSkeleton } from "./knowledge-skeletons";
 import { useSharedTargets } from "./shared-folders";
 import { SidebarGetStarted, hasNoDocuments, startActions } from "./sidebar-get-started";
 import { TreeFilter } from "./tree-filter";
@@ -333,9 +334,9 @@ export function SourceSidebar({ workspaceId, source, defaultSourceId, collection
                 {isNotes && canCreate ? <div className="flex items-center"><span className="kh-row-action flex items-center">{addFolder}</span>{addNote}</div> : null}
               </RowContextMenu>
               <div id={`collection-${candidate.id}`} hidden={!open} className="mt-1 pl-2">
-                {open && ensureTree && treeStates?.[candidate.id]?.status !== "loaded" ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">
-                  {treeStates?.[candidate.id]?.status === "error" ? <>Documents could not be loaded. <button className="kh-focus-ring underline" onClick={() => void retryTree?.(candidate.id)}>Retry</button></> : "Loading documents…"}
-                </p> : open ? <KnowledgeTree
+                {open && ensureTree && treeStates?.[candidate.id]?.status !== "loaded" ? (treeStates?.[candidate.id]?.status === "error"
+                  ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Documents could not be loaded. <button className="kh-focus-ring underline" onClick={() => void retryTree?.(candidate.id)}>Retry</button></p>
+                  : <TreeSkeleton />) : open ? <KnowledgeTree
                   items={tree}
                   sidebarReady={sidebarReady}
                   workspaceId={workspaceId}

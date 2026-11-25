@@ -19,6 +19,7 @@ import { useScrollRestoration } from "./use-scroll-restoration";
 import { useActiveHeading } from "./use-active-heading";
 import { useScrollToHash } from "./use-scroll-to-hash";
 import { OutlineDisclosure, OutlineList, OutlineRail } from "./document-outline";
+import { DocumentMetaContext } from "./document-meta";
 import { DocumentLinksPanel } from "./document-links-panel";
 import { rememberedInspectorTab, rememberInspectorTab, resolveInspectorTab } from "./inspector-tab-memory";
 import { summariseLinks } from "./link-summary";
@@ -345,6 +346,7 @@ export function DocumentDetailClient({
   syncHref,
   ownership,
   contentOwnsTitle,
+  metaInArticle,
   outline,
   titleControl,
   editorActions,
@@ -380,6 +382,8 @@ export function DocumentDetailClient({
   /** Passed rather than inferred from `readOnly`: the two happen to agree today. */
   ownership: "SOURCE_MANAGED" | "HUB_MANAGED";
   contentOwnsTitle: boolean;
+  /** Whether the article itself draws the meta line under its title (`DocumentMetaSlot`); by default, when it owns the title. The editor says no while it shows no article. */
+  metaInArticle?: boolean;
   /** The page's chosen emoji, or null for the default file glyph. */
   pageIcon?: string | null;
   /** Headings of the revision on screen, from the same parse that gives them their ids. */
@@ -513,6 +517,8 @@ export function DocumentDetailClient({
       startTransition(() => setDocumentTopbar(null));
     };
   }, [pathname, title, toggleInspector, setDocumentTopbar, target]);
+  const linkSummary = summariseLinks(inspectorData.links);
+  const metaContext = { meta: { status, updatedAt, readOnly, syncHref, readOnlyReason, wordCount, editHint, linkSummary, onLinksClick: openLinks }, outline: { entries: outline, activeSlug } };
   return (
     <ReviewEntryProvider>
       <DocumentPane
@@ -535,7 +541,7 @@ export function DocumentDetailClient({
             updatedAt={updatedAt}
             revisionBanner={revisionBanner}
             onDetailsClick={toggleInspector}
-            linkSummary={summariseLinks(inspectorData.links)}
+            linkSummary={linkSummary}
             onLinksClick={openLinks}
             onShareClick={canShare ? () => requestShare({ documentId: inspectorData.documentId }) : null}
             readOnly={readOnly}
@@ -544,9 +550,12 @@ export function DocumentDetailClient({
             actions={headerActions}
             onRunAction={runAction}
             beforeTitle={<PageIconPicker documentId={inspectorData.documentId} icon={pageIcon ?? null} editable={canEditPage} />}
+            metaAfterTitle={metaInArticle ?? contentOwnsTitle}
           />
-        <OutlineDisclosure entries={outline} activeSlug={activeSlug} />
-        {children}
+        {/* A page that opens with its own `# Title` has that title in the article; the meta line and the disclosure
+            follow it there (DocumentMetaSlot), so the title is the first thing on the page. */}
+        {metaInArticle ?? contentOwnsTitle ? null : <OutlineDisclosure entries={outline} activeSlug={activeSlug} />}
+        <DocumentMetaContext.Provider value={metaContext}>{children}</DocumentMetaContext.Provider>
       </DocumentPane>
     </ReviewEntryProvider>
   );

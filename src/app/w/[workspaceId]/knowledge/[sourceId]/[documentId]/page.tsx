@@ -123,7 +123,7 @@ export default async function KnowledgeDocumentPage({
       view.status === "ACTIVE" && explorer?.source.status === "ACTIVE" && !isHistorical,
   });
 
-  const viewer = <DocumentViewer view={view} selectedRevision={selectedRevision} links={linkView ? renderedLinksFrom(linkView, inspectorData.createLinks ?? {}) : undefined} />;
+  const viewer = <DocumentViewer metaAfterTitle={contentOwnsTitle} view={view} selectedRevision={selectedRevision} links={linkView ? renderedLinksFrom(linkView, inspectorData.createLinks ?? {}) : undefined} />;
   if (canEdit && shell && explorer) {
     return <EditableDocument key={documentId} markdown={selectedRevision.markdown} metadata={selectedRevision.metadata}
       revisionId={selectedRevision.id} userId={shell.identityId} personal={shell.workspace.type === "PERSONAL"}
