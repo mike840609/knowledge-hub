@@ -115,3 +115,28 @@ export function ShareLinksSkeleton() {
     </div>
   );
 }
+
+const TREE_ROWS = [
+  { indent: "", width: "w-3/4" },
+  { indent: "pl-4", width: "w-2/3" },
+  { indent: "pl-4", width: "w-1/2" },
+  { indent: "", width: "w-4/5" },
+  { indent: "pl-4", width: "w-3/5" },
+];
+
+/** A source's tree while it loads: rows at the tree's own height, indented as a folder's children are. */
+export function TreeSkeleton() {
+  return (
+    <div aria-busy="true" className="px-2 py-1">
+      <LoadingStatus>Loading documents</LoadingStatus>
+      <div aria-hidden="true">
+        {TREE_ROWS.map((row, index) => (
+          <div key={index} className={`flex h-8 items-center gap-2 ${row.indent}`}>
+            <Skeleton className="h-4 w-4 shrink-0" />
+            <Skeleton className={`h-3.5 ${row.width}`} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

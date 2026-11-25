@@ -1033,6 +1033,14 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   margin-inline-end: calc(100% - 100cqi);
   background-color: var(--kh-bg);
 }
+/* The path in a narrow pane keeps the page's own name whole: the levels between the first and the page fold into
+   one `…` menu, and the first is what gives way when the line is short. A wide pane shows every level. */
+.kh-crumb-collapsed { display: none; }
+@container kh-document (max-width: 40rem) {
+  .kh-crumb-collapsed { display: flex; }
+  .kh-crumb-middle { display: none; }
+  .kh-crumb-first { flex-shrink: 1000; min-width: min(3ch, 16%); }
+}
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column {
   margin-inline-start: max(0px, min(calc((100% - theme("spacing.56") - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.reading") - 320px)));
 }
@@ -1159,13 +1167,18 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 /* The new comment is a card of the rail, level with its passage and ahead of the others. */
 .kh-review-document[data-review-inline] .kh-review-thread-list[data-positioned] > [data-review-draft] { z-index: 1; }
 
-/* A table is shown whole, in the reader and the editor alike: it never scrolls in a box of its own.
-   Columns share the column's width and a long word wraps anywhere, so nothing spills sideways.
-   `clip` rounds the corners without making a scroll container. */
+/* A table is shown whole, in the reader and the editor alike, and never scrolls up and down in a box of its own.
+   It is the container its cells ask about. Where the column is wide (40rem and over) a long word wraps
+   anywhere, so nothing spills sideways. Where it is narrow a word is kept whole (`break-word` does not shrink
+   a column below its longest word), and a table that still does not fit scrolls sideways, and only sideways.
+   Wide, the table never overflows, so the same rule means no scrollbar. The region's `overflow-x` also rounds
+   the corners. */
 .kh-markdown-table {
   @apply my-4 w-full rounded-md;
   border: 1px solid var(--kh-table-border);
-  overflow: clip;
+  container: kh-table / inline-size;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 .kh-markdown-table table { @apply w-full border-separate border-spacing-0 text-body; }
 .kh-markdown-table table :is(th, td) {
@@ -1175,7 +1188,10 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   padding: 0.5rem 0.75rem;
   color: var(--kh-text);
   vertical-align: top;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+}
+@container kh-table (min-width: 40rem) {
+  .kh-markdown-table table :is(th, td) { overflow-wrap: anywhere; }
 }
 .kh-markdown-table table tr > :last-child { border-right: 0; }
 .kh-markdown-table table > :last-child > tr:last-child > :is(th, td) { border-bottom: 0; }

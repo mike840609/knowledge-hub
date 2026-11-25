@@ -73,3 +73,20 @@ it('hides both marker and action for archived sources and non-owners', async()=>
  await act(async()=>root.render(view('ACTIVE')));
  expect(host.querySelector('button')).toBeNull(); expect(host.querySelector('[aria-label="Shared"]')).toBeNull();
 });
+
+it('shows skeleton rows, not a line of text, while a source tree loads, and says so to assistive tech',async()=>{
+ let release:(response:Response)=>void=()=>{};
+ vi.stubGlobal('fetch',vi.fn(()=>new Promise<Response>(resolve=>{release=resolve;})));
+ const host=document.createElement('div');document.body.append(host);const root=createRoot(host);
+ cleanup=async()=>{await act(async()=>root.unmount());host.remove();};
+ await act(async()=>root.render(<Host/>));
+ await act(async()=>host.querySelector<HTMLButtonElement>('button[aria-controls="collection-b"]')!.click());
+ const busy=host.querySelector('#collection-b [aria-busy="true"]');
+ expect(busy).not.toBeNull();
+ expect(busy!.querySelector('[role="status"]')?.textContent).toBe('Loading documents');
+ expect(busy!.querySelectorAll('[aria-hidden="true"] > div').length).toBeGreaterThan(2);
+ expect(host.textContent).not.toContain('Loading documents…');
+ await act(async()=>release(Response.json({tree:[{type:'document',id:'n',documentId:'d',label:'Beta note',status:'ACTIVE',parentId:null,position:0}]})));
+ expect(host.querySelector('#collection-b [aria-busy="true"]')).toBeNull();
+ expect(host.textContent).toContain('Beta note');
+});

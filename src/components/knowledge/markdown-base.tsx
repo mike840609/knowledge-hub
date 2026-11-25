@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { AnchorHTMLAttributes, ComponentProps, ComponentType, DetailedHTMLProps, ImgHTMLAttributes, ReactNode } from "react";
+import { MarkdownTable } from "./markdown-table";
 import ReactMarkdown, { type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { PluggableList } from "unified";
@@ -191,14 +192,6 @@ function MarkdownLink(props: DetailedHTMLProps<AnchorHTMLAttributes<HTMLAnchorEl
   );
 }
 
-function ResponsiveTable({ children }: { children?: React.ReactNode }) {
-  return (
-    <div role="region" aria-label="Table" className="kh-markdown-table">
-      <table>{children}</table>
-    </div>
-  );
-}
-
 /**
  * Markdown as this product typesets it, and nothing else: no colour in the code, no copy button.
  *
@@ -254,7 +247,7 @@ export function MarkdownBase({
           img: ({ src, alt }: DetailedHTMLProps<ImgHTMLAttributes<HTMLImageElement>, HTMLImageElement>) => (
             <MarkdownImage src={typeof src === "string" ? src : undefined} alt={alt} />
           ),
-          table: ResponsiveTable,
+          table: MarkdownTable,
           blockquote: MarkdownQuote,
           details: MarkdownDetails,
           summary: MarkdownSummary,

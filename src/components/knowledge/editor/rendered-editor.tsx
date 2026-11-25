@@ -22,6 +22,8 @@ import { editorViewCtx } from "@milkdown/kit/core";
 import { editorReviewBlockElement, editorReviewPathsPlugin, preserveEditorSelection, updateEditorReviewPaths } from "./review-paths";
 import { createPortal } from "react-dom";
 import { NodeSelection, Plugin, TextSelection } from "@milkdown/kit/prose/state";
+import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
+import { DocumentMetaSlot } from "../document-meta";
 import { $prose } from "@milkdown/kit/utils";
 import { MarkdownAnchor } from "../markdown-base";
 import type { RenderedLinks } from "../rendered-links";
@@ -57,6 +59,8 @@ export type RenderedEditorProps = {
   onMarkdown: (markdown: string) => void;
   /** Where a failure of something the editor does beside editing is said (a page `[[` offered to create). Without it, nothing is. */
   onNotice?: (message: string) => void;
+  /** Draw the page's meta line (`DocumentMetaSlot`) right under the first `#` heading, where the document opens with one. */
+  titleMeta?: boolean;
 };
 
 /**
@@ -75,6 +79,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
   const editorRef = useRef<MarkdownEditor | null>(null);
   const [wikiViews, setWikiViews] = useState<{ dom: HTMLElement; raw: string }[]>([]);
   const [codeViews, setCodeViews] = useState<{ dom: HTMLElement; preview: HTMLElement; pre: HTMLElement; code: string; language: string; editing: boolean; setEditing: (value: boolean) => void; setLanguage: (language: string) => void }[]>([]);
+  const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null);
   const latest = useRef(props);
   latest.current = props;
 
@@ -158,6 +163,19 @@ export function RenderedEditor(props: RenderedEditorProps) {
           destroy() { queueMicrotask(() => { if (!cancelled) setWikiViews(previous => previous.filter(item => item !== entry)); }); },
         };
       },
+    } } }));
+    // A widget after the opening `#` title, which is a slot React fills: the place the reader draws the same line.
+    // It is no part of the document, and no key or click in it reaches the editor.
+    const titleMeta = $prose(() => new Plugin({ props: { decorations(state) {
+      const first = state.doc.firstChild;
+      if (!first || first.type.name !== "heading" || first.attrs.level !== 1) return null;
+      return DecorationSet.create(state.doc, [Decoration.widget(first.nodeSize, () => {
+        const dom = document.createElement("div");
+        dom.contentEditable = "false";
+        dom.setAttribute("data-title-meta", "");
+        queueMicrotask(() => { if (!cancelled) setTitleSlot(dom); });
+        return dom;
+      }, { key: "kh-title-meta", side: -1, ignoreSelection: true, stopEvent: () => true, destroy: () => queueMicrotask(() => { if (!cancelled) setTitleSlot(null); }) })]);
     } } }));
     const codeControllers = new Map<HTMLElement, () => void>();
     const codes = $prose(() => new Plugin({
@@ -257,7 +275,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
       onUserEdit: () => latest.current.onUserEdit(),
       onMarkdown: (markdown) => latest.current.onMarkdown(markdown),
       allowImage: (src) => isAllowedMarkdownImageSrc(src, { origin: window.location.origin }),
-      extraPlugins: [editorReviewPathsPlugin, ...toolbar.plugins, ...suggest.plugins, ...slash.plugins, ...emoji.plugins, ...mention.plugins, ...(latest.current.links ? [links] : []), ...(latest.current.renderCode ? [codes] : []), gutter, tableActions(), taskCheckbox()],
+      extraPlugins: [editorReviewPathsPlugin, ...toolbar.plugins, ...suggest.plugins, ...slash.plugins, ...emoji.plugins, ...mention.plugins, ...(latest.current.titleMeta ? [titleMeta] : []), ...(latest.current.links ? [links] : []), ...(latest.current.renderCode ? [codes] : []), gutter, tableActions(), taskCheckbox()],
       configure: (ctx) => {
         toolbar.configure(ctx);
         suggest.configure(ctx);
@@ -326,7 +344,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
     const parts = parseWikiLinkParts(raw.slice(2, -2));
     const attributes = parts.target ? { [WIKILINK_TARGET]: parts.target, ...(parts.fragment ? { [WIKILINK_FRAGMENT]: parts.fragment } : {}) } : { [WIKILINK_ANCHOR]: headingSlug(parts.fragment ?? "") };
     return createPortal(<MarkdownAnchor links={props.links} {...attributes}>{parts.alias ?? (parts.target || parts.fragment)}</MarkdownAnchor>, dom, String(index));
-  })}{codeViews.map(entry => createPortal(<>
+  })}{titleSlot ? createPortal(<DocumentMetaSlot />, titleSlot) : null}{codeViews.map(entry => createPortal(<>
     <div data-inline-code-preview hidden={entry.editing}>{props.renderCode?.(entry.code, entry.language)}</div>
     {/* Under every block it was a line of chrome read past on each scroll, and room the saved page does not
         have. Over the block's lower corner instead, taking none, shown on pointing, on keyboard focus and
