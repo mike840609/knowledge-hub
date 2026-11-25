@@ -1045,6 +1045,20 @@ converts on the space after it. It never opens in a code block or inline code,
 or after a word character (`http://`, `12:30`). One undo step; the glyph is
 plain Markdown text.
 
+**Mention list** (2026-11-25, `editor/at-mention-suggest.ts`,
+`2026-11-25-editor-at-mentions-design.md`). Typing `@` at the start of a block or
+after whitespace, an opening bracket or a Han character, as the writer's own edit,
+opens `.kh-at-menu`: the emoji list's surface (radius, border, `popover`
+elevation, `kh-bg-raised`, selected row, z 50, `kh-pop-in`) at 20rem. Rows sit in
+two `role="group"`s under `.kh-at-heading` (`text-caption`, medium, muted):
+**Pages** (up to five, title and its Source name in `text-caption` muted) and
+**Dates** (Today, Tomorrow, Yesterday, or a typed `YYYY-MM-DD`, each with its ISO
+day muted). A loading or failed Pages group says so in `.kh-at-note`
+(`text-body-sm`, muted). The listbox is named "Mentions"; the editor is the
+combobox while it is open, and a `[[`, `/` or `:` list owning it makes `@` stand
+down. Enter or Tab chooses, arrows wrap, Escape leaves `@query` as text. No
+colour, radius or elevation token was added.
+
 Layers: the controls sit at 30, under the app's popovers; the three menus and
 the drop line at 50. The selection toolbar lives inside the document pane, whose
 `contain: layout` keeps it under the body's layers whatever its own `z-index`,
@@ -1082,7 +1096,13 @@ text. Each control is a named button (`Row 3 actions`, `Column 2 actions`,
 `Add row`, `Add column`). `Alt+F10` with the caret in a table cell moves focus
 to the row grip, then Tab reaches the column grip and the two bars; Escape in
 a grip or menu returns to the cell, and the block gutter is reached by Escape
-(table selected) then `Alt+F10`. Delete table is the block menu's Delete. No
+(table selected) then `Alt+F10`. Delete table is the block menu's Delete.
+Pressing a grip and moving past 4px drags its row or column
+(`2026-11-25-table-drag-reorder-design.md`): the moved row or column takes the
+block drag's tint, the block drop line (2px `--kh-primary`, horizontal for a
+row, vertical for a column) shows the landing boundary, the header row's grip
+does not drag and no row lands above the header, Escape cancels, and a click
+without movement still opens the menu. No
 colour, radius, elevation or motion token was added; nothing here is printed.
 
 ## 11. Navigation state
@@ -2056,7 +2076,7 @@ Out of scope, recorded: comments inside a team document's editor (the review
 API is document-scoped but its editor wiring is personal-workspace-only; making
 it general is an authorization change), move-to-page (no block tree; copy-link
 to block is now in scope, above), multi-block selection (deferred by the 2026-11-15
-spec), row/column drag reorder, and the earlier deferred list (mentions, page
+spec), row/column drag reorder, and the earlier deferred list (mentions (pages and dates since 2026-11-25), page
 width, images, columns, embeds, real-time collaboration).
 
 ### Inline writing polish (2026-11-18)

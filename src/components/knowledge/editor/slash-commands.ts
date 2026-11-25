@@ -9,6 +9,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { blockKind, canTurnInto, dispatchBlockAction, insertAfterListItem, replaceListItem, turnInto, type BlockKind } from "./block-actions";
 import { detailsSkeleton, insertDetailsSkeleton } from "./details-toggle";
+import { isoDate } from "./date-text";
 import { keepsAsText } from "./wiki-link";
 
 // `aliases` match by prefix (what a Notion hand types: /h2, /todo, /ul); label and `words` match anywhere.
@@ -157,12 +158,6 @@ export function matchingCommands(query: string): readonly Command[] {
     (found.indexOf(a) - found.indexOf(b)));
 }
 
-/** Today in the writer's own time zone, as `YYYY-MM-DD`. */
-function todayIso(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
-
 /** Each row's 16px Lucide glyph, drawn once from lucide-react as reader-hints.ts draws a callout's, then cloned. */
 const glyphs = new Map<LucideIcon, SVGElement>();
 function glyph(Icon: LucideIcon): SVGElement {
@@ -187,7 +182,7 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
     const current = view.state.doc.nodeAt(trigger.pos)!;
     if (command.id === "date") {
       // Text, not a block: today's date goes where the "/query" was (ISO, the way a Markdown note dates a line).
-      const date = todayIso();
+      const date = isoDate();
       const caretAt = view.state.selection.from;
       if (trigger.inline || trigger.item !== null) dispatchBlockAction(view, view.state.tr.insertText(date, trigger.from, caretAt), trigger.from + date.length);
       else dispatchBlockAction(view, view.state.tr.replaceWith(trigger.pos, trigger.pos + current.nodeSize, nodes.paragraph.create(null, view.state.schema.text(date))), trigger.pos + 1 + date.length);

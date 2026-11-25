@@ -83,6 +83,9 @@ function clearColumnAlignment(transaction: Transaction, tablePos: number, column
   });
 }
 
+/** How far a press on a grip travels before it is a drag and no longer a click. */
+const DRAG_THRESHOLD = 4;
+
 const outside = (rect: DOMRect, region: DOMRect) =>
   rect.right < region.left || rect.left > region.right || rect.bottom < region.top || rect.top > region.bottom;
 
@@ -277,12 +280,189 @@ export function tableActions() {
         menu.style.top = `${Math.max(8, top)}px`;
       }
 
+      // Dragging a grip (2026-11-25 table-drag-reorder design): a press that travels past DRAG_THRESHOLD moves its row or column.
+      const dropLine = document.createElement("div");
+      dropLine.className = "kh-block-drop-line kh-table-drop-line"; dropLine.hidden = true; dropLine.setAttribute("aria-hidden", "true");
+      document.body.appendChild(dropLine);
+      interface TableDrag {
+        kind: "row" | "column"; tablePos: number; from: number; caretColumn: number;
+        pointerId: number; startX: number; startY: number; active: boolean; cancelled: boolean; boundary: number | null; doc: ProseNode; marked: Element[];
+      }
+      let drag: TableDrag | null = null;
+      let suppressClick = false;
+
+      /** The boundary nearest the pointer: between rows (never above the header) or between columns. */
+      function boundaryAt(state: TableDrag, x: number, y: number): { boundary: number; line: DOMRect } | null {
+        const table = view.state.doc.nodeAt(state.tablePos);
+        const tableDom = view.nodeDOM(state.tablePos) as HTMLElement | null;
+        if (!table || !tableDom) return null;
+        const tableRect = tableDom.getBoundingClientRect();
+        const rects: DOMRect[] = [];
+        if (state.kind === "row") {
+          for (let index = 0, offset = 0; index < table.childCount; offset += table.child(index).nodeSize, index++) {
+            const dom = view.nodeDOM(state.tablePos + 1 + offset) as HTMLElement | null;
+            if (!dom) return null;
+            rects.push(dom.getBoundingClientRect());
+          }
+        } else {
+          const header = table.child(0);
+          for (let index = 0; index < header.childCount; index++) {
+            const dom = view.nodeDOM(cellPosAt(table, state.tablePos, 0, index)) as HTMLElement | null;
+            if (!dom) return null;
+            rects.push(dom.getBoundingClientRect());
+          }
+        }
+        if (rects.length === 0) return null;
+        // What the writer can see of the table: its own (scrolling) box, the document pane and the viewport.
+        const pane = tableDom.closest(".kh-document-pane")?.getBoundingClientRect();
+        const visible = {
+          left: Math.max(tableRect.left, pane?.left ?? 0, 0), right: Math.min(tableRect.right, pane?.right ?? Infinity, window.innerWidth),
+          top: Math.max(tableRect.top, pane?.top ?? 0, 0), bottom: Math.min(tableRect.bottom, pane?.bottom ?? Infinity, window.innerHeight),
+        };
+        const shown = rects.map(rect => state.kind === "row"
+          ? rect.bottom > visible.top && rect.top < visible.bottom
+          : rect.right > visible.left && rect.left < visible.right);
+        const first = shown.indexOf(true), last = shown.lastIndexOf(true);
+        if (first < 0) return null;
+        const point = state.kind === "row" ? y : x;
+        let boundary = rects.length;
+        for (let index = 0; index < rects.length; index++) {
+          const mid = state.kind === "row" ? rects[index].top + rects[index].height / 2 : rects[index].left + rects[index].width / 2;
+          if (point < mid) { boundary = index; break; }
+        }
+        // GFM has one header row, and it stays first: nothing lands above it.
+        // Only a boundary of a row or column the writer can see: a drop never lands among hidden ones.
+        boundary = Math.min(Math.max(boundary, first), last + 1);
+        if (state.kind === "row") boundary = Math.max(boundary, 1);
+        const edge = boundary < rects.length ? rects[boundary] : rects[rects.length - 1];
+        const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), high);
+        const line = state.kind === "row"
+          ? new DOMRect(visible.left, clamp(boundary < rects.length ? edge.top : edge.bottom, visible.top, visible.bottom), visible.right - visible.left, 2)
+          : new DOMRect(clamp(boundary < rects.length ? edge.left : edge.right, visible.left, visible.right), visible.top, 2, visible.bottom - visible.top);
+        return { boundary, line };
+      }
+
+      function clearDragVisuals() {
+        dropLine.hidden = true;
+        document.body.classList.remove("kh-block-is-dragging");
+        for (const element of drag?.marked ?? []) element.classList.remove("kh-table-drag-source");
+        if (drag) drag.marked = [];
+      }
+      function cancelDrag() { if (drag) { drag.cancelled = true; drag.boundary = null; clearDragVisuals(); } }
+
+      /** One transaction: the table rebuilt with the row or column moved to `boundary`, the caret in its cell. */
+      function moveTo(state: TableDrag, boundary: number) {
+        const table = view.state.doc.nodeAt(state.tablePos);
+        if (!table || !view.editable) return;
+        const to = boundary > state.from ? boundary - 1 : boundary;
+        let next: ProseNode;
+        if (state.kind === "row") {
+          const rows: ProseNode[] = [];
+          table.forEach(row => rows.push(row));
+          rows.splice(to, 0, rows.splice(state.from, 1)[0]);
+          next = table.type.create(table.attrs, Fragment.fromArray(rows));
+        } else {
+          const rows: ProseNode[] = [];
+          table.forEach(row => {
+            if (state.from >= row.childCount) { rows.push(row); return; }
+            const cells: ProseNode[] = [];
+            row.forEach(cell => cells.push(cell));
+            cells.splice(Math.min(to, cells.length - 1), 0, cells.splice(state.from, 1)[0]);
+            rows.push(row.type.create(row.attrs, Fragment.fromArray(cells), row.marks));
+          });
+          next = table.type.create(table.attrs, Fragment.fromArray(rows));
+        }
+        const tr = view.state.tr.replaceWith(state.tablePos, state.tablePos + table.nodeSize, next);
+        const row = state.kind === "row" ? to : 0;
+        const column = state.kind === "row" ? Math.min(state.caretColumn, next.child(to).childCount - 1) : Math.min(to, next.child(0).childCount - 1);
+        tr.setSelection(Selection.near(tr.doc.resolve(cellPosAt(next, state.tablePos, row, column) + 1)));
+        view.dispatch(closeHistory(tr).scrollIntoView());
+        hovered = null;
+        settle(view);
+      }
+
+      function endDrag(finish: boolean) {
+        const state = drag;
+        if (!state) return;
+        document.removeEventListener("pointermove", onDragMove, true);
+        document.removeEventListener("pointerup", onDragUp, true);
+        document.removeEventListener("pointercancel", onDragCancel, true);
+        document.removeEventListener("keydown", onDragKey, true);
+        clearDragVisuals();
+        drag = null;
+        if (!state.active) return;
+        // The click that follows this release belongs to the drag, not to the grip's menu.
+        suppressClick = true;
+        setTimeout(() => { suppressClick = false; }, 0);
+        const inPlace = state.boundary === null || state.boundary === state.from || state.boundary === state.from + 1;
+        if (finish && !state.cancelled && !inPlace && !view.composing && view.state.doc === state.doc) moveTo(state, state.boundary!);
+        if (!destroyed) position();
+      }
+      function onDragMove(event: PointerEvent) {
+        const state = drag;
+        if (!state || event.pointerId !== state.pointerId) return;
+        if (!state.active) {
+          if (Math.hypot(event.clientX - state.startX, event.clientY - state.startY) < DRAG_THRESHOLD) return;
+          state.active = true;
+          closeMenu();
+          document.body.classList.add("kh-block-is-dragging");
+          const table = view.state.doc.nodeAt(state.tablePos);
+          if (table) {
+            if (state.kind === "row") {
+              let offset = 0;
+              for (let index = 0; index < state.from; index++) offset += table.child(index).nodeSize;
+              const dom = view.nodeDOM(state.tablePos + 1 + offset) as HTMLElement | null;
+              if (dom) state.marked.push(dom);
+            } else {
+              for (let index = 0; index < table.childCount; index++) {
+                if (state.from >= table.child(index).childCount) continue;
+                const dom = view.nodeDOM(cellPosAt(table, state.tablePos, index, state.from)) as HTMLElement | null;
+                if (dom) state.marked.push(dom);
+              }
+            }
+            for (const element of state.marked) element.classList.add("kh-table-drag-source");
+          }
+        }
+        if (state.cancelled) return;
+        event.preventDefault();
+        const at = boundaryAt(state, event.clientX, event.clientY);
+        const inPlace = !at || at.boundary === state.from || at.boundary === state.from + 1;
+        state.boundary = at?.boundary ?? null;
+        if (!at || inPlace) { dropLine.hidden = true; return; }
+        dropLine.classList.toggle("kh-table-drop-line-column", state.kind === "column");
+        dropLine.style.left = `${at.line.left}px`; dropLine.style.top = `${at.line.top}px`;
+        dropLine.style.width = `${at.line.width}px`; dropLine.style.height = state.kind === "column" ? `${at.line.height}px` : "";
+        dropLine.hidden = false;
+      }
+      function onDragUp(event: PointerEvent) { if (event.pointerId === drag?.pointerId) endDrag(true); }
+      function onDragCancel(event: PointerEvent) { if (event.pointerId === drag?.pointerId) endDrag(false); }
+      function onDragKey(event: KeyboardEvent) {
+        if (event.key !== "Escape" || !drag?.active) return;
+        event.preventDefault(); event.stopPropagation();
+        cancelDrag();
+      }
+      function startDrag(kind: "row" | "column", event: PointerEvent) {
+        if (event.button !== 0 || !view.editable || view.composing || drag) return;
+        const target = targetCell();
+        // The header row stays the header: its grip opens a menu and nothing more.
+        if (!target || (kind === "row" && target.row === 0)) return;
+        drag = {
+          kind, tablePos: target.tablePos, from: kind === "row" ? target.row : target.column, caretColumn: target.column,
+          pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, active: false, cancelled: false, boundary: null, doc: view.state.doc, marked: [],
+        };
+        document.addEventListener("pointermove", onDragMove, true);
+        document.addEventListener("pointerup", onDragUp, true);
+        document.addEventListener("pointercancel", onDragCancel, true);
+        document.addEventListener("keydown", onDragKey, true);
+      }
+
       function toggle(grip: HTMLButtonElement, kind: "row" | "column") {
         if (menuGrip === grip) { closeMenu(); view.focus(); } else { closeMenu(); openMenu(grip, kind); }
       }
       const gripListeners: Array<() => void> = [];
       for (const [grip, kind] of [[rowGrip, "row"], [colGrip, "column"]] as const) {
-        const onClick = () => toggle(grip, kind);
+        const onClick = () => { if (suppressClick) { suppressClick = false; return; } toggle(grip, kind); };
+        const onPointerDown = (event: PointerEvent) => startDrag(kind, event);
         const onDown = (event: MouseEvent) => { if (event.button === 0) event.preventDefault(); };
         const onKey = (event: KeyboardEvent) => {
           if (event.key === "ArrowDown" && menuGrip !== grip) { event.preventDefault(); closeMenu(); openMenu(grip, kind); }
@@ -291,8 +471,9 @@ export function tableActions() {
         const onEnter = () => { pointerInside = true; };
         grip.addEventListener("click", onClick); grip.addEventListener("mousedown", onDown);
         grip.addEventListener("keydown", onKey); grip.addEventListener("pointerenter", onEnter);
+        grip.addEventListener("pointerdown", onPointerDown);
         gripListeners.push(() => {
-          grip.removeEventListener("click", onClick); grip.removeEventListener("mousedown", onDown);
+          grip.removeEventListener("pointerdown", onPointerDown); grip.removeEventListener("click", onClick); grip.removeEventListener("mousedown", onDown);
           grip.removeEventListener("keydown", onKey); grip.removeEventListener("pointerenter", onEnter);
         });
       }
@@ -411,6 +592,7 @@ export function tableActions() {
 
       const onPointerMove = (event: PointerEvent) => {
         pointerInside = true;
+        if (drag?.active) return;
         const hit = event.target as HTMLElement | null;
         const cell = hit?.closest?.("td, th");
         if (!cell || !view.dom.contains(cell)) {
@@ -427,7 +609,8 @@ export function tableActions() {
       };
       const onPointerLeave = (event: PointerEvent) => {
         const to = event.relatedTarget as Node | null;
-        if (inControls(to) || (to as Element | null)?.closest?.(".kh-block-gutter")) return;
+        // A drag keeps its grips where they were until it ends.
+        if (drag || inControls(to) || (to as Element | null)?.closest?.(".kh-block-gutter")) return;
         pointerInside = false;
         if (menu.hidden) { hovered = null; position(); }
       };
@@ -447,11 +630,14 @@ export function tableActions() {
           // A hovered cell is a position in the old document; once the document or the caret moves, the caret rules.
           if (hovered !== null && (previous.doc !== updated.state.doc || !previous.selection.eq(updated.state.selection))) hovered = null;
           if (previous.doc !== updated.state.doc) closeMenu();
+          if (drag?.active && (updated.state.doc !== drag.doc || !updated.editable)) cancelDrag();
           position();
         },
         destroy() {
           destroyed = true;
           focusRowGrip = undefined;
+          endDrag(false);
+          dropLine.remove();
           gripListeners.forEach(remove => remove());
           menu.removeEventListener("keydown", onMenuKey);
           document.removeEventListener("mousedown", onDocumentDown, true);
