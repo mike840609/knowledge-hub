@@ -32,7 +32,7 @@ export function DocumentBreadcrumb({ segments }: { segments: DocumentBreadcrumbS
             <Fragment key={`${segment.label}-${index}`}>
             <li
               data-crumb={isFirst ? "first" : isLast ? "last" : "middle"}
-              className={`flex items-center ${isMiddle ? "kh-crumb-middle " : ""}${isFirst ? "kh-crumb-first " : ""}${isParent ? "min-w-0 max-w-[76%] shrink-0" : isLast ? "kh-crumb-last min-w-[min(30%,7ch)] flex-auto" : isFirst ? "min-w-0 overflow-hidden focus-within:overflow-visible" : "min-w-0 overflow-hidden focus-within:overflow-visible"}`}
+              className={`flex items-center ${isMiddle ? "kh-crumb-middle " : ""}${isFirst && !isLast ? "kh-crumb-first " : ""}${isParent ? "min-w-0 max-w-[76%] shrink-0" : isLast ? "kh-crumb-last min-w-[min(30%,7ch)] flex-auto" : isFirst ? "min-w-0 overflow-hidden focus-within:overflow-visible" : "min-w-0 overflow-hidden focus-within:overflow-visible"}`}
             >
               {index > 0 ? <ChevronRight className="mx-1 h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : null}
               {segment.href && !isLast ? (

@@ -94,3 +94,8 @@ own width with what the name leaves (`flex: 1 1 0%`, `max-width: max-content`), 
 level carries `kh-crumb-first` whether or not it is the parent. The name is cut only once the first level is at its
 minimum. `zz-reader-chrome-polish.spec.ts` checks that on a touch phone (`hasTouch`, `isMobile`), three levels deep
 and two, by the text's width against its box rather than `scrollWidth`.
+
+## Review round 5
+
+A one-level path (the explorer read's fallback, in the page and the peek) is first and last at once; it does not take
+`kh-crumb-first`, which would start the page's name from nothing and hold it at 3ch.

@@ -50,3 +50,14 @@ it("has nothing to fold for a page directly under its source", async () => {
   expect(host.querySelector("[data-crumb=collapsed]")).toBeNull();
   await act(async () => root.unmount());
 });
+
+// Review round 5: the first level gives way to the page's name, so the name itself never takes the first level's
+// narrow-pane rule (it would start from nothing and sit at 3ch); a two-level path's first level does take it.
+it("gives way at the first level only when the first level is not the page itself", async () => {
+  const only = await mount(<DocumentBreadcrumb segments={[{ label: "Onboarding guide" }]} />);
+  expect(only.host.querySelector("li")!.className).not.toContain("kh-crumb-first");
+  await act(async () => only.root.unmount());
+  const two = await mount(<DocumentBreadcrumb segments={[{ label: "Notes", href: "/w/w/knowledge/s" }, { label: "Onboarding guide" }]} />);
+  expect(Array.from(two.host.querySelectorAll("li")).map((item) => item.className.includes("kh-crumb-first"))).toEqual([true, false]);
+  await act(async () => two.root.unmount());
+});
