@@ -98,6 +98,6 @@ describe("checkbox", () => {
   });
 
   it("leaves an unresolved link its own look in the editor, as in the reader", () => {
-    expect(css).toContain(".kh-editor a:not([data-unresolved-link])");
+    expect(css).toContain(".kh-editor a:not([data-unresolved-link], [data-outline-link])");
   });
 });

@@ -95,3 +95,12 @@ Two more causes of the handoff shift were found by measuring each block before a
   exception in `globals.css`. `tests/unit/document-header.test.tsx`: the count with the hint.
 - `tests/e2e/zz-editor-handoff-shift.spec.ts` also pins the outline rule on both pages.
 - `npm run -s typecheck`, `npm run -s lint`, `npm run -s test:unit`.
+
+## Review fixes
+
+- **The title slot follows its node.** The title-meta widget's `destroy` cleared the slot unconditionally; on a
+  whole-document replace that changes the title ProseMirror builds the new widget before destroying the old, so the
+  last call (null) won and the meta line vanished. `destroy` now clears the slot only if it is still the destroyed
+  node. `tests/unit/editor-title-meta.test.ts`.
+- The meta line is drawn once and the outline disclosure is reset inside prose; see the reader chrome spec's
+  "Review fixes".

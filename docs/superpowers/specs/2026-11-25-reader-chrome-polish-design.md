@@ -29,7 +29,8 @@ Nothing stored changes, no token is added, and no route or service is touched.
      heading, filled by a portal. The widget is no part of the document, so nothing is serialised.
    - A page with a title field or a heading-less body keeps the line under its header title, as before.
    - A peek draws its own header and keeps its order. When the editor is showing no article (Markdown source, a
-     failed editor, a recovery), the header holds the line, so it is never lost.
+     failed editor), the header holds the line, so it is never lost. (A recovery keeps its article on screen and
+     the page's own `# Title` in it; the first draft of this decision wrongly listed it. See "Review fixes".)
 3. **Read only is a compact lock badge.** The row says `Read only` with the lock, as a button. Its explanation, "Edit
    the file in your folder, then update from folder" with the link (or "Managed by its source"), is a Popover that
    opens on hover (200ms), on Enter or Space from the keyboard, and on tap, and closes on Escape. It is not a `title`.
@@ -62,3 +63,22 @@ Nothing stored changes, no token is added, and no route or service is touched.
   and icon-only at 390px.
 - Existing: `zz-table-controls.spec.ts`, `zz-table-drag.spec.ts`, `zz-reader-chrome.spec.ts`, `zz-page-chrome.spec.ts`,
   `phase5-authoring.spec.ts`; `make verify`.
+
+## Review fixes
+
+A review of the branch found these; each has a test that failed before.
+
+- **One answer to "the article draws the line".** `DocumentDetailClient` derives it once (`metaInArticle ??
+  contentOwnsTitle`) and uses it for the header, the non-bare disclosure and `DocumentMetaContext`, which it now
+  provides only when the article draws the line. `DocumentMetaSlot` therefore draws nothing where the header does, so
+  an emptied title (`#` alone, or `# ` typed on line 1: `markdownOpensWithHeading` is false) never shows two lines.
+  The editor passes `metaInArticle` false for source view and a failed editor only; **a recovery shows the article**
+  (it is not hidden) and its first `# Title` carries the line, so decision 2 above no longer lists it.
+  `tests/e2e/zz-meta-single.spec.ts`.
+- **The disclosure is not prose.** `.kh-outline-inline nav ol|li` resets list style, padding and margins at a
+  specificity that beats `MARKDOWN_PROSE`'s `[&_ol]` / `[&_li]`; the outline's links carry `data-outline-link`, which
+  the editor's `.kh-editor a:not(...)` rule excludes, so they keep the rail's muted colour, weight and no underline.
+- **Add icon is reachable by mouse** on a note that opens with `# Title`: `.kh-document-pane:has(h1:first-child:hover)
+  [data-page-icon-add]` shows it, beside the header's own `group-hover/header`.
+- A table no longer receives react-markdown's `node` (it serialised each table's hast into the RSC payload), and the
+  Read only popover has an accessible name ("Read only").

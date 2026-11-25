@@ -47,6 +47,7 @@ export function OutlineList({
           <li key={entry.slug}>
             <a
               href={`#${encodeURIComponent(entry.slug)}`}
+              data-outline-link=""
               aria-current={active ? "location" : undefined}
               onClick={(event) => goToHeading(event, entry.slug, onNavigate)}
               className={`-ml-px block rounded-r-md border-l py-1 pr-2 text-body-sm transition-colors kh-focus-ring ${

@@ -292,7 +292,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
     @apply my-0;
   }
   /* Not a link the reader could not resolve: that draws itself (grey, dashed) and must stay as it does there. */
-  .kh-editor a:not([data-unresolved-link]) {
+  .kh-editor a:not([data-unresolved-link], [data-outline-link]) {
     @apply cursor-text font-medium text-kh-link underline decoration-kh-link underline-offset-2;
   }
   /* An external link says it leaves the Hub, as the reader's does with lucide's ExternalLink (the
@@ -584,6 +584,21 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 
   .kh-outline-inline {
     display: block;
+  }
+
+  /* A page whose Markdown opens with `# Title` has its title in the article, not the header, so pointing at that title
+     reveals "Add icon" as pointing at the header does (editor page polish, review fixes). */
+  .kh-document-pane:has(h1:first-child:hover) [data-page-icon-add] {
+    opacity: 1;
+  }
+
+  /* The disclosure sits inside the article's prose (reader and editor), whose list rules would otherwise reach its
+     list: three classes of specificity beat `[&_ol]:…` and `[&_li]:…`, so it is the same list the rail draws. */
+  .kh-outline-inline nav ol {
+    @apply m-0 list-none p-0;
+  }
+  .kh-outline-inline nav li {
+    @apply m-0;
   }
 
   @container kh-document (min-width: 60rem) {

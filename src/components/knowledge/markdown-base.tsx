@@ -247,7 +247,7 @@ export function MarkdownBase({
           img: ({ src, alt }: DetailedHTMLProps<ImgHTMLAttributes<HTMLImageElement>, HTMLImageElement>) => (
             <MarkdownImage src={typeof src === "string" ? src : undefined} alt={alt} />
           ),
-          table: MarkdownTable,
+          table: ({ children }) => <MarkdownTable>{children}</MarkdownTable>,
           blockquote: MarkdownQuote,
           details: MarkdownDetails,
           summary: MarkdownSummary,

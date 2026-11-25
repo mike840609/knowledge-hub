@@ -37,13 +37,16 @@ it("opens the explanation, with its link, from the keyboard-reachable button", a
   expect(popup?.textContent).toContain("Edit the file in your folder, then update from folder");
   expect(popup?.querySelector("a")?.getAttribute("href")).toBe("/w/w1/sources/s1/update");
   expect(badge.getAttribute("aria-expanded")).toBe("true");
+  // The dialog has a name.
+  const labelledBy = popup?.getAttribute("aria-labelledby");
+  expect(labelledBy && document.getElementById(labelledBy)?.textContent).toBe("Read only");
   await act(async () => root.unmount());
 });
 
 it("names a source with no folder to update from", async () => {
   const { host, root } = await mount(<ReadOnlyBadge syncHref={null} />);
   await act(async () => host.querySelector<HTMLButtonElement>("button")!.click());
-  expect(document.body.querySelector("[role=dialog]")?.textContent).toBe("Managed by its source");
+  expect(document.body.querySelector("[role=dialog] p")?.textContent).toBe("Managed by its source");
   await act(async () => root.unmount());
 });
 
@@ -56,5 +59,11 @@ it("the slot draws the page's meta line and nothing without a page around it", a
   expect(host.textContent).toContain("Read only");
   expect(host.textContent).toContain("Updated");
   expect(host.textContent).toContain("3 backlinks");
+  await act(async () => root.unmount());
+});
+
+it("draws nothing when the page keeps the meta line in its header (no context)", async () => {
+  const { host, root } = await mount(<DocumentMetaContext.Provider value={null}><DocumentMetaSlot /></DocumentMetaContext.Provider>);
+  expect(host.innerHTML).toBe("");
   await act(async () => root.unmount());
 });

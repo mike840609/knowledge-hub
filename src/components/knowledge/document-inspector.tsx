@@ -518,7 +518,9 @@ export function DocumentDetailClient({
     };
   }, [pathname, title, toggleInspector, setDocumentTopbar, target]);
   const linkSummary = summariseLinks(inspectorData.links);
-  const metaContext = { meta: { status, updatedAt, readOnly, syncHref, readOnlyReason, wordCount, editHint, linkSummary, onLinksClick: openLinks }, outline: { entries: outline, activeSlug } };
+  // The one answer to "does the article draw the meta line": the header, the disclosure and the slot all follow it.
+  const metaDrawnInArticle = metaInArticle ?? contentOwnsTitle;
+  const metaContext = !metaDrawnInArticle ? null : { meta: { status, updatedAt, readOnly, syncHref, readOnlyReason, wordCount, editHint, linkSummary, onLinksClick: openLinks }, outline: { entries: outline, activeSlug } };
   return (
     <ReviewEntryProvider>
       <DocumentPane
@@ -550,11 +552,11 @@ export function DocumentDetailClient({
             actions={headerActions}
             onRunAction={runAction}
             beforeTitle={<PageIconPicker documentId={inspectorData.documentId} icon={pageIcon ?? null} editable={canEditPage} />}
-            metaAfterTitle={metaInArticle ?? contentOwnsTitle}
+            metaAfterTitle={metaDrawnInArticle}
           />
         {/* A page that opens with its own `# Title` has that title in the article; the meta line and the disclosure
             follow it there (DocumentMetaSlot), so the title is the first thing on the page. */}
-        {metaInArticle ?? contentOwnsTitle ? null : <OutlineDisclosure entries={outline} activeSlug={activeSlug} />}
+        {metaDrawnInArticle ? null : <OutlineDisclosure entries={outline} activeSlug={activeSlug} />}
         <DocumentMetaContext.Provider value={metaContext}>{children}</DocumentMetaContext.Provider>
       </DocumentPane>
     </ReviewEntryProvider>

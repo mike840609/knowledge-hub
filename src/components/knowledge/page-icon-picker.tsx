@@ -131,6 +131,7 @@ export function PageIconPicker({
         <Popover.Trigger
           type="button"
           aria-label={current ? "Change page icon" : "Add page icon"}
+          data-page-icon-add={current ? undefined : ""}
           className={`kh-focus-ring group inline-flex items-center gap-1.5 rounded-md px-1 text-kh-text-muted transition-colors hover:bg-kh-bg-hover hover:text-kh-text aria-expanded:bg-kh-bg-hover aria-expanded:text-kh-text ${current ? "h-10 min-w-10" : "h-7 opacity-0 focus-visible:opacity-100 aria-expanded:opacity-100 group-hover/header:opacity-100 group-focus-within/header:opacity-100 [@media(hover:none)]:opacity-100"}`}
         >
           {current ? (

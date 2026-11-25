@@ -175,7 +175,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
         dom.setAttribute("data-title-meta", "");
         queueMicrotask(() => { if (!cancelled) setTitleSlot(dom); });
         return dom;
-      }, { key: "kh-title-meta", side: -1, ignoreSelection: true, stopEvent: () => true, destroy: () => queueMicrotask(() => { if (!cancelled) setTitleSlot(null); }) })]);
+      }, { key: "kh-title-meta", side: -1, ignoreSelection: true, stopEvent: () => true, destroy: (dom) => queueMicrotask(() => { if (!cancelled) setTitleSlot(current => current === dom ? null : current); }) })]);
     } } }));
     const codeControllers = new Map<HTMLElement, () => void>();
     const codes = $prose(() => new Plugin({

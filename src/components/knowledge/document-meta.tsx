@@ -42,6 +42,7 @@ export function ReadOnlyBadge({ syncHref }: { syncHref: string | null }) {
       <Popover.Portal>
         <Popover.Positioner side="bottom" align="start" sideOffset={6} className="z-[80]">
           <Popover.Popup className="max-w-[min(20rem,calc(100vw-2rem))] rounded-lg border border-kh-border bg-kh-bg-raised px-3 py-2 text-body-sm text-kh-text shadow-popover outline-none transition-[opacity,transform] duration-120 ease-out data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0">
+            <Popover.Title className="sr-only">Read only</Popover.Title>
             {/* Source ownership decides who may write: say where the edit happens instead of only refusing it. */}
             <Popover.Description render={<p />}>
               {syncHref ? <>Edit the file in your folder, then{" "}
