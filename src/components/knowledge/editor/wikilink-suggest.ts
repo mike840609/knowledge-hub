@@ -17,6 +17,32 @@ export const TARGETS_RETRY_MS = 5_000;
 
 export type LinkTargetsResult = { targets: readonly LinkTargetView[]; truncated: boolean };
 
+/**
+ * The documents a link can go to, as one `wikiLinkSuggest` holds them: read, never fetched twice. `ensure` starts a
+ * fetch when the list is missing or older than a minute; `subscribe` is told when one finishes.
+ */
+export type LinkTargetsStore = {
+  ensure: () => void;
+  snapshot: () => { targets: readonly LinkTargetView[] | null; truncated: boolean; failed: boolean };
+  subscribe: (listener: () => void) => () => void;
+};
+
+/**
+ * Writes `raw` (`[[Title]]`) over `from`–`to` as a `wiki_link` node, the one way any list puts a link into the
+ * document, so that what is saved is what was typed by hand. The caret ends up after the link; the pick is its own
+ * undo step, and so is whatever is typed next.
+ */
+export function insertWikiLink(view: EditorView, from: number, to: number, raw: string): void {
+  const type = view.state.schema.nodes.wiki_link;
+  if (!type) return;
+  const transaction = view.state.tr.replaceWith(from, to, type.create({ raw }));
+  // Its own undo step: Undo takes back the pick and leaves what was typed, not everything typed before it.
+  view.dispatch(closeHistory(transaction).scrollIntoView());
+  // Following prose is another step even when typed immediately after the pick.
+  view.dispatch(closeHistory(view.state.tr));
+  view.focus();
+}
+
 export type WikiLinkSuggestOptions = {
   /** Fetches the documents a link can go to. Called the first time a `[[` is typed, then at most once a minute. */
   loadTargets: () => Promise<LinkTargetsResult>;
@@ -84,7 +110,7 @@ function detect(state: EditorState): Trigger | null {
  * It only offers. It writes nothing but the link the person picked, it grants no read of any
  * document it lists, and when it cannot fetch the list it says so and lets typing carry on.
  */
-export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: MilkdownPlugin[]; configure: (ctx: Ctx) => void } {
+export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: MilkdownPlugin[]; configure: (ctx: Ctx) => void; targets: LinkTargetsStore } {
   const now = options.now ?? (() => Date.now());
   const key = new PluginKey<SuggestState>("khWikiLinkSuggest");
 
@@ -135,16 +161,8 @@ export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: Mil
 
   function choose(view: EditorView, suggestion: Suggestion) {
     const state = key.getState(view.state);
-    const type = view.state.schema.nodes.wiki_link;
-    if (!isOpen(state) || !type) return;
-    const node = type.create({ raw: suggestion.link });
-    // The caret was at the end of what is replaced, so it ends up after the link.
-    const transaction = view.state.tr.replaceWith(state.trigger.from, state.trigger.to, node);
-    // Its own undo step: Undo takes back the pick and leaves what was typed, not everything typed before it.
-    view.dispatch(closeHistory(transaction).scrollIntoView());
-    // Following prose is another step even when typed immediately after the pick.
-    view.dispatch(closeHistory(view.state.tr));
-    view.focus();
+    if (!isOpen(state)) return;
+    insertWikiLink(view, state.trigger.from, state.trigger.to, suggestion.link);
   }
 
   /** Titles of pages this editor has made or is making, so the list does not offer a second page while it is catching up. */
@@ -317,8 +335,19 @@ export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: Mil
     }
   }
 
+  const store: LinkTargetsStore = {
+    ensure: ensureTargets,
+    snapshot: () => ({ targets, truncated, failed: failedAt !== null }),
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
+  };
+
   return {
     plugins: [plugin],
+    /** The fetched list of documents, for other lists in this editor that offer the same pages (the `@` list). */
+    targets: store,
     configure: (ctx) => {
       ctx.update(editorViewOptionsCtx, (previous) => ({
         ...previous,

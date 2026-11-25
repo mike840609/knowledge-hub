@@ -228,7 +228,7 @@ export function emojiSuggest(): { plugins: MilkdownPlugin[]; configure: (ctx: Ct
  * blocks, and not a forward delete after the caret, each of which can leave a caret after a
  * colon word the writer did not just type (review, 2026-11-17).
  */
-function typedAt(transaction: Transaction, before: EditorState, trigger: Trigger): boolean {
+export function typedAt(transaction: Transaction, before: EditorState, trigger: { from: number; to: number }): boolean {
   if (!transaction.docChanged || isHistoryTransaction(transaction)) return false;
   const event = transaction.getMeta("uiEvent");
   if (event === "paste" || event === "drop") return false;
