@@ -1093,7 +1093,13 @@ text. Each control is a named button (`Row 3 actions`, `Column 2 actions`,
 `Add row`, `Add column`). `Alt+F10` with the caret in a table cell moves focus
 to the row grip, then Tab reaches the column grip and the two bars; Escape in
 a grip or menu returns to the cell, and the block gutter is reached by Escape
-(table selected) then `Alt+F10`. Delete table is the block menu's Delete. No
+(table selected) then `Alt+F10`. Delete table is the block menu's Delete.
+Pressing a grip and moving past 4px drags its row or column
+(`2026-11-25-table-drag-reorder-design.md`): the moved row or column takes the
+block drag's tint, the block drop line (2px `--kh-primary`, horizontal for a
+row, vertical for a column) shows the landing boundary, the header row's grip
+does not drag and no row lands above the header, Escape cancels, and a click
+without movement still opens the menu. No
 colour, radius, elevation or motion token was added; nothing here is printed.
 
 ## 11. Navigation state
