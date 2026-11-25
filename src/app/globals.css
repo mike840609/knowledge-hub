@@ -1057,7 +1057,10 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 @container kh-document (max-width: 40rem) {
   .kh-crumb-collapsed { display: flex; }
   .kh-crumb-middle { display: none; }
-  .kh-crumb-first { flex-shrink: 1000; min-width: min(3ch, 16%); }
+  /* The first level starts from nothing and grows to its own width with whatever the page's name leaves, so the name
+     never gives up a fraction of a pixel (an ellipsis) while the first level still has some to give (review round 4). */
+  .kh-crumb-first { flex: 1 1 0%; min-width: min(3ch, 16%); max-width: max-content; }
+  .kh-crumb-last { flex-grow: 0; }
 }
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column {
   margin-inline-start: max(0px, min(calc((100% - theme("spacing.56") - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.reading") - 320px)));

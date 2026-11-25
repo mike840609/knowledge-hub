@@ -84,3 +84,13 @@ A review of the branch found these; each has a test that failed before.
 - A table no longer receives react-markdown's `node` (it serialised each table's hast into the RSC payload), and the
   Read only popover has an accessible name ("Read only"). The table wrapper is a module-level component, so a
   client re-render (the peek pane's active heading as it scrolls) keeps a table's sideways scroll and focus.
+
+## Review round 4
+
+On a phone the page's name still lost a fraction of a pixel (an ellipsis) whenever the line was short, because it
+shrank beside the first level (`flex-shrink: 1000` against 1); and a two-level path never let its first level give
+way, since that level is also the parent. Under a 40rem pane the first level now starts from nothing and grows to its
+own width with what the name leaves (`flex: 1 1 0%`, `max-width: max-content`), the name does not grow, and the first
+level carries `kh-crumb-first` whether or not it is the parent. The name is cut only once the first level is at its
+minimum. `zz-reader-chrome-polish.spec.ts` checks that on a touch phone (`hasTouch`, `isMobile`), three levels deep
+and two, by the text's width against its box rather than `scrollWidth`.

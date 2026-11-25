@@ -4,7 +4,7 @@
  * content, so they cannot drift apart. Composer spec §11.4.
  *
  * Running text is held to the measure while tables and code keep the whole column, and the
- * headings step 24 / 20 / 17 / 15, none smaller than the text under it (reader-measure spec). H2 is set off by 32px above and
+ * headings step 24 / 20 / 17 / 15, none smaller than the text under it (reader-measure spec). H2 has 24px above it, H3 16px, and
  * H3 is medium, not semibold, so two steps of 3px read as two levels (editor page polish spec, decision 4).
  * A to-do's native box hangs in the gutter like the editor's drawn one (`li.task-list-item` is styled in globals.css; the
  * input is here because Tailwind drops a component rule whose only class is one no source names).

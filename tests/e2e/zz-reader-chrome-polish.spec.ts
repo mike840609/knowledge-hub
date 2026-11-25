@@ -167,3 +167,45 @@ test.describe("a writer's own note", () => {
     expect(await noPageScroll(page)).toBe(true);
   });
 });
+
+/**
+ * The page's own name gives way last: it is drawn whole (its text's width against the box it was given; a scrollWidth
+ * check rounds away the fraction of a pixel an ellipsis needs), or the first level has already given all it can.
+ */
+async function expectPageNameLast(page: Page, title: string) {
+  const nav = page.getByRole("navigation", { name: "Breadcrumb" });
+  await expect(nav.locator("[aria-current=page]")).toHaveText(title, ROUND_TRIP);
+  const facts = await nav.evaluate((element) => {
+    const name = element.querySelector("[aria-current=page]")!;
+    const first = element.querySelector<HTMLElement>("[data-crumb=first]")!;
+    const range = document.createRange();
+    range.selectNodeContents(name);
+    const facts = { text: range.getBoundingClientRect().width, box: name.getBoundingClientRect().width, first: first.getBoundingClientRect().width, firstMin: 0 };
+    // min-width is `min(3ch, 16%)`, which computed style leaves unresolved: lay the item out at nothing to read it.
+    first.style.flex = "0 0 0px";
+    facts.firstMin = first.getBoundingClientRect().width;
+    first.style.flex = "";
+    return facts;
+  });
+  if (facts.text > facts.box) expect(facts.first, `"${title}" is cut while the first level could give more`).toBeLessThanOrEqual(facts.firstMin + 0.5);
+  return facts;
+}
+
+test.describe("on a touch phone", () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: PHONE });
+
+  test("the breadcrumb gives way at its first level before the page's name, three levels deep and two", async ({ page }) => {
+    const doc = await syncedPage(page);
+    await page.goto(doc.url);
+    await expectPageNameLast(page, doc.title);
+
+    const workspaceId = await mySpace(page);
+    const created = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title: "Onboarding guide", markdown: "Body.\n" } });
+    expect(created.ok()).toBe(true);
+    const { sourceId, documentId } = (await created.json()) as { sourceId: string; documentId: string };
+    await page.goto(`/w/${workspaceId}/knowledge/${sourceId}/${documentId}`);
+    // Two levels: the first is also the parent, and still gives way before the name.
+    await expectPageNameLast(page, "Onboarding guide");
+    expect(await noPageScroll(page)).toBe(true);
+  });
+});
