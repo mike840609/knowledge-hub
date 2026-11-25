@@ -1202,6 +1202,11 @@ input[type="search"]::-webkit-search-cancel-button:hover {
    half over the header cell's padding above its text. */
 .kh-table-col-grip { @apply h-3 w-6; }
 .kh-table-col-grip svg { flex: none; transform: rotate(90deg); }
+/* A grip drags its row or column (2026-11-25): a touch press must reach the page as a drag, not a scroll. */
+.kh-table-grip, .kh-table-col-grip { touch-action: none; cursor: grab; }
+.kh-table-grip:active, .kh-table-col-grip:active { cursor: grabbing; }
+.kh-editor :is(th, td).kh-table-drag-source, .kh-editor tr.kh-table-drag-source > :is(th, td) { background-color: var(--kh-bg-selected); }
+.kh-block-drop-line.kh-table-drop-line-column { width: 2px; }
 .kh-block-gutter[hidden], .kh-block-move-menu[hidden], .kh-slash-menu[hidden] { display: none; }
 /* The selection toolbar's Turn into menu hangs over the gutter's column, inside the document pane, whose `contain: layout`
    keeps it under anything drawn on the body at 30: while it is open, the controls drawn there step aside.
