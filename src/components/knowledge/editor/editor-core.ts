@@ -85,7 +85,7 @@ const commonmarkWithLocalSchemas = commonmark.flatMap(plugin => {
 
 const scrollableTable = tableSchema.extendSchema(previous => ctx => ({
   ...previous(ctx),
-  toDOM: () => ["div", { class: "kh-markdown-table kh-editor-table", role: "region", "aria-label": "Table", tabindex: "0" }, ["table", ["tbody", 0]]],
+  toDOM: () => ["div", { class: "kh-markdown-table kh-editor-table", role: "region", "aria-label": "Table" }, ["table", ["tbody", 0]]],
 }));
 // Without Milkdown's `[ ] ` rule: notion-keys' own covers list items too, and asks which line it is on.
 const gfmWithLocalSchemas = gfm.flatMap(plugin => {
