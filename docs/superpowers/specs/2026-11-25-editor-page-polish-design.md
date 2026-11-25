@@ -60,6 +60,20 @@ H2 takes 32px above it (`mt-8`) and H3 is `font-medium`, so a section starts wit
 sub-section is lighter. No token is added. It applies to the reader too, since the two are one class
 by contract.
 
+## Amendment (2026-11-25, review)
+
+Two more causes of the handoff shift were found by measuring each block before and after:
+
+- A line ending in a wikilink was 6px taller in the editor: ProseMirror draws a
+  separator `<img>` after a trailing inline node, and in the line box it adds height.
+  The separator is taken out of the flow (`position: absolute`); it still marks the
+  caret's place.
+- The editor writes an empty paragraph as `<br />`. The reader drew that, standing
+  as a block, as a bare line break (19px), the editor as a paragraph (28px plus its
+  margin). The reader now reads a `<br>` that stands alone at the top level, in a
+  quote or in a list item as an empty paragraph (`remark-known-html.ts`); a `<br>`
+  inside a line or a table cell is still a line break. Nothing is passed through.
+
 ## Out of scope
 
 - A new type token or weight token; a title row in the outline for title-field documents; moving the

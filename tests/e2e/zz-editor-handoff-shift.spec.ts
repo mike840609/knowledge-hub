@@ -19,9 +19,14 @@ const NOTE = [
   "- second bullet",
   "- [ ] open task",
   "- [x] done task",
+  // A line that ends in a wikilink: ProseMirror draws a separator <img> after it that must not grow the line.
+  "- [ ] read the [[Somewhere unresolved]]",
   "- last bullet",
   "",
   "> A quoted sentence that carries a second thought.",
+  "",
+  // The editor's empty paragraph, as it writes it: the reader must give it a paragraph's height too.
+  "<br />",
   "",
   "### Details",
   "",
@@ -129,13 +134,13 @@ test("a to-do, a quote and a link read alike before and after the editor", async
   });
   const standIn = await read();
   expect(standIn.link, "the stand-in drew the unresolved link").not.toBeNull();
-  await expect(page.locator('main [contenteditable="true"] [data-unresolved-link]')).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('main [contenteditable="true"] [data-unresolved-link]').first()).toBeVisible({ timeout: 20_000 });
   const editor = await read();
   expect(editor.items.map(item => item.left)).toEqual(standIn.items.map(item => item.left));
   expect(editor.items.map(item => item.top)).toEqual(standIn.items.map(item => item.top));
   // A to-do is a box with no bullet, before and after.
   expect(standIn.items.map(item => item.list)).toEqual(editor.items.map(item => item.list));
-  expect(editor.items.filter(item => item.kind !== "plain").map(item => item.list)).toEqual(["none", "none"]);
+  expect(editor.items.filter(item => item.kind !== "plain").map(item => item.list)).toEqual(["none", "none", "none"]);
   expect(editor.link).toBe(standIn.link);
   expect(editor.quote).toBe(standIn.quote);
 });

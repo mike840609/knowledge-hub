@@ -261,8 +261,11 @@ input[type="search"]::-webkit-search-cancel-button:hover {
     overflow-wrap: break-word;
     font-variant-ligatures: none;
   }
+  /* Out of the line's flow: in the line box it makes a line ending in a wikilink 6px taller than the reader's,
+     and the page jumps when the editor takes over (2026-11-25 editor page polish, decision 1). */
   .kh-editor img.ProseMirror-separator {
     @apply m-0 inline border-0;
+    position: absolute;
   }
   /* A page whose title is the H1 it opens with has no title field; that H1 is
      the page's name, not a section heading, so it wears the page-title scale
