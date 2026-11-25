@@ -523,15 +523,18 @@ keeps that link and is not a button — one destination per image. A blocked or
 missing image is the placeholder it was, and opens nothing. No token was added;
 the dialog sits at `z-[90]`/`z-[100]`, above the page's other layers.
 
-A table is a region of its own that scrolls both ways (`.kh-markdown-table`):
+A table is shown whole, in the reader and in the editor alike (`.kh-markdown-table`).
+It never scrolls in a box of its own: a reader sees every row and column without
+hunting for a hidden scrollbar (amended 2026-11-25; it was a 70vh box that scrolled
+both ways):
 
 ```text
-height     at most 70vh, then it scrolls inside its box
-header     sticky at the top of that box
-cell       at least 8rem wide; a long word wraps anywhere
+height     none: the table is as tall as its rows
+width      the column's; columns share it and a long word wraps anywhere, so nothing spills sideways
+header     `bg-raised`, not sticky
 row        `bg-subtle` under the pointer
-focus      the region is a tab stop named "Table", with the shared focus ring, so it scrolls from the keyboard
-print      no height limit and no sticky header: the whole table is printed
+region     named "Table"; not a tab stop, since there is nothing to scroll
+print      as on screen
 ```
 
 ### A link to a document previews it

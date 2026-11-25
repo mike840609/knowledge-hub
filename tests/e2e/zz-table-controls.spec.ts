@@ -118,18 +118,16 @@ test.describe("table edge controls", () => {
     expect(box.y + box.height).toBeLessThanOrEqual(visible.bottom);
   });
 
-  test("a cell scrolled out of view hides its grip", async ({ page }) => {
+  test("a wide table is shown whole, not scrolled, and every column keeps its grip", async ({ page }) => {
     const cell = (prefix: string) => Array.from({ length: 12 }, (_, i) => `${prefix}${i} ${"w".repeat(40)}`);
     const markdown = `| ${cell("H").join(" | ")} |\n| ${cell("-").map(() => "---").join(" | ")} |\n| ${cell("C").join(" | ")} |\n`;
     const { surface } = await openNote(page, markdown);
-    await surface.locator("tbody td").first().click();
-    // The row grip hangs in the page's gutter beside the whole row, so it stays; the column grip follows its column.
-    await expect(page.getByRole("button", { name: "Column 1 actions" })).toBeVisible();
     const region = surface.locator(".kh-markdown-table");
-    expect(await region.evaluate(node => node.scrollWidth > node.clientWidth)).toBe(true);
-    await region.evaluate(node => { node.scrollLeft = node.scrollWidth; });
-    await expect(page.getByRole("button", { name: "Column 1 actions" })).toBeHidden();
-    await expect(page.getByRole("button", { name: "Row 2 actions" })).toBeVisible();
+    const fits = await region.evaluate(node => ({ wide: node.scrollWidth <= node.clientWidth + 1, tall: node.scrollHeight <= node.clientHeight + 1 }));
+    expect(fits).toEqual({ wide: true, tall: true });
+    // The header's last cell: the grip sits on the table's top border, which stays in view.
+    await surface.locator("tr").first().locator(":scope > *").last().click();
+    await expect(page.getByRole("button", { name: "Column 12 actions" })).toBeVisible();
   });
 
   test("the bars and grips stay out of the text around the table", async ({ page }) => {

@@ -193,7 +193,7 @@ function MarkdownLink(props: DetailedHTMLProps<AnchorHTMLAttributes<HTMLAnchorEl
 
 function ResponsiveTable({ children }: { children?: React.ReactNode }) {
   return (
-    <div role="region" aria-label="Table" tabIndex={0} className="kh-markdown-table kh-focus-ring">
+    <div role="region" aria-label="Table" className="kh-markdown-table">
       <table>{children}</table>
     </div>
   );
