@@ -43,7 +43,11 @@ for (const width of [1680, 900, 390]) {
     }
     await page.screenshot({ path: testInfo.outputPath(`comment-draft-${width}.png`) });
     await expect(box).toBeFocused();
+    // Escape on a box holding words asks first (2026-11-24 amendment); discarding restores the passage.
     await box.press("Escape");
+    const discard = page.getByRole("alertdialog", { name: "Discard this comment?" }).or(page.getByRole("dialog", { name: "Discard this comment?" }));
+    await expect(discard).toBeVisible();
+    await discard.getByRole("button", { name: "Discard comment" }).click();
     await expect(box).toHaveCount(0);
     await expect(surface).toBeFocused();
     await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("😀 bold");
