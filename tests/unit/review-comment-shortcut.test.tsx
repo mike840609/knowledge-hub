@@ -29,6 +29,12 @@ describe("isCommentShortcut", () => {
     expect(isCommentShortcut({ ...key({ ctrlKey: true, altKey: true, key: "µ" }), getModifierState: (name: string) => name === "AltGraph" })).toBe(false);
     expect(isCommentShortcut({ ...key({ ctrlKey: true, altKey: true }), getModifierState: () => false })).toBe(true);
   });
+  it("is the key that types M, wherever the layout puts it", () => {
+    expect(isCommentShortcut(key({ ctrlKey: true, altKey: true, key: "m", code: "KeyM" }))).toBe(true); // QWERTY
+    expect(isCommentShortcut(key({ ctrlKey: true, altKey: true, key: "m", code: "Semicolon" }))).toBe(true); // AZERTY's M
+    expect(isCommentShortcut(key({ ctrlKey: true, altKey: true, key: ",", code: "KeyM" }))).toBe(false); // AZERTY's comma, where QWERTY has M
+    expect(isCommentShortcut(key({ metaKey: true, altKey: true, key: "µ", code: "KeyM" }))).toBe(true); // macOS ⌥M
+  });
   it("reads ⌘⌥M on screen", () => expect(shortcutLabel(COMMENT_SHORTCUT)).toBe("⌘⌥M"));
 });
 

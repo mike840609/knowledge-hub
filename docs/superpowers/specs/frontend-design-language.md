@@ -732,8 +732,9 @@ its keys: `D` opens it and `Esc` closes it. Not `C` (Create document) nor `M` (M
 ⌘⌥M (Ctrl+Alt+M elsewhere) comments on the text selected in a document under
 review, as Google Docs binds it, and is `COMMENT_SHORTCUT` in the registry; the
 Comment buttons take their `aria-keyshortcuts` from it and the panel's **Comment
-on selected text** its tooltip. It is matched by position (`code`), since ⌥M
-types "µ" on a Mac, and `shortcutLabel` writes Alt as ⌥. It acts only with a
+on selected text** its tooltip. It is matched by the character typed (`key`), and by position (`code`)
+only when the key types no ASCII character, since ⌥M types "µ" on a Mac
+(AltGr, which Windows reports as Ctrl+Alt, is never it), and `shortcutLabel` writes Alt as ⌥. It acts only with a
 selection inside the document, never from a field
 (inline review spec, 2026-11-26 amendment).
 
