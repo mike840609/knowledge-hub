@@ -77,26 +77,39 @@ export class MariaDbKnowledgeSearchRepository implements KnowledgeSearchReposito
     if (criteria.filters?.updatedFrom) { filterClauses.push("r.created_at >= ?"); parameters.push(criteria.filters.updatedFrom); }
     if (criteria.filters?.updatedBefore) { filterClauses.push("r.created_at < ?"); parameters.push(criteria.filters.updatedBefore); }
     const order = criteria.filters?.sort === "newest" ? "r.created_at DESC, d.id ASC" : criteria.filters?.sort === "oldest" ? "r.created_at ASC, d.id ASC" : "title_hits DESC, r.created_at DESC, d.id ASC";
+    // The derived query ranks and pages over metadata only; the outer join
+    // reads the LONGTEXT body once per returned row so it is never substringed
+    // for candidates that LIMIT discards.
+    const outerOrder = criteria.filters?.sort === "newest" ? "matched.updated_at DESC, matched.document_id ASC" : criteria.filters?.sort === "oldest" ? "matched.updated_at ASC, matched.document_id ASC" : "matched.title_hits DESC, matched.updated_at DESC, matched.document_id ASC";
     parameters.push(criteria.limit, criteria.offset);
     const sql = `SET STATEMENT max_statement_time=${SEARCH_TIMEOUT_SECONDS} FOR
-      SELECT d.id AS document_id, d.source_id AS source_id, s.workspace_id AS workspace_id, r.title AS title,
-             d.page_icon AS page_icon, s.name AS source_name, w.name AS workspace_name, d.status AS status, r.created_at AS updated_at,
-             LOCATE(?, r.markdown COLLATE utf8mb4_unicode_ci) AS anchor_at, CHAR_LENGTH(r.markdown) AS markdown_length,
-             CASE WHEN LOCATE(?, r.markdown COLLATE utf8mb4_unicode_ci) > 0
-                  THEN SUBSTRING(r.markdown, GREATEST(LOCATE(?, r.markdown COLLATE utf8mb4_unicode_ci) - ?, 1), ?)
-                  ELSE SUBSTRING(r.markdown, 1, ?) END AS snippet,
-             (${titleHits}) AS title_hits
-      FROM knowledge_documents d
-      JOIN knowledge_revisions r ON r.id = d.current_revision_id
-      JOIN knowledge_tree_nodes n ON n.document_id = d.id
-      JOIN knowledge_sources s ON s.id = d.source_id
-      JOIN workspaces w ON w.id = s.workspace_id
-      WHERE s.workspace_id IN (${criteria.workspaceIds.map(() => "?").join(", ")})
-        AND (? = 1 OR (d.status = 'ACTIVE' AND s.status = 'ACTIVE' AND n.status = 'ACTIVE'))
-        AND (? = 1 OR d.source_id = ?)
-        ${[...termClauses, ...filterClauses].map(clause => `AND ${clause}`).join("\n        ")}
-      ORDER BY ${order}
-      LIMIT ? OFFSET ?`;
+      SELECT matched.document_id, matched.source_id, matched.workspace_id, matched.title, matched.page_icon,
+             matched.source_name, matched.workspace_name, matched.status, matched.updated_at,
+             LOCATE(?, body_r.markdown COLLATE utf8mb4_unicode_ci) AS anchor_at,
+             CHAR_LENGTH(body_r.markdown) AS markdown_length,
+             CASE WHEN LOCATE(?, body_r.markdown COLLATE utf8mb4_unicode_ci) > 0
+                  THEN SUBSTRING(body_r.markdown, GREATEST(LOCATE(?, body_r.markdown COLLATE utf8mb4_unicode_ci) - ?, 1), ?)
+                  ELSE SUBSTRING(body_r.markdown, 1, ?) END AS snippet,
+             matched.title_hits AS title_hits
+      FROM (
+        SELECT d.id AS document_id, d.source_id AS source_id, d.current_revision_id AS current_revision_id,
+               s.workspace_id AS workspace_id, r.title AS title, d.page_icon AS page_icon, s.name AS source_name,
+               w.name AS workspace_name, d.status AS status, r.created_at AS updated_at,
+               (${titleHits}) AS title_hits
+        FROM knowledge_documents d
+        JOIN knowledge_revisions r ON r.id = d.current_revision_id
+        JOIN knowledge_tree_nodes n ON n.document_id = d.id
+        JOIN knowledge_sources s ON s.id = d.source_id
+        JOIN workspaces w ON w.id = s.workspace_id
+        WHERE s.workspace_id IN (${criteria.workspaceIds.map(() => "?").join(", ")})
+          AND (? = 1 OR (d.status = 'ACTIVE' AND s.status = 'ACTIVE' AND n.status = 'ACTIVE'))
+          AND (? = 1 OR d.source_id = ?)
+          ${[...termClauses, ...filterClauses].map(clause => `AND ${clause}`).join("\n          ")}
+        ORDER BY ${order}
+        LIMIT ? OFFSET ?
+      ) matched
+      JOIN knowledge_revisions body_r ON body_r.id = matched.current_revision_id
+      ORDER BY ${outerOrder}`;
     try {
       const rows = await this.connection.query<DbRow[]>(sql, parameters);
       return rows.map(mapRow);

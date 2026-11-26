@@ -27,11 +27,16 @@ export class AgentContextService {
       const links = linkMapFor(graph, ids, edges);
       const assemble = async (map: readonly AgentContextLink[] | null) => {
         const formatter = new AgentContextFormatter(workspaceId, origin, includeDiscussions);
+        const treesBySource = new Map<string, Awaited<ReturnType<typeof r.tree.listBySource>>>();
         if (map) formatter.addLinks(map); else formatter.addLinkMapOmitted();
         for (const id of ids) {
           const { document, policy } = await requireVisibleDocument(r, caller, id, false);
           if (policy.workspaceId !== workspaceId) throw new DocumentNotFoundError();
-          const tree = await r.tree.listBySource(document.sourceId);
+          let tree = treesBySource.get(document.sourceId);
+          if (!tree) {
+            tree = await r.tree.listBySource(document.sourceId);
+            treesBySource.set(document.sourceId, tree);
+          }
           if (!tree.some(node => node.documentId === document.id && node.status === "ACTIVE")) throw new DocumentNotFoundError();
           await assertActiveDocumentPlacement(r, document.sourceId, document.id, tree);
           const revision = await r.revisions.findCurrent(document.id);
