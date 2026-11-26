@@ -63,7 +63,10 @@ already there (All comments, Open, Resolved).
   **Every comment is resolved.** and offers **Show resolved**.*
 - The Comments entry still counts every discussion.
 - A mark or a highlight on a passage whose discussion is resolved switches the
-  list to All, as it always did, so it still leads somewhere.
+  list to All, as it always did, so it still leads somewhere. *Amended
+  2026-11-26 (inline review spec, "resolved passages fade"): under Open a
+  resolved passage carries no mark or highlight at all; a mark leading to a
+  discussion the filter lists leaves the filter as it is.*
 - Resolving a discussion while the list is on Open takes its card out of the
   list; Reopen is under Resolved.
 

@@ -6,6 +6,15 @@ import { EXPAND_CODE_BLOCK } from "./code-block";
 import { createReviewRangeResolver } from "./review-selection";
 import { reviewRailInline } from "./review-rail-mode";
 
+/**
+ * The discussions whose passages are marked in the text (highlight and margin marker): a resolved one
+ * is settled, so it is drawn only where the reader asked for resolved ones (a filter other than Open)
+ * or is looking at it. Google Docs fades resolved comments out of the text the same way.
+ */
+export function drawnReviewThreads<T extends { id: string; status: string }>(threads: T[] | undefined, filter: string, activeThreadId?: string): T[] | undefined {
+  return threads?.filter(thread => thread.status === "OPEN" || filter !== "OPEN" || thread.id === activeThreadId);
+}
+
 /** Native highlights never rewrite Markdown DOM or expose hidden/outdated quotes.
  * Browsers without the Highlight API retain the accessible quote buttons. */
 export function useReviewHighlights(markdown: string, threads?: (ReviewThreadView | OwnerReviewThreadView)[], activeThreadId?: string) {

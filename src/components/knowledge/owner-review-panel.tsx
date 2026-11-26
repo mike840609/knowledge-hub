@@ -9,7 +9,7 @@ import { readStored, removeStored, writeStored } from "@/components/shell/use-pe
 import { awaitingOwner, dismissedKey, opensOnArrival, parseDismissed } from "./review-auto-open";
 import { useShareCommentUnread } from "./share-comment-notifications";
 import { useReviewEntry } from "./review-entry";
-import { useReviewDraftHighlight, useReviewHighlights } from "./review-highlights";
+import { drawnReviewThreads, useReviewDraftHighlight, useReviewHighlights } from "./review-highlights";
 import { ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
 import { ReviewPanelShell } from "./review-panel-shell";
 import { ReviewBlockComment } from "./review-block-comment";
@@ -46,7 +46,9 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const inline = useReviewRailInline();
   const revisionChanged = !!result && result.revisionId !== revisionId;
   const located = revisionChanged || contentPending ? undefined : result?.threads;
-  useReviewHighlights(markdown, located, activeThreadId);
+  // A resolved passage is not marked under Open, unless it is the one being looked at (2026-11-26).
+  const drawn = useMemo(() => drawnReviewThreads(located, filter, activeThreadId), [located, filter, activeThreadId]);
+  useReviewHighlights(markdown, drawn, activeThreadId);
   const selection = useReviewSelection(readingRef, markdown, prepareComment ? documentId : `${documentId}:${revisionId}`, !!prepareComment);
   const [prepared, setPrepared] = useState<PreparedReviewComment>();
   const [commentRevision, setCommentRevision] = useState<string>();
@@ -215,7 +217,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
           changeOpen(true);
           return resolved === anchor;
         }} />}
-        <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={located} />
+        <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={drawn} />
       </div>
       <aside id="owner-document-discussions" className="kh-review-panel" aria-label="Document comments" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && reviewRailInline()) { if (selection.chosen) cancelComment(); else changeOpen(false); } }}>
         <ReviewPanelShell open={open} inline={inline} onOpenChange={changeOpen} returnFocus={() => {

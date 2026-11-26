@@ -261,13 +261,20 @@ test("the owner is shown what is still open; what is resolved is one choice away
   await page.getByRole("menuitemradio", { name: "All comments", exact: true }).click();
   await expect(cards).toHaveCount(2);
 
-  // A mark on a passage whose discussion is resolved still leads to it.
+  // Under Open a resolved passage carries no mark (2026-11-26); under Resolved it does, and the open
+  // one's mark, hidden by that filter, still leads to its discussion.
   await rail.getByRole("button", { name: "Filter comments" }).click();
   await page.getByRole("menuitemradio", { name: "Open", exact: true }).click();
   await expect(cards).toHaveCount(1);
-  await page.getByRole("button", { name: "1 comment on passage: Paragraph 8" }).click();
-  await expect(cards).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "1 comment on passage: Paragraph 8" })).toHaveCount(0);
+  await page.getByRole("button", { name: "1 comment on passage: Paragraph 3" }).click();
+  await expect(rail.getByRole("button", { name: "Filter comments" })).toHaveText("Open");
+  await rail.getByRole("button", { name: "Filter comments" }).click();
+  await page.getByRole("menuitemradio", { name: "Resolved", exact: true }).click();
+  await expect(cards).toHaveCount(1);
   await expect(rail).toContainText("A reviewer's remark");
+  await page.getByRole("button", { name: "1 comment on passage: Paragraph 3" }).click();
+  await expect(cards).toHaveCount(2);
 });
 
 test("discussions that are all resolved do not open by themselves", async ({ page, request }) => {

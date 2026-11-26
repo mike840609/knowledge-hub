@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ReviewAnchor, ReviewThreadView } from "@/modules/knowledge/domain/document-review";
-import { useReviewDraftHighlight, useReviewHighlights } from "./review-highlights";
+import { drawnReviewThreads, useReviewDraftHighlight, useReviewHighlights } from "./review-highlights";
 import { LogIn, RefreshCw, MessageSquare, MessageSquarePlus, X } from "lucide-react";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -87,7 +87,9 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
     const send = () => reviewRequest(`/api/share-review/threads/${activeThreadId}/seen`, scope);
     void send().catch(() => send()).then(() => window.dispatchEvent(new Event("kh:notification-changed")), () => undefined);
   }, [activeThreadId, seeing, scope]);
-  useReviewHighlights(markdown, revisionChanged ? undefined : result?.threads, activeThreadId);
+  // A resolved passage is not marked under Open, unless it is the one being looked at (2026-11-26).
+  const drawn = useMemo(() => revisionChanged ? undefined : drawnReviewThreads(result?.threads, filter, activeThreadId), [revisionChanged, result, filter, activeThreadId]);
+  useReviewHighlights(markdown, drawn, activeThreadId);
   const selection = useReviewSelection(readingRef, markdown, `${token}:${revisionId}`);
   useReviewDraftHighlight(readingRef, revisionChanged ? null : selection.chosen, markdown);
   // A newer reading, held back while it would move the cards: the reader chooses when to see it.
@@ -210,7 +212,7 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
           const anchor = selection.peek();
           if (anchor) writeStored("session", signInKey, JSON.stringify({ revisionId, anchor }));
         }} />}
-        <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={revisionChanged ? undefined : result?.threads} />
+        <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={drawn} />
       </div>
       <aside id="shared-document-discussions" className="kh-review-panel" aria-label="Document comments" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && reviewRailInline()) changeOpen(false); }}>
     <ReviewPanelShell open={open} inline={inline} onOpenChange={changeOpen} returnFocus={() => {

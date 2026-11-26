@@ -211,8 +211,11 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
   const [own, setOwn] = useState<ReviewFilter>("ALL");
   const filter = controlled ?? own;
   const setFilter = onFilterChange ?? setOwn;
-  // A mark or a highlight may lead to a discussion the filter is hiding.
-  useEffect(() => { const show = () => setFilter("ALL"); document.addEventListener("review-focus-thread",show); return () => document.removeEventListener("review-focus-thread",show); }, [setFilter]);
+  // A mark or a highlight may lead to a discussion the filter is hiding; one the filter lists leaves it as it is.
+  useEffect(() => {
+    const show = (event: Event) => { const target = threads.find(thread => thread.id === (event as CustomEvent<string>).detail); if (!target || (filter !== "ALL" && target.status !== filter)) setFilter("ALL"); };
+    document.addEventListener("review-focus-thread", show); return () => document.removeEventListener("review-focus-thread", show);
+  }, [setFilter, threads, filter]);
   // The card whose own Reply was pressed, and a count so that pressing it again asks again.
   const [replyRequest, setReplyRequest] = useState<{ threadId: string; nonce: number }>();
   const [error, setError] = useState<string>();
