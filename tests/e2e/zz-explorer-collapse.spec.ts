@@ -66,8 +66,12 @@ function testDestinations() {
     base("the page switch works in the touch drawer", async ({ page }) => {
       const workspace = `/w/${await personalWorkspaceId(page)}`;
       await page.goto(`${workspace}/home`);
-      await page.getByRole("button", { name: "Open menu", exact: true }).tap();
       const drawer = page.getByRole("dialog", { name: "Menu", exact: true });
+      // A tap that lands before the shell hydrates opens nothing; tap again until the drawer is up.
+      await expect(async () => {
+        if (!await drawer.isVisible()) await page.getByRole("button", { name: "Open menu", exact: true }).tap();
+        await expect(drawer).toBeVisible({ timeout: 2_000 });
+      }).toPass(ROUND_TRIP);
       const graph = drawer.getByRole("navigation", { name: "Primary", exact: true }).getByRole("link", { name: "Graph", exact: true });
       const [newPage] = await Promise.all([
         page.context().waitForEvent("page"),
