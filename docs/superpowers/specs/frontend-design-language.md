@@ -863,6 +863,23 @@ there is more room there, and scrolling rather than covering the line when
 there is room on neither side. Its count is announced by a live region of its
 own: the page's one `role="status"` is the toast layer's.
 
+### The find bar (2026-11-26)
+
+The editor's find and replace (`editor/find-bar.tsx`, `find-replace.ts`; spec
+`2026-11-26-editor-find-replace-design.md`) is the one floating bar in the
+document: a `role="search"` panel at the top right of the editor, in the `lg`
+radius, with a border and the `popover` elevation, held in a zero-height sticky
+anchor (`.kh-find-anchor`, `top: 4.5rem`, below the page's sticky header) so it
+takes no room and does not cover the selection toolbar. It is made of the
+shared `Button` (ghost, `sm`, icon), `Input` (`sm`) and `Tooltip` with the
+shortcut as a `Kbd`; "Aa" and the replace disclosure carry `aria-pressed` /
+`aria-expanded`. Focus lives in its fields while it is open, so the keys are
+handled there as well as in the editor. Matches are inline decorations in
+existing tokens only: `kh-find-match` is `--kh-highlight` with a `--kh-primary`
+underline, `kh-find-current` is `--kh-primary` on `--kh-on-primary`. The count
+("3 of 12", "No results", "Replaced 3") is one polite live region. It wraps at
+phone width and is hidden in print.
+
 ### Block controls and the `/` list
 
 The rendered editor has two more things drawn on `document.body`, `fixed`, for
