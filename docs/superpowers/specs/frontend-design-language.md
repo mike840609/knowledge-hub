@@ -863,6 +863,23 @@ there is more room there, and scrolling rather than covering the line when
 there is room on neither side. Its count is announced by a live region of its
 own: the page's one `role="status"` is the toast layer's.
 
+### The find bar (2026-11-26)
+
+The editor's find and replace (`editor/find-bar.tsx`, `find-replace.ts`; spec
+`2026-11-26-editor-find-replace-design.md`) is the one floating bar in the
+document: a `role="search"` panel at the top right of the editor, in the `lg`
+radius, with a border and the `popover` elevation, held in a zero-height sticky
+anchor (`.kh-find-anchor`, `top: 4.5rem` from `lg` up, below the pinned document header; `0.75rem` below `lg`) so it
+takes no room and does not cover the selection toolbar. It is made of the
+shared `Button` (ghost, `sm`, icon), `Input` (`sm`) and `Tooltip` with the
+shortcut as a `Kbd`; "Aa" and the replace disclosure carry `aria-pressed` /
+`aria-expanded`. Focus lives in its fields while it is open, so the keys are
+handled there as well as in the editor. Matches are inline decorations in
+existing tokens only: `kh-find-match` is `--kh-highlight` with a `--kh-primary`
+underline, `kh-find-current` is `--kh-primary` on `--kh-on-primary`. The count
+("3 of 12", "No results", "Replaced 3") is one polite live region. It wraps at
+phone width and is hidden in print.
+
 ### Block controls and the `/` list
 
 The rendered editor has two more things drawn on `document.body`, `fixed`, for
@@ -921,6 +938,12 @@ block is dragged it is tinted `kh-bg-selected` and a 2px `--kh-primary` line
 marks where it will land; a grip inside a range drags the range, every block of
 it tinted. On a device with no hover the controls follow the
 block the caret is in.
+
+**A range chosen with the mouse** (mouse block-range spec): Shift-click on a block or
+its grip extends the chosen block, and a drag from the editor's margin, or from the blank column beside it, draws a box
+(`.kh-block-marquee`: `kh-bg-selected` fill at 0.7 opacity, a 1px `--kh-primary` border,
+`rounded-sm`, `fixed`, `z-30`, no pointer events) over the blocks it meets, which are
+drawn as any range is. No token was added.
 
 **Copy link to block** writes `<document address>#kh-block-<uuid>` and gives
 the block that id if it has none. Markdown carries the id as an HTML comment
