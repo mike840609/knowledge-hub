@@ -236,7 +236,7 @@ test("opening and closing the rail moves nothing under the pointer where the win
   await page.setViewportSize({ width: 1600, height: 900 });
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
   const article = page.locator("[data-review-document]").filter({ visible: true });
-  const entry = page.getByRole("button", { name: /^(Show|Hide) comments/ });
+  const entry = page.getByRole("button", { name: /^Comments\b/ });
   const save = page.getByRole("button", { name: "Save share", exact: true });
   const where = async () => ({ article: (await article.boundingBox())!.x, entry: (await entry.boundingBox())!.x, save: (await save.boundingBox())!.x });
   const before = await where();
