@@ -53,6 +53,8 @@ export type FindKeyAction = "open" | "openReplace" | "next" | "previous";
 /** What a key does for the bar. Mod-G and Mod-Shift-G are the bar's only while it is open; the browser's otherwise. */
 export function findKeyAction(event: KeyboardEvent, open: boolean): FindKeyAction | null {
   if (event.isComposing || event.keyCode === 229) return null;
+  // Windows reports AltGr as Ctrl+Alt; AltGr+F types "[" on some layouts, which must reach the editor.
+  if (event.getModifierState?.("AltGraph")) return null;
   if (!(isMac() ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey)) return null;
   // By physical key for Alt: Option-F types "ƒ" on a Mac.
   if (event.altKey) return !event.shiftKey && event.code === "KeyF" ? "openReplace" : null;
@@ -118,8 +120,13 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
     if (!view) return;
     const match = stateOf().matches[index];
     if (!match) return;
-    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, match.from, match.to)).setMeta(key, { current: index } satisfies FindMeta).scrollIntoView());
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, match.from, match.to)).setMeta(key, { current: index } satisfies FindMeta));
+    reveal();
   };
+  /** Centred, not ProseMirror's 5px margin: the pinned header and the bar itself cover the pane's top edge. */
+  const reveal = () => { view?.dom.querySelector(".kh-find-current")?.scrollIntoView?.({ block: "center", inline: "nearest" }); };
+  /** After a search: the current match is selected and shown, as it is in a browser's find. */
+  const showCurrent = () => { if (stateOf().matches.length) select(stateOf().current); };
   /** The marks at the match's start: replacing never changes what the text around it was written with. */
   const insert = (tr: Transaction, match: FindMatch, text: string) => {
     if (!text) { tr.delete(match.from, match.to); return; }
@@ -145,7 +152,8 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
       ensureMounted();
       const { selection, doc } = view.state;
       let query: string | undefined;
-      if (!selection.empty) {
+      // With the bar open, Mod-F refocuses the query the writer typed rather than overwriting it.
+      if (!selection.empty && !stateOf().open) {
         const text = doc.textBetween(selection.from, selection.to, "\n", BARRIER);
         if (text.length <= PREFILL_LIMIT && !/[\n￼]/.test(text)) query = text;
       }
@@ -165,8 +173,8 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
       view.focus();
       refresh();
     },
-    setQuery(query) { notice = ""; dispatchMeta({ query }); refresh(); },
-    setMatchCase(matchCase) { notice = ""; dispatchMeta({ matchCase }); refresh(); },
+    setQuery(query) { notice = ""; dispatchMeta({ query }); showCurrent(); refresh(); },
+    setMatchCase(matchCase) { notice = ""; dispatchMeta({ matchCase }); showCurrent(); refresh(); },
     setReplaceOpen(open) { replaceOpen = open; refresh(); },
     step(direction) {
       const { matches, current } = stateOf();
@@ -235,7 +243,8 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
       refresh();
       return {
         update: refresh,
-        destroy() { mount.remove(); view = null; listeners.clear(); },
+        // A whole-document replace recreates plugin views; React's subscription must outlive this one.
+        destroy() { mount.remove(); view = null; },
       };
     },
   }));

@@ -12,8 +12,10 @@ read it").
 
 1. **Opening.** Mod-F with focus in the rendered editor opens the find bar and
    moves focus to its query. Mod-F again, with the bar open, focuses and selects the query.
-   The query is pre-filled with the editor's selection when that is non-empty,
-   on one line and at most 200 characters; otherwise it is left as it was. The
+   When the bar was closed, the query is pre-filled with the editor's selection when that is non-empty,
+   on one line and at most 200 characters; otherwise it is left as it was. With the bar
+   open the typed query is kept. AltGr (which Windows reports as Ctrl+Alt) is never
+   Mod-Alt: AltGr+F types "[" on some layouts. The
    key is claimed only inside the editor: reader pages, the read-only stand-in
    and the Markdown source view never reach it, so the browser's own find is
    untouched there. Mod is Command on Apple platforms and Control elsewhere.
@@ -23,11 +25,12 @@ read it").
    tokens exist for light and dark. Matching is case-insensitive unless "Aa" (match
    case) is pressed. The count reads "3 of 12", "No results", or "1 of 1000+"
    past the ceiling, in a polite live region. A query change chooses the first match at or after the
-   editor's selection, so the bar finds what is below the caret first.
+   editor's selection, so the bar finds what is below the caret first, and selects and
+   shows that match as the query is typed, as a browser's find does.
 3. **Moving.** Enter / Shift-Enter in the bar, the ↓ / ↑ buttons, and Mod-G /
    Mod-Shift-G (bar open, from the editor or the bar) step to the next / previous
    match, wrapping at the ends. Stepping selects the match in the editor and scrolls it
-   into view. Enter always advances; it does not first "select the current one".
+   to the middle of the pane, clear of the pinned header and the bar. Enter always advances; it does not first "select the current one".
    Escape in the bar closes it, removes the decorations and returns focus to the
    editor with the caret at the end of the current match. Escape in the editor
    is the editor's (it selects the block), not the bar's.

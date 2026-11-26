@@ -51,7 +51,7 @@ function escapeOn(view: EditorView, text: string) {
 }
 /** A press of the left button on `target`, as the browser sends it. */
 function mouse(target: Element | Document, type: string, init: MouseEventInit = {}) {
-  const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, ...init });
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, buttons: type === "mousemove" ? 1 : 0, ...init });
   target.dispatchEvent(event);
   return event;
 }
@@ -218,4 +218,18 @@ it("a range chosen with the mouse keeps its wikilinks as links through Mod-d", a
   let nodes = 0;
   view.state.doc.descendants(node => { if (node.type.name === "wiki_link") nodes++; });
   expect(nodes).toBe(2);
+});
+
+it("a release outside the window (no mouseup) ends the drag at the next move", async () => {
+  const { view } = await open("one\n\ntwo\n\nthree\n");
+  const restore = layout(view);
+  try {
+    mouse(view.dom, "mousedown", { clientX: 10, clientY: 5 });
+    mouse(document, "mousemove", { clientX: 10, clientY: 55 });
+    expect(inRange(view)).toEqual(["one", "two"]);
+    mouse(document, "mousemove", { clientX: 10, clientY: 85, buttons: 0 });
+    expect(document.querySelector(".kh-block-marquee")).toBeNull();
+    mouse(document, "mousemove", { clientX: 10, clientY: 85 });
+    expect(inRange(view)).not.toContain("three");
+  } finally { restore(); }
 });

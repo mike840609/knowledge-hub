@@ -105,9 +105,13 @@ export const blockPointer = $prose(() => {
       if (step) { if (pane) pane.scrollTop += step; else window.scrollBy(0, step); schedule(); }
     };
     const move = (event: MouseEvent) => {
+      // The button came up outside the window (alt-tab): no mouseup arrives, so end here.
+      // It keeps what the drag chose by the last move it saw; a press that never dragged is simply dropped.
+      if (!(event.buttons & 1)) { finish(false); return; }
       x = event.clientX; y = event.clientY;
       if (!dragging && Math.hypot(x - startX, y - (startY - top())) < DRAG_THRESHOLD) return;
       dragging = true;
+      // ponytail: synchronous layout reads per move; route through schedule() if long documents feel it.
       apply();
       edge();
     };

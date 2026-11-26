@@ -173,10 +173,46 @@ describe("keys", () => {
     expect(find.getSnapshot()).toMatchObject({ open: true, replaceOpen: true });
   });
 
+  it("leaves AltGr+F (Ctrl+Alt on Windows) to the editor: on some layouts it types \"[\"", async () => {
+    const { find, view } = await open("a\n");
+    expect(key(view, { key: "[", code: "KeyF", ctrlKey: true, altKey: true, modifierAltGraph: true } as KeyboardEventInit).defaultPrevented).toBe(false);
+    expect(find.getSnapshot().open).toBe(false);
+  });
+
+  it("Mod-F with the bar open keeps the query the writer typed", async () => {
+    const { find, view } = await open("hello world\n");
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1, 6)));
+    key(view, { key: "f", ctrlKey: true });
+    find.setQuery("cat");
+    key(view, { key: "f", ctrlKey: true });
+    expect(find.getSnapshot().query).toBe("cat");
+  });
+
   it("leaves other keys, and a Mod-F with Shift, to the browser", async () => {
     const { view } = await open("a\n");
     expect(key(view, { key: "f" }).defaultPrevented).toBe(false);
     expect(key(view, { key: "F", ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(false);
+  });
+});
+
+describe("living through the editor", () => {
+  it("still notifies the bar after a whole-document replace (Mod-/ round trip, a newer revision)", async () => {
+    const { editor, find } = await open("one\n");
+    let calls = 0;
+    find.subscribe(() => { calls += 1; });
+    find.open();
+    editor.replaceMarkdown("two two\n");
+    const before = calls;
+    find.open();
+    find.setQuery("two");
+    expect(calls).toBeGreaterThan(before);
+    expect(find.getSnapshot()).toMatchObject({ open: true, total: 2 });
+  });
+
+  it("selects the current match as the query is typed", async () => {
+    const { find, view } = await open("x\n\nfind me\n");
+    search(find, "me");
+    expect(selected(view)).toBe("me");
   });
 });
 

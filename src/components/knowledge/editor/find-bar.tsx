@@ -35,7 +35,7 @@ export function FindBar({ controller }: { controller: FindController }) {
       event.preventDefault();
       if (action === "next" || action === "previous") controller.step(action === "next" ? 1 : -1);
       else controller.open({ replace: action === "openReplace" });
-    } else if (event.key === "Escape") {
+    } else if (event.key === "Escape" && !event.nativeEvent.isComposing) {
       event.preventDefault();
       controller.close();
     }
