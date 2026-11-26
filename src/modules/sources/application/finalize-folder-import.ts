@@ -204,6 +204,12 @@ export class FinalizeFolderImportService {
     const normalized = normalizeEntries(staged);
     applyCollisions(normalized);
     const kept = normalized.filter((entry) => !entry.ignored);
+    // Ignored files never reach a parse, so their received bytes have no use
+    // past path normalization. Drop them before the kept entries are parsed so
+    // the finalize peak does not include every ignored body.
+    for (const entry of normalized) {
+      if (entry.ignored) (entry.staged as { rawMarkdown: string | null }).rawMarkdown = null;
+    }
     const documents: ReadyImportDocument[] = [];
     const assets: ReadyImportAsset[] = [];
     const finalized: FinalizedImportSnapshotEntry[] = [];
@@ -255,6 +261,11 @@ export class FinalizeFolderImportService {
             row = { ...row, diagnostics: [...entry.diagnostics] };
           }
         }
+        // `row.markdown` holds the canonical body now (or the entry was
+        // skipped as blocked), so the raw upload is dead weight. Release it
+        // before moving on rather than retaining every raw body until the
+        // loop ends.
+        (entry.staged as { rawMarkdown: string | null }).rawMarkdown = null;
         if (hasBlocker(entry.diagnostics)) extraChanges.push(diagnosticChange(entry));
       } else {
         if (!hasBlocker(entry.diagnostics) && entry.sourcePath !== null && entry.sourcePathHash !== null && entry.staged.assetContentHash !== null) {

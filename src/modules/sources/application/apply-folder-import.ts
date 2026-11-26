@@ -75,16 +75,35 @@ export class ApplyFolderImportService {
    * is parsed there as before; the transaction still verifies every body.
    */
   private async linksBeforeLocking(caller: CallerContext, snapshotId: string): Promise<(markdown: string) => ExtractedLink[]> {
+    const hash = (markdown: string) => createHash("sha256").update(markdown, "utf8").digest("base64");
     // Only a speed-up: if this read fails, the transaction parses in place and meets (and
     // reports under Apply's own codes) whatever went wrong.
-    const bodies = await this.uow.run(async (repositories) => {
+    const byHash = await this.uow.run(async (repositories) => {
+      const extracted = new Map<string, ExtractedLink[]>();
       const snapshot = await repositories.importSnapshots.findById(snapshotId);
-      if (!snapshot || snapshot.createdBy !== caller.identity.id || snapshot.state !== "READY") return [];
+      if (!snapshot || snapshot.createdBy !== caller.identity.id || snapshot.state !== "READY" || !snapshot.plan) return extracted;
+      // Only bodies the plan actually writes are parsed again inside Apply. A
+      // move/archive-only plan references none, so it never reads the staged
+      // Markdown at all and the transaction's own integrity read is the only one.
+      const neededUploadKeys = new Set<string>();
+      for (const action of [...snapshot.plan.documents.create, ...snapshot.plan.documents.revise]) {
+        const content = action.content as { uploadKey?: unknown; markdown?: unknown };
+        if (typeof content.uploadKey === "string") neededUploadKeys.add(content.uploadKey);
+        // In-memory legacy payloads carry the body inline instead of by reference.
+        if (typeof content.markdown === "string") extracted.set(hash(content.markdown), extractDocumentLinks(content.markdown));
+      }
+      if (neededUploadKeys.size === 0) return extracted;
       const entries = await repositories.importSnapshotEntries.listBySnapshotId(snapshotId);
-      return entries.flatMap((entry) => (entry.entryType === "DOCUMENT" && entry.markdown !== null ? [entry.markdown] : []));
-    }).catch(() => [] as string[]);
-    const hash = (markdown: string) => createHash("sha256").update(markdown, "utf8").digest("base64");
-    const byHash = new Map(bodies.map((markdown) => [hash(markdown), extractDocumentLinks(markdown)]));
+      for (const entry of entries) {
+        if (entry.entryType !== "DOCUMENT" || entry.markdown === null || !neededUploadKeys.has(entry.uploadKey)) continue;
+        extracted.set(hash(entry.markdown), extractDocumentLinks(entry.markdown));
+        // The links are all this pass needs from the body; release it before the
+        // transaction loads its own copy so both never sit in memory together.
+        (entry as { markdown: string | null }).markdown = null;
+      }
+      return extracted;
+    }).catch(() => new Map<string, ExtractedLink[]>());
+    if (byHash.size === 0) return (markdown) => extractDocumentLinks(markdown);
     return (markdown) => byHash.get(hash(markdown)) ?? extractDocumentLinks(markdown);
   }
 
