@@ -16,7 +16,7 @@ import { reviewRailInline, useReviewRailInline, useReviewRailOpen } from "./revi
 import { awaitingReader, newComments, parseDismissed, sharedDismissedKey } from "./review-auto-open";
 import { readStored, removeStored, writeStored } from "@/components/shell/use-persisted-state";
 import { COMMENT_SHORTCUT, useCommentShortcut } from "./review-shortcut";
-import { shareDiscussionLink, sharedPagePath } from "@/lib/share-paths";
+import { shareDiscussionLink } from "@/lib/share-paths";
 
 const SHOWS: readonly ReviewShow[] = ["ANYONE", "MINE", "MENTIONS"];
 type DiscussionResult = { threads: ReviewThreadView[]; revisionId: string; writesEnabled: boolean; callerUserId: string | null };
@@ -26,7 +26,7 @@ type DiscussionResult = { threads: ReviewThreadView[]; revisionId: string; write
  * reader keeps on the device (dismissals, an unsent comment) is kept per document. The bar is `wide` there, spanning
  * the window over the tree as the folder page's own bar does, with `brand` holding the tree, brand and breadcrumb.
  */
-export function SharedReviewPanel({ token, documentId, revisionId, markdown, signInHref, brand, actions, wide = false, children }: { token: string; documentId?: string; revisionId: string; markdown: string; signInHref: string; brand?: ReactNode; actions?: ReactNode; wide?: boolean; children: ReactNode }) {
+export function SharedReviewPanel({ token, documentId, revisionId, markdown, signInHref, brand, actions, wide = false, named = false, children }: { /** A NAMED share (read in the Hub only): its discussion links are the `/open` form. */ named?: boolean; token: string; documentId?: string; revisionId: string; markdown: string; signInHref: string; brand?: ReactNode; actions?: ReactNode; wide?: boolean; children: ReactNode }) {
   // A document link's page keeps the keys it always had, so a reader's stored drafts and dismissals still match.
   const kept = documentId ? `${token}:${documentId}` : token;
   const scope = useMemo(() => (documentId ? { token, documentId } : { token }), [token, documentId]);
@@ -168,9 +168,10 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
   // reader's bubble offers sign-in; the key never takes them off the page, so for them it does nothing.
   const commentOnSelection = useCallback(() => { selection.capture(); changeOpen(true); }, [selection.capture, changeOpen]);
   useCommentShortcut(readingRef, canComment, commentOnSelection);
-  // The link a reader passes on to a discussion: this page's own (`/s/<token>`), or — read in the Hub, where
-  // only a NAMED share is — the `/open` form, which sends each recipient to their own Hub reader.
-  const linkTo = useCallback((threadId: string) => new URL(shareDiscussionLink(token, threadId, { documentId, named: window.location.pathname !== sharedPagePath(token) }), window.location.origin).href, [token, documentId]);
+  // The link a reader passes on to a discussion: a LINK share's own page (`/s/<token>`), wherever it is
+  // read; a NAMED share's `/open` form, which sends each recipient to their own Hub reader. Told, not
+  // guessed from the address: a LINK share can be read in the Hub too.
+  const linkTo = useCallback((threadId: string) => new URL(shareDiscussionLink(token, threadId, { documentId, named }), window.location.origin).href, [token, documentId, named]);
   // Only a signed-in reader who may write is offered `@`: the candidate route refuses anyone else.
   const mentionScope = result?.writesEnabled && !anonymous ? scope : undefined;
   const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} signInHref={signInHref} draftKey={draftKey} restored={restored} mentionScope={mentionScope} onCancel={() => { discardDraft(); selection.clear(); }} onSubmit={async (body, idempotencyKey, mentions) => {

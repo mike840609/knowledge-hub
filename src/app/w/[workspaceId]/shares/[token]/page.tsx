@@ -67,7 +67,7 @@ export default async function HubSharePage(props: HubSharePageProps) {
   return (
     <div className="kh-share-page min-h-full bg-kh-bg">
       <SharedSkipLink />
-      <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={pagePath} actions={<SharedDownloadButton title={shared.title} markdown={shared.markdown} metadata={shared.metadata} />}>
+      <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={pagePath} named={shared.audience === "NAMED"} actions={<SharedDownloadButton title={shared.title} markdown={shared.markdown} metadata={shared.metadata} />}>
         <SharedReading document={shared} contentId={SHARED_CONTENT_ID} />
       </SharedReviewPanel>
     </div>

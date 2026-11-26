@@ -24,10 +24,10 @@ const thread = { id: THREAD, status: "OPEN", createdAt: "2026-11-01T00:00:00Z", 
   comments: [{ id: "c1", threadId: THREAD, body: "A remark", visibility: "VISIBLE", createdAt: "2026-11-01T00:00:00Z", editedAt: null, deleted: false, own: false }] };
 
 /** The page at `path`, an anonymous reader, the discussion opened by `?thread=` so its card is the open one. */
-async function render(path: string, documentId?: string) {
+async function render(path: string, documentId?: string, named = false) {
   window.history.replaceState(null, "", `${path}?${documentId ? `d=${documentId}&` : ""}thread=${THREAD}`);
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ threads: [thread], revisionId: "r1", writesEnabled: false, callerUserId: null }), { headers: { "content-type": "application/json" } })));
-  await act(async () => root.render(<SharedReviewPanel token="tok" documentId={documentId} revisionId="r1" markdown="Text." signInHref="/sign-in"><article data-review-document><p>Text.</p></article></SharedReviewPanel>));
+  await act(async () => root.render(<SharedReviewPanel token="tok" documentId={documentId} named={named} revisionId="r1" markdown="Text." signInHref="/sign-in"><article data-review-document><p>Text.</p></article></SharedReviewPanel>));
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
 }
 async function copy() {
@@ -58,11 +58,18 @@ it("keeps a folder page's document in the link", async () => {
   expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/s/tok?d=${DOC}&thread=${THREAD}`);
 });
 
-it("copies the /open form from the Hub's reader, never the copier's own Workspace path", async () => {
+it("copies a NAMED share's /open form, never the copier's own Workspace path", async () => {
+  const writeText = clipboard(async () => {});
+  await render("/w/my-space/shares/tok", undefined, true);
+  await copy();
+  expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/s/tok/open?thread=${THREAD}`);
+});
+
+it("copies a LINK share's own page, even where it is read in the Hub", async () => {
   const writeText = clipboard(async () => {});
   await render("/w/my-space/shares/tok");
   await copy();
-  expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/s/tok/open?thread=${THREAD}`);
+  expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/s/tok?thread=${THREAD}`);
 });
 
 it("shows the link to copy by hand where the clipboard refuses", async () => {

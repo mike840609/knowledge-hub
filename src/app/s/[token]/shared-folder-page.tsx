@@ -25,7 +25,7 @@ import { buttonClasses } from "@/components/ui/button";
  * app shell: `platformEntry` is null there, so it has no brand, Save, Open or footer, and `pagePath`
  * points the tree and the in-folder links at that reader instead of `/s/<token>`.
  */
-export function SharedFolderPage({ token, shared, platformEntry, signInHref, pagePath }: { token: string; shared: SharedTreeView; platformEntry: string | null; signInHref: string; pagePath?: string }) {
+export function SharedFolderPage({ token, shared, platformEntry, signInHref, pagePath }: { token: string; shared: SharedTreeView & { audience?: "LINK" | "NAMED" }; platformEntry: string | null; signInHref: string; pagePath?: string }) {
   const { document } = shared;
   // In the shell the page is its scroll pane's content, not a window: layout containment holds the
   // tree's fixed rail inside it rather than over the shell's own navigation.
@@ -93,7 +93,7 @@ export function SharedFolderPage({ token, shared, platformEntry, signInHref, pag
         {/* Before the panel, as it was the bar's first part: the rail still comes first in focus order. */}
         {tree}
         <div className="kh-share-folder-body">
-          <SharedReviewPanel key={document.documentId} token={token} documentId={document.documentId} revisionId={document.revisionId} markdown={document.markdown} signInHref={signInHref} brand={lead} actions={actions} wide>
+          <SharedReviewPanel key={document.documentId} token={token} documentId={document.documentId} revisionId={document.revisionId} markdown={document.markdown} signInHref={signInHref} brand={lead} actions={actions} named={shared.audience === "NAMED"} wide>
             <SharedReading document={document} links={sharedFolderLinks(token, document.links, pagePath)} contentId={SHARED_CONTENT_ID} />
           </SharedReviewPanel>
           {platformEntry === null ? null : <SharedFooter platformEntry={platformEntry} />}
