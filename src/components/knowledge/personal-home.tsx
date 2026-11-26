@@ -10,7 +10,7 @@ import { AttentionList, UnreadDiscussions, type HomeNotice } from "./home-attent
 import type { FreshnessReminder } from "@/modules/personal/application/knowledge-freshness";
 
 import Link from "next/link";
-import { FileText, PenLine, Star, MoreHorizontal, Search, Plus } from "lucide-react";
+import { ArrowRight, FileText, PenLine, Star, MoreHorizontal, Search, Plus } from "lucide-react";
 import { Kbd } from "@/components/ui/kbd";
 import { requestQuickSearch } from "@/components/search/search-nav-item";
 import { navigateListRows } from "@/lib/list-row-navigation";
@@ -30,12 +30,11 @@ import { RowPreviewButton } from "./row-preview-button";
 
 type Doc = ContinueDoc;
 
-/** A labelled group of rows; the label is the rail's group-label style, not a heading-size title. */
 function Section({ title, count, action, children }: { title: string; count?: number; action?: ReactNode; children: React.ReactNode }) {
   return (
     <section aria-label={title} className="min-w-0">
       <div className="flex items-baseline justify-between gap-3 px-3 pb-2">
-        <h2 className="text-caption font-medium text-kh-text-muted">
+        <h2 className="text-body font-semibold text-kh-text">
           {title}{count ? <span className="ml-1.5 text-kh-selected-text">{count}</span> : null}
         </h2>
         {action}
@@ -144,6 +143,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
   const runAction = useActionRunner({ onToggleFavorite: (sourceId, documentId) => update(state => toggleFavoriteDocument(state, documentShortcutKey(sourceId, documentId))) });
   const keyOf = (doc: Doc) => documentShortcutKey(doc.sourceId, doc.documentId);
   const lists = homeLists({ documents, drafts, recent: shortcuts.recent, openedAt: shortcuts.openedAt });
+  const [latestDraft, ...otherDrafts] = lists.drafts;
   const activeDocumentCount = documents.filter(doc => doc.status === "ACTIVE" && doc.sourceStatus === "ACTIVE").length;
   const [showAllRecent, setShowAllRecent] = useState(false);
   const hiddenRecent = lists.recent.length - RECENT_SHOWN;
@@ -195,12 +195,12 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
     );
   }
 
-  function draftHref(item: DraftItem): string {
-    if (!item.doc) return `/w/${workspaceId}/knowledge/new?compose`;
+  function draftDestination(item: DraftItem) {
+    if (!item.doc) return { href: `/w/${workspaceId}/knowledge/new?compose`, action: "Continue editing" };
     if (item.doc.status === "ACTIVE" && item.doc.sourceStatus === "ACTIVE" && item.doc.ownership === "HUB_MANAGED" && confirmed && access.actions.canWrite && access.workspace.lifecycleState !== "ARCHIVED") {
-      return `/w/${workspaceId}/knowledge/${item.doc.sourceId}/${item.doc.documentId}`;
+      return { href: `/w/${workspaceId}/knowledge/${item.doc.sourceId}/${item.doc.documentId}`, action: "Continue editing" };
     }
-    return `/w/${workspaceId}/knowledge/drafts/${item.doc.sourceId}/${item.doc.documentId}`;
+    return { href: `/w/${workspaceId}/knowledge/drafts/${item.doc.sourceId}/${item.doc.documentId}`, action: "Open draft" };
   }
 
   function draftProvenance(item: DraftItem): string | undefined {
@@ -213,21 +213,31 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
   function draftRow(item: DraftItem) {
     // Draft rows omit document actions. Matching slots align their times with Recent.
     const slot = buttonClasses({ variant: "ghost", icon: true, size: "sm", className: "invisible" });
-    return <Row key={item.id} href={draftHref(item)} icon={<PenLine size={14} aria-hidden="true" />} title={item.draft.title || "Untitled draft"} timestamp={item.at} provenance={draftProvenance(item)}
+    return <Row key={item.id} href={draftDestination(item).href} icon={<PenLine size={14} aria-hidden="true" />} title={item.draft.title || "Untitled draft"} timestamp={item.at} provenance={draftProvenance(item)}
       trailing={<span aria-hidden="true" className="mr-1 flex shrink-0"><span className={`${slot} hidden lg:inline-flex`} /><span className={slot} /><span className={slot} /></span>} />;
   }
 
+  const destination = latestDraft && draftDestination(latestDraft);
+  const latestDraftLocation = [latestDraft?.doc?.sourceName, latestDraft?.doc?.sourcePath].filter(Boolean).join(" · ");
   const recentDocs = recentShown.map(item => item.doc);
   const recentRow = (item: RecentItem, i: number) => documentRow(item.doc, { timestamp: item.at, eventLabel: item.label, showSource: sourceChanges(recentDocs, i) });
 
   return (
     <GuidanceVisibilityContext.Provider value={{ dismissed, setDismissed }}>
-    <div className="kh-page space-y-6 pb-6">
+    <div className="kh-page-wide space-y-6 pb-6">
       <PageHeader
         location="My Space"
         locationHref={`/w/${workspaceId}/home`}
         title="Home"
         actions={<>
+          <button type="button" data-home-search onClick={requestQuickSearch} aria-label="Search articles and notes ⌘K" aria-keyshortcuts="Meta+K Control+K" className={buttonClasses({ variant: "ghost" })}>
+            <Search size={16} aria-hidden="true" />
+            <span className="hidden md:inline">Search articles and notes</span>{" "}
+            <Kbd size="md" className="hidden md:inline-flex">⌘K</Kbd>
+          </button>
+          <Tooltip label="Create document" shortcut="C">
+            <Link className={buttonClasses()} href={newNoteHref} onClick={(event) => { if (!plainClick(event)) return; bufferTyping(); }} aria-keyshortcuts="C"><Plus size={16} aria-hidden="true" />Create document</Link>
+          </Tooltip>
           <MenuRoot>
             <MenuTrigger aria-label="Home actions" className={buttonClasses({ variant: "ghost", icon: true })}><MoreHorizontal size={16} aria-hidden="true" /></MenuTrigger>
             <MenuContent align="end" className="w-72">
@@ -240,29 +250,28 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
           </MenuRoot>
         </>}
       />
-      {/* Opens the same ⌘K palette as the rail, so there is still one place to search. */}
-      {/* WCAG 2.5.3: the badge is visible text in the field, so the name carries it too. The space
-          before the badge is real: axe joins visible text nodes without one, and the name has to
-          appear inside that run. A whitespace-only text node is not a flex item, so the field's
-          layout is unchanged. */}
-      <div className="flex items-center gap-3">
-        <button type="button" data-home-search onClick={requestQuickSearch} aria-label="Search articles and notes ⌘K" aria-keyshortcuts="Meta+K Control+K" className="kh-focus-ring flex min-h-8 min-w-0 flex-1 items-center gap-3 rounded-md border border-kh-border px-3 py-1 text-body text-kh-text-muted hover:bg-kh-bg-subtle">
-          <Search size={16} aria-hidden="true" />
-          <span className="flex-1 truncate text-left">Search articles and notes</span>{" "}
-          <Kbd size="md" className="hidden shrink-0 sm:inline-flex">⌘K</Kbd>
-        </button>
-        <Tooltip label="Create document" shortcut="C">
-          <Link className={buttonClasses({ variant: "secondary" })} href={newNoteHref} onClick={(event) => { if (!plainClick(event)) return; bufferTyping(); }} aria-keyshortcuts="C"><Plus size={16} aria-hidden="true" />Create document</Link>
-        </Tooltip>
-      </div>
       {slots?.guidance}
-      <AttentionList workspaceId={workspaceId} reminders={reminders} />
+      {latestDraft && destination && (
+        <section aria-label="Continue working">
+          <h2 className="mb-2 text-heading font-semibold text-kh-text">Continue working</h2>
+          <Link href={destination.href} className="kh-focus-ring flex min-h-20 items-center gap-3 rounded-lg border border-kh-border bg-kh-bg-selected px-4 py-3 hover:bg-kh-highlight">
+            <PenLine size={20} aria-hidden="true" className="hidden shrink-0 text-kh-selected-text sm:block" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-title font-semibold text-kh-text">{latestDraft.draft.title || "Untitled draft"}</span>
+              <span className="block truncate text-caption text-kh-text-secondary">
+                {draftProvenance(latestDraft) ?? "Draft"} · Edited <Timestamp value={latestDraft.at} variant="relative" />
+                {latestDraftLocation && <span className="block truncate sm:inline"> · {latestDraftLocation}</span>}
+              </span>
+            </span>
+            <span className={buttonClasses({ size: "sm" })}>
+              {destination.action}<ArrowRight size={14} aria-hidden="true" />
+            </span>
+          </Link>
+        </section>
+      )}
       {/* Wide screens set Discussions and Favorites beside the work lists, so the whole page fits without scrolling. */}
       <div className="-mx-3 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-6">
-          {lists.drafts.length ? <Section title="Drafts" count={lists.drafts.length}>
-            <ul onKeyDown={navigateListRows} className="space-y-0.5">{lists.drafts.map(draftRow)}</ul>
-          </Section> : null}
           <Section title="Recent">
             {lists.recent.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{recentShown.map(recentRow)}</ul>
               : <EmptyLine>Documents you edit or open will appear here.{activeDocumentCount === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>}
@@ -270,6 +279,9 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
               {showAllRecent ? "Show fewer" : `Show ${hiddenRecent} more`}
             </Button> : null}
           </Section>
+          {otherDrafts.length > 0 && <Section title="Other drafts" count={otherDrafts.length}>
+            <ul onKeyDown={navigateListRows} className="space-y-0.5">{otherDrafts.map(draftRow)}</ul>
+          </Section>}
         </div>
         <div className="min-w-0 space-y-6">
           <Section title="Discussions" count={notices.length} action={<Link className="kh-focus-ring inline-flex min-h-6 items-center rounded-md text-caption text-kh-link" href={`/w/${workspaceId}/inbox`}>Open Inbox</Link>}>
@@ -282,6 +294,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
           <Section title="Tasks" action={<Link className="kh-control kh-focus-ring inline-flex min-h-8 items-center rounded-md text-body text-kh-link hover:underline" href={`/w/${workspaceId}/tasks`}>Open Tasks</Link>}>
             <p className="px-3 text-caption text-kh-text-muted">Browse results from coding agents.</p>
           </Section>
+          <AttentionList workspaceId={workspaceId} reminders={reminders} />
         </div>
       </div>
     </div>

@@ -52,7 +52,7 @@ test("a draft survives archiving and can be restored from Home", { tag: "@smoke-
   expect(archived.ok()).toBe(true);
 
   await page.goto(`/w/${workspaceId}/home`);
-  const drafts = page.getByRole("region", { name: "Drafts", exact: true });
+  const drafts = page.getByRole("region", { name: "Continue working", exact: true });
   const row = drafts.getByRole("link").filter({ has: page.getByText("Draft recovery", { exact: true }) });
   await expect(row).toHaveAttribute("href", `/w/${workspaceId}/knowledge/drafts/${document.sourceId}/${document.documentId}`);
   await row.click();

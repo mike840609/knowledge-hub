@@ -43,7 +43,8 @@ it("leads with Recent and Favorites, searches through ⌘K and leaves the change
   expect(html).toContain('aria-label="Recent"');
   expect(html).toContain('aria-label="Favorites"');
   expect(html.indexOf('aria-label="Recent"')).toBeLessThan(html.indexOf('aria-label="Favorites"'));
-  expect(html).not.toContain('aria-label="Drafts"');
+  expect(html).not.toContain('aria-label="Continue working"');
+  expect(html).not.toContain('aria-label="Other drafts"');
   expect(html).not.toContain('aria-label="Updates"');
   expect(html).not.toContain('role="tablist"');
   expect(html).not.toContain("Needs attention");
@@ -57,13 +58,21 @@ it("leads with Recent and Favorites, searches through ⌘K and leaves the change
   expect(html.indexOf('aria-label="Discussions"')).toBeLessThan(html.indexOf('aria-label="Favorites"'));
 });
 
-it("puts drafts above Recent, counted in the accent, and edits in muted text", () => {
-  const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[doc("a"), doc("b", { updatedAt: "2026-10-01T00:00:00.000Z" })]} drafts={[{ key: "draft:a", title: "Doc a", sourceId: "src", updatedAt: "2026-10-02T00:00:00.000Z" }]} />);
-  const drafts = html.slice(html.indexOf('aria-label="Drafts"'), html.indexOf('aria-label="Recent"'));
-  expect(html.indexOf('aria-label="Drafts"')).toBeGreaterThan(-1);
-  expect(drafts).toContain('href="/w/ws/knowledge/src/a"');
-  expect(drafts).toMatch(/text-kh-selected-text[^"]*">1</);
-  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Favorites"'));
+it("features only the newest draft and puts the remaining drafts below Recent", () => {
+  const drafts = [
+    { key: "draft:new", title: "Older note", sourceId: null, updatedAt: "2026-10-01T00:00:00.000Z" },
+    { key: "draft:a", title: "Latest note", sourceId: "src", updatedAt: "2026-10-02T00:00:00.000Z" },
+  ];
+  const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[doc("a"), doc("b", { updatedAt: "2026-10-01T00:00:00.000Z" })]} drafts={drafts} />);
+  const featured = html.slice(html.indexOf('aria-label="Continue working"'), html.indexOf('aria-label="Recent"'));
+  expect(featured).toContain("Latest note");
+  expect(featured).toContain("Continue editing");
+  expect(featured).toContain('href="/w/ws/knowledge/src/a"');
+  expect(html.match(/Latest note/g)).toHaveLength(1);
+  const others = html.slice(html.indexOf('aria-label="Other drafts"'), html.indexOf('aria-label="Discussions"'));
+  expect(others).toContain("Older note");
+  expect(others).toContain('href="/w/ws/knowledge/new?compose"');
+  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Other drafts"'));
   expect(recent).toContain('href="/w/ws/knowledge/src/b"');
   expect(recent).not.toContain('href="/w/ws/knowledge/src/a"');
   // The event is read out and shown in the time's tooltip; the column holds only the short time.
@@ -79,9 +88,11 @@ it("links an archived document's draft to recovery, not the editor", () => {
       drafts={[{ key: "draft:a", title: "Doc a", sourceId: "src", updatedAt: "2026-10-02T00:00:00.000Z" }]}
     />,
   );
-  const drafts = html.slice(html.indexOf('aria-label="Drafts"'), html.indexOf('aria-label="Recent"'));
+  const drafts = html.slice(html.indexOf('aria-label="Continue working"'), html.indexOf('aria-label="Recent"'));
   expect(drafts).toContain('href="/w/ws/knowledge/drafts/src/a"');
   expect(drafts).toContain("Original document archived");
+  expect(drafts).toContain("Open draft");
+  expect(html).not.toContain('aria-label="Other drafts"');
   expect(drafts).not.toContain("/edit");
 });
 
@@ -126,7 +137,7 @@ it("puts source reminders in the attention strip and unread comments in Discussi
   const withReminders = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} reminders={reminders} />);
   expect(withReminders).toContain('aria-label="Needs attention"');
   const withNotices = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} notices={notices} />);
-  expect(withReminders.indexOf('aria-label="Needs attention"')).toBeLessThan(withReminders.indexOf('aria-label="Recent"'));
+  expect(withReminders.indexOf('aria-label="Needs attention"')).toBeGreaterThan(withReminders.indexOf('aria-label="Favorites"'));
   expect(withNotices).not.toContain("Needs attention");
   expect(withNotices).not.toContain("No new comments or replies.");
   const discussions = withNotices.slice(withNotices.indexOf('aria-label="Discussions"'), withNotices.indexOf('aria-label="Favorites"'));
