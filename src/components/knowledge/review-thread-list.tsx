@@ -238,6 +238,11 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
   // A copied link says so on its card for a moment; where the clipboard refuses, the card shows the link to copy by hand.
   const [copied, setCopied] = useState<{ threadId: string; manual?: string }>();
   useEffect(() => { if (!copied || copied.manual) return; const timer = window.setTimeout(() => setCopied(undefined), 3000); return () => window.clearTimeout(timer); }, [copied]);
+  // The field to copy by hand takes focus once the menu has finished closing: a menu closing hands
+  // focus back to its trigger, which would otherwise take it from the field again.
+  const manualInput = useRef<HTMLInputElement>(null);
+  const [menuClosed, setMenuClosed] = useState(0);
+  useEffect(() => { if (copied?.manual) { manualInput.current?.focus(); manualInput.current?.select(); } }, [copied, menuClosed]);
   async function copyLink(threadId: string) {
     const url = linkTo!(threadId);
     try { await navigator.clipboard.writeText(url); setCopied({ threadId }); } catch { setCopied({ threadId, manual: url }); }
@@ -344,7 +349,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
             {/* The row keeps the name's 24px: its 32px buttons overhang it rather than push the remark down. */}
             <div className="-my-1 flex">
             {moderate && index === 0 && <Tooltip label={thread.status === "OPEN" ? "Resolve" : "Reopen"}><Button type="button" variant="ghost" icon aria-label={thread.status === "OPEN" ? "Resolve" : "Reopen"} disabled={busy || !canResolve} onClick={() => void act(thread.id, "resolution", thread.status === "OPEN" ? "RESOLVED" : "OPEN")}><Check className="size-4" aria-hidden="true" /></Button></Tooltip>}
-            {(hides || mine || (copies && index === 0)) && <MenuRoot><MenuTrigger aria-label={index === 0 ? "Comment options" : "Reply options"} className={buttonClasses({variant:"ghost",icon:true})}><MoreHorizontal className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent align="end">{copies && index === 0 && <MenuItem onClick={() => void copyLink(thread.id)}>Copy link to discussion</MenuItem>}{canEdit && <MenuItem disabled={busy} onClick={() => setEditing(comment.id)}>Edit</MenuItem>}{mine && <MenuItem disabled={busy} onClick={() => setPendingDelete({ threadId: thread.id, commentId: comment.id })}>Delete</MenuItem>}{hides && <MenuItem disabled={busy} onClick={() => void act(thread.id, "visibility", index === 0 ? (owner?.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN") : (comment.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN"), index === 0 ? undefined : comment.id)}>{index === 0 ? (owner?.visibility === "HIDDEN" ? "Unhide thread" : "Hide thread") : comment.visibility === "HIDDEN" ? "Unhide reply" : "Hide reply"}</MenuItem>}</MenuContent></MenuRoot>}
+            {(hides || mine || (copies && index === 0)) && <MenuRoot onOpenChangeComplete={open => { if (!open && index === 0) setMenuClosed(count => count + 1); }}><MenuTrigger aria-label={index === 0 ? "Comment options" : "Reply options"} className={buttonClasses({variant:"ghost",icon:true})}><MoreHorizontal className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent align="end">{copies && index === 0 && <MenuItem onClick={() => void copyLink(thread.id)}>Copy link to discussion</MenuItem>}{canEdit && <MenuItem disabled={busy} onClick={() => setEditing(comment.id)}>Edit</MenuItem>}{mine && <MenuItem disabled={busy} onClick={() => setPendingDelete({ threadId: thread.id, commentId: comment.id })}>Delete</MenuItem>}{hides && <MenuItem disabled={busy} onClick={() => void act(thread.id, "visibility", index === 0 ? (owner?.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN") : (comment.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN"), index === 0 ? undefined : comment.id)}>{index === 0 ? (owner?.visibility === "HIDDEN" ? "Unhide thread" : "Hide thread") : comment.visibility === "HIDDEN" ? "Unhide reply" : "Hide reply"}</MenuItem>}</MenuContent></MenuRoot>}
             </div>
           </div>
           {comment.deleted
@@ -375,7 +380,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
         {copies && <div role="status" className="text-caption text-kh-text-muted">{copied?.threadId === thread.id && (copied.manual
           ? <p className="mt-2">Couldn’t copy the link. Copy it from the box below.</p>
           : <p className="mt-2 flex items-center gap-1"><Check className="size-4" aria-hidden="true" />Link copied</p>)}</div>}
-        {copies && copied?.threadId === thread.id && copied.manual && <Input readOnly size="sm" aria-label="Link to discussion" value={copied.manual} onFocus={event => event.currentTarget.select()} autoFocus className="mt-1" />}
+        {copies && copied?.threadId === thread.id && copied.manual && <Input ref={manualInput} readOnly size="sm" aria-label="Link to discussion" value={copied.manual} onFocus={event => event.currentTarget.select()} className="mt-1" />}
         {canReply && <div hidden={compact}><ReviewReplyForm signInHref={reauthHref} draftKey={reviewDraftKey("reply", thread.id)} openRequest={replyRequest?.threadId === thread.id ? replyRequest.nonce : 0} mentionScope={mentionScope} onSubmit={(body, key, mentions, mentionLinkId) => reply(thread.id, body, key, mentions, mentionLinkId)} /></div>}
         </div></div>
       </section>;

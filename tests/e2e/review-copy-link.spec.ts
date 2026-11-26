@@ -77,3 +77,26 @@ test("a NAMED share's discussion link is its /open form, which leads each recipi
   await expectOpenedOn(page, copied, threadId);
   await expect(page).toHaveURL(new RegExp(`/w/[^/]+/shares/${token}\\?thread=${threadId}$`));
 });
+
+test("where the clipboard refuses, the link is shown, focused and selected, to copy by hand", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  const token = doc.links[0].path.split("/").pop()!;
+  const viewer = phase3Origin("viewer");
+  const threadId = await startThread(request, viewer, token, doc.revisionId, "No clipboard here");
+  await page.addInitScript(() => { Object.defineProperty(navigator, "clipboard", { value: { writeText: () => Promise.reject(new Error("denied")) }, configurable: true }); });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${viewer}${doc.links[0].path}`);
+  await openReviewDiscussions(page);
+  const card = page.locator(`[data-review-thread="${threadId}"]`).filter({ visible: true });
+  await card.click();
+  await card.getByRole("button", { name: "Comment options" }).click();
+  await page.getByRole("menuitem", { name: "Copy link to discussion" }).click();
+  await expect(card.getByRole("status")).toContainText("Couldn’t copy the link.");
+  const field = card.getByRole("textbox", { name: "Link to discussion" });
+  await expect(field).toHaveValue(`${viewer}/s/${token}?thread=${threadId}`);
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  // Focus stays in the field after the menu has closed: nothing hands it back to the menu's trigger.
+  await page.waitForTimeout(400);
+  await expect(field).toBeFocused();
+  expect(await field.evaluate((input: HTMLInputElement) => input.selectionEnd! - input.selectionStart!)).toBe(`${viewer}/s/${token}?thread=${threadId}`.length);
+});

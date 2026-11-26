@@ -77,7 +77,11 @@ it("shows the link to copy by hand where the clipboard refuses", async () => {
   await render("/s/tok");
   const card = await copy();
   expect(card.querySelector('[role="status"]')!.textContent).toContain("Couldn’t copy the link.");
-  expect(card.querySelector<HTMLInputElement>('input[aria-label="Link to discussion"]')!.value).toBe(`${window.location.origin}/s/tok?thread=${THREAD}`);
+  const field = card.querySelector<HTMLInputElement>('input[aria-label="Link to discussion"]')!;
+  expect(field.value).toBe(`${window.location.origin}/s/tok?thread=${THREAD}`);
+  // Once the menu has closed (and handed focus back to its trigger), the field has it, selected.
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
+  expect(document.activeElement).toBe(field);
 });
 
 it("writes the link as the share's own page or its /open form", () => {
