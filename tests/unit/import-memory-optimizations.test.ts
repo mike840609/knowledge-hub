@@ -378,6 +378,10 @@ function applyUow(snapshot: ImportSnapshot, entries: ImportSnapshotEntry[], list
   };
 }
 
+function applyService(snapshot: ImportSnapshot, entries: ImportSnapshotEntry[], listCalls: { count: number }): ApplyFolderImportService {
+  return new ApplyFolderImportService(applyUow(snapshot, entries, listCalls), { now: () => new Date("2026-09-13T10:05:00.000Z") });
+}
+
 describe("ApplyFolderImportService plan-scoped link pre-extraction", () => {
   it("skips staged entry reads before locking when the plan creates or revises no documents", async () => {
     const entries = [
@@ -389,7 +393,7 @@ describe("ApplyFolderImportService plan-scoped link pre-extraction", () => {
     const snapshot = readySnapshotFrom(plan, entries);
     const listCalls = { count: 0 };
 
-    const rejection = new ApplyFolderImportService(applyUow(snapshot, entries, listCalls)).apply(fixtureCaller(), snapshot.id);
+    const rejection = applyService(snapshot, entries, listCalls).apply(fixtureCaller(), snapshot.id);
 
     await expect(rejection).rejects.toMatchObject({ code: "IMPORT_SOURCE_NOT_FOUND" });
     // Only Apply's own integrity-verification read inside the transaction remains.
@@ -414,9 +418,53 @@ describe("ApplyFolderImportService plan-scoped link pre-extraction", () => {
     const snapshot = readySnapshotFrom(plan, entries);
     const listCalls = { count: 0 };
 
-    const rejection = new ApplyFolderImportService(applyUow(snapshot, entries, listCalls)).apply(fixtureCaller(), snapshot.id);
+    const rejection = applyService(snapshot, entries, listCalls).apply(fixtureCaller(), snapshot.id);
 
     await expect(rejection).rejects.toMatchObject({ code: "IMPORT_SOURCE_NOT_FOUND" });
     expect(linkParsing.parsed).toEqual([entries[0].markdown]);
+  });
+
+  it("parses links for the upload key of a revise action only", async () => {
+    const entries = [
+      documentEntry("docs/a.md", { uploadKey: "k0" }),
+      documentEntry("docs/b.md", { uploadKey: "k1" }),
+      documentEntry("docs/c.md", { uploadKey: "k2" }),
+    ];
+    const plan = emptyPlan();
+    plan.documents.revise.push({
+      entryId: "entry-b",
+      documentId: "document-b",
+      expectedCurrentRevisionId: "revision-b",
+      content: { uploadKey: "k1", title: "B", metadata: {}, contentHash: "hash-b" },
+    });
+    const snapshot = readySnapshotFrom(plan, entries);
+    const listCalls = { count: 0 };
+
+    const rejection = applyService(snapshot, entries, listCalls).apply(fixtureCaller(), snapshot.id);
+
+    await expect(rejection).rejects.toMatchObject({ code: "IMPORT_SOURCE_NOT_FOUND" });
+    expect(linkParsing.parsed).toEqual([entries[1].markdown]);
+  });
+
+  it("parses inline legacy content.markdown even when no staged entry is referenced", async () => {
+    const entries = [documentEntry("docs/a.md", { uploadKey: "k0" }), documentEntry("docs/b.md", { uploadKey: "k1" })];
+    const inlineMarkdown = "# Legacy\n\nSee [[Target]].\n";
+    const plan = emptyPlan();
+    plan.documents.create.push({
+      sourcePath: "docs/legacy.md",
+      parentPath: null,
+      desiredPosition: 0,
+      externalId: null,
+      content: { title: "Legacy", markdown: inlineMarkdown, metadata: {}, contentHash: "hash-legacy" },
+    });
+    const snapshot = readySnapshotFrom(plan, entries);
+    const listCalls = { count: 0 };
+
+    const rejection = applyService(snapshot, entries, listCalls).apply(fixtureCaller(), snapshot.id);
+
+    await expect(rejection).rejects.toMatchObject({ code: "IMPORT_SOURCE_NOT_FOUND" });
+    expect(linkParsing.parsed).toEqual([inlineMarkdown]);
+    // No upload keys were referenced, so the pre-pass never read staged entries.
+    expect(listCalls.count).toBe(1);
   });
 });

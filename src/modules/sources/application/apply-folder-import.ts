@@ -97,9 +97,6 @@ export class ApplyFolderImportService {
       for (const entry of entries) {
         if (entry.entryType !== "DOCUMENT" || entry.markdown === null || !neededUploadKeys.has(entry.uploadKey)) continue;
         extracted.set(hash(entry.markdown), extractDocumentLinks(entry.markdown));
-        // The links are all this pass needs from the body; release it before the
-        // transaction loads its own copy so both never sit in memory together.
-        (entry as { markdown: string | null }).markdown = null;
       }
       return extracted;
     }).catch(() => new Map<string, ExtractedLink[]>());

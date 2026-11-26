@@ -143,10 +143,12 @@ export function hashImportPlan(plan: FolderImportPlan): string {
  * in the digest and their relative order cannot change the result.
  *
  * The serialized payload is expensive (it walks the whole entry), so it is
- * computed lazily only to break a tie, cached per entry while the sort runs,
- * and then streamed into the hash instead of being collected into an array of
- * every serialization. Peak memory is the entries plus one payload at a time,
- * not every payload plus the concatenated canonical JSON document.
+ * computed lazily only to break a tie and cached in the `WeakMap` just for the
+ * entries that tie on `sourcePath`. Non-tied entries are never serialized
+ * during sorting; each is serialized once, immediately before it is streamed
+ * into the hash, so payloads are never all collected into an array. Peak
+ * memory is the entries plus one payload at a time, not every payload plus the
+ * concatenated canonical JSON document.
  */
 export function hashReadyImportSnapshot(
   snapshot: Pick<ImportSnapshot, "adapterType" | "adapterVersion" | "planVersion" | "workspaceId" | "sourceId" | "basedOnVersion" | "importScope">,
