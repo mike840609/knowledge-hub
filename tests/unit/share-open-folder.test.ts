@@ -105,6 +105,17 @@ describe("/s/:token/open for a NAMED link", () => {
     expect(fixture.target).toHaveBeenLastCalledWith("tok", inFolder, "reader");
   });
 
+  it("carries a discussion to open as `?thread=`, after a folder's `?d=`", async () => {
+    const thread = "0192f3a4-5b6c-7d8e-9f01-0000000000aa";
+    fixture.target.mockResolvedValueOnce(null).mockResolvedValueOnce({ kind: "FOLDER", documentId: inFolder, audience: "NAMED" });
+    await expect(OpenSharedDocument({ params: Promise.resolve({ token: "tok" }), searchParams: Promise.resolve({ d: inFolder, thread }) })).rejects.toThrow(`redirect:/w/personal/shares/tok?d=${inFolder}&thread=${thread}`);
+    fixture.target.mockResolvedValueOnce(null).mockResolvedValueOnce({ kind: "DOCUMENT", documentId: "named-doc", audience: "NAMED" });
+    await expect(OpenSharedDocument({ params: Promise.resolve({ token: "tok" }), searchParams: Promise.resolve({ thread }) })).rejects.toThrow(`redirect:/w/personal/shares/tok?thread=${thread}`);
+    // A malformed one is dropped, not an error.
+    fixture.target.mockResolvedValueOnce(null).mockResolvedValueOnce({ kind: "DOCUMENT", documentId: "named-doc", audience: "NAMED" });
+    await expect(OpenSharedDocument({ params: Promise.resolve({ token: "tok" }), searchParams: Promise.resolve({ thread: "<x>" }) })).rejects.toThrow(/redirect:\/w\/personal\/shares\/tok$/);
+  });
+
   it("opens an empty named folder without `?d=`", async () => {
     fixture.target.mockResolvedValueOnce(null).mockResolvedValueOnce({ kind: "FOLDER", documentId: null, audience: "NAMED" });
     await expect(open()).rejects.toThrow("redirect:/w/personal/shares/tok");

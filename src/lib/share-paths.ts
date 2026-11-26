@@ -53,6 +53,16 @@ export function shareDiscussionHref(link: { audience: "LINK" | "NAMED"; token: s
   return page ? `${page}?${documentId ? `d=${documentId}&` : ""}thread=${threadId}` : null;
 }
 
+/**
+ * A discussion read through a share, as a link a reader may pass on ("Copy link to discussion"): a LINK
+ * share's anonymous page, or for a NAMED share read in the Hub its `/open` form, which sends each
+ * recipient to their own Hub reader (a Hub path names the copier's own Workspace). Navigation only: it
+ * opens nothing the link itself does not, for no one the link does not admit.
+ */
+export function shareDiscussionLink(token: string, threadId: string, options: { documentId?: string; named?: boolean } = {}): string {
+  return `${sharedPagePath(token)}${options.named ? "/open" : ""}?${options.documentId ? `d=${options.documentId}&` : ""}thread=${encodeURIComponent(threadId)}`;
+}
+
 /** A document of a shared folder, read through the folder's link on `pagePath`: the anonymous page, or the Hub's reader. */
 export function sharedFolderHref(token: string, documentId: string, pagePath = sharedPagePath(token)): string {
   return `${pagePath}?d=${documentId}`;

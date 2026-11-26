@@ -8,7 +8,7 @@ import type { ReviewThreadView } from "@/modules/knowledge/domain/document-revie
 import type { InboxDiscussionView } from "@/modules/knowledge/domain/inbox-discussion";
 import { DocumentPane } from "./document-pane";
 import { governanceRequest } from "@/components/workspaces/governance-error";
-import { sharedDocumentParam } from "@/lib/share-paths";
+import { shareDiscussionLink, sharedDocumentParam } from "@/lib/share-paths";
 import { MARKDOWN_ARTICLE } from "./markdown-article";
 import { MarkdownRenderer } from "./markdown-renderer";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
@@ -54,7 +54,7 @@ function OwnerDocument({ entry, onChanged }: { entry: InboxDiscussionView; onCha
     <DocumentPane>
       <div className="kh-reading-column py-6">
         {!markdownOpensWithHeading(peek.markdown) && <h1 className="mb-6 text-page-title font-semibold tracking-tight text-kh-text">{peek.title}</h1>}
-        <OwnerReviewPanel documentId={entry.documentId} revisionId={peek.revisionId} markdown={peek.markdown} thread={entry.threadId} onChanged={onChanged}
+        <OwnerReviewPanel documentId={entry.documentId} revisionId={peek.revisionId} markdown={peek.markdown} thread={entry.threadId} onChanged={onChanged} documentPath={entry.href ? entry.href.split("?")[0] : undefined}
           readOnly={peek.status !== "ACTIVE" || peek.sourceStatus !== "ACTIVE"}>
           <article data-review-document className={MARKDOWN_ARTICLE}>
             <MarkdownRenderer markdown={peek.markdown} links={peek.linkView ? renderedLinksFrom(peek.linkView) : undefined} />
@@ -98,6 +98,7 @@ function FollowedDiscussion({ entry, onChanged }: { entry: InboxDiscussionView; 
   const share = async (threadId: string, path: string, body: object) => { await reviewRequest(`/api/share-review/threads/${path}`, { token, documentId, ...body }); await load(); onChanged?.(threadId); };
   return <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
     <ReviewThreadList threads={[loaded.thread]} activeThreadId={loaded.thread.id} filter="ALL" onFilterChange={() => {}} writesEnabled={loaded.writesEnabled}
+      linkTo={threadId => new URL(shareDiscussionLink(token, threadId, { documentId, named: !entry.href.startsWith("/s/") }), window.location.origin).href}
       mentionScope={loaded.writesEnabled && loaded.signedIn ? (documentId ? { token, documentId } : { token }) : undefined}
       reply={(threadId, body, idempotencyKey, mentions) => share(threadId, `${threadId}/replies`, { body, idempotencyKey, ...(mentions.length ? { mentions } : {}) })}
       follow={(threadId, following) => share(threadId, `${threadId}/follow`, { following })}

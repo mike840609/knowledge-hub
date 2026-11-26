@@ -287,3 +287,10 @@ Where the build differs from the text above, this section is the record.
    cannot fill the window and hide an older live share, and are not judged
    again on every poll. A document archived and later restored therefore
    loses its share's unread mark.
+10. **`/s/<token>/open` carries `?thread=` to the Hub reader** (2026-11-26, inline review
+   spec "Copy link to discussion"). A discussion's copied link on a NAMED share is
+   `/s/<token>/open?thread=<id>` (with `d=` on a folder), never the copier's own
+   `/w/<ws>/shares/…` path. The route passes a well-formed `thread` on to the reader's
+   own Hub reader after its usual judgement, and drops a malformed one; it is navigation
+   only, judged by nothing, and the reader shows the discussion only where its own read
+   lists it.

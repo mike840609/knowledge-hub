@@ -5,6 +5,7 @@ import type { OwnerReviewThreadView, ReviewAnchor, ReviewThreadView } from "@/mo
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Timestamp } from "@/components/ui/timestamp";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Bell, BellDot, BellOff, Check, ChevronDown, CircleAlert, CircleArrowDown, MoreHorizontal } from "lucide-react";
 import { MenuRoot, MenuTrigger, MenuContent, MenuItem, MenuRadioGroup, MenuRadioItem } from "@/components/ui/menu";
 import { buttonClasses } from "@/components/ui/button";
@@ -170,7 +171,7 @@ export function ReviewNextButtons({ threads, activeThreadId, onActivate, filter,
   </div>;
 }
 
-export function ReviewThreadList({ threads, writesEnabled, reply, moderate, author, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange, draft, signInHref, reauthHref, unreadThreadIds, follow, mentionScope, emptyHint = "Select text in the document to start a comment." }: {
+export function ReviewThreadList({ threads, writesEnabled, reply, moderate, author, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange, draft, signInHref, reauthHref, unreadThreadIds, follow, mentionScope, linkTo, emptyHint = "Select text in the document to start a comment." }: {
   /** Where a signed-in reader whose sign-in expired signs in again (a reply or edit offers it on that failure). */
   reauthHref?: string;
   threads: (ReviewThreadView | OwnerReviewThreadView)[];
@@ -198,12 +199,21 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
   follow?: (threadId: string, following: boolean) => Promise<void>;
   /** Offers the `@` list in replies (never in edits). */
   mentionScope?: MentionScope;
+  /** The absolute address that reopens a discussion where this list is read; offers **Copy link to discussion**. */
+  linkTo?: (threadId: string) => string;
 }) {
   // Which previews cut their remark short: only those have more to show when opened.
   const [clamped, setClamped] = useState<Record<string, boolean>>({});
   const [pendingHide, setPendingHide] = useState<{ threadId: string; commentId?: string }>();
   const [pendingDelete, setPendingDelete] = useState<{ threadId: string; commentId: string }>();
   const [editing, setEditing] = useState<string>();
+  // A copied link says so on its card for a moment; where the clipboard refuses, the card shows the link to copy by hand.
+  const [copied, setCopied] = useState<{ threadId: string; manual?: string }>();
+  useEffect(() => { if (!copied || copied.manual) return; const timer = window.setTimeout(() => setCopied(undefined), 3000); return () => window.clearTimeout(timer); }, [copied]);
+  async function copyLink(threadId: string) {
+    const url = linkTo!(threadId);
+    try { await navigator.clipboard.writeText(url); setCopied({ threadId }); } catch { setCopied({ threadId, manual: url }); }
+  }
   async function remove(target: { threadId: string; commentId: string }) {
     setBusy(true); setError(undefined);
     try { await author?.remove(target.threadId, target.commentId); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not delete comment."); } finally { setBusy(false); setPendingDelete(undefined); }
@@ -269,6 +279,8 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
       const active = activeThreadId === thread.id;
       const compact = !!onActivate && !active;
       const canReply = thread.status === "OPEN" && owner?.visibility !== "HIDDEN" && writesEnabled;
+      // A read, so offered to every reader, anonymous included; on the open card, as a preview keeps its one button.
+      const copies = !!linkTo && (!compact || !!moderate);
       return <section key={thread.id} data-review-thread={thread.id} data-active={active ? "" : undefined} tabIndex={-1} aria-label="Comment thread" aria-current={active ? "true" : undefined} onFocus={event => {
         // A pointer focuses on mousedown. Moving the card then would move the button
         // out from under mouseup and swallow its click. Keyboard focus can activate now.
@@ -299,7 +311,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
             {/* The row keeps the name's 24px: its 32px buttons overhang it rather than push the remark down. */}
             <div className="-my-1 flex">
             {moderate && index === 0 && <Tooltip label={thread.status === "OPEN" ? "Resolve" : "Reopen"}><Button type="button" variant="ghost" icon aria-label={thread.status === "OPEN" ? "Resolve" : "Reopen"} disabled={busy || !canResolve} onClick={() => void act(thread.id, "resolution", thread.status === "OPEN" ? "RESOLVED" : "OPEN")}><Check className="size-4" aria-hidden="true" /></Button></Tooltip>}
-            {(hides || mine) && <MenuRoot><MenuTrigger aria-label={index === 0 ? "Comment options" : "Reply options"} className={buttonClasses({variant:"ghost",icon:true})}><MoreHorizontal className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent align="end">{canEdit && <MenuItem disabled={busy} onClick={() => setEditing(comment.id)}>Edit</MenuItem>}{mine && <MenuItem disabled={busy} onClick={() => setPendingDelete({ threadId: thread.id, commentId: comment.id })}>Delete</MenuItem>}{hides && <MenuItem disabled={busy} onClick={() => void act(thread.id, "visibility", index === 0 ? (owner?.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN") : (comment.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN"), index === 0 ? undefined : comment.id)}>{index === 0 ? (owner?.visibility === "HIDDEN" ? "Unhide thread" : "Hide thread") : comment.visibility === "HIDDEN" ? "Unhide reply" : "Hide reply"}</MenuItem>}</MenuContent></MenuRoot>}
+            {(hides || mine || (copies && index === 0)) && <MenuRoot><MenuTrigger aria-label={index === 0 ? "Comment options" : "Reply options"} className={buttonClasses({variant:"ghost",icon:true})}><MoreHorizontal className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent align="end">{copies && index === 0 && <MenuItem onClick={() => void copyLink(thread.id)}>Copy link to discussion</MenuItem>}{canEdit && <MenuItem disabled={busy} onClick={() => setEditing(comment.id)}>Edit</MenuItem>}{mine && <MenuItem disabled={busy} onClick={() => setPendingDelete({ threadId: thread.id, commentId: comment.id })}>Delete</MenuItem>}{hides && <MenuItem disabled={busy} onClick={() => void act(thread.id, "visibility", index === 0 ? (owner?.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN") : (comment.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN"), index === 0 ? undefined : comment.id)}>{index === 0 ? (owner?.visibility === "HIDDEN" ? "Unhide thread" : "Hide thread") : comment.visibility === "HIDDEN" ? "Unhide reply" : "Hide reply"}</MenuItem>}</MenuContent></MenuRoot>}
             </div>
           </div>
           {comment.deleted
@@ -326,6 +338,11 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
           event.stopPropagation(); setBusy(true); setError(undefined);
           try { await follow(thread.id, !thread.following); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not update following."); } finally { setBusy(false); }
         }}>{thread.following ? <BellOff className="size-4" aria-hidden="true" /> : <Bell className="size-4" aria-hidden="true" />}{thread.following ? "Unfollow" : "Follow replies"}</Button></div>}
+        {/* Mounted with the card, so what it says is announced. */}
+        {copies && <div role="status" className="text-caption text-kh-text-muted">{copied?.threadId === thread.id && (copied.manual
+          ? <p className="mt-2">Couldn’t copy the link. Copy it from the box below.</p>
+          : <p className="mt-2 flex items-center gap-1"><Check className="size-4" aria-hidden="true" />Link copied</p>)}</div>}
+        {copies && copied?.threadId === thread.id && copied.manual && <Input readOnly size="sm" aria-label="Link to discussion" value={copied.manual} onFocus={event => event.currentTarget.select()} autoFocus className="mt-1" />}
         {canReply && <div hidden={compact}><ReviewReplyForm signInHref={reauthHref} draftKey={reviewDraftKey("reply", thread.id)} openRequest={replyRequest?.threadId === thread.id ? replyRequest.nonce : 0} mentionScope={mentionScope} onSubmit={(body, key, mentions, mentionLinkId) => reply(thread.id, body, key, mentions, mentionLinkId)} /></div>}
         </div></div>
       </section>;

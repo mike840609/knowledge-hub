@@ -16,6 +16,7 @@ import { reviewRailInline, useReviewRailInline, useReviewRailOpen } from "./revi
 import { awaitingReader, newComments, parseDismissed, sharedDismissedKey } from "./review-auto-open";
 import { readStored, removeStored, writeStored } from "@/components/shell/use-persisted-state";
 import { COMMENT_SHORTCUT, useCommentShortcut } from "./review-shortcut";
+import { shareDiscussionLink, sharedPagePath } from "@/lib/share-paths";
 
 type DiscussionResult = { threads: ReviewThreadView[]; revisionId: string; writesEnabled: boolean; callerUserId: string | null };
 /**
@@ -162,6 +163,9 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
   // reader's bubble offers sign-in; the key never takes them off the page, so for them it does nothing.
   const commentOnSelection = useCallback(() => { selection.capture(); changeOpen(true); }, [selection.capture, changeOpen]);
   useCommentShortcut(readingRef, canComment, commentOnSelection);
+  // The link a reader passes on to a discussion: this page's own (`/s/<token>`), or — read in the Hub, where
+  // only a NAMED share is — the `/open` form, which sends each recipient to their own Hub reader.
+  const linkTo = useCallback((threadId: string) => new URL(shareDiscussionLink(token, threadId, { documentId, named: window.location.pathname !== sharedPagePath(token) }), window.location.origin).href, [token, documentId]);
   // Only a signed-in reader who may write is offered `@`: the candidate route refuses anyone else.
   const mentionScope = result?.writesEnabled && !anonymous ? scope : undefined;
   const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} signInHref={signInHref} draftKey={draftKey} restored={restored} mentionScope={mentionScope} onCancel={() => { discardDraft(); selection.clear(); }} onSubmit={async (body, idempotencyKey, mentions) => {
@@ -251,7 +255,7 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
       </div>}
       </div>
       {!draft && composer}
-      {result && <ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId} focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }} threads={result.threads} writesEnabled={result.writesEnabled} signInHref={anonymous ? signInHref : undefined} reauthHref={anonymous ? undefined : signInHref}
+      {result && <ReviewThreadList linkTo={linkTo} draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId} focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }} threads={result.threads} writesEnabled={result.writesEnabled} signInHref={anonymous ? signInHref : undefined} reauthHref={anonymous ? undefined : signInHref}
         follow={anonymous ? undefined : async (threadId, next) => { await reviewRequest(`/api/share-review/threads/${threadId}/follow`, { ...scope, following: next }); await load(); }} mentionScope={mentionScope} reply={async (threadId, body, idempotencyKey, mentions) => { await reviewRequest(`/api/share-review/threads/${threadId}/replies`, { ...scope, body, idempotencyKey, ...(mentions.length ? { mentions } : {}) }); await load(); }}
         author={result.callerUserId === null ? undefined : {
           edit: async (threadId, commentId, body) => { await reviewRequest(`/api/share-review/threads/${threadId}/comments/${commentId}/body`, { ...scope, body }); await load(); },
