@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { DomainError } from "@/shared/domain/errors";
 import { isUuid, uuidv7 } from "@/shared/ids/uuidv7";
-import { isShareToken, MAX_NAMED_SHARE_RECIPIENTS, ShareLinkNotFoundError } from "../domain/document-share-link";
+import { isActiveShareLink, isShareToken, MAX_NAMED_SHARE_RECIPIENTS, ShareLinkNotFoundError } from "../domain/document-share-link";
 import { REVIEW_LIMITS, isRetractedThread, projectOwnerThread, projectReviewerThread, projectReviewComment, validateReviewBody, validateReviewIdempotencyKey, type ReviewThread, type ReviewComment, type ReviewCommentView, type ReviewAnchor, type ReviewStatus, type ReviewVisibility, type ReviewThreadView, type OwnerReviewThreadView, type CreateReviewThreadInput, type CreateOwnerReviewThreadInput, type ReplyReviewInput, type ReplyOwnerReviewInput } from "../domain/document-review";
 import { MENTION_LIMIT, MENTION_PREFIX, normalizeMentions, splitMentions, type MentionedPerson, type ReviewMention } from "../domain/review-mention";
 import { followForMention } from "./follow-for-mention";
@@ -15,7 +15,7 @@ import type { DocumentShareLink } from "../domain/document-share-link";
 import { filterInboxDiscussions, mergeInboxDiscussions, sortInboxDiscussions, type InboxCursor, type InboxDiscussionView, type InboxKindFilter, type InboxPage, type InboxStatusFilter } from "../domain/inbox-discussion";
 import type { InboxOwnerSummary } from "../ports/share-comment-event-repository";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
-import { judgeNamedShares, namedShareTitle, openNamedTarget, type NamedShareTarget } from "./internal/named-share-judgement";
+import { judgeNamedShares, namedShareTitle, openNamedTarget, MAX_UNREAD_PAGES, type NamedShareTarget } from "./internal/named-share-judgement";
 import { audienceAdmits, documentReachesFolder, documentReachesSource, linkOpensFor, openShareLinkTarget, reachableChain, reachableChainForSource } from "./internal/folder-link-reach";
 import { hubSharePath, shareDiscussionHref } from "@/lib/share-paths";
 
@@ -537,8 +537,9 @@ export class DocumentReviewService {
    * that death is permanent (missing comment, thread, link or document; deleted comment; retracted thread; revoked or
    * expired link) or only temporary (hidden comment/thread, archived target, moved out of reach, viewer not named).
    * ponytail: at most FOLLOW_LIMIT mentions, one comment lookup each; paging once readers are named more.
+   * `documentExists` may be shared by callers that judge several pages of the same document set.
    */
-  private async judgedMentions(r: KnowledgeRepositories, mentions: readonly ReviewMention[], userId: string) {
+  private async judgedMentions(r: KnowledgeRepositories, mentions: readonly ReviewMention[], userId: string, documentExists = new Map<string, boolean>()) {
     if (mentions.length === 0) return [];
     // Comments, threads and links each come in one query; only a link's reach is judged per document.
     const named = new Map((await r.reviewComments.findByIds(mentions.map(mention => mention.commentId))).map(comment => [comment.id, comment]));
@@ -548,7 +549,6 @@ export class DocumentReviewService {
     for (const comment of await r.reviewComments.listByThreads(threadIds)) commentsByThread.set(comment.threadId, [...(commentsByThread.get(comment.threadId) ?? []), comment]);
     const links = new Map((await r.shareLinks.findByIds([...new Set(mentions.map(mention => mention.shareLinkId))])).map(link => [link.id.toLowerCase(), link]));
     const opens = new Map<string, boolean>();
-    const documentExists = new Map<string, boolean>();
     const now = this.clock();
     const documentsExist = async (documentId: string) => {
       if (!documentExists.has(documentId)) documentExists.set(documentId, !!await r.documents.findById(documentId));
@@ -563,7 +563,7 @@ export class DocumentReviewService {
       const link = links.get(mention.shareLinkId.toLowerCase());
       // Irreversible: a row or its history is gone for good, or the link can never open again.
       if (!thread || !comment || isRetractedThread(comments) || !!comment.deletedAt || !link
-        || link.revokedAt != null || (link.expiresAt != null && link.expiresAt.getTime() <= now.getTime())) {
+        || !isActiveShareLink(link, now)) {
         judged.push({ mention, permanentDead: true });
         continue;
       }
@@ -587,16 +587,19 @@ export class DocumentReviewService {
    * dead one (its link is revoked or expired, its comment deleted, or a row is gone) is marked read here, so it cannot
    * fill the window and hide an older live mention. A temporarily unreachable one (its comment or thread is hidden, its
    * document archived, or it was moved out of a shared folder) keeps its unread mark and is paged past instead, so it
-   * returns unread once restored.
+   * returns unread once restored. The scan is bounded to `MAX_UNREAD_PAGES` pages (500 rows) so a reader whose unread
+   * rows are all temporarily unreachable cannot turn every Inbox poll into an unbounded walk.
    */
   private async unreadMentions(r: KnowledgeRepositories, userId: string) {
     let offset = 0;
     const live: ReviewMention[] = [];
-    for (;;) {
+    // Shared across pages: the same documents are re-judged on every page, and existence cannot change mid-poll.
+    const documentExists = new Map<string, boolean>();
+    for (let page = 0; page < MAX_UNREAD_PAGES; page += 1) {
       const unread = offset > 0
         ? await r.reviewMentions.listUnreadByRecipient(userId, FOLLOW_LIMIT, offset)
         : await r.reviewMentions.listUnreadByRecipient(userId, FOLLOW_LIMIT);
-      const judged = await this.judgedMentions(r, unread, userId);
+      const judged = await this.judgedMentions(r, unread, userId, documentExists);
       const permanentDead = judged.filter(judged => !("comment" in judged) && judged.permanentDead);
       for (const { mention } of permanentDead) await r.reviewMentions.markRead(userId, mention.commentId, this.clock());
       for (const judgedMention of judged) if ("comment" in judgedMention) live.push(judgedMention.mention);
@@ -606,6 +609,7 @@ export class DocumentReviewService {
       if (unread.length < FOLLOW_LIMIT || live.length >= FOLLOW_LIMIT) return live.slice(0, FOLLOW_LIMIT);
       offset += remainingUnreadInBatch;
     }
+    return live.slice(0, FOLLOW_LIMIT);
   }
   /**
    * Mentions as Inbox entries, one per comment. A dead one names nothing and is never unread. A dead one through a link

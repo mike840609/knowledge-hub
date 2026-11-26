@@ -70,7 +70,7 @@ Three bottlenecks and edge-case defects were identified in the current architect
 - Statements:
   1. `CREATE INDEX idx_entries_source_path ON source_entries (source_id, source_path(255))`
   2. `CREATE INDEX idx_task_bindings_workspace_owner ON task_export_bindings (workspace_id, owner_user_id)`
-  3. `CREATE INDEX idx_recipient_user_unread ON document_share_link_recipients (user_id, read_at, added_at)`
+  3. `CREATE INDEX idx_recipient_user_unread ON document_share_link_recipients (user_id, read_at, added_at, share_link_id)`
 
 ### 4.2 Deferred Snippet Projection (`src/infrastructure/database/mariadb/repositories/knowledge-search.ts`)
 - Inner derived query `matched` joins `knowledge_documents d`, `knowledge_revisions r`, `knowledge_tree_nodes n`, `knowledge_sources s`, `workspaces w`, applies all `WHERE` predicates, computes `(${titleHits}) AS title_hits` and `LOCATE(?, r.markdown COLLATE utf8mb4_unicode_ci) AS anchor_at` only in the outer query after `ORDER BY ${order} LIMIT ? OFFSET ?`.

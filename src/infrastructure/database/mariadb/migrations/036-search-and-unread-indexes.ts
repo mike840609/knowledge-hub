@@ -12,6 +12,6 @@ export const searchAndUnreadIndexesMigration: Migration = {
   statements: [
     "CREATE INDEX idx_entries_source_path ON source_entries (source_id, source_path(255))",
     "CREATE INDEX idx_task_bindings_workspace_owner ON task_export_bindings (workspace_id, owner_user_id)",
-    "CREATE INDEX idx_recipient_user_unread ON document_share_link_recipients (user_id, read_at, added_at)",
+    "CREATE INDEX idx_recipient_user_unread ON document_share_link_recipients (user_id, read_at, added_at, share_link_id)",
   ],
 };

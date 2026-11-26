@@ -20,6 +20,8 @@ export class AgentContextService {
       const workspace = await r.workspaces.findById(workspaceId);
       if (!workspace || workspace.workspaceType !== "PERSONAL" || workspace.personalOwnerUserId !== caller.identity.id || workspace.lifecycleState !== "ACTIVE") throw new DomainError("WORKSPACE_NOT_FOUND", "Workspace unavailable.");
       const authors = new Map<string, string>();
+      // Source trees are reused across the `assemble(null)` retry: the retry drops the link map, not the source read.
+      const treesBySource = new Map<string, Awaited<ReturnType<typeof r.tree.listBySource>>>();
       const catalog = await r.links.loadCatalog(workspaceId);
       const edges = resolveEdges(catalog, await r.links.loadValidEdges(workspaceId));
       const graph = buildWorkspaceGraph(catalog, edges, { includeUnresolved: true, includeOrphans: true, limit: Number.MAX_SAFE_INTEGER });
@@ -27,7 +29,6 @@ export class AgentContextService {
       const links = linkMapFor(graph, ids, edges);
       const assemble = async (map: readonly AgentContextLink[] | null) => {
         const formatter = new AgentContextFormatter(workspaceId, origin, includeDiscussions);
-        const treesBySource = new Map<string, Awaited<ReturnType<typeof r.tree.listBySource>>>();
         if (map) formatter.addLinks(map); else formatter.addLinkMapOmitted();
         for (const id of ids) {
           const { document, policy } = await requireVisibleDocument(r, caller, id, false);

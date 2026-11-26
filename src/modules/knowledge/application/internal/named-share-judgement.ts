@@ -1,5 +1,5 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
-import type { DocumentShareLink } from "../../domain/document-share-link";
+import { isActiveShareLink, type DocumentShareLink } from "../../domain/document-share-link";
 import type { ReceivedShareLink } from "../../ports/document-share-link-repository";
 import type { KnowledgeRepositories } from "../../ports/unit-of-work";
 import { openShareLinkTarget } from "./folder-link-reach";
@@ -7,13 +7,8 @@ import { openShareLinkTarget } from "./folder-link-reach";
 /** What a named link opens for its viewer: a document, or a folder (by name). */
 export type NamedShareTarget = { documentId: string } | { folderName: string } | { sourceName: string };
 
-/**
- * Whether the link itself is dead for good: revoked, or expired. `!= null` (not `=== null`) so a
- * partial test double that omits these fields is not mistaken for a revoked link.
- */
-function isLinkRevokedOrExpired(link: Pick<DocumentShareLink, "revokedAt" | "expiresAt">, now: Date): boolean {
-  return link.revokedAt != null || (link.expiresAt != null && link.expiresAt.getTime() <= now.getTime());
-}
+/** How many unread pages one Inbox poll may scan past temporarily unreachable rows (5 x `FOLLOW_LIMIT` rows). */
+export const MAX_UNREAD_PAGES = 5;
 
 /**
  * What this link opens for `userId` now, and whether a refusal is permanent. Permanently dead means the
@@ -22,7 +17,7 @@ function isLinkRevokedOrExpired(link: Pick<DocumentShareLink, "revokedAt" | "exp
  * viewer no longer named) is only temporarily unreachable, so its unread mark must survive.
  */
 async function judgeNamedTarget(r: KnowledgeRepositories, link: DocumentShareLink, userId: string, now: Date): Promise<{ target: NamedShareTarget | null; permanentDead: boolean }> {
-  if (isLinkRevokedOrExpired(link, now)) return { target: null, permanentDead: true };
+  if (!isActiveShareLink(link, now)) return { target: null, permanentDead: true };
   if (link.target.kind === "DOCUMENT") {
     const document = await r.documents.findById(link.target.documentId);
     if (!document) return { target: null, permanentDead: true };
@@ -56,13 +51,15 @@ async function judgeRows(r: KnowledgeRepositories, userId: string, now: Date, ro
  * `unreadOnly` (the Inbox's unread list and badge) reads only unread rows and returns only live ones. A
  * permanently dead row is marked read here, as a dead mention is, so it cannot fill the window and hide an
  * older live share; a temporarily unreachable one keeps its unread mark and is paged past instead.
+ * The scan is bounded to `MAX_UNREAD_PAGES` pages so a reader whose unread rows are all temporarily
+ * unreachable cannot turn every Inbox poll into an unbounded walk.
  * ponytail: a few reads per share, bounded by `limit`; paging once readers are named more.
  */
 export async function judgeNamedShares(r: KnowledgeRepositories, userId: string, limit: number, now: Date, unreadOnly = false) {
   if (!unreadOnly) return judgeRows(r, userId, now, await r.shareLinks.listForRecipient(userId, limit));
   let offset = 0;
   const live: Awaited<ReturnType<typeof judgeRows>> = [];
-  for (;;) {
+  for (let page = 0; page < MAX_UNREAD_PAGES; page += 1) {
     const batch = offset > 0
       ? await r.shareLinks.listUnreadForRecipient(userId, limit, offset)
       : await r.shareLinks.listUnreadForRecipient(userId, limit);
@@ -73,9 +70,10 @@ export async function judgeNamedShares(r: KnowledgeRepositories, userId: string,
     // Permanently dead rows are now read and drop out of `read_at IS NULL`; everything else still occupies
     // the unread list, so the next page starts after it.
     const remainingUnreadInBatch = judged.filter(share => !share.permanentDead).length;
-    if (batch.length < limit || live.length >= limit || (permanentDead.length === 0 && remainingUnreadInBatch === 0)) return live.slice(0, limit);
+    if (batch.length < limit || live.length >= limit) return live.slice(0, limit);
     offset += remainingUnreadInBatch;
   }
+  return live.slice(0, limit);
 }
 
 /**

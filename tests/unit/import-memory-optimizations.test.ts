@@ -356,7 +356,7 @@ function applyUow(snapshot: ImportSnapshot, entries: ImportSnapshotEntry[], list
     importSnapshotEntries: {
       listBySnapshotId: async () => {
         listCalls.count += 1;
-        return entries.map((entry) => ({ ...entry }));
+        return entries.map((entry) => Object.freeze({ ...entry }));
       },
     },
     sources: { lockById: async () => null, findById: async () => null },

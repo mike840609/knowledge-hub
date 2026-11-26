@@ -39,8 +39,8 @@ function world() {
 function repositories() {
   const addedAt = new Date(0);
   const rows = [
-    { link: { target: { kind: "DOCUMENT", documentId: "read-doc" } }, addedAt, readAt: new Date(1) },
-    { link: { target: { kind: "DOCUMENT", documentId: "unread-doc" } }, addedAt, readAt: null },
+    { link: { target: { kind: "DOCUMENT", documentId: "read-doc" }, revokedAt: null, expiresAt: null }, addedAt, readAt: new Date(1) },
+    { link: { target: { kind: "DOCUMENT", documentId: "unread-doc" }, revokedAt: null, expiresAt: null }, addedAt, readAt: null },
   ];
   const findById = vi.fn(async () => null);
   const markRecipientRead = vi.fn(async () => undefined);
@@ -120,5 +120,23 @@ describe("permanently dead and temporarily unreachable unread shares", () => {
     expect((await judgeNamedShares(w.r, USER, 1, w.now, true)).map(row => row.link.id)).toEqual(["live"]);
     expect(w.listUnreadForRecipient.mock.calls).toEqual([[USER, 1], [USER, 1, 1]]);
     expect(w.markRecipientRead).not.toHaveBeenCalled();
+  });
+
+  it("returns an older live share past a full page mixing dead and unreachable rows", async () => {
+    const w = world();
+    w.documents.get("doc")!.status = "ARCHIVED";
+    w.documents.set("other", { id: "other", sourceId: "source", status: "ACTIVE" });
+    // 40 permanently dead (revoked) rows, then 60 temporarily unreachable (archived) ones, then one older live share.
+    for (let index = 0; index < 40; index += 1) {
+      w.add(`revoked-${index}`, { kind: "DOCUMENT", documentId: "doc" }, new Date(2000 - index), { revokedAt: new Date(1) });
+    }
+    for (let index = 0; index < 60; index += 1) {
+      w.add(`archived-${index}`, { kind: "DOCUMENT", documentId: "doc" }, new Date(1000 - index));
+    }
+    w.add("live", { kind: "DOCUMENT", documentId: "other" }, new Date(0));
+    expect((await judgeNamedShares(w.r, USER, 100, w.now, true)).map(row => row.link.id)).toEqual(["live"]);
+    // Only the 40 permanently dead shares are marked read; the archived ones keep their unread mark.
+    expect(w.markRecipientRead).toHaveBeenCalledTimes(40);
+    expect(w.listUnreadForRecipient.mock.calls).toEqual([[USER, 100], [USER, 100, 60]]);
   });
 });

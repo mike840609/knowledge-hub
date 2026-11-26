@@ -166,4 +166,46 @@ describe("unread mentions survive a reversible unreachability", () => {
     expect(w.listUnreadByRecipient.mock.calls).toEqual([[USER, 100], [USER, 100, 100]]);
     expect(w.markRead).not.toHaveBeenCalled();
   });
+
+  /** Fills the world with `count` mentions of one kind, each on its own thread, newest first. */
+  const fill = (w: World, kind: "deleted" | "hidden", count: number, startAt: number) => {
+    const rows: ReviewMention[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const threadId = `thread-${kind}-${index}`;
+      const commentId = `${kind}-${index}`;
+      const createdAt = new Date(startAt - index);
+      w.threads.set(threadId, thread({ id: threadId, documentId: DOC_ID }));
+      w.comments.set(commentId, comment({ id: commentId, threadId, createdAt, ...(kind === "deleted" ? { deletedAt: new Date(1) } : { visibility: "HIDDEN" as const }) }));
+      rows.push(mention({ commentId, createdAt }));
+    }
+    return rows;
+  };
+
+  it("returns an older live mention past a full page mixing dead and unreachable rows", async () => {
+    const w = world();
+    w.comments.clear();
+    w.threads.clear();
+    const live = comment({ id: "live", threadId: "thread-live", createdAt: new Date(0) });
+    w.threads.set("thread-live", thread({ id: "thread-live", documentId: DOC_ID }));
+    w.comments.set(live.id, live);
+    w.unread.splice(0, w.unread.length,
+      ...fill(w, "deleted", 40, 2000),
+      ...fill(w, "hidden", 60, 1000),
+      mention({ commentId: live.id, createdAt: new Date(0) }));
+    expect((await unreadMentions(w)).map(row => row.commentId)).toEqual(["live"]);
+    // Only the 40 permanently dead mentions are marked read; the hidden ones keep their unread mark.
+    expect(w.markRead).toHaveBeenCalledTimes(40);
+    expect(w.listUnreadByRecipient.mock.calls).toEqual([[USER, 100], [USER, 100, 60]]);
+  });
+
+  it("stops after MAX_UNREAD_PAGES pages of temporarily unreachable mentions", async () => {
+    const w = world();
+    w.comments.clear();
+    w.threads.clear();
+    // 500 unread hidden mentions (five full pages) sit ahead of an older live one.
+    w.unread.splice(0, w.unread.length, ...fill(w, "hidden", 500, 1000));
+    expect(await unreadMentions(w)).toEqual([]);
+    expect(w.listUnreadByRecipient).toHaveBeenCalledTimes(5);
+    expect(w.markRead).not.toHaveBeenCalled();
+  });
 });

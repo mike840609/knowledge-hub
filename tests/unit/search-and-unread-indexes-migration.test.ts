@@ -19,7 +19,7 @@ describe("migration 036 search and unread indexes", () => {
     const statements = migration!.statements.join("\n");
     expect(statements).toContain("CREATE INDEX idx_entries_source_path ON source_entries (source_id, source_path(255))");
     expect(statements).toContain("CREATE INDEX idx_task_bindings_workspace_owner ON task_export_bindings (workspace_id, owner_user_id)");
-    expect(statements).toContain("CREATE INDEX idx_recipient_user_unread ON document_share_link_recipients (user_id, read_at, added_at)");
+    expect(statements).toContain("CREATE INDEX idx_recipient_user_unread ON document_share_link_recipients (user_id, read_at, added_at, share_link_id)");
   });
 });
 
@@ -89,6 +89,39 @@ describe("AgentContextService source-tree cache", () => {
       .build(caller, workspaceId, [firstId, secondId], "", { includeDiscussions: false });
 
     expect(out.documentCount).toBe(2);
+    expect(listBySource).toHaveBeenCalledTimes(1);
+    expect(listBySource).toHaveBeenCalledWith(sourceId);
+  });
+
+  it("reuses the loaded source tree when ContextTooLargeError retries without the link map", async () => {
+    const caller = callerFromIdentity({ id: workspaceId, emp_id: "1", name: "Mike", org_code: "A" });
+    const listBySource = vi.fn(async () => [{ id: "node-1", sourceId, documentId: firstId, nodeType: "DOCUMENT", parentId: null, status: "ACTIVE" }]);
+    // The document alone fits under the 256 KiB cap; only the link map pushes the first assembly over it.
+    const markdown = "x".repeat(260_000);
+    const unresolvedTarget = "a".repeat(10_000);
+    const r = {
+      users: { upsertIdentity: vi.fn(), findById: vi.fn() },
+      workspaceAccess: { requireWorkspaceRead: vi.fn(), requireMembership: vi.fn() },
+      workspaces: { findById: vi.fn(async () => ({ workspaceType: "PERSONAL", personalOwnerUserId: workspaceId, lifecycleState: "ACTIVE" })) },
+      documents: { findById: vi.fn(async (documentId: string) => ({ id: documentId, sourceId, status: "ACTIVE" })) },
+      sourcePolicy: { findById: vi.fn(async () => ({ id: sourceId, workspaceId, status: "ACTIVE", name: "Wiki" })) },
+      tree: { listBySource },
+      revisions: { findCurrent: vi.fn(async (documentId: string) => ({ id: documentId, revisionNo: 1, title: documentId, markdown, createdAt: new Date("2026-11-01T00:00:00Z") })) },
+      linkedEntries: { findByDocumentId: vi.fn(async () => null) },
+      links: {
+        loadCatalog: vi.fn(async () => [{ documentId: firstId, sourceId, title: "Doc", sourcePath: null, createdAt: new Date("2026-11-01T00:00:00Z") }]),
+        loadValidEdges: vi.fn(async () => [{ documentId: firstId, links: [{ kind: "WIKI", target: unresolvedTarget, fragment: null, display: null, line: 1, ordinal: 0 }] }]),
+      },
+      reviewThreads: { listByDocument: vi.fn(async () => []) },
+      reviewComments: { listByThreads: vi.fn(async () => []) },
+    } as unknown as KnowledgeRepositories;
+
+    const out = await new AgentContextService({ run: (work) => work(r), read: (work) => work(r) })
+      .build(caller, workspaceId, [firstId], "", { includeDiscussions: false });
+
+    // The retry dropped the map, not the already-read source tree.
+    expect(out.linkCount).toBe(0);
+    expect(out.documentCount).toBe(1);
     expect(listBySource).toHaveBeenCalledTimes(1);
     expect(listBySource).toHaveBeenCalledWith(sourceId);
   });

@@ -147,8 +147,9 @@ export function hashImportPlan(plan: FolderImportPlan): string {
  * entries that tie on `sourcePath`. Non-tied entries are never serialized
  * during sorting; each is serialized once, immediately before it is streamed
  * into the hash, so payloads are never all collected into an array. Peak
- * memory is the entries plus one payload at a time, not every payload plus the
- * concatenated canonical JSON document.
+ * memory is the entries, any tie-group payloads during sort, plus one entry
+ * payload at a time while streaming — not every payload plus the concatenated
+ * canonical JSON document.
  */
 export function hashReadyImportSnapshot(
   snapshot: Pick<ImportSnapshot, "adapterType" | "adapterVersion" | "planVersion" | "workspaceId" | "sourceId" | "basedOnVersion" | "importScope">,
