@@ -84,6 +84,19 @@ test.describe("a block range chosen with the mouse", () => {
     await expect(surface.getByText("Beta!", { exact: true })).toBeVisible();
   });
 
+  test("a click below the text puts the caret there, and the next keys move it at once", async ({ page }) => {
+    const { surface } = await openNote(page, "hello world\n");
+    const editor = await surface.boundingBox();
+    const text = await surface.getByText("hello world", { exact: true }).boundingBox();
+    if (!editor || !text) throw new Error("no layout");
+    // Below the last block, on the editor's own surface: the marquee's press, which ends as a click.
+    await page.mouse.click(editor.x + editor.width / 2, Math.min(editor.y + editor.height - 4, text.y + text.height + 40));
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.type("X");
+    await expect(surface.getByText("Xhello world", { exact: true })).toBeVisible();
+  });
+
   test("Escape during the drag cancels it", async ({ page }) => {
     const { surface } = await openNote(page, "Alpha\n\nBeta\n\nGamma\n");
     const release = await dragFromMargin(page, surface, "Alpha", "Gamma");

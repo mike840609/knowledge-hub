@@ -139,6 +139,11 @@ export const blockPointer = $prose(() => {
           const at = view.posAtCoords({ left: Math.min(Math.max(x, rect.left + inset + 1), right), top: y });
           // Right of a short line the position is the boundary after its block: look back into it, not into the next.
           if (at) view.dispatch(view.state.tr.setSelection(Selection.near(view.state.doc.resolve(at.pos), x >= right ? -1 : 1)));
+          // ProseMirror records the clicks it handles; this one it did not see, so within 200ms of the focus it took a
+          // caret the next key moved to the document's start for the browser resetting it, and put the old one back.
+          // ponytail: ProseMirror's internal input state; harmless if renamed (the guard returns to its old behaviour).
+          const input = (view as unknown as { input?: { lastClick?: unknown } }).input;
+          if (input) input.lastClick = { time: Date.now(), x, y, type: "singleClick", button: 0 };
         } catch { /* no layout to ask */ }
       }
       view.focus();
