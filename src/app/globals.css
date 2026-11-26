@@ -1282,7 +1282,9 @@ body:has(.kh-selection-toolbar [role="menu"]:not([hidden])) :is(.kh-block-gutter
 .kh-slash-option[aria-selected="true"] { @apply bg-kh-bg-selected text-kh-selected-text; }
 /* Find and replace (2026-11-26 spec). The anchor is a zero-height sticky strip at the top of the editor's host;
    the bar hangs from its right edge, so it neither takes room from the page nor covers its toolbar. */
-.kh-find-anchor { position: sticky; top: 4.5rem; z-index: 20; height: 0; }
+/* Below lg the pane has no pinned header; from lg up the document header is 3rem, and the bar sits 1.5rem under it. */
+.kh-find-anchor { position: sticky; top: 0.75rem; z-index: 20; height: 0; }
+@media (min-width: theme("screens.lg")) { .kh-find-anchor { top: 4.5rem; } }
 .kh-find-anchor[hidden] { display: none; }
 .kh-find-bar { position: absolute; top: 0; right: 0; max-width: 100%; @apply flex flex-col gap-1 rounded-lg border border-kh-border bg-kh-bg-raised p-1.5 shadow-popover; }
 .kh-find-row { @apply flex flex-wrap items-center gap-1; }

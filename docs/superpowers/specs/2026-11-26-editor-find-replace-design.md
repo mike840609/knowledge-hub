@@ -65,8 +65,8 @@ read it").
 7. **Surface and accessibility.** The bar is React (`find-bar.tsx`: `Button`,
    `Input`, `Tooltip`), portalled into a zero-height sticky anchor the plugin puts
    at the top of the editor host, so it stays at the top right of the document
-   as it scrolls, below the page's sticky header (`top: 4.5rem`, as the share
-   page's rail). It is `role="search"` with a name, each field has an
+   as it scrolls, below the page's sticky header: `top: 4.5rem` from `lg` up, under the 3rem pinned
+   document header (measured 2026-11-26); `0.75rem` below `lg`, where the pane has no pinned header. It is `role="search"` with a name, each field has an
    `aria-label`, each icon button an `aria-label` and a `Tooltip` with its
    shortcut, "Aa" and the replace disclosure carry `aria-pressed` / `aria-expanded`, all
    controls take `kh-focus-ring`, and at phone width the bar wraps inside the

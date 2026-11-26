@@ -869,7 +869,7 @@ The editor's find and replace (`editor/find-bar.tsx`, `find-replace.ts`; spec
 `2026-11-26-editor-find-replace-design.md`) is the one floating bar in the
 document: a `role="search"` panel at the top right of the editor, in the `lg`
 radius, with a border and the `popover` elevation, held in a zero-height sticky
-anchor (`.kh-find-anchor`, `top: 4.5rem`, below the page's sticky header) so it
+anchor (`.kh-find-anchor`, `top: 4.5rem` from `lg` up, below the pinned document header; `0.75rem` below `lg`) so it
 takes no room and does not cover the selection toolbar. It is made of the
 shared `Button` (ghost, `sm`, icon), `Input` (`sm`) and `Tooltip` with the
 shortcut as a `Kbd`; "Aa" and the replace disclosure carry `aria-pressed` /
