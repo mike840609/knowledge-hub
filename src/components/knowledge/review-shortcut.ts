@@ -3,12 +3,14 @@ import { useEffect, type RefObject } from "react";
 export { COMMENT_SHORTCUT } from "@/components/actions/action-registry";
 
 /**
- * Whether a key press is `COMMENT_SHORTCUT` (⌘⌥M / Ctrl+Alt+M; a single letter is never bound). The key is matched where it sits (`code`): with ⌥ held a Mac
- * types "µ" for M, so `key` would never say "m". `key` is the fallback where no `code` is reported.
+ * Whether a key press is `COMMENT_SHORTCUT` (⌘⌥M / Ctrl+Alt+M; a single letter is never bound). AltGr
+ * is not it: Windows reports AltGr as Ctrl+Alt, and AltGr+M types a character on some layouts (µ on
+ * German QWERTZ), which must be typed, not taken.
  */
-export function isCommentShortcut(event: Pick<KeyboardEvent, "key" | "code" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "isComposing" | "repeat" | "keyCode">): boolean {
+export function isCommentShortcut(event: Pick<KeyboardEvent, "key" | "code" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "isComposing" | "repeat" | "keyCode"> & { getModifierState?: (key: string) => boolean }): boolean {
   if (event.isComposing || event.keyCode === 229 || event.repeat) return false;
   if (event.metaKey === event.ctrlKey || !event.altKey || event.shiftKey) return false;
+  if (event.getModifierState?.("AltGraph")) return false;
   return event.code ? event.code === "KeyM" : event.key.toLowerCase() === "m";
 }
 

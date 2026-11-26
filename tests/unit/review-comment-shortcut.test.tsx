@@ -25,6 +25,10 @@ describe("isCommentShortcut", () => {
     expect(isCommentShortcut(key({ ctrlKey: true, altKey: true, isComposing: true }))).toBe(false);
     expect(isCommentShortcut(key({ ctrlKey: true, altKey: true, repeat: true }))).toBe(false);
   });
+  it("is not AltGr, which Windows reports as Ctrl+Alt and which types µ with M on German QWERTZ", () => {
+    expect(isCommentShortcut({ ...key({ ctrlKey: true, altKey: true, key: "µ" }), getModifierState: (name: string) => name === "AltGraph" })).toBe(false);
+    expect(isCommentShortcut({ ...key({ ctrlKey: true, altKey: true }), getModifierState: () => false })).toBe(true);
+  });
   it("reads ⌘⌥M on screen", () => expect(shortcutLabel(COMMENT_SHORTCUT)).toBe("⌘⌥M"));
 });
 
