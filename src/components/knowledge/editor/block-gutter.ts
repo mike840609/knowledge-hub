@@ -7,7 +7,7 @@ import { isBlockId } from "@/shared/markdown/remark-block-links";
 import { closeHistory } from "@milkdown/kit/prose/history";
 import { openBlockList } from "./slash-commands";
 import { blockKind, canTurnInto, headingText, deleteBlock, dispatchBlockAction, duplicateBlock, insertBlockBelow, moveBlock, selectedBlockPos, siblingBlocks, topLevelBlocks, turnBlockInto, type BlockKind, type EditorBlock } from "./block-actions";
-import { keepRange, rangeBlocks, setBlockRange } from "./block-range";
+import { extendRangeTo, keepRange, rangeBlocks, setBlockRange } from "./block-range";
 import { deleteBlocks, duplicateBlocks, moveBlocks, sequenceOf, turnBlocks } from "./block-sequence";
 
 export function icon(kind: "plus" | "grip"): SVGSVGElement {
@@ -484,11 +484,14 @@ export function blockGutter(comment?: { available: (view: EditorView, pos: numbe
         if (moveBlock(view, active, before)) live.textContent = direction < 0 ? "Block moved up" : "Block moved down";
       }
       // The grip of a block outside the range ends the range; its menu and drag act on that block alone (decision 5).
-      grip.addEventListener("mousedown", () => {
+      grip.addEventListener("mousedown", (event) => {
+        if (event.shiftKey) return; // Shift-click extends the range (2026-11-26 spec), see the click below
         const range = rangeBlocks(view.state);
         if (range && !range.some((block) => block.pos === active)) setBlockRange(view, view.state.tr, null, false);
       });
-      grip.addEventListener("click", () => {
+      grip.addEventListener("click", (event) => {
+        // Shift-click: the range runs from the chosen block (or the caret's) to this one; the menu stays shut (2026-11-26 spec).
+        if (event.shiftKey && active !== null && view.editable && extendRangeTo(view, active, true)) { closeMenu(); view.focus(); return; }
         if (!menu.hidden) { closeMenu(); return; }
         renderMain();
         menu.hidden = false; grip.setAttribute("aria-expanded", "true"); position();

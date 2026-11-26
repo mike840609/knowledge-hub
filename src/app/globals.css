@@ -1284,6 +1284,14 @@ body:has(.kh-selection-toolbar [role="menu"]:not([hidden])) :is(.kh-block-gutter
 .kh-block-is-dragging { cursor: grabbing; }
 @media print { .kh-block-gutter, .kh-block-move-menu, .kh-slash-menu, .kh-block-drop-line, .kh-tree-drop-line, .kh-table-grip, .kh-table-col-grip, .kh-table-add { display: none; } }
 
+/* The box a drag from the margin draws to choose blocks (mouse block-range spec): the selected fill and the primary line. */
+.kh-block-marquee {
+  position: fixed; z-index: 30; pointer-events: none;
+  background-color: var(--kh-bg-selected);
+  border: 1px solid var(--kh-primary);
+  border-radius: theme("borderRadius.sm");
+  opacity: 0.7;
+}
 /* The whole block stays marked while it moves, nested content included. */
 .kh-editor .kh-block-drag-source {
   background-color: var(--kh-bg-selected);

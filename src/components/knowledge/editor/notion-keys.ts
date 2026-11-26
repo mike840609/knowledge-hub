@@ -14,6 +14,7 @@ import { ReplaceStep } from "@milkdown/kit/prose/transform";
 import { $inputRule, $prose, $useKeymap } from "@milkdown/kit/utils";
 import { blockKind, canTurnInto, deleteBlock, duplicateBlock, isBlockItem, moveBlock, selectedBlockPos, siblingBlocks, turnBlockInto, turnInto, type BlockKind } from "./block-actions";
 import { blockRange, rangeBlocks } from "./block-range";
+import { blockPointer } from "./block-pointer";
 import { blocksTouched, moveBlocks, sequenceOf, turnBlocks } from "./block-sequence";
 import { flipNearestDetails } from "./details-toggle";
 import { findWikiLinkTrigger } from "./link-suggestions";
@@ -698,4 +699,4 @@ const chosenItemEdits = $prose(
     }),
 );
 
-export const notionKeys: MilkdownPlugin[] = [todoInputRule, markEnd, ...typography, notionKeymap, blockRange, escapeSelection, chosenItemEdits, tabStaysInText, topLeadsToTitle].flat();
+export const notionKeys: MilkdownPlugin[] = [todoInputRule, markEnd, ...typography, notionKeymap, blockRange, blockPointer, escapeSelection, chosenItemEdits, tabStaysInText, topLeadsToTitle].flat();
