@@ -60,16 +60,16 @@ test.describe("page chrome", () => {
     await expect.poll(() => breadcrumb.getByText(nearest, { exact: true }).evaluate(fits)).toBe(true);
     await expect(breadcrumb.getByText(title, { exact: true })).toBeVisible();
     await expect.poll(() => breadcrumb.getByText(title, { exact: true }).evaluate(fits)).toBe(false);
-    // Share is the page's main action: it says its name here (2026-11-25-reader-chrome-polish-design.md) while
-    // Comments and Details stay icons. Same height as Details; its accessible name is unchanged.
+    // Share is the same icon button as Comments and Details: no label, and the same box
+    // (2026-11-25-reader-chrome-polish-design.md, 2026-11-26 amendment).
     const share = page.getByRole("button", { name: "Share link…" });
     await expect(share).toBeVisible();
-    await expect(share.getByText("Share", { exact: true })).toBeVisible();
+    await expect(share.getByText("Share", { exact: true })).toHaveCount(0);
     const details = page.getByRole("button", { name: "Details", exact: true });
     const shareBox = await share.boundingBox();
     const detailsBox = await details.boundingBox();
     expect(shareBox?.height).toBe(detailsBox?.height);
-    expect(shareBox!.width).toBeGreaterThan(detailsBox!.width);
+    expect(shareBox?.width).toBe(detailsBox?.width);
   });
 
   test("Comments opens the empty document discussion panel", async ({ page }) => {

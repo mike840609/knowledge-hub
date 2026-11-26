@@ -38,8 +38,9 @@ Nothing stored changes, no token is added, and no route or service is touched.
 4. **The breadcrumb keeps the page's name.** In a document pane under 40rem the levels between the first and the page
    fold into one `…` button ("Show N more levels of the path") that opens them as a menu of links. The first segment
    shrinks first, then the page's own name last of all. Wider, every level is shown as before.
-5. **Share says its name.** From `sm` up the Share button is icon plus the word "Share", bordered as a secondary
-   control; under it, the icon alone. Its accessible name stays `Share link…`, which contains the visible word.
+5. ~~**Share says its name.**~~ Reverted on 2026-11-26 (see the amendment below): Share is the ghost icon button it
+   was before, the same style as Markdown, Comments and Details at every width, named `Share link…` by its tooltip
+   and accessible name.
 6. **A source's tree loads as skeleton rows.** `Loading documents…` was a bare paragraph beside the one idiom the
    skeleton module records. `TreeSkeleton` draws five rows at tree height, indented as children are, with a
    screen-reader-only status `Loading documents` and `aria-busy`. The failure line and Retry are unchanged.
@@ -59,8 +60,8 @@ Nothing stored changes, no token is added, and no route or service is touched.
 - E2E, `tests/e2e/zz-reader-chrome-polish.spec.ts`, at 390px and 1440px: the title is above the meta line and sits
   higher than it did; Read only opens its explanation from the keyboard; no document-level horizontal scroll; the
   table keeps `headcount_daily` whole and scrolls sideways at 390px, has no scrollbar at 1440px, and has no vertical
-  scroll; the breadcrumb's last segment is not truncated and the `…` menu lists the middle; Share is labelled at 1440px
-  and icon-only at 390px.
+  scroll; the breadcrumb's last segment is not truncated and the `…` menu lists the middle; Share is icon-only at 1440px
+  and at 390px.
 - Existing: `zz-table-controls.spec.ts`, `zz-table-drag.spec.ts`, `zz-reader-chrome.spec.ts`, `zz-page-chrome.spec.ts`,
   `phase5-authoring.spec.ts`; `make verify`.
 
@@ -99,3 +100,10 @@ and two, by the text's width against its box rather than `scrollWidth`.
 
 A one-level path (the explorer read's fallback, in the page and the peek) is first and last at once; it does not take
 `kh-crumb-first`, which would start the page's name from nothing and hold it at 3ch.
+
+## Amendment 2026-11-26: Share is an icon button again
+
+The labelled, bordered Share (decision 5) stood apart from the header's other actions, which are ghost icon buttons
+named by tooltip. It is reverted to that shared style: `buttonClasses({ variant: "ghost", icon: true })`, the share
+glyph alone, tooltip and accessible name `Share link…`. The e2e now checks that it carries no visible word at either
+width. The other decisions are unchanged.
