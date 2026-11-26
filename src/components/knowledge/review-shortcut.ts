@@ -11,7 +11,9 @@ export { COMMENT_SHORTCUT } from "@/components/actions/action-registry";
 export function isCommentShortcut(event: Pick<KeyboardEvent, "key" | "code" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "isComposing" | "repeat" | "keyCode"> & { getModifierState?: (key: string) => boolean }): boolean {
   if (event.isComposing || event.keyCode === 229 || event.repeat) return false;
   if (event.metaKey === event.ctrlKey || !event.altKey || event.shiftKey) return false;
-  if (event.getModifierState?.("AltGraph")) return false;
+  // Only on the Ctrl path: AltGr is a Windows/Linux key, and a browser that reports the Mac's Option
+  // as AltGraph would otherwise turn ⌘⌥M off altogether.
+  if (event.ctrlKey && event.getModifierState?.("AltGraph")) return false;
   // The key the reader sees: "m" wherever the layout puts it (on AZERTY its position is `Semicolon`).
   // Only where the key types no ASCII character at all — ⌥M types "µ" on a Mac — is the position asked
   // instead; AZERTY's comma, where QWERTY has M, types "," and so is not it.
