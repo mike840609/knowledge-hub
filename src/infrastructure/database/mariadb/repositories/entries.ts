@@ -29,9 +29,9 @@ export class MariaDbEntryRepository implements EntryRepository {
   }
 
   async findBySourcePath(sourceId: string, sourcePath: string): Promise<SourceEntry | null> {
-    // `source_path` is utf8mb4_bin, so `=` is already a binary comparison; avoiding BINARY on the
-    // column lets MariaDB use `idx_entries_source_path (source_id, source_path(255))`.
-    const rows=await this.connection.query<DbRow[]>("SELECT * FROM source_entries WHERE source_id=? AND source_path=? LIMIT 1",[sourceId,sourcePath]);
+    // `source_path = ?` uses `idx_entries_source_path (source_id, source_path(255))`, and
+    // `BINARY source_path = BINARY ?` preserves exact trailing-space comparison under PAD SPACE.
+    const rows=await this.connection.query<DbRow[]>("SELECT * FROM source_entries WHERE source_id=? AND source_path=? AND BINARY source_path=BINARY ? LIMIT 1",[sourceId,sourcePath,sourcePath]);
     return rows[0]?mapEntry(rows[0]):null;
   }
 

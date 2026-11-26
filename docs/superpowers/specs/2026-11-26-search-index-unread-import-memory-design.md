@@ -87,15 +87,15 @@ Three bottlenecks and edge-case defects were identified in the current architect
       - Otherwise, if `openShareLinkTarget` returns `null` (e.g. target, source, or workspace is `ARCHIVED`, or viewer is not admitted), `permanentDead = false` (temporarily unreachable).
     - Marks only `permanentDead` rows read via `r.shareLinks.markRecipientRead(link.id, userId, now)`.
     - Appends live rows (`target !== null`) to `live`.
-    - Advances `offset` by the number of non-permanently-dead rows in the batch (since permanently dead rows were marked read and drop out of `read_at IS NULL`). Stops when the batch had fewer than `limit` rows or `live.length >= limit`.
+    - Advances `offset` by the number of non-permanently-dead rows in the batch (since permanently dead rows were marked read and drop out of `read_at IS NULL`). Stops when the batch had fewer than `limit` rows, `live.length >= limit`, or `MAX_UNREAD_PAGES` (5) pages have been scanned.
 - `DocumentReviewService.unreadMentions(r, userId)`:
-  - Loops with `offset = 0` and collects `live` mentions up to `FOLLOW_LIMIT`:
+  - Loops up to `MAX_UNREAD_PAGES` (5) pages with `offset = 0`, sharing a per-call `documentExists` cache across pages, and collects `live` mentions up to `FOLLOW_LIMIT`:
     - Fetches `unread = await r.reviewMentions.listUnreadByRecipient(userId, FOLLOW_LIMIT, offset)`.
     - Judges each mention with `{ live, permanentDead }`:
       - `permanentDead = true` if `!found` (comment missing), `!thread` (thread missing), `comment.deletedAt !== null`, `isRetractedThread(comments)`, `!link` (share link missing), `!isActiveShareLink(link, now)` (link revoked or expired), or the thread's document row does not exist (`!(await r.documents.findById(thread.documentId))`).
       - `permanentDead = false` (temporarily unreachable) if `thread.visibility === "HIDDEN"`, `comment.visibility === "HIDDEN"`, or `linkValid` returns `false` while the link is active and the document exists (e.g. document/folder/source archived, document moved out of shared folder, or user not currently a recipient).
     - Marks only `permanentDead` mentions read via `r.reviewMentions.markRead(userId, mention.commentId, this.clock())`.
-    - Appends live mentions to `live`, advances `offset` by the number of non-permanently-dead rows in the batch, and stops when `unread.length < FOLLOW_LIMIT` or `live.length >= FOLLOW_LIMIT`.
+    - Appends live mentions to `live`, advances `offset` by the number of non-permanently-dead rows in the batch, and stops when `unread.length < FOLLOW_LIMIT`, `live.length >= FOLLOW_LIMIT`, or `MAX_UNREAD_PAGES` pages have been scanned.
 
 ### 4.4 Import Memory Reduction (`import-integrity.ts`, `finalize-folder-import.ts`, `apply-folder-import.ts`)
 - `hashReadyImportSnapshot`:

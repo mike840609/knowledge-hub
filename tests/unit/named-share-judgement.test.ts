@@ -55,9 +55,11 @@ describe("judging the shares that name a reader", () => {
   });
 
   it("refuses a missing Source", async () => {
-    const r = { shareLinks: { isRecipient: async () => true }, sourcePolicy: { findById: async () => null } } as unknown as KnowledgeRepositories;
-    const link = { id: "link", audience: "NAMED", target: { kind: "SOURCE", sourceId: "missing" } } as DocumentShareLink;
+    const findById = vi.fn(async () => null);
+    const r = { shareLinks: { isRecipient: async () => true }, sourcePolicy: { findById } } as unknown as KnowledgeRepositories;
+    const link = { id: "link", audience: "NAMED", target: { kind: "SOURCE", sourceId: "missing" }, revokedAt: null, expiresAt: null } as DocumentShareLink;
     expect(await openNamedTarget(r, link, "00000000-0000-4000-8000-000000000001", new Date())).toBeNull();
+    expect(findById).toHaveBeenCalledWith("missing");
   });
   it("the unread list and badge judge only the shares not yet read, and mark a dead one read", async () => {
     const { r, findById, markRecipientRead } = repositories();

@@ -202,8 +202,11 @@ describe("unread mentions survive a reversible unreachability", () => {
     const w = world();
     w.comments.clear();
     w.threads.clear();
+    const live = comment({ id: "live", threadId: "thread-live", createdAt: new Date(0) });
+    w.threads.set("thread-live", thread({ id: "thread-live", documentId: DOC_ID }));
+    w.comments.set(live.id, live);
     // 500 unread hidden mentions (five full pages) sit ahead of an older live one.
-    w.unread.splice(0, w.unread.length, ...fill(w, "hidden", 500, 1000));
+    w.unread.splice(0, w.unread.length, ...fill(w, "hidden", 500, 1000), mention({ commentId: live.id, createdAt: new Date(0) }));
     expect(await unreadMentions(w)).toEqual([]);
     expect(w.listUnreadByRecipient).toHaveBeenCalledTimes(5);
     expect(w.markRead).not.toHaveBeenCalled();
