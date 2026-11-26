@@ -96,6 +96,11 @@ describe("the find bar", () => {
     const input = field(bar(), "Find");
     type(input, "a");
     const press = (init: KeyboardEventInit) => act(() => { input.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init })); });
+    // Safari: the Enter that ends a composition comes with isComposing false and keyCode 229. It is not a step.
+    press({ key: "Enter", keyCode: 229 } as KeyboardEventInit);
+    expect(find.getSnapshot().index).toBe(0);
+    press({ key: "Escape", keyCode: 229 } as KeyboardEventInit);
+    expect(find.getSnapshot().open).toBe(true);
     press({ key: "Enter" });
     expect(find.getSnapshot().index).toBe(1);
     press({ key: "Enter", shiftKey: true });

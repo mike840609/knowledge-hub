@@ -12,13 +12,14 @@ read it").
 
 1. **Opening.** Mod-F with focus in the rendered editor opens the find bar and
    moves focus to its query. Mod-F again, with the bar open, focuses and selects the query.
-   When the bar was closed, the query is pre-filled with the editor's selection when that is non-empty,
+   When the bar was closed, the query is pre-filled with the editor's text selection (not a block range) when that is non-empty,
    on one line and at most 200 characters; otherwise it is left as it was. With the bar
-   open the typed query is kept. Mod-Alt-F is matched by the physical key on a Mac
-   (Option-F types "ƒ") and by the character "f" elsewhere, so AltGr+F, which Windows
-   reports as Ctrl+Alt and which types "[" on some layouts, reaches the editor. A
-   whole-document replace (Mod-/, a newer revision) keeps the bar open on its query.
-   When a query finds nothing, no earlier match stays selected. The
+   open the typed query is kept. Mod-Alt-F is matched by the character "f", or by the
+   physical key on a Mac (Option-F types "ƒ") and on a non-Latin layout; AltGr+F, which
+   Windows reports as Ctrl+Alt and which types "[" on some layouts, reaches the editor. A
+   whole-document replace (Mod-/, a newer revision) keeps the bar open on its query and
+   its current match (the first at or after where it was). When a query finds nothing,
+   a match the bar selected is collapsed; a selection the writer made is left alone. The
    key is claimed only inside the editor: reader pages, the read-only stand-in
    and the Markdown source view never reach it, so the browser's own find is
    untouched there. Mod is Command on Apple platforms and Control elsewhere.

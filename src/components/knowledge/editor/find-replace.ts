@@ -1,6 +1,6 @@
 import { closeHistory } from "@milkdown/kit/prose/history";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
-import { Plugin, PluginKey, TextSelection, type Transaction } from "@milkdown/kit/prose/state";
+import { Plugin, PluginKey, Selection, TextSelection, type Transaction } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 
@@ -57,7 +57,9 @@ export function findKeyAction(event: KeyboardEvent, open: boolean): FindKeyActio
   if (!(mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey)) return null;
   // On a Mac by physical key: Option-F types "ƒ". Elsewhere by the character: Windows reports AltGr as Ctrl+Alt,
   // and AltGr+F types "[" on some layouts, which must reach the editor.
-  if (event.altKey) return !event.shiftKey && (mac ? event.code === "KeyF" : event.key.toLowerCase() === "f") ? "openReplace" : null;
+  // A non-Latin layout reports a character above 127: then the physical key decides, as ProseMirror's keymap does.
+  const f = event.key.toLowerCase() === "f" || ((mac || event.key.charCodeAt(0) > 127) && event.code === "KeyF");
+  if (event.altKey) return !event.shiftKey && f ? "openReplace" : null;
   const letter = event.key.toLowerCase();
   if (letter === "f" && !event.shiftKey) return "open";
   if (letter === "g" && open) return event.shiftKey ? "previous" : "next";
@@ -98,7 +100,9 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
   let focusToken = 0;
   const listeners = new Set<() => void>();
   /** What the bar was showing; a new EditorState (a whole-document replace) starts from it, not from closed. */
-  let kept: Pick<FindState, "open" | "query" | "matchCase"> = idle;
+  let kept: Pick<FindState, "open" | "query" | "matchCase"> & { from: number } = { ...idle, from: 0 };
+  /** The range the bar last selected: only that is ours to collapse, never a selection the writer made. */
+  let ours: FindMatch | null = null;
   const stateOf = () => (view ? key.getState(view.state) ?? idle : idle);
   const build = (): FindSnapshot => {
     const state = stateOf();
@@ -106,7 +110,7 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
   };
   let snapshot = build();
   const refresh = () => {
-    if (view) { const { open, query, matchCase } = stateOf(); kept = { open, query, matchCase }; }
+    if (view) { const { open, query, matchCase, matches, current } = stateOf(); kept = { open, query, matchCase, from: matches[current]?.from ?? 0 }; }
     const next = build();
     mount.hidden = !next.open;
     if ((Object.keys(next) as (keyof FindSnapshot)[]).every(name => next[name] === snapshot[name])) return;
@@ -124,6 +128,7 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
     const match = stateOf().matches[index];
     if (!match) return;
     view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, match.from, match.to)).setMeta(key, { current: index } satisfies FindMeta));
+    ours = match;
     reveal();
   };
   /** Centred, not ProseMirror's 5px margin: the pinned header and the bar itself cover the pane's top edge. */
@@ -132,7 +137,10 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
   const showCurrent = () => {
     if (stateOf().matches.length) { select(stateOf().current); return; }
     // Nothing found (a typo, a cleared query): an earlier match must not stay selected for the next keystroke to overwrite.
-    if (view && !view.state.selection.empty) view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, view.state.selection.from)));
+    if (!view || !ours) return;
+    const { from, to } = view.state.selection;
+    if (from === ours.from && to === ours.to) view.dispatch(view.state.tr.setSelection(Selection.near(view.state.doc.resolve(from))));
+    ours = null;
   };
   /** The marks at the match's start: replacing never changes what the text around it was written with. */
   const insert = (tr: Transaction, match: FindMatch, text: string) => {
@@ -161,7 +169,7 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
       let query: string | undefined;
       const wasOpen = stateOf().open;
       // With the bar open, Mod-F refocuses the query the writer typed rather than overwriting it.
-      if (!selection.empty && !stateOf().open) {
+      if (selection instanceof TextSelection && !selection.empty && !stateOf().open) {
         const text = doc.textBetween(selection.from, selection.to, "\n", BARRIER);
         if (text.length <= PREFILL_LIMIT && !/[\n￼]/.test(text)) query = text;
       }
@@ -215,8 +223,10 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
     key,
     state: {
       init: (_config, state) => {
-        if (!kept.open || !kept.query) return { ...idle, ...kept };
-        return { ...kept, ...findMatches(state.doc, kept.query, kept.matchCase), current: 0 };
+        if (!kept.open || !kept.query) return { ...idle, open: kept.open, query: kept.query, matchCase: kept.matchCase };
+        // The current match is the one at or after where it was: a newer revision does not retarget Replace.
+        const { matches, truncated } = findMatches(state.doc, kept.query, kept.matchCase);
+        return { open: kept.open, query: kept.query, matchCase: kept.matchCase, matches, truncated, current: firstFrom(matches, kept.from) };
       },
       apply(tr, previous, _old, state) {
         const meta = tr.getMeta(key) as FindMeta | undefined;

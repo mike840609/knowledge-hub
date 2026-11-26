@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { editorViewCtx } from "@milkdown/kit/core";
 import { undo } from "@milkdown/kit/prose/history";
-import { TextSelection } from "@milkdown/kit/prose/state";
+import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import { afterEach, describe, expect, it } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { FIND_MATCH_LIMIT, findReplace, type FindController } from "@/components/knowledge/editor/find-replace";
@@ -195,6 +195,12 @@ describe("keys", () => {
     expect(find.getSnapshot()).toMatchObject({ open: true, replaceOpen: true });
   });
 
+  it("Ctrl+Alt+F on a non-Latin layout opens replace by the physical key", async () => {
+    const { find, view } = await open("a\n");
+    key(view, { key: "а", code: "KeyF", ctrlKey: true, altKey: true });
+    expect(find.getSnapshot()).toMatchObject({ open: true, replaceOpen: true });
+  });
+
   it("Mod-F with the bar open keeps the query the writer typed", async () => {
     const { find, view } = await open("hello world\n");
     view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1, 6)));
@@ -236,6 +242,38 @@ describe("living through the editor", () => {
     find.open();
     find.setQuery("");
     expect(view.state.selection.empty).toBe(true);
+  });
+
+  it("never collapses a selection the writer made, and never builds one inside a list (a block range)", async () => {
+    const { find, view } = await open("alpha\n\n- one\n- two\n");
+    let list = -1;
+    view.state.doc.forEach((node, offset) => { if (node.type.name === "bullet_list") list = offset; });
+    view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, list)));
+    find.open();
+    expect(find.getSnapshot().query).toBe("");
+    find.setQuery("zzz");
+    find.setMatchCase(true);
+    expect(view.state.selection).toBeInstanceOf(NodeSelection);
+    expect(view.state.selection.from).toBe(list);
+  });
+
+  it("keeps the current match, not the first, across a newer revision", async () => {
+    const { editor, find, view } = await open("cat a\n\ncat b\n\ncat c\n\ncat d\n");
+    search(find, "cat");
+    find.step(1); find.step(1);
+    expect(find.getSnapshot().index).toBe(2);
+    editor.replaceMarkdown("cat a\n\ncat b\n\ncat c\n\ncat d\n\ncat e\n");
+    expect(find.getSnapshot()).toMatchObject({ open: true, index: 2, total: 5 });
+    find.replace("dog");
+    expect(view.state.doc.child(2).textContent).toBe("dog c");
+  });
+
+  it("reopening on a kept query selects its current match", async () => {
+    const { find, view } = await open("x\n\nfind me\n");
+    search(find, "me");
+    find.close();
+    find.open();
+    expect(selected(view)).toBe("me");
   });
 
   it("selects the current match as the query is typed", async () => {
