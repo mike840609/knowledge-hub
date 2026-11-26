@@ -389,16 +389,26 @@ describe("mentions in the Inbox", () => {
     expect(await count(f)).toBe(1);
   });
 
-  it("a dead mention is marked read, so it cannot hide an older live one", async () => {
+  it("marks a permanently dead mention read, but keeps a hidden one unread until restored", async () => {
     const f = await fixture();
     const live = await mentionAlice(f);
-    const dead = await mentionAlice(f);
-    await f.service.setVisibility(f.owner, { documentId: f.documentId, threadId: dead.threadId, commentId: dead.commentId, visibility: "HIDDEN", reason: "off topic" });
+    const hidden = await mentionAlice(f);
+    const deleted = await mentionAlice(f);
+    await f.service.setVisibility(f.owner, { documentId: f.documentId, threadId: hidden.threadId, commentId: hidden.commentId, visibility: "HIDDEN", reason: "off topic" });
+    await f.service.deleteForLink(f.reader, { token: f.token, threadId: deleted.threadId, commentId: deleted.commentId });
+    // The hidden mention does not hide the older live one; the deleted one is gone for good.
+    expect((await unread(f)).map(n => (n as { id: string }).id)).toEqual([`mention:${live.commentId}`]);
     expect(await count(f)).toBe(1);
     const rows = await pool.query("SELECT comment_id, read_at FROM review_comment_mentions WHERE mentioned_user_id=?", [f.alice]);
     const readAt = (id: string) => rows.find((row: { comment_id: string }) => row.comment_id === id).read_at;
-    expect(readAt(dead.commentId)).not.toBeNull();
+    expect(readAt(deleted.commentId)).not.toBeNull();
+    expect(readAt(hidden.commentId)).toBeNull();
     expect(readAt(live.commentId)).toBeNull();
+    // Restoring the comment's visibility brings its unread mention back.
+    f.setTime(20);
+    await f.service.setVisibility(f.owner, { documentId: f.documentId, threadId: hidden.threadId, commentId: hidden.commentId, visibility: "VISIBLE" });
+    expect((await unread(f)).map(n => (n as { id: string }).id).sort()).toEqual([`mention:${hidden.commentId}`, `mention:${live.commentId}`].sort());
+    expect(await count(f)).toBe(2);
   });
 
   it("the badge counts exactly the unread list: read and dead mentions are in neither", async () => {

@@ -255,9 +255,13 @@ behave through them, as built:
   `@name` is still a mention; Cancel and a successful send forget them.
 - **The Inbox split view offers `@`** to a signed-in reader replying to a
   followed discussion, through that entry's token (and document, on a folder link).
-- **A dead mention is marked read** when the unread list or badge is built, so
-  a document moved out of a folder and back (or a hidden thread restored) comes
-  back read.
+- **Only a permanently dead mention is marked read** when the unread list or
+  badge is built: its comment, thread, link or document row is gone, the comment
+  is deleted, the thread is retracted, or the link is revoked or expired. A
+  temporarily unreachable mention (a hidden comment or thread, an archived
+  document, a document moved out of a shared folder, or a viewer no longer named)
+  keeps its unread mark and is paged past, so restoring it brings the mention
+  back unread.
 
 ## Non-goals
 

@@ -268,16 +268,16 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
     return this.receivedBy(userId, limit, false);
   }
 
-  listUnreadForRecipient(userId: string, limit: number): Promise<ReceivedShareLink[]> {
-    return this.receivedBy(userId, limit, true);
+  listUnreadForRecipient(userId: string, limit: number, offset = 0): Promise<ReceivedShareLink[]> {
+    return this.receivedBy(userId, limit, true, offset);
   }
 
-  private async receivedBy(userId: string, limit: number, unreadOnly: boolean): Promise<ReceivedShareLink[]> {
+  private async receivedBy(userId: string, limit: number, unreadOnly: boolean, offset = 0): Promise<ReceivedShareLink[]> {
     const rows = await this.connection.query<DbRow[]>(
       `SELECT l.*, r.added_at AS recipient_added_at, r.read_at AS recipient_read_at
        FROM document_share_link_recipients r JOIN document_share_links l ON l.id = r.share_link_id
-       WHERE r.user_id = ?${unreadOnly ? " AND r.read_at IS NULL" : ""} ORDER BY r.added_at DESC, l.id DESC LIMIT ?`,
-      [userId, limit],
+       WHERE r.user_id = ?${unreadOnly ? " AND r.read_at IS NULL" : ""} ORDER BY r.added_at DESC, l.id DESC LIMIT ?${offset > 0 ? " OFFSET ?" : ""}`,
+      offset > 0 ? [userId, limit, offset] : [userId, limit],
     );
     return rows.map(row => ({ link: mapLink(row), addedAt: asDate(row.recipient_added_at), readAt: asNullableDate(row.recipient_read_at) }));
   }
