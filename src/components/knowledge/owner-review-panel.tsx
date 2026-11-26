@@ -32,7 +32,10 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const [result, setResult] = useState<{ threads: OwnerReviewThreadView[]; writesEnabled: boolean; revisionId: string; callerUserId: string }>();
   const [error, setError] = useState<string>();
   const [activeThreadId, setActiveThreadId] = useState<string>();
-  const [filter, setFilter] = useState<ReviewFilter>("ALL");
+  // The list starts on what is still open: settled discussions would otherwise crowd the ones
+  // that want an answer away from their passages. With nothing open it says every comment is
+  // resolved and offers them (Show resolved), so an empty list never reads as no discussion at all.
+  const [filter, setFilter] = useState<ReviewFilter>("OPEN");
   // The way in is the document header's (`review-entry.tsx`), not a row of this panel's.
   const shared = useReviewEntry();
   const publish = shared?.publish;
@@ -94,10 +97,6 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     owner.current = result.callerUserId;
     if (arrived.current) return;
     arrived.current = true;
-    // The list starts on what is still open, where something is: settled discussions would
-    // otherwise crowd the ones that want an answer away from their passages. With nothing open it
-    // starts on everything — an empty list would say there was nothing at all.
-    setFilter(result.threads.some(thread => thread.status === "OPEN") ? "OPEN" : "ALL");
     // A `?thread=` deep link (e.g. from the home discussions list) selects its
     // discussion and opens the rail; an unknown id is ignored, never an error.
     const deep = thread ?? new URLSearchParams(window.location.search).get("thread");

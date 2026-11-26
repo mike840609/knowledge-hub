@@ -338,7 +338,7 @@ test("collapsed selection offers Comment, and Escape preserves a new-comment dra
   await expect(input).toBeFocused();
   await expect(input).toHaveValue("New draft");
   await page.getByRole("button", { name: "Add comment", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Hide comments, 1 comments", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Hide comments, 1 comments, 1 open", exact: true })).toBeVisible();
 });
 
 test("a comment starts from a button beside the selection and opens in the rail level with the passage", async ({ page, request }) => {

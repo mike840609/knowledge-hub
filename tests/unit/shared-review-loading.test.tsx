@@ -60,6 +60,7 @@ const resolvedThread = (id: string) => ({
   id, status: "RESOLVED", createdAt: "2026-10-22T09:00:00Z", updatedAt: "2026-10-22T09:00:00Z", currentAnchor: { match: "OUTDATED" },
   comments: [{ id: `${id}-c`, threadId: id, body: "Settled", visibility: "VISIBLE", createdAt: "2026-10-22T09:00:00Z", editedAt: null, deleted: false, own: false }],
 });
+const openThread = (id: string) => ({ ...resolvedThread(id), status: "OPEN", comments: [{ ...resolvedThread(id).comments[0], body: "Still open" }] });
 const entryButton = () => container.querySelector<HTMLButtonElement>('button[aria-controls="shared-document-discussions"]')!;
 
 it("says Updating while Refresh reads, and stops when it has read", async () => {
@@ -77,12 +78,12 @@ it("says Updating while Refresh reads, and stops when it has read", async () => 
 it("keeps the discussions shown when a Refresh fails, and says it failed", async () => {
   const answer = pendingFetch();
   await render();
-  await answer(json({ threads: [resolvedThread("t1")], revisionId: "r1", writesEnabled: true, callerUserId: "u1" }));
+  await answer(json({ threads: [openThread("t1")], revisionId: "r1", writesEnabled: true, callerUserId: "u1" }));
   const refresh = Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-label="Refresh comments"]')).at(-1)!;
   await act(async () => { refresh.click(); });
   await answer(json({ error: { message: "x" } }, 503));
   expect(container.textContent).toContain("Comments are unavailable.");
-  expect(container.textContent).toContain("Settled");
+  expect(container.textContent).toContain("Still open");
 });
 
 it("tells a reader who can comment how to start a comment", async () => {
@@ -136,4 +137,40 @@ it("offers to refresh the page where it says the document changed", async () => 
   const refresh = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).filter(button => button.textContent === "Refresh page");
   // Beside the notice above the article and beside the one in the panel.
   expect(refresh).toHaveLength(2);
+});
+
+const filterButton = () => container.querySelector<HTMLElement>('[aria-label="Filter comments"]')!;
+
+it("starts on Open, and counts what is open in the Comments entry", async () => {
+  const answer = pendingFetch();
+  await render();
+  await answer(json({ threads: [openThread("t1"), resolvedThread("t2"), resolvedThread("t3")], revisionId: "r1", writesEnabled: true, callerUserId: "u1" }));
+  expect(filterButton().textContent).toBe("Open");
+  expect(container.textContent).toContain("Still open");
+  expect(container.textContent).not.toContain("Settled");
+  expect(entryButton().textContent).toBe("Comments (1)1");
+  expect(entryButton().getAttribute("aria-label")).toBe("Show comments, 3 comments, 1 open");
+});
+
+it("says every comment is resolved, and Show resolved lists them", async () => {
+  const answer = pendingFetch();
+  await render();
+  await answer(json({ threads: [resolvedThread("t1")], revisionId: "r1", writesEnabled: true, callerUserId: "u1" }));
+  expect(filterButton().textContent).toBe("Open");
+  expect(container.textContent).toContain("Every comment is resolved.");
+  expect(container.textContent).not.toContain("Settled");
+  const show = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent === "Show resolved")!;
+  await act(async () => { show.click(); });
+  expect(filterButton().textContent).toBe("Resolved");
+  expect(container.textContent).toContain("Settled");
+});
+
+it("shows a resolved discussion a ?thread= link names, whatever the filter starts on", async () => {
+  window.history.replaceState(null, "", "/s/share-token?thread=t2");
+  try {
+    const answer = pendingFetch();
+    await render();
+    await answer(json({ threads: [openThread("t1"), resolvedThread("t2")], revisionId: "r1", writesEnabled: true, callerUserId: "u1" }));
+    expect(container.textContent).toContain("Settled");
+  } finally { window.history.replaceState(null, "", "/"); }
 });

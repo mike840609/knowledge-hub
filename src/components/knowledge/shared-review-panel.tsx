@@ -37,7 +37,8 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
   // Every way the rail opens and closes holds the reader's place.
   const [open, setOpen, holdAt] = useReviewRailOpen(readingRef);
   const inline = useReviewRailInline();
-  const [filter, setFilter] = useState<ReviewFilter>("ALL");
+  // Open first, as the owner's list and Google Docs start: settled discussions are under Resolved (2026-11-26 amendment).
+  const [filter, setFilter] = useState<ReviewFilter>("OPEN");
   const shown = useRef<DiscussionResult | undefined>(undefined);
   useEffect(() => { shown.current = result; }, [result]);
   // The reader's own opening and closing. Closing is remembered as the discussions it was closed on,
@@ -98,7 +99,8 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
     if (shown.current) setRefreshing(true);
     try { setResult(await reviewRequest<DiscussionResult>("/api/share-review/threads/query", scope)); setArrived(undefined); } catch (failure) { if (!shown.current) setResult(undefined); setError(failure instanceof Error ? failure.message : "Comments are unavailable."); } finally { setRefreshing(false); }
   }, [scope]);
-  const allResolved = !!result && result.threads.length > 0 && result.threads.every(thread => thread.status === "RESOLVED");
+  const openCount = result?.threads.filter(thread => thread.status === "OPEN").length ?? 0;
+  const allResolved = !!result && result.threads.length > 0 && openCount === 0;
   useEffect(() => { void load(); }, [load]);
   // Coming back to the tab reads the discussions again. Nothing new is taken in quietly; new
   // comments wait behind a notice, so a card is never moved under the reader.
@@ -175,10 +177,11 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
             ml-auto keeps the actions on the right where there is no brand (the Hub's reader), so they stay put when the rail opens. */}
         <div className={wide ? "-me-3 ml-auto flex shrink-0 items-center gap-1" : "-me-3 ml-auto flex min-w-0 items-center justify-end gap-1"}>
           <span aria-live="polite">{arrived && <Button type="button" variant="soft" onClick={showArrived} className="kh-pop-in max-sm:px-2"><span className="max-sm:hidden">{arrived.count === 1 ? "1 new comment" : `${arrived.count} new comments`}</span><span className="sm:hidden">{arrived.count} new</span></Button>}</span>
-          <Button ref={entryRef} type="button" variant="ghost" aria-label={`${open ? "Hide comments" : "Show comments"}${result ? `, ${result.threads.length} comments` : ""}${allResolved ? ", all resolved" : ""}`} aria-expanded={open} aria-controls="shared-document-discussions" onPointerDown={event => event.preventDefault()} onClick={toggle} className="max-sm:gap-1 max-sm:px-2">
+          <Button ref={entryRef} type="button" variant="ghost" aria-label={`${open ? "Hide comments" : "Show comments"}${result ? `, ${result.threads.length} comments` : ""}${allResolved ? ", all resolved" : openCount > 0 ? `, ${openCount} open` : ""}`} aria-expanded={open} aria-controls="shared-document-discussions" onPointerDown={event => event.preventDefault()} onClick={toggle} className="max-sm:gap-1 max-sm:px-2">
             <MessageSquare className="size-4" aria-hidden="true" />
-            <span className="max-sm:sr-only">Comments{allResolved ? ` · ${result.threads.length} resolved` : result && result.threads.length > 0 ? ` (${result.threads.length})` : ""}</span>
-            {result && result.threads.length > 0 && !allResolved ? <span className="tabular-nums sm:hidden">{result.threads.length}</span> : null}
+            {/* The number is what still wants an answer, as the owner's entry counts; the name says both. */}
+            <span className="max-sm:sr-only">Comments{allResolved ? ` · ${result.threads.length} resolved` : openCount > 0 ? ` (${openCount})` : ""}</span>
+            {openCount > 0 ? <span className="tabular-nums sm:hidden">{openCount}</span> : null}
           </Button>
           {actions}
         </div>

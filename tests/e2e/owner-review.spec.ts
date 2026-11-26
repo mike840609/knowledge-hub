@@ -286,9 +286,13 @@ test("discussions that are all resolved do not open by themselves", async ({ pag
   const rail = page.getByRole("complementary", { name: "Document comments" });
   await expect(rail).toBeHidden();
   await expect(page.getByRole("complementary", { name: "On this page" })).toBeVisible();
-  // Asked for, they are all there: with nothing open, an empty list would say there was nothing at all.
+  // Asked for, the list is on Open and says everything is resolved, offering the history (2026-11-26 amendment).
   await openReviewDiscussions(page);
-  await expect(rail.getByRole("button", { name: "Filter comments" })).toHaveText("All comments");
+  await expect(rail.getByRole("button", { name: "Filter comments" })).toHaveText("Open");
+  await expect(rail.locator("[data-review-thread]").filter({ visible: true })).toHaveCount(0);
+  await expect(rail).toContainText("Every comment is resolved.");
+  await rail.getByRole("button", { name: "Show resolved", exact: true }).click();
+  await expect(rail.getByRole("button", { name: "Filter comments" })).toHaveText("Resolved");
   await expect(rail.locator("[data-review-thread]").filter({ visible: true })).toHaveCount(1);
 });
 

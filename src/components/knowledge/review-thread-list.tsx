@@ -251,7 +251,10 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
     <ConfirmDialog open={!!pendingDelete} onOpenChange={open => { if (!open) setPendingDelete(undefined); }} title="Delete comment?" description="Your comment will be removed for everyone. This cannot be undone." confirmLabel="Delete comment" onConfirm={() => { if (pendingDelete) void remove(pendingDelete); }} />
     {threads.length > 0 && !onFilterChange && <ReviewFilterMenu value={filter} onChange={setFilter} />}
     {error && <p role="alert" className="text-body-sm">{error}</p>}
-    {visible.length === 0 && !draft && <p className="py-6 text-body-sm text-kh-text-muted">{threads.length === 0 ? `No comments yet.${writesEnabled ? ` ${emptyHint}` : ""}` : filter === "OPEN" && threads.every(thread => thread.status === "RESOLVED") ? "Every comment is resolved." : "No comments here."}</p>}
+    {/* The list starts on Open, so a document whose discussions are all settled says so, and offers them. */}
+    {visible.length === 0 && !draft && (filter === "OPEN" && threads.length > 0 && threads.every(thread => thread.status === "RESOLVED")
+      ? <div className="py-6"><p className="text-body-sm text-kh-text-muted">Every comment is resolved.</p><Button type="button" variant="ghost" className="-ml-3 mt-1" onClick={() => setFilter("RESOLVED")}>Show resolved</Button></div>
+      : <p className="py-6 text-body-sm text-kh-text-muted">{threads.length === 0 ? `No comments yet.${writesEnabled ? ` ${emptyHint}` : ""}` : "No comments here."}</p>)}
     <div ref={railRef} data-review-rail={railMarkdown !== undefined ? "" : undefined} data-positioned={layout ? "" : undefined} className="kh-review-thread-list" style={layout ? { "--review-list-height": `${layout.height}px` } as CSSProperties : undefined}>
     {/* The box is placed before its field mounts: the field takes focus on mounting, and focused at the rail's top it scrolls the page away from the passage. */}
     {draft && <section data-review-draft={DRAFT_ID} aria-label="New comment" style={layout ? { "--review-thread-top": `${layout.positions[DRAFT_ID] ?? 0}px` } as CSSProperties : undefined} className={layout?.positions[DRAFT_ID] !== undefined ? "kh-pop-in" : undefined}>{layout?.positions[DRAFT_ID] !== undefined && draft.composer}</section>}
