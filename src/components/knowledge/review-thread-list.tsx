@@ -138,6 +138,8 @@ const FILTER_NAMES: Record<ReviewFilter, string> = { ALL: "All comments", OPEN: 
 /** Whose discussions are listed, for a signed-in caller: everyone's, those they wrote in, those that mention them. */
 export type ReviewShow = "ANYONE" | "MINE" | "MENTIONS";
 const SHOW_NAMES: Record<ReviewShow, string> = { ANYONE: "Everyone", MINE: "Mine", MENTIONS: "Mentions me" };
+/** What Open says when everything the Show group lists is resolved: about that group, not about every discussion. */
+const RESOLVED_EMPTY: Record<ReviewShow, string> = { ANYONE: "Every comment is resolved.", MINE: "Every comment of yours is resolved.", MENTIONS: "Every comment that mentions you is resolved." };
 type ShownComment = { own: boolean; mentionsMe?: true };
 /** Whether `show` lists a discussion: Mine is one the caller wrote any comment in; Mentions me, one a comment of which names them. */
 export function reviewShows(thread: { comments: readonly ShownComment[] }, show: ReviewShow): boolean {
@@ -297,7 +299,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
     {error && <p role="alert" className="text-body-sm">{error}</p>}
     {/* The list starts on Open, so a document whose discussions are all settled says so, and offers them. */}
     {visible.length === 0 && !draft && (filter === "OPEN" && whose.length > 0 && whose.every(thread => thread.status === "RESOLVED")
-      ? <div className="py-6"><p className="text-body-sm text-kh-text-muted">Every comment is resolved.</p><Button type="button" variant="ghost" className="-ml-3 mt-1" onClick={() => setFilter("RESOLVED")}>Show resolved</Button></div>
+      ? <div className="py-6"><p className="text-body-sm text-kh-text-muted">{RESOLVED_EMPTY[show]}</p><Button type="button" variant="ghost" className="-ml-3 mt-1" onClick={() => setFilter("RESOLVED")}>Show resolved</Button></div>
       : <p className="py-6 text-body-sm text-kh-text-muted">{threads.length === 0 ? `No comments yet.${writesEnabled ? ` ${emptyHint}` : ""}` : whose.length === 0 ? (show === "MINE" ? "You haven’t commented here." : "No comment mentions you.") : "No comments here."}</p>)}
     <div ref={railRef} data-review-rail={railMarkdown !== undefined ? "" : undefined} data-positioned={layout ? "" : undefined} className="kh-review-thread-list" style={layout ? { "--review-list-height": `${layout.height}px` } as CSSProperties : undefined}>
     {/* The box is placed before its field mounts: the field takes focus on mounting, and focused at the rail's top it scrolls the page away from the passage. */}

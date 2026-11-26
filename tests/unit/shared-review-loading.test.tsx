@@ -216,3 +216,12 @@ it("offers an anonymous reader no Mine or Mentions me", async () => {
   await act(async () => filterButton().click());
   expect([...document.querySelectorAll('[role="menuitemradio"]')].map(row => row.textContent)).toEqual(["All comments", "Open", "Resolved"]);
 });
+
+it("says what is resolved of the Show group, not of every discussion", async () => {
+  const answer = pendingFetch();
+  await render();
+  await answer(json({ threads: [{ ...resolvedThread("t1"), comments: [{ ...resolvedThread("t1").comments[0], own: true, body: "Mine, settled" }] }, withComment("t2", "Someone else's, open", { own: false })], revisionId: "r1", writesEnabled: true, callerUserId: "u1" }));
+  await chooseRow("Mine");
+  expect(container.textContent).toContain("Every comment of yours is resolved.");
+  expect(container.textContent).not.toContain("Every comment is resolved.");
+});
