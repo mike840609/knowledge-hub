@@ -41,8 +41,14 @@ test.describe("find and replace in the rendered editor", () => {
     const { url, documentId } = await createNote(page, unique("Find"), `The ${word} runs.\n\nA ${word.toUpperCase()} sleeps and a [[Elsewhere ${word}]] link.\n\n- last ${word}\n`);
     const surface = await openEditor(page, url);
 
-    await surface.locator("p").first().click();
+    // The first match is the one at or after the caret: put the caret at the very start, and wait until it is there,
+    // or a click that lands mid-paragraph under load starts the count at the second match.
+    await surface.locator("p").first().click({ position: { x: 1, y: 4 } });
     await page.keyboard.press("ControlOrMeta+Home");
+    await expect.poll(() => page.evaluate(() => {
+      const selection = window.getSelection();
+      return selection?.isCollapsed && selection.focusOffset === 0 && !!selection.focusNode?.textContent?.startsWith("The ");
+    })).toBe(true);
     await expect(bar(page)).toHaveCount(0);
     await page.keyboard.press("ControlOrMeta+f");
     await expect(bar(page)).toBeVisible();
