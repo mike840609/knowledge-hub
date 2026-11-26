@@ -137,7 +137,8 @@ export const blockPointer = $prose(() => {
           const inset = Number.parseFloat(style.paddingLeft) || 0;
           const right = rect.right - (Number.parseFloat(style.paddingRight) || 0) - 1;
           const at = view.posAtCoords({ left: Math.min(Math.max(x, rect.left + inset + 1), right), top: y });
-          if (at) view.dispatch(view.state.tr.setSelection(Selection.near(view.state.doc.resolve(at.pos))));
+          // Right of a short line the position is the boundary after its block: look back into it, not into the next.
+          if (at) view.dispatch(view.state.tr.setSelection(Selection.near(view.state.doc.resolve(at.pos), x >= right ? -1 : 1)));
         } catch { /* no layout to ask */ }
       }
       view.focus();
