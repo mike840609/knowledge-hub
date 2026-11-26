@@ -53,11 +53,11 @@ export type FindKeyAction = "open" | "openReplace" | "next" | "previous";
 /** What a key does for the bar. Mod-G and Mod-Shift-G are the bar's only while it is open; the browser's otherwise. */
 export function findKeyAction(event: KeyboardEvent, open: boolean): FindKeyAction | null {
   if (event.isComposing || event.keyCode === 229) return null;
-  // Windows reports AltGr as Ctrl+Alt; AltGr+F types "[" on some layouts, which must reach the editor.
-  if (event.getModifierState?.("AltGraph")) return null;
-  if (!(isMac() ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey)) return null;
-  // By physical key for Alt: Option-F types "ƒ" on a Mac.
-  if (event.altKey) return !event.shiftKey && event.code === "KeyF" ? "openReplace" : null;
+  const mac = isMac();
+  if (!(mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey)) return null;
+  // On a Mac by physical key: Option-F types "ƒ". Elsewhere by the character: Windows reports AltGr as Ctrl+Alt,
+  // and AltGr+F types "[" on some layouts, which must reach the editor.
+  if (event.altKey) return !event.shiftKey && (mac ? event.code === "KeyF" : event.key.toLowerCase() === "f") ? "openReplace" : null;
   const letter = event.key.toLowerCase();
   if (letter === "f" && !event.shiftKey) return "open";
   if (letter === "g" && open) return event.shiftKey ? "previous" : "next";
@@ -97,6 +97,8 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
   let notice = "";
   let focusToken = 0;
   const listeners = new Set<() => void>();
+  /** What the bar was showing; a new EditorState (a whole-document replace) starts from it, not from closed. */
+  let kept: Pick<FindState, "open" | "query" | "matchCase"> = idle;
   const stateOf = () => (view ? key.getState(view.state) ?? idle : idle);
   const build = (): FindSnapshot => {
     const state = stateOf();
@@ -104,6 +106,7 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
   };
   let snapshot = build();
   const refresh = () => {
+    if (view) { const { open, query, matchCase } = stateOf(); kept = { open, query, matchCase }; }
     const next = build();
     mount.hidden = !next.open;
     if ((Object.keys(next) as (keyof FindSnapshot)[]).every(name => next[name] === snapshot[name])) return;
@@ -126,7 +129,11 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
   /** Centred, not ProseMirror's 5px margin: the pinned header and the bar itself cover the pane's top edge. */
   const reveal = () => { view?.dom.querySelector(".kh-find-current")?.scrollIntoView?.({ block: "center", inline: "nearest" }); };
   /** After a search: the current match is selected and shown, as it is in a browser's find. */
-  const showCurrent = () => { if (stateOf().matches.length) select(stateOf().current); };
+  const showCurrent = () => {
+    if (stateOf().matches.length) { select(stateOf().current); return; }
+    // Nothing found (a typo, a cleared query): an earlier match must not stay selected for the next keystroke to overwrite.
+    if (view && !view.state.selection.empty) view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, view.state.selection.from)));
+  };
   /** The marks at the match's start: replacing never changes what the text around it was written with. */
   const insert = (tr: Transaction, match: FindMatch, text: string) => {
     if (!text) { tr.delete(match.from, match.to); return; }
@@ -152,6 +159,7 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
       ensureMounted();
       const { selection, doc } = view.state;
       let query: string | undefined;
+      const wasOpen = stateOf().open;
       // With the bar open, Mod-F refocuses the query the writer typed rather than overwriting it.
       if (!selection.empty && !stateOf().open) {
         const text = doc.textBetween(selection.from, selection.to, "\n", BARRIER);
@@ -161,6 +169,7 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
       focusToken += 1;
       notice = "";
       dispatchMeta({ open: true, ...(query === undefined ? {} : { query }) });
+      if (!wasOpen && stateOf().matches.length) select(stateOf().current);
       refresh();
     },
     close() {
@@ -205,7 +214,10 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
   const plugin = $prose(() => new Plugin<FindState>({
     key,
     state: {
-      init: () => idle,
+      init: (_config, state) => {
+        if (!kept.open || !kept.query) return { ...idle, ...kept };
+        return { ...kept, ...findMatches(state.doc, kept.query, kept.matchCase), current: 0 };
+      },
       apply(tr, previous, _old, state) {
         const meta = tr.getMeta(key) as FindMeta | undefined;
         const search = meta?.open !== undefined || meta?.query !== undefined || meta?.matchCase !== undefined;
@@ -243,8 +255,9 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
       refresh();
       return {
         update: refresh,
-        // A whole-document replace recreates plugin views; React's subscription must outlive this one.
-        destroy() { mount.remove(); view = null; },
+        // A whole-document replace recreates plugin views on the same EditorView: the subscription and the mount
+        // (with the focused query field in it) must outlive this one. The host and the mount go with the editor.
+        destroy() { view = null; },
       };
     },
   }));

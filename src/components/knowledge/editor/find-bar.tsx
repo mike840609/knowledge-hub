@@ -12,6 +12,9 @@ import { findKeyAction, type FindController } from "./find-replace";
  * fields while it is open; the keys the editor handles (Mod-F, Mod-G, Mod-Alt-F) are handled here too, and Escape
  * closes it and gives the editor its caret back.
  */
+/** Safari sends the key that ends a composition with isComposing false and keyCode 229. */
+const composing = (event: KeyboardEvent<HTMLElement>) => event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229;
+
 export function FindBar({ controller }: { controller: FindController }) {
   const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
   const [replacement, setReplacement] = useState("");
@@ -35,18 +38,18 @@ export function FindBar({ controller }: { controller: FindController }) {
       event.preventDefault();
       if (action === "next" || action === "previous") controller.step(action === "next" ? 1 : -1);
       else controller.open({ replace: action === "openReplace" });
-    } else if (event.key === "Escape" && !event.nativeEvent.isComposing) {
+    } else if (event.key === "Escape" && !composing(event)) {
       event.preventDefault();
       controller.close();
     }
   };
   const submitQuery = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+    if (event.key !== "Enter" || composing(event)) return;
     event.preventDefault();
     controller.step(event.shiftKey ? -1 : 1);
   };
   const submitReplacement = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+    if (event.key !== "Enter" || composing(event)) return;
     event.preventDefault();
     replacing(() => controller.replace(replacement));
   };

@@ -169,14 +169,30 @@ describe("keys", () => {
 
   it("Mod-Alt-F opens it with the replace field", async () => {
     const { find, view } = await open("a\n");
-    key(view, { key: "ƒ", code: "KeyF", ctrlKey: true, altKey: true });
+    key(view, { key: "f", code: "KeyF", ctrlKey: true, altKey: true });
     expect(find.getSnapshot()).toMatchObject({ open: true, replaceOpen: true });
+  });
+
+  it("on a Mac, Command-Option-F opens it by the physical key (Option-F types \"ƒ\")", async () => {
+    const platform = Object.getOwnPropertyDescriptor(Navigator.prototype, "platform");
+    Object.defineProperty(navigator, "platform", { configurable: true, get: () => "MacIntel" });
+    try {
+      const { find, view } = await open("a\n");
+      key(view, { key: "ƒ", code: "KeyF", metaKey: true, altKey: true });
+      expect(find.getSnapshot()).toMatchObject({ open: true, replaceOpen: true });
+    } finally {
+      delete (navigator as unknown as Record<string, unknown>).platform;
+      if (platform) Object.defineProperty(Navigator.prototype, "platform", platform);
+    }
   });
 
   it("leaves AltGr+F (Ctrl+Alt on Windows) to the editor: on some layouts it types \"[\"", async () => {
     const { find, view } = await open("a\n");
+    // Firefox may report AltGraph for any Ctrl+Alt, so the character decides: "[" is not "f".
     expect(key(view, { key: "[", code: "KeyF", ctrlKey: true, altKey: true, modifierAltGraph: true } as KeyboardEventInit).defaultPrevented).toBe(false);
     expect(find.getSnapshot().open).toBe(false);
+    expect(key(view, { key: "f", code: "KeyF", ctrlKey: true, altKey: true, modifierAltGraph: true } as KeyboardEventInit).defaultPrevented).toBe(true);
+    expect(find.getSnapshot()).toMatchObject({ open: true, replaceOpen: true });
   });
 
   it("Mod-F with the bar open keeps the query the writer typed", async () => {
@@ -200,13 +216,26 @@ describe("living through the editor", () => {
     const { editor, find } = await open("one\n");
     let calls = 0;
     find.subscribe(() => { calls += 1; });
-    find.open();
+    search(find, "two");
     editor.replaceMarkdown("two two\n");
+    // The bar stays open on the same query, and finds it in the new document.
+    expect(find.getSnapshot()).toMatchObject({ open: true, query: "two", total: 2 });
     const before = calls;
-    find.open();
-    find.setQuery("two");
+    find.setQuery("tw");
     expect(calls).toBeGreaterThan(before);
     expect(find.getSnapshot()).toMatchObject({ open: true, total: 2 });
+  });
+
+  it("leaves no match selected once the query finds nothing, so Escape and a keystroke overwrite nothing", async () => {
+    const { find, view } = await open("alpha beta\n");
+    search(find, "be");
+    expect(selected(view)).toBe("be");
+    find.setQuery("bex");
+    find.close();
+    expect(view.state.selection.empty).toBe(true);
+    find.open();
+    find.setQuery("");
+    expect(view.state.selection.empty).toBe(true);
   });
 
   it("selects the current match as the query is typed", async () => {
