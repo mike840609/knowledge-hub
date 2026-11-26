@@ -922,6 +922,12 @@ marks where it will land; a grip inside a range drags the range, every block of
 it tinted. On a device with no hover the controls follow the
 block the caret is in.
 
+**A range chosen with the mouse** (mouse block-range spec): Shift-click on a block or
+its grip extends the chosen block, and a drag from the editor's margin draws a box
+(`.kh-block-marquee`: `kh-bg-selected` fill at 0.7 opacity, a 1px `--kh-primary` border,
+`rounded-sm`, `fixed`, `z-30`, no pointer events) over the blocks it meets, which are
+drawn as any range is. No token was added.
+
 **Copy link to block** writes `<document address>#kh-block-<uuid>` and gives
 the block that id if it has none. Markdown carries the id as an HTML comment
 adjacent to the block (`<!-- kh-block-… -->` before a paragraph or fence,
