@@ -161,10 +161,10 @@ it("puts the meta line under the header's title, and leaves it to the article wh
   }
 });
 
-it("labels Share where there is room and keeps its name for assistive tech", async () => {
+it("draws Share as an icon button with no visible word, named for assistive tech", async () => {
   const { host, root } = await renderHeader({ onShareClick: vi.fn() });
   try {
-    expect(host.querySelector('button[aria-label="Share link…"]')?.textContent).toBe("Share");
+    expect(host.querySelector('button[aria-label="Share link…"]')?.textContent).toBe("");
   } finally {
     await act(async () => root.unmount());
   }

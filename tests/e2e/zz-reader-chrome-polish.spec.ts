@@ -3,7 +3,7 @@ import { personalWorkspaceId as mySpace } from "./fixtures/my-space";
 
 /**
  * Reader chrome (docs/superpowers/specs/2026-11-25-reader-chrome-polish-design.md): the title before its meta line,
- * Read only as a badge with a popover, the breadcrumb that keeps the page's name, a labelled Share, and a table that
+ * Read only as a badge with a popover, the breadcrumb that keeps the page's name, an icon-only Share, and a table that
  * scrolls sideways only where its column is narrow. It writes into the E2E user's My Space, so it sorts last.
  */
 
@@ -132,7 +132,7 @@ test.describe("a read-only synced page", () => {
 });
 
 test.describe("a writer's own note", () => {
-  test("desktop: the title is above its meta line, and Share is labelled", async ({ page }) => {
+  test("desktop: the title is above its meta line, and Share is the icon alone", async ({ page }) => {
     await page.setViewportSize(DESKTOP);
     const note = await writersNote(page);
     await page.goto(note.url);
@@ -144,8 +144,8 @@ test.describe("a writer's own note", () => {
     const [titleBox, metaBox] = await Promise.all([title.boundingBox(), meta.boundingBox()]);
     expect(titleBox!.y).toBeLessThan(metaBox!.y);
     const share = page.getByRole("button", { name: "Share link…" });
-    await expect(share).toContainText("Share");
-    await expect(share.getByText("Share", { exact: true })).toBeVisible();
+    await expect(share).toBeVisible();
+    await expect(share).toHaveText("");
     // The saved page does not carry the slot.
     expect(await page.locator("main .kh-editor").first().evaluate((element) => element.textContent?.includes("Updated"))).toBe(true);
   });
@@ -157,7 +157,7 @@ test.describe("a writer's own note", () => {
     await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(ROUND_TRIP);
     const share = page.getByRole("button", { name: "Share link…" });
     await expect(share).toBeVisible();
-    await expect(share.getByText("Share", { exact: true })).toBeHidden();
+    await expect(share).toHaveText("");
     const title = page.locator("main .kh-editor h1").first();
     const [titleBox, metaBox] = await Promise.all([title.boundingBox(), page.locator("[data-document-meta]").boundingBox()]);
     expect(titleBox!.y).toBeLessThan(metaBox!.y);

@@ -291,7 +291,7 @@ describe("pages", () => {
     await flush();
     expect(menu().textContent).toContain("Couldn't load pages.");
     key(view, "Enter");
-    expect(editor.getMarkdown()).toBe(`${isoDate(0, new Date())}\n`);
+    expect(editor.getMarkdown()).toBe(`${isoDate(0, NOW)}\n`);
   });
 });
 
