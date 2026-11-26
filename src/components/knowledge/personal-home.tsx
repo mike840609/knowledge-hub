@@ -30,14 +30,18 @@ import { RowPreviewButton } from "./row-preview-button";
 
 type Doc = ContinueDoc;
 
-function Section({ title, count, action, children }: { title: string; count?: number; action?: ReactNode; children: React.ReactNode }) {
+function Section({ title, count, action, children }: { title: string; count?: number; action?: { href: string; label: string }; children: React.ReactNode }) {
   return (
     <section aria-label={title} className="min-w-0">
       <div className="flex items-baseline justify-between gap-3 px-3 pb-2">
         <h2 className="text-body font-semibold text-kh-text">
           {title}{count ? <span className="ml-1.5 text-kh-selected-text">{count}</span> : null}
         </h2>
-        {action}
+        {action && (
+          <Link href={action.href} className="kh-control kh-focus-ring inline-flex min-h-8 items-center rounded-md text-body text-kh-link hover:underline">
+            {action.label}
+          </Link>
+        )}
       </div>
       {children}
     </section>
@@ -284,14 +288,14 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
           </Section>}
         </div>
         <div className="min-w-0 space-y-6">
-          <Section title="Discussions" count={notices.length} action={<Link className="kh-focus-ring inline-flex min-h-6 items-center rounded-md text-caption text-kh-link" href={`/w/${workspaceId}/inbox`}>Open Inbox</Link>}>
+          <Section title="Discussions" count={notices.length} action={{ href: `/w/${workspaceId}/inbox`, label: "Open Inbox" }}>
             {notices.length ? <UnreadDiscussions notices={notices} /> : <EmptyLine>No new comments or replies.</EmptyLine>}
           </Section>
           <Section title="Favorites">
             {favorites.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{favorites.map((doc, i) => documentRow(doc, { showSource: sourceChanges(favorites, i), stackProvenance: true }))}</ul>
               : <EmptyLine>Star a document to keep it here.</EmptyLine>}
           </Section>
-          <Section title="Tasks" action={<Link className="kh-control kh-focus-ring inline-flex min-h-8 items-center rounded-md text-body text-kh-link hover:underline" href={`/w/${workspaceId}/tasks`}>Open Tasks</Link>}>
+          <Section title="Tasks" action={{ href: `/w/${workspaceId}/tasks`, label: "Open Tasks" }}>
             <p className="px-3 text-caption text-kh-text-muted">Browse results from coding agents.</p>
           </Section>
           <AttentionList workspaceId={workspaceId} reminders={reminders} />

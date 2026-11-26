@@ -236,10 +236,12 @@ describe("C on Home opens a new note", () => {
     expect(html).toMatch(/<button [^>]*data-home-search/);
   });
 
-  // Launcher audit (WCAG 2.5.8, target size): the caption link was 16px tall.
-  it("gives the Open Inbox link a 24px target", () => {
+  it("gives the Inbox and Tasks section links the same 32px target and text style", () => {
     const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} />);
-    expect(html).toMatch(/<a[^>]*class="[^"]*min-h-6[^"]*"[^>]*>Open Inbox</);
+    const inbox = html.match(/<a[^>]*class="([^"]*)"[^>]*>Open Inbox</)?.[1];
+    const tasks = html.match(/<a[^>]*class="([^"]*)"[^>]*>Open Tasks</)?.[1];
+    expect(inbox).toContain("min-h-8");
+    expect(tasks).toEqual(inbox);
   });
 
   // Launcher audit (axe `label-content-name-mismatch`): the field is announced as "Search
