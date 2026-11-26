@@ -7,7 +7,7 @@ import { LogIn, RefreshCw, MessageSquare, MessageSquarePlus, X } from "lucide-re
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewDraftKey, reviewRequest, type ReviewFilter } from "./review-thread-list";
-import { ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
+import { CommentShortcutTip, ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
 import { ReviewPanelShell } from "./review-panel-shell";
 import { ReviewBlockComment } from "./review-block-comment";
 import { COMMENT_HINT, createReviewRangeResolver, focusReviewAnchor, selectionAnchorInBlock } from "./review-selection";
@@ -15,6 +15,7 @@ import { ReviewPassageMarkers } from "./review-passage-markers";
 import { reviewRailInline, useReviewRailInline, useReviewRailOpen } from "./review-rail-mode";
 import { awaitingReader, newComments, parseDismissed, sharedDismissedKey } from "./review-auto-open";
 import { readStored, removeStored, writeStored } from "@/components/shell/use-persisted-state";
+import { COMMENT_SHORTCUT, useCommentShortcut } from "./review-shortcut";
 
 type DiscussionResult = { threads: ReviewThreadView[]; revisionId: string; writesEnabled: boolean; callerUserId: string | null };
 /**
@@ -157,6 +158,10 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
     const root = readingRef.current?.querySelector<HTMLElement>("[data-review-document]");
     if (signedIn && signedIn.revisionId === revisionId && root && createReviewRangeResolver(root, markdown)(signedIn.anchor)) { selection.choose(signedIn.anchor); setOpen(true); }
   }, [result, canComment, anchorKey, draftKey, revisionId, markdown, selection, discardDraft, setOpen]);
+  // ⌘⌥M / Ctrl+Alt+M does what the bubble's Comment does, for a reader who may comment. An anonymous
+  // reader's bubble offers sign-in; the key never takes them off the page, so for them it does nothing.
+  const commentOnSelection = useCallback(() => { selection.capture(); changeOpen(true); }, [selection.capture, changeOpen]);
+  useCommentShortcut(readingRef, canComment, commentOnSelection);
   // Only a signed-in reader who may write is offered `@`: the candidate route refuses anyone else.
   const mentionScope = result?.writesEnabled && !anonymous ? scope : undefined;
   const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} signInHref={signInHref} draftKey={draftKey} restored={restored} mentionScope={mentionScope} onCancel={() => { discardDraft(); selection.clear(); }} onSubmit={async (body, idempotencyKey, mentions) => {
@@ -196,7 +201,7 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
     <div className="kh-review-document" data-review-ready={result || error ? "" : undefined} data-review-open={open ? "" : undefined} data-review-inline={inline ? "" : undefined}>
       <div ref={readingRef} className="kh-review-reading">
         {children}
-        {canComment && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={() => { selection.capture(); changeOpen(true); }} />}
+        {canComment && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={commentOnSelection} />}
         {/* The keyboard's way in: read-only text cannot be selected without a pointer, so each paragraph
             has the owner's Comment button, offered only to a reader who may write. What is selected
             inside the paragraph narrows it, as on the owner's page. */}
@@ -239,7 +244,7 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
       {result && <div className="mt-3">
         {revisionChanged && <div className="mb-3">{changedNotice()}</div>}
         {/* The one thing a reader does here that an owner does not, on a row of its own. */}
-        {canComment && <div className="mb-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={() => { if (!inline) { focusArticleAfterClose.current = true; changeOpen(false); return; } selection.capture(); }}><MessageSquarePlus className="size-4" aria-hidden="true" />{inline ? "Comment on selected text" : "Close comments and select text"}</Button>{inline && !selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
+        {canComment && <div className="mb-3"><CommentShortcutTip inline={inline}><Button type="button" variant="soft" aria-keyshortcuts={inline ? COMMENT_SHORTCUT : undefined} onPointerDown={event => event.preventDefault()} onClick={() => { if (!inline) { focusArticleAfterClose.current = true; changeOpen(false); return; } selection.capture(); }}><MessageSquarePlus className="size-4" aria-hidden="true" />{inline ? "Comment on selected text" : "Close comments and select text"}</Button></CommentShortcutTip>{inline && !selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
         {/* An anonymous reader is offered sign-in once, as the button below, not also as a line saying the same. */}
         {!result.writesEnabled && !anonymous && <p className="mb-3 text-body-sm text-kh-text-muted">Adding comments is currently disabled.</p>}
         {anonymous && <div className="mb-3"><a href={signInHref} className={buttonClasses({ variant: "soft" })}><LogIn className="size-4" aria-hidden="true" />Sign in to comment</a></div>}

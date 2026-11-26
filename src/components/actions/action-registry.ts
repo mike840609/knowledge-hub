@@ -140,6 +140,14 @@ export type ActionEffect =
  */
 export const NAV_TOGGLE_SHORTCUT = "Meta+\\ Control+\\";
 
+/**
+ * Comment on the selected text of a document under review: ⌘⌥M on macOS, Ctrl+Alt+M elsewhere, as
+ * Google Docs binds it. Read by `useCommentShortcut` and the owner's editor toolbar (`isCommentShortcut`,
+ * which matches the key by position: with ⌥ a Mac types "µ" for M), and shown on the Comment buttons.
+ * No editor keymap uses Mod-Alt-M (`notion-keys.ts` takes Mod-Alt-0…8).
+ */
+export const COMMENT_SHORTCUT = "Meta+Alt+M Control+Alt+M";
+
 export type Action = {
   id: ActionId;
   /** Imperative, and complete on its own: a palette row has no surrounding context. */

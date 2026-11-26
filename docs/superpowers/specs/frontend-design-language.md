@@ -729,6 +729,14 @@ owner's page it acts when that control is there (discussions to open, or open
 ones to close). Where the comments are a drawer, the drawer is a dialog and keeps
 its keys: `D` opens it and `Esc` closes it. Not `C` (Create document) nor `M` (Move).
 
+⌘⌥M (Ctrl+Alt+M elsewhere) comments on the text selected in a document under
+review, as Google Docs binds it, and is `COMMENT_SHORTCUT` in the registry; the
+Comment buttons take their `aria-keyshortcuts` from it and the panel's **Comment
+on selected text** its tooltip. It is matched by position (`code`), since ⌥M
+types "µ" on a Mac, and `shortcutLabel` writes Alt as ⌥. It acts only with a
+selection inside the document, never from a field
+(inline review spec, 2026-11-26 amendment).
+
 ⌘\ (Ctrl \ elsewhere) collapses and expands the workspace sidebar, and is
 `NAV_TOGGLE_SHORTCUT` in the registry: the app shell reads the key from there,
 the collapse button takes its `aria-keyshortcuts` from there, and the palette's

@@ -23,6 +23,7 @@ import { blocksTouched, turnBlocks } from "./block-sequence";
 import { parseDocumentHref } from "@/modules/knowledge/domain/document-links";
 import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
 import type { RenderedLinks } from "../rendered-links";
+import { COMMENT_SHORTCUT, isCommentShortcut } from "../review-shortcut";
 
 const tooltip = tooltipFactory("khSelectionToolbar");
 
@@ -464,8 +465,9 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           const commentLabel = document.createElement("span");
           commentLabel.className = "hidden sm:inline"; commentLabel.textContent = "Comment";
           commentButton.append(commentIcon, commentLabel);
-          commentButton.title = "Comment on selection";
+          commentButton.title = "Comment on selection (⌘⌥M / Ctrl+Alt+M)";
           commentButton.setAttribute("aria-label", "Comment on selection");
+          commentButton.setAttribute("aria-keyshortcuts", COMMENT_SHORTCUT);
           commentButton.addEventListener("mousedown", event => event.preventDefault());
           commentButton.addEventListener("click", () => {
             if (!comment?.available()) return;
@@ -792,6 +794,15 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             event.preventDefault();
           }
           editorView.dom.addEventListener("keydown", clearOnModShiftBackslash);
+          // ⌘⌥M / Ctrl+Alt+M: what the Comment button does, where it would be offered (a selection the
+          // owner may comment on). Taken here so the page's own listener (`useCommentShortcut`) leaves it.
+          function commentOnShortcut(event: KeyboardEvent) {
+            if (!isCommentShortcut(event) || editorView.state.selection.empty || !comment?.available()) return;
+            event.preventDefault();
+            comment.run(editorView);
+            provider.hide();
+          }
+          editorView.dom.addEventListener("keydown", commentOnShortcut);
 
           // Above the first line is the document's header ("Updated …"), not free space: flip below a
           // selection with no room above it inside the editor, as well as inside the panes that clip it
@@ -873,6 +884,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
               editorView.dom.removeEventListener("keydown", closeCardOnEscape, true);
               editorView.dom.removeEventListener("keydown", openLinkOnModK);
               editorView.dom.removeEventListener("keydown", clearOnModShiftBackslash);
+              editorView.dom.removeEventListener("keydown", commentOnShortcut);
               editorView.dom.removeEventListener("blur", hideCardOnBlur);
               window.removeEventListener("scroll", onScroll, true);
               clearTimeout(pointerTimer);

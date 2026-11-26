@@ -10,7 +10,8 @@ import { awaitingOwner, dismissedKey, opensOnArrival, parseDismissed } from "./r
 import { useShareCommentUnread } from "./share-comment-notifications";
 import { useReviewEntry } from "./review-entry";
 import { drawnReviewThreads, useReviewDraftHighlight, useReviewHighlights } from "./review-highlights";
-import { ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
+import { CommentShortcutTip, ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
+import { COMMENT_SHORTCUT, useCommentShortcut } from "./review-shortcut";
 import { ReviewPanelShell } from "./review-panel-shell";
 import { ReviewBlockComment } from "./review-block-comment";
 import { ReviewPassageMarkers } from "./review-passage-markers";
@@ -172,6 +173,10 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     if (!inline) { returnPassage.current = restore; changeOpen(false); }
     else requestAnimationFrame(restore);
   };
+  // ⌘⌥M / Ctrl+Alt+M comments on the selection, as the bubble's Comment does. In the editor the
+  // editor's own toolbar takes the key (`selection-toolbar.ts`), as it takes its Comment button.
+  const commentOnSelection = useCallback(() => { selection.capture(); changeOpen(true); }, [selection.capture, changeOpen]);
+  useCommentShortcut(readingRef, canComment && !prepareComment, commentOnSelection);
   // The owner mentions through one of the document's live links, which the `@` list loads when it first opens.
   const mentionScope = readOnly ? undefined : { documentId };
   const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} onCancel={cancelComment} cancelOnEscape={!!prepared} mentionScope={mentionScope}
@@ -193,7 +198,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
       <div ref={readingRef} className="kh-review-reading">
         {children}
         {/* The editor owns the selection toolbar, including its optional Comment action. */}
-        {canComment && !prepareComment && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={() => { selection.capture(); changeOpen(true); }} />}
+        {canComment && !prepareComment && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={commentOnSelection} />}
         {canComment && <ReviewBlockComment readingRef={readingRef} markdown={markdown} chosen={selection.chosen} onChoose={(anchor, element) => {
           holdAt(element);
           // What is selected inside this paragraph is the comment's passage; without a selection
@@ -241,7 +246,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
             {refreshing && result && <p role="status" className="mt-3 text-caption text-kh-text-muted">Updating…</p>}
             {selection.refusal && <p role="status" className="mt-3 text-body-sm">{selection.refusal}</p>}
             {revisionChanged && !prepared && <p role="status" className="mt-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage.</p>}
-            {canComment && !selection.chosen && (count > 0 || selection.ready || !inline) && <div className="mt-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={() => { if (!inline) { focusArticleAfterClose.current = true; changeOpen(false); return; } if (prepareComment) requestComment(() => selection.capture()); else selection.capture(); }} ><MessageSquarePlus className="size-4" aria-hidden="true" />{inline ? "Comment on selected text" : "Close comments and select text"}</Button>{inline && !selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
+            {canComment && !selection.chosen && (count > 0 || selection.ready || !inline) && <div className="mt-3"><CommentShortcutTip inline={inline}><Button type="button" variant="soft" aria-keyshortcuts={inline ? COMMENT_SHORTCUT : undefined} onPointerDown={event => event.preventDefault()} onClick={() => { if (!inline) { focusArticleAfterClose.current = true; changeOpen(false); return; } if (prepareComment) requestComment(() => selection.capture()); else selection.capture(); }} ><MessageSquarePlus className="size-4" aria-hidden="true" />{inline ? "Comment on selected text" : "Close comments and select text"}</Button></CommentShortcutTip>{inline && !selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
           </div>
           {composer && !draft && <div className="mt-3">{composer}</div>}
           {result && <div className="mt-3"><ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={prepared?.markdown ?? (revisionChanged || contentPending ? undefined : markdown)} activeThreadId={activeThreadId} onActivate={setActiveThreadId} unreadThreadIds={unreadThreadIds}
