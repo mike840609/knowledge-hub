@@ -567,8 +567,11 @@ export class DocumentReviewService {
         judged.push({ mention, permanentDead: true });
         continue;
       }
-      // Reversible: the owner can restore visibility.
-      if (thread.visibility === "HIDDEN" || comment.visibility === "HIDDEN") { judged.push({ mention, permanentDead: false }); continue; }
+      // Reversible: the owner can restore visibility. A document row that is gone is still permanent.
+      if (thread.visibility === "HIDDEN" || comment.visibility === "HIDDEN") {
+        judged.push({ mention, permanentDead: !await documentsExist(thread.documentId) });
+        continue;
+      }
       // One judgement per link and document: a folder link reaches each document by its own chain.
       const key = `${mention.shareLinkId}:${thread.documentId}`;
       if (!opens.has(key)) opens.set(key, await this.linkValid(r, link, thread.documentId, userId));

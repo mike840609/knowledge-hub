@@ -44,6 +44,16 @@ function world() {
   const documents = new Map([[DOC_ID, document()]]);
   const source = { id: "source", workspaceId: "workspace", name: "Source", sourceType: "HUB" as const, ownership: "HUB_MANAGED" as const, status: "ACTIVE" as "ACTIVE" | "ARCHIVED", syncVersion: 1 };
   const workspace = { id: "workspace", workspaceType: "PERSONAL", lifecycleState: "ACTIVE", personalOwnerUserId: OWNER };
+  const folder = { id: "folder", nodeType: "FOLDER" as const, sourceId: "source", status: "ACTIVE" as const, parentId: null, name: "Shared" };
+  type ChainNode = { id: string; nodeType: "FOLDER" | "DOCUMENT"; sourceId: string; status: "ACTIVE"; parentId: string | null; name?: string };
+  // `doc` starts outside the shared folder; `other` sits inside it.
+  const chains = new Map<string, ChainNode[]>([
+    [DOC_ID, [{ id: "node-doc", nodeType: "DOCUMENT", sourceId: "source", status: "ACTIVE", parentId: null }]],
+    ["other", [
+      { id: "node-other", nodeType: "DOCUMENT", sourceId: "source", status: "ACTIVE", parentId: "folder" },
+      folder,
+    ]],
+  ]);
   const unread: ReviewMention[] = [mention()];
   const markRead = vi.fn(async (_userId: string, commentId: string) => {
     const index = unread.findIndex(row => row.commentId === commentId);
@@ -64,9 +74,14 @@ function world() {
     sourcePolicy: { findById: vi.fn(async (id: string) => id === source.id ? source : null) },
     workspaces: { findById: vi.fn(async (id: string) => id === workspace.id ? workspace : null) },
     workspaceMemberships: { find: vi.fn(async () => ({ role: "OWNER" })) },
+    tree: {
+      findById: vi.fn(async (id: string) => id === folder.id ? folder : null),
+      findByDocumentId: vi.fn(async (documentId: string) => chains.get(documentId)?.[0] ?? null),
+      listChain: vi.fn(async (nodeId: string) => [...chains.values()].find(chain => chain[0]!.id === nodeId) ?? []),
+    },
     reviewMentions: { listUnreadByRecipient, markRead },
   } as unknown as KnowledgeRepositories;
-  return { r, comments, threads, links, documents, source, unread, markRead, listUnreadByRecipient };
+  return { r, comments, threads, links, documents, source, folder, chains, unread, markRead, listUnreadByRecipient };
 }
 type World = ReturnType<typeof world>;
 
@@ -89,6 +104,7 @@ describe("unread mentions survive a reversible unreachability", () => {
     ["a missing thread", w => { w.threads.clear(); }],
     ["a missing link", w => { w.links.clear(); }],
     ["a missing document", w => { w.documents.clear(); }],
+    ["a hidden comment whose document is missing", w => { w.comments.set(COMMENT_ID, comment({ visibility: "HIDDEN" })); w.documents.clear(); }],
   ])("marks %s read", async (_label, arrange) => {
     const w = world();
     arrange(w);
@@ -116,6 +132,26 @@ describe("unread mentions survive a reversible unreachability", () => {
     expect(w.markRead).not.toHaveBeenCalled();
     w.documents.set(DOC_ID, document());
     expect(await unreadMentions(w)).toEqual([mention()]);
+  });
+
+  it("leaves a mention through a folder link unread while the document is outside it, and returns it when moved back", async () => {
+    const w = world();
+    w.links.set(LINK_ID, link({ target: { kind: "FOLDER", folderNodeId: "folder" } }));
+    w.documents.set("other", document({ id: "other" }));
+    w.threads.set("thread-moved", thread({ id: "thread-moved", documentId: DOC_ID }));
+    w.threads.set("thread-live", thread({ id: "thread-live", documentId: "other" }));
+    w.comments.set("moved", comment({ id: "moved", threadId: "thread-moved", createdAt: new Date(2) }));
+    w.comments.set("live", comment({ id: "live", threadId: "thread-live", createdAt: new Date(1) }));
+    w.comments.delete(COMMENT_ID);
+    w.threads.delete(THREAD_ID);
+    w.unread.splice(0, w.unread.length,
+      mention({ commentId: "moved", createdAt: new Date(2) }),
+      mention({ commentId: "live", createdAt: new Date(1) }));
+    expect((await unreadMentions(w)).map(row => row.commentId)).toEqual(["live"]);
+    expect(w.markRead).not.toHaveBeenCalled();
+    // Moving the document back under the shared folder makes it reachable again.
+    w.chains.set(DOC_ID, [w.chains.get(DOC_ID)![0]!, w.folder]);
+    expect((await unreadMentions(w)).map(row => row.commentId).sort()).toEqual(["live", "moved"]);
   });
 
   it("pages past hidden mentions to an older live one, without marking them read", async () => {

@@ -61,6 +61,21 @@ describe("mentions through a folder link", () => {
     expect(await f.unread()).toEqual([]);
   });
 
+  it("keeps its unread mark while the document is outside the shared folder, and returns when moved back", async () => {
+    const f = await fixture();
+    await f.mention();
+    const nodeId = String((await pool.query("SELECT id FROM knowledge_tree_nodes WHERE document_id=?", [f.doc.documentId]))[0].id);
+    const readAt = async () => (await pool.query("SELECT read_at FROM review_comment_mentions WHERE mentioned_user_id=?", [f.mentionedId.id]))[0].read_at;
+    const root = await f.hub.createFolder(f.owner, { sourceId: f.sourceId, parentId: null, name: "Elsewhere" });
+    await f.hub.moveTreeNode(f.owner, { nodeId, newParentId: root.treeNodeId, newPosition: 0 });
+    expect(await f.unread()).toEqual([]);
+    expect((await f.service.countUnreadForOwner(f.mentioned)).count).toBe(0);
+    expect(await readAt()).toBeNull();
+    await f.hub.moveTreeNode(f.owner, { nodeId, newParentId: f.folderNodeId, newPosition: 0 });
+    expect(await f.unread()).toEqual([expect.objectContaining({ kind: "MENTION", token: f.token, documentId: f.doc.documentId, linkAvailable: true })]);
+    expect((await f.service.countUnreadForOwner(f.mentioned)).count).toBe(1);
+  });
+
   it("finds candidates on a folder link's page, and refuses the token without a document", async () => {
     const f = await fixture();
     const found = await f.service.searchMentionCandidates(f.reader, { query: f.mentionedId.emp_id, token: f.token, documentId: f.doc.documentId });
