@@ -103,6 +103,16 @@ that person's `name`, `name_en` and `emp_id`, to anyone holding a live link.
   `name`, `name_en` and `emp_id`, and points here. The mentions spec gets a
   one-line "amended by" note.
 
+**Amended 2026-11-26 (`mentionsMe`, for "Mentions me"):** a shown comment also
+carries `mentionsMe: true` when, and only when, the people its body names now
+(the same `splitMentions` judgement that decides `mentions`) include **the
+caller themself**. It is absent otherwise — for every other reader, for a
+caller-less read (no caller, so never), and for the owner, who is never
+mentioned on their own document. Like `own` it is a fact about the caller, not
+about anyone else: it carries no id and adds nothing to what `mentions` already
+tells that reader. It feeds the panels' **Mentions me** filter (inline review
+spec, 2026-11-26 amendment). No new entry, route or parameter.
+
 ## 5. Rendering contract
 
 - `CommentBody` already splits text into plain parts and `linkify` links. The

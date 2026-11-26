@@ -174,3 +174,32 @@ it("shows a resolved discussion a ?thread= link names, whatever the filter start
     expect(container.textContent).toContain("Settled");
   } finally { window.history.replaceState(null, "", "/"); }
 });
+
+const withComment = (id: string, body: string, extra: object) => ({ ...openThread(id), comments: [{ ...openThread(id).comments[0], body, ...extra }] });
+async function chooseRow(name: string) {
+  await act(async () => filterButton().click());
+  const row = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(item => item.textContent === name)!;
+  await act(async () => row.click());
+}
+
+it("narrows a signed-in reader's list to Mine or Mentions me", async () => {
+  const answer = pendingFetch();
+  await render();
+  await answer(json({ threads: [withComment("t1", "Written by me", { own: true }), withComment("t2", "Names me", { own: false, mentionsMe: true }), withComment("t3", "Someone else's", { own: false })], revisionId: "r1", writesEnabled: true, callerUserId: "u1" }));
+  await chooseRow("Mine");
+  expect(filterButton().textContent).toBe("Open · Mine");
+  expect(container.textContent).toContain("Written by me");
+  expect(container.textContent).not.toContain("Names me");
+  expect(container.textContent).not.toContain("Someone else's");
+  await chooseRow("Mentions me");
+  expect(container.textContent).toContain("Names me");
+  expect(container.textContent).not.toContain("Written by me");
+});
+
+it("offers an anonymous reader no Mine or Mentions me", async () => {
+  const answer = pendingFetch();
+  await render();
+  await answer(json({ threads: [openThread("t1")], revisionId: "r1", writesEnabled: false, callerUserId: null }));
+  await act(async () => filterButton().click());
+  expect([...document.querySelectorAll('[role="menuitemradio"]')].map(row => row.textContent)).toEqual(["All comments", "Open", "Resolved"]);
+});

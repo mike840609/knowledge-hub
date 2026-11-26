@@ -7,7 +7,7 @@ import { Timestamp } from "@/components/ui/timestamp";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Bell, BellDot, BellOff, Check, ChevronDown, CircleAlert, CircleArrowDown, MoreHorizontal } from "lucide-react";
-import { MenuRoot, MenuTrigger, MenuContent, MenuItem, MenuRadioGroup, MenuRadioItem } from "@/components/ui/menu";
+import { MenuRoot, MenuTrigger, MenuContent, MenuGroup, MenuGroupLabel, MenuItem, MenuRadioGroup, MenuRadioItem, MenuSeparator } from "@/components/ui/menu";
 import { buttonClasses } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -135,9 +135,29 @@ const DRAFT_ID = "draft";
 const GROUP_THRESHOLD = 3;
 const FILTER_NAMES: Record<ReviewFilter, string> = { ALL: "All comments", OPEN: "Open", RESOLVED: "Resolved" };
 
-/** Which discussions are listed. The list draws it above itself unless a panel takes it for its heading. */
-export function ReviewFilterMenu({ value, onChange }: { value: ReviewFilter; onChange: (value: ReviewFilter) => void }) {
-  return <MenuRoot><MenuTrigger className={buttonClasses({ variant: "ghost" })} aria-label="Filter comments">{FILTER_NAMES[value]}<ChevronDown className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent><MenuRadioGroup value={value} onValueChange={next => onChange(next as ReviewFilter)}>{(Object.keys(FILTER_NAMES) as ReviewFilter[]).map(option => <MenuRadioItem key={option} value={option}>{FILTER_NAMES[option]}</MenuRadioItem>)}</MenuRadioGroup></MenuContent></MenuRoot>;
+/** Whose discussions are listed, for a signed-in caller: everyone's, those they wrote in, those that mention them. */
+export type ReviewShow = "ANYONE" | "MINE" | "MENTIONS";
+const SHOW_NAMES: Record<ReviewShow, string> = { ANYONE: "Everyone", MINE: "Mine", MENTIONS: "Mentions me" };
+type ShownComment = { own: boolean; mentionsMe?: true };
+/** Whether `show` lists a discussion: Mine is one the caller wrote any comment in; Mentions me, one a comment of which names them. */
+export function reviewShows(thread: { comments: readonly ShownComment[] }, show: ReviewShow): boolean {
+  return show === "ANYONE" || thread.comments.some(comment => show === "MINE" ? comment.own : !!comment.mentionsMe);
+}
+
+/**
+ * Which discussions are listed. The list draws it above itself unless a panel takes it for its heading.
+ * Given `shows`, a second group narrows them to whose (signed-in callers only); the trigger names both.
+ */
+export function ReviewFilterMenu({ value, onChange, show = "ANYONE", shows, onShowChange }: { value: ReviewFilter; onChange: (value: ReviewFilter) => void; show?: ReviewShow; shows?: readonly ReviewShow[]; onShowChange?: (show: ReviewShow) => void }) {
+  const whose = shows && onShowChange;
+  const statuses = <MenuRadioGroup value={value} onValueChange={next => onChange(next as ReviewFilter)}>{(Object.keys(FILTER_NAMES) as ReviewFilter[]).map(option => <MenuRadioItem key={option} value={option}>{FILTER_NAMES[option]}</MenuRadioItem>)}</MenuRadioGroup>;
+  return <MenuRoot><MenuTrigger className={buttonClasses({ variant: "ghost" })} aria-label="Filter comments">{FILTER_NAMES[value]}{show !== "ANYONE" ? ` · ${SHOW_NAMES[show]}` : ""}<ChevronDown className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent>
+    {whose ? <>
+      <MenuGroup><MenuGroupLabel>Status</MenuGroupLabel>{statuses}</MenuGroup>
+      <MenuSeparator />
+      <MenuGroup><MenuGroupLabel>Show</MenuGroupLabel><MenuRadioGroup value={show} onValueChange={next => onShowChange(next as ReviewShow)}>{shows.map(option => <MenuRadioItem key={option} value={option}>{SHOW_NAMES[option]}</MenuRadioItem>)}</MenuRadioGroup></MenuGroup>
+    </> : statuses}
+  </MenuContent></MenuRoot>;
 }
 
 /** The first discussion after the active one, in passage order and round again, that `matches`; never the active one itself. */
@@ -151,12 +171,15 @@ export function nextReviewThreadId(threads: readonly RailCard[], activeThreadId:
  * Steps through what wants attention: discussions with unread notices (the owner's) and open ones.
  * Focus stays on the button, so pressing again goes on to the next.
  */
-export function ReviewNextButtons({ threads, activeThreadId, onActivate, filter, onFilterChange, unreadThreadIds }: { threads: readonly ReviewThreadView[]; activeThreadId?: string; onActivate: (threadId: string) => void; filter: ReviewFilter; onFilterChange: (filter: ReviewFilter) => void; unreadThreadIds?: ReadonlySet<string> }) {
+export function ReviewNextButtons({ threads, activeThreadId, onActivate, filter, onFilterChange, unreadThreadIds, show = "ANYONE", onShowChange }: { threads: readonly ReviewThreadView[]; activeThreadId?: string; onActivate: (threadId: string) => void; filter: ReviewFilter; onFilterChange: (filter: ReviewFilter) => void; unreadThreadIds?: ReadonlySet<string>; show?: ReviewShow; onShowChange?: (show: ReviewShow) => void }) {
   const status = new Map(threads.map(thread => [thread.id, thread.status]));
+  // Next open steps through the open ones of whose are shown (Mine, Mentions me), so it never leaves that list.
+  const shown = new Set(threads.filter(thread => reviewShows(thread, show)).map(thread => thread.id));
   const nextUnread = unreadThreadIds && nextReviewThreadId(threads, activeThreadId, id => unreadThreadIds.has(id));
-  const nextOpen = nextReviewThreadId(threads, activeThreadId, id => status.get(id) === "OPEN");
+  const nextOpen = nextReviewThreadId(threads, activeThreadId, id => status.get(id) === "OPEN" && shown.has(id));
   function go(threadId: string) {
     if (filter !== "ALL" && status.get(threadId) !== filter) onFilterChange("ALL");
+    if (!shown.has(threadId)) onShowChange?.("ANYONE");
     onActivate(threadId);
     // The card is drawn, and placed beside its passage, after this render.
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -171,7 +194,7 @@ export function ReviewNextButtons({ threads, activeThreadId, onActivate, filter,
   </div>;
 }
 
-export function ReviewThreadList({ threads, writesEnabled, reply, moderate, author, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange, draft, signInHref, reauthHref, unreadThreadIds, follow, mentionScope, linkTo, emptyHint = "Select text in the document to start a comment." }: {
+export function ReviewThreadList({ threads, writesEnabled, reply, moderate, author, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange, draft, signInHref, reauthHref, unreadThreadIds, follow, mentionScope, linkTo, show = "ANYONE", onShowChange, emptyHint = "Select text in the document to start a comment." }: {
   /** Where a signed-in reader whose sign-in expired signs in again (a reply or edit offers it on that failure). */
   reauthHref?: string;
   threads: (ReviewThreadView | OwnerReviewThreadView)[];
@@ -201,6 +224,9 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
   mentionScope?: MentionScope;
   /** The absolute address that reopens a discussion where this list is read; offers **Copy link to discussion**. */
   linkTo?: (threadId: string) => string;
+  /** Whose discussions are listed (the panel's filter); a mark leading to one it hides shows everyone's. */
+  show?: ReviewShow;
+  onShowChange?: (show: ReviewShow) => void;
 }) {
   // Which previews cut their remark short: only those have more to show when opened.
   const [clamped, setClamped] = useState<Record<string, boolean>>({});
@@ -223,9 +249,13 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
   const setFilter = onFilterChange ?? setOwn;
   // A mark or a highlight may lead to a discussion the filter is hiding; one the filter lists leaves it as it is.
   useEffect(() => {
-    const show = (event: Event) => { const target = threads.find(thread => thread.id === (event as CustomEvent<string>).detail); if (!target || (filter !== "ALL" && target.status !== filter)) setFilter("ALL"); };
-    document.addEventListener("review-focus-thread", show); return () => document.removeEventListener("review-focus-thread", show);
-  }, [setFilter, threads, filter]);
+    const reveal = (event: Event) => {
+      const target = threads.find(thread => thread.id === (event as CustomEvent<string>).detail);
+      if (!target || (filter !== "ALL" && target.status !== filter)) setFilter("ALL");
+      if (!target || !reviewShows(target, show)) onShowChange?.("ANYONE");
+    };
+    document.addEventListener("review-focus-thread", reveal); return () => document.removeEventListener("review-focus-thread", reveal);
+  }, [setFilter, threads, filter, show, onShowChange]);
   // The card whose own Reply was pressed, and a count so that pressing it again asks again.
   const [replyRequest, setReplyRequest] = useState<{ threadId: string; nonce: number }>();
   const [error, setError] = useState<string>();
@@ -236,9 +266,10 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
     try { await moderate?.(threadId, action, value, commentId); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not update comment."); } finally { setBusy(false); setPendingHide(undefined); }
   }
   const visible = useMemo(() => {
-    const filtered = threads.filter(thread => filter === "ALL" || thread.status === filter);
+    const filtered = threads.filter(thread => (filter === "ALL" || thread.status === filter) && reviewShows(thread, show));
     return railMarkdown === undefined ? filtered : filtered.sort(compareReviewPassages);
-  }, [threads, filter, railMarkdown]);
+  }, [threads, filter, show, railMarkdown]);
+  const whose = useMemo(() => threads.filter(thread => reviewShows(thread, show)), [threads, show]);
   // Keyed on the anchor: the composer element is new on every render, the place it needs is not.
   const draftAnchor = draft?.anchor;
   const placed = useMemo<RailCard[]>(() => !draftAnchor ? visible
@@ -265,9 +296,9 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
     {threads.length > 0 && !onFilterChange && <ReviewFilterMenu value={filter} onChange={setFilter} />}
     {error && <p role="alert" className="text-body-sm">{error}</p>}
     {/* The list starts on Open, so a document whose discussions are all settled says so, and offers them. */}
-    {visible.length === 0 && !draft && (filter === "OPEN" && threads.length > 0 && threads.every(thread => thread.status === "RESOLVED")
+    {visible.length === 0 && !draft && (filter === "OPEN" && whose.length > 0 && whose.every(thread => thread.status === "RESOLVED")
       ? <div className="py-6"><p className="text-body-sm text-kh-text-muted">Every comment is resolved.</p><Button type="button" variant="ghost" className="-ml-3 mt-1" onClick={() => setFilter("RESOLVED")}>Show resolved</Button></div>
-      : <p className="py-6 text-body-sm text-kh-text-muted">{threads.length === 0 ? `No comments yet.${writesEnabled ? ` ${emptyHint}` : ""}` : "No comments here."}</p>)}
+      : <p className="py-6 text-body-sm text-kh-text-muted">{threads.length === 0 ? `No comments yet.${writesEnabled ? ` ${emptyHint}` : ""}` : whose.length === 0 ? (show === "MINE" ? "You haven’t commented here." : "No comment mentions you.") : "No comments here."}</p>)}
     <div ref={railRef} data-review-rail={railMarkdown !== undefined ? "" : undefined} data-positioned={layout ? "" : undefined} className="kh-review-thread-list" style={layout ? { "--review-list-height": `${layout.height}px` } as CSSProperties : undefined}>
     {/* The box is placed before its field mounts: the field takes focus on mounting, and focused at the rail's top it scrolls the page away from the passage. */}
     {draft && <section data-review-draft={DRAFT_ID} aria-label="New comment" style={layout ? { "--review-thread-top": `${layout.positions[DRAFT_ID] ?? 0}px` } as CSSProperties : undefined} className={layout?.positions[DRAFT_ID] !== undefined ? "kh-pop-in" : undefined}>{layout?.positions[DRAFT_ID] !== undefined && draft.composer}</section>}

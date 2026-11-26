@@ -525,6 +525,22 @@ describe("mentioned people on the discussion", () => {
     expect(((await onLink(f, rootId)).mentions ?? []).length).toBe(0);
   });
 
+  it("tells a reader a comment mentions them, and nobody else anything", async () => {
+    const f = await fixture();
+    const { carol, rootId, commentId } = await mentionBoth(f);
+    const alice = callerFromIdentity({ id: f.alice, emp_id: await empId(f.alice), name: "Alice", org_code: "MENTION" });
+    const read = async (caller: typeof alice | null, id: string) => commentOf((await f.service.queryForLink(caller, f.token)).threads, id) as Comment & { mentionsMe?: boolean };
+    expect((await read(alice, commentId)).mentionsMe).toBe(true);
+    expect("mentionsMe" in await read(alice, rootId)).toBe(false);
+    // The comment's writer, a reader without a caller, and the owner are not mentioned in it.
+    expect("mentionsMe" in await read(carol, commentId)).toBe(false);
+    expect("mentionsMe" in await read(null, commentId)).toBe(false);
+    expect("mentionsMe" in await onOwner(f, commentId)).toBe(false);
+    // Renamed out of the text, the mention no longer stands, for "Mentions me" as for the highlight.
+    await setUser("name", "Alicia", f.alice);
+    expect("mentionsMe" in await read(alice, commentId)).toBe(false);
+  });
+
   it("reads the person as they are now", async () => {
     const f = await fixture();
     const { commentId } = await mentionBoth(f);

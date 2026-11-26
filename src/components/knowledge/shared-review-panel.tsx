@@ -6,7 +6,7 @@ import { drawnReviewThreads, useReviewDraftHighlight, useReviewHighlights } from
 import { LogIn, RefreshCw, MessageSquare, MessageSquarePlus, X } from "lucide-react";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewDraftKey, reviewRequest, type ReviewFilter } from "./review-thread-list";
+import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewDraftKey, reviewRequest, type ReviewFilter, type ReviewShow } from "./review-thread-list";
 import { CommentShortcutTip, ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
 import { ReviewPanelShell } from "./review-panel-shell";
 import { ReviewBlockComment } from "./review-block-comment";
@@ -18,6 +18,7 @@ import { readStored, removeStored, writeStored } from "@/components/shell/use-pe
 import { COMMENT_SHORTCUT, useCommentShortcut } from "./review-shortcut";
 import { shareDiscussionLink, sharedPagePath } from "@/lib/share-paths";
 
+const SHOWS: readonly ReviewShow[] = ["ANYONE", "MINE", "MENTIONS"];
 type DiscussionResult = { threads: ReviewThreadView[]; revisionId: string; writesEnabled: boolean; callerUserId: string | null };
 /**
  * `brand` and `actions` (the page's own: Download, Save, Open; the Hub reader passes Download only) share the one pinned bar with Comments, so nothing stands between it and the title.
@@ -41,6 +42,8 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
   const inline = useReviewRailInline();
   // Open first, as the owner's list and Google Docs start: settled discussions are under Resolved (2026-11-26 amendment).
   const [filter, setFilter] = useState<ReviewFilter>("OPEN");
+  // Whose discussions: Mine and Mentions me are offered to a signed-in reader only (2026-11-26).
+  const [show, setShow] = useState<ReviewShow>("ANYONE");
   const shown = useRef<DiscussionResult | undefined>(undefined);
   useEffect(() => { shown.current = result; }, [result]);
   // The reader's own opening and closing. Closing is remembered as the discussions it was closed on,
@@ -75,7 +78,7 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
     deepLinked.current = true;
     const thread = result.threads.find(candidate => candidate.id === new URLSearchParams(window.location.search).get("thread"));
     if (!thread) return;
-    setFilter("ALL"); setActiveThreadId(thread.id); setArrivedThreadId(thread.id); setOpen(true);
+    setFilter("ALL"); setShow("ANYONE"); setActiveThreadId(thread.id); setArrivedThreadId(thread.id); setOpen(true);
     const anchor = revisionChanged ? undefined : thread.currentAnchor.anchor;
     const root = document.querySelector<HTMLElement>("[data-review-document]");
     if (anchor && root) requestAnimationFrame(() => requestAnimationFrame(() => focusReviewAnchor(root, markdown, anchor)));
@@ -170,7 +173,7 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
   const mentionScope = result?.writesEnabled && !anonymous ? scope : undefined;
   const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} signInHref={signInHref} draftKey={draftKey} restored={restored} mentionScope={mentionScope} onCancel={() => { discardDraft(); selection.clear(); }} onSubmit={async (body, idempotencyKey, mentions) => {
     const created = await reviewRequest<{ id: string }>("/api/share-review/threads", { ...scope, expectedRevisionId: revisionId, anchor: selection.chosen, body, idempotencyKey, ...(mentions.length ? { mentions } : {}) });
-    discardDraft(); selection.clear(); setFilter(current => current === "RESOLVED" ? "OPEN" : current); setActiveThreadId(created.id); await load();
+    discardDraft(); selection.clear(); setFilter(current => current === "RESOLVED" ? "OPEN" : current); setShow(current => current === "MENTIONS" ? "ANYONE" : current); setActiveThreadId(created.id); await load();
   }} />;
   // Beside its passage where the discussions are a rail; at the top of the drawer, which covers the passage, where they are not.
   const draft = composer && inline && !revisionChanged ? { anchor: selection.chosen!, composer } : undefined;
@@ -237,10 +240,10 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
           on it. As a drawer the drawer names itself and closes itself, so the name and the cross
           are the rail's alone. */}
       <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-1"><h2 className="kh-review-rail-only text-body font-medium">Comments</h2>{result && result.threads.length > 0 && <ReviewFilterMenu value={filter} onChange={setFilter} />}</div>
+        <div className="flex min-w-0 items-center gap-1"><h2 className="kh-review-rail-only text-body font-medium">Comments</h2>{result && result.threads.length > 0 && <ReviewFilterMenu value={filter} onChange={setFilter} show={show} shows={anonymous ? undefined : SHOWS} onShowChange={setShow} />}</div>
         <div className="flex shrink-0 items-center gap-1"><Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" disabled={refreshing} onClick={() => void load()}><RefreshCw className={`size-4 ${refreshing ? "motion-safe:animate-spin" : ""}`} aria-hidden="true" /></Button></Tooltip><span className="kh-review-rail-only"><Tooltip label="Close comments"><Button type="button" variant="ghost" icon aria-label="Close comments" onClick={() => changeOpen(false)}><X className="size-4" aria-hidden="true" /></Button></Tooltip></span></div>
       </div>
-      {result && result.threads.length > 0 && <ReviewNextButtons threads={result.threads} activeThreadId={activeThreadId} onActivate={setActiveThreadId} filter={filter} onFilterChange={setFilter} />}
+      {result && result.threads.length > 0 && <ReviewNextButtons threads={result.threads} activeThreadId={activeThreadId} onActivate={setActiveThreadId} filter={filter} onFilterChange={setFilter} show={show} onShowChange={setShow} />}
       {error && <div className="mt-3"><p role="status" className="text-body-sm">{error}</p><Button type="button" variant="ghost" className="-ml-3" disabled={refreshing} onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" />Retry</Button></div>}
       {!result && !error && <p role="status" className="mt-3 text-body-sm text-kh-text-muted">Loading comments…</p>}
       {refreshing && <p role="status" className="mt-3 text-caption text-kh-text-muted">Updating…</p>}
@@ -255,7 +258,7 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
       </div>}
       </div>
       {!draft && composer}
-      {result && <ReviewThreadList linkTo={linkTo} draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId} focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }} threads={result.threads} writesEnabled={result.writesEnabled} signInHref={anonymous ? signInHref : undefined} reauthHref={anonymous ? undefined : signInHref}
+      {result && <ReviewThreadList linkTo={linkTo} draft={draft} filter={filter} onFilterChange={setFilter} show={show} onShowChange={setShow} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId} focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }} threads={result.threads} writesEnabled={result.writesEnabled} signInHref={anonymous ? signInHref : undefined} reauthHref={anonymous ? undefined : signInHref}
         follow={anonymous ? undefined : async (threadId, next) => { await reviewRequest(`/api/share-review/threads/${threadId}/follow`, { ...scope, following: next }); await load(); }} mentionScope={mentionScope} reply={async (threadId, body, idempotencyKey, mentions) => { await reviewRequest(`/api/share-review/threads/${threadId}/replies`, { ...scope, body, idempotencyKey, ...(mentions.length ? { mentions } : {}) }); await load(); }}
         author={result.callerUserId === null ? undefined : {
           edit: async (threadId, commentId, body) => { await reviewRequest(`/api/share-review/threads/${threadId}/comments/${commentId}/body`, { ...scope, body }); await load(); },

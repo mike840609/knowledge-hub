@@ -18,7 +18,10 @@ import { ReviewPassageMarkers } from "./review-passage-markers";
 import { reviewRailInline, useReviewRailInline, useReviewRailOpen } from "./review-rail-mode";
 import { InlineReviewContext, type CaptureReviewAnchor, type PreparedReviewComment } from "./inline-review-context";
 import { COMMENT_HINT, createReviewRangeResolver, focusReviewAnchor, revealReviewAnchor, selectionAnchorInBlock } from "./review-selection";
-import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewRequest, type ReviewFilter } from "./review-thread-list";
+import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewRequest, type ReviewFilter, type ReviewShow } from "./review-thread-list";
+
+/** The owner is never mentioned on their own document (`normalizeMentions`), so Mentions me is not offered. */
+const OWNER_SHOWS: readonly ReviewShow[] = ["ANYONE", "MINE"];
 
 /**
  * The owner's discussions, beside the article they are about (`children`).
@@ -37,6 +40,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   // that want an answer away from their passages. With nothing open it says every comment is
   // resolved and offers them (Show resolved), so an empty list never reads as no discussion at all.
   const [filter, setFilter] = useState<ReviewFilter>("OPEN");
+  const [show, setShow] = useState<ReviewShow>("ANYONE");
   // The way in is the document header's (`review-entry.tsx`), not a row of this panel's.
   const shared = useReviewEntry();
   const publish = shared?.publish;
@@ -106,6 +110,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     const found = deep ? result.threads.find(item => item.id === deep) : undefined;
     // A deep link to a settled discussion must not land on a list that hides it.
     if (found?.status === "RESOLVED") setFilter("ALL");
+    if (found) setShow("ANYONE");
     // From the Inbox only as a rail: a drawer would cover the list the reader is working through.
     if (found) { setActiveThreadId(found.id); if (!thread || reviewRailInline()) setOpen(true); }
     const anchor = thread && result.revisionId === revisionId && found?.currentAnchor.match !== "OUTDATED" ? found?.currentAnchor.anchor : undefined;
@@ -240,10 +245,10 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
                 drawer names itself and closes itself, so the name and the cross are the rail's alone.
                 A cross, not a panel glyph: Details, just above, is the panel glyph. */}
             <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-1"><h2 className="kh-review-rail-only text-body font-medium">Comments</h2>{count > 0 && <ReviewFilterMenu value={filter} onChange={setFilter} />}</div>
+              <div className="flex min-w-0 items-center gap-1"><h2 className="kh-review-rail-only text-body font-medium">Comments</h2>{count > 0 && <ReviewFilterMenu value={filter} onChange={setFilter} show={show} shows={OWNER_SHOWS} onShowChange={setShow} />}</div>
               <div className="flex shrink-0 items-center gap-1">{unreadCount > 0 && <Tooltip label="Mark all read"><Button type="button" variant="ghost" icon aria-label="Mark all read" onClick={() => void markRead()}><CheckCheck className="size-4" aria-hidden="true" /></Button></Tooltip>}{refresh}<span className="kh-review-rail-only"><Tooltip label="Close comments"><Button type="button" variant="ghost" icon aria-label="Close comments" onClick={() => changeOpen(false)}><X className="size-4" aria-hidden="true" /></Button></Tooltip></span></div>
             </div>
-            {result && result.threads.length > 0 && <ReviewNextButtons threads={result.threads} activeThreadId={activeThreadId} onActivate={setActiveThreadId} filter={filter} onFilterChange={setFilter} unreadThreadIds={unreadThreadIds} />}
+            {result && result.threads.length > 0 && <ReviewNextButtons threads={result.threads} activeThreadId={activeThreadId} onActivate={setActiveThreadId} filter={filter} onFilterChange={setFilter} unreadThreadIds={unreadThreadIds} show={show} onShowChange={setShow} />}
             {error && <p role="alert" className="mt-3 text-body-sm">{error}</p>}
             {refreshing && result && <p role="status" className="mt-3 text-caption text-kh-text-muted">Updating…</p>}
             {selection.refusal && <p role="status" className="mt-3 text-body-sm">{selection.refusal}</p>}
@@ -251,7 +256,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
             {canComment && !selection.chosen && (count > 0 || selection.ready || !inline) && <div className="mt-3"><CommentShortcutTip inline={inline}><Button type="button" variant="soft" aria-keyshortcuts={inline ? COMMENT_SHORTCUT : undefined} onPointerDown={event => event.preventDefault()} onClick={() => { if (!inline) { focusArticleAfterClose.current = true; changeOpen(false); return; } if (prepareComment) requestComment(() => selection.capture()); else selection.capture(); }} ><MessageSquarePlus className="size-4" aria-hidden="true" />{inline ? "Comment on selected text" : "Close comments and select text"}</Button></CommentShortcutTip>{inline && !selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
           </div>
           {composer && !draft && <div className="mt-3">{composer}</div>}
-          {result && <div className="mt-3"><ReviewThreadList linkTo={linkTo} draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={prepared?.markdown ?? (revisionChanged || contentPending ? undefined : markdown)} activeThreadId={activeThreadId} onActivate={setActiveThreadId} unreadThreadIds={unreadThreadIds}
+          {result && <div className="mt-3"><ReviewThreadList linkTo={linkTo} draft={draft} filter={filter} onFilterChange={setFilter} show={show} onShowChange={setShow} railMarkdown={prepared?.markdown ?? (revisionChanged || contentPending ? undefined : markdown)} activeThreadId={activeThreadId} onActivate={setActiveThreadId} unreadThreadIds={unreadThreadIds}
             focusAnchor={revisionChanged || contentPending ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }}
             threads={result.threads} writesEnabled={result.writesEnabled && !readOnly} canResolve={!readOnly}
             emptyHint={canStartDiscussion ? "Select text or use a block’s comment action to start a discussion." : undefined}
