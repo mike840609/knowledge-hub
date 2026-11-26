@@ -21,7 +21,7 @@ test("a keyboard reader comments on a paragraph beside the open rail, without se
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
   await ready(page);
-  await page.getByRole("button", { name: /^Show comments/ }).click();
+  await page.getByRole("button", { name: /^Comments\b/, expanded: false }).click();
   const second = button(page, "A second paragraph here.");
   await tabIn(page, button(page, "A first passage to review."));
   await page.keyboard.press("ArrowDown");

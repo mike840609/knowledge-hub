@@ -106,7 +106,7 @@ it("says when every discussion is resolved, on the way in", async () => {
   await render();
   await answer(json({ threads: [resolvedThread("t1"), resolvedThread("t2")], revisionId: "r1", writesEnabled: true, callerUserId: "u1" }));
   expect(entryButton().textContent).toBe("Comments · 2 resolved");
-  expect(entryButton().getAttribute("aria-label")).toBe("Show comments, 2 comments, all resolved");
+  expect(entryButton().getAttribute("aria-label")).toBe("Comments · 2 resolved");
 });
 
 it("names the drawer's comment button for what it does: close and select", async () => {
@@ -149,7 +149,7 @@ it("starts on Open, and counts what is open in the Comments entry", async () => 
   expect(container.textContent).toContain("Still open");
   expect(container.textContent).not.toContain("Settled");
   expect(entryButton().textContent).toBe("Comments (1)1");
-  expect(entryButton().getAttribute("aria-label")).toBe("Show comments, 3 comments, 1 open");
+  expect(entryButton().getAttribute("aria-label")).toBe("Comments (1), 1 open of 3 comments");
 });
 
 it("says every comment is resolved, and Show resolved lists them", async () => {

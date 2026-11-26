@@ -110,6 +110,9 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
   }, [scope]);
   const openCount = result?.threads.filter(thread => thread.status === "OPEN").length ?? 0;
   const allResolved = !!result && result.threads.length > 0 && openCount === 0;
+  // The name starts with what the button shows (WCAG 2.5.3, label in name); `aria-expanded` says whether it shows or hides.
+  const total = result?.threads.length ?? 0;
+  const entryName = allResolved ? `Comments · ${total} resolved` : openCount > 0 ? `Comments (${openCount}), ${openCount} open of ${total} ${total === 1 ? "comment" : "comments"}` : "Comments";
   useEffect(() => { void load(); }, [load]);
   // Coming back to the tab reads the discussions again. Nothing new is taken in quietly; new
   // comments wait behind a notice, so a card is never moved under the reader.
@@ -194,7 +197,7 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
             ml-auto keeps the actions on the right where there is no brand (the Hub's reader), so they stay put when the rail opens. */}
         <div className={wide ? "-me-3 ml-auto flex shrink-0 items-center gap-1" : "-me-3 ml-auto flex min-w-0 items-center justify-end gap-1"}>
           <span aria-live="polite">{arrived && <Button type="button" variant="soft" onClick={showArrived} className="kh-pop-in max-sm:px-2"><span className="max-sm:hidden">{arrived.count === 1 ? "1 new comment" : `${arrived.count} new comments`}</span><span className="sm:hidden">{arrived.count} new</span></Button>}</span>
-          <Button ref={entryRef} type="button" variant="ghost" aria-label={`${open ? "Hide comments" : "Show comments"}${result ? `, ${result.threads.length} comments` : ""}${allResolved ? ", all resolved" : openCount > 0 ? `, ${openCount} open` : ""}`} aria-expanded={open} aria-controls="shared-document-discussions" onPointerDown={event => event.preventDefault()} onClick={toggle} className="max-sm:gap-1 max-sm:px-2">
+          <Button ref={entryRef} type="button" variant="ghost" aria-label={entryName} aria-expanded={open} aria-controls="shared-document-discussions" onPointerDown={event => event.preventDefault()} onClick={toggle} className="max-sm:gap-1 max-sm:px-2">
             <MessageSquare className="size-4" aria-hidden="true" />
             {/* The number is what still wants an answer, as the owner's entry counts; the name says both. */}
             <span className="max-sm:sr-only">Comments{allResolved ? ` · ${result.threads.length} resolved` : openCount > 0 ? ` (${openCount})` : ""}</span>

@@ -59,7 +59,7 @@ test("where the discussions could not be read, the open panel offers Retry", asy
   await page.route("**/api/share-review/threads/query", route => failing ? route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: { message: "x" } }) }) : route.fallback());
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
-  await page.getByRole("button", { name: /^Show comments/ }).click();
+  await page.getByRole("button", { name: /^Comments\b/, expanded: false }).click();
   const panel = page.getByRole("complementary", { name: "Document comments" });
   await expect(panel).toContainText("Comments are unavailable.");
   failing = false;

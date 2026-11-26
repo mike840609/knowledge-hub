@@ -171,7 +171,7 @@ test("mobile comments can retry after a temporary loading failure", async ({ pag
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
-  await page.getByRole("button", { name: "Show comments" }).click();
+  await page.getByRole("button", { name: /^Comments\b/, expanded: false }).click();
   const drawer = page.getByRole("dialog");
   await expect(drawer.getByRole("status")).toContainText("unavailable");
   await drawer.getByRole("button", { name: "Refresh comments" }).click();
@@ -185,7 +185,7 @@ test("on a screen too narrow for the rail, discussions are reachable from anywhe
   // A monitor turned to portrait: wide enough to read, too narrow for the reading column and a rail.
   await page.setViewportSize({ width: 1080, height: 1920 });
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
-  const open = page.getByRole("button", { name: "Show comments" });
+  const open = page.getByRole("button", { name: /^Comments\b/, expanded: false });
   const article = page.locator("[data-review-document]").filter({ visible: true });
   await expect(article.locator("p")).toHaveCount(120);
   expect(await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight * 2), "the document must be long enough to scroll").toBe(true);
@@ -210,7 +210,7 @@ test("wide screens default to centered reading and open a 320px rail on demand",
   const rail = page.getByRole("complementary", { name: "Document comments" });
   const article = page.locator("[data-review-document]").filter({ visible: true });
   await expect(rail).toBeHidden();
-  await expect(page.getByRole("button", { name: "Show comments" })).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("button", { name: /^Comments\b/, expanded: false })).toHaveAttribute("aria-expanded", "false");
   const initialBox = (await article.boundingBox())!;
   expect(initialBox.x + initialBox.width / 2).toBeCloseTo(720, 0);
   await openReviewDiscussions(page);
@@ -218,7 +218,7 @@ test("wide screens default to centered reading and open a 320px rail on demand",
   const railRow = async (locator: ReturnType<typeof page.locator>) => { const box = (await locator.boundingBox())!; return box.y + box.height / 2; };
   expect(Math.abs(await railRow(page.locator(".kh-review-panel h2").filter({ visible: true })) - await railRow(page.getByRole("button", { name: "Close comments", exact: true })))).toBeLessThan(6);
   await expect(rail.getByRole("button", { name: "Comment on selected text" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Hide comments" })).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("button", { name: /^Comments\b/, expanded: true })).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const railBox = (await rail.boundingBox())!;
   const articleBox = (await article.boundingBox())!;
@@ -227,7 +227,7 @@ test("wide screens default to centered reading and open a 320px rail on demand",
   expect(railBox.x).toBeGreaterThanOrEqual(articleBox.x + articleBox.width - 1);
   await page.getByRole("button", { name: "Close comments", exact: true }).click();
   await expect(rail).toBeHidden();
-  await expect(page.getByRole("button", { name: "Show comments" })).toBeFocused();
+  await expect(page.getByRole("button", { name: /^Comments\b/, expanded: false })).toBeFocused();
   await expect.poll(async () => Math.round((await article.boundingBox())!.x)).toBe(Math.round(initialBox.x));
 });
 
@@ -329,7 +329,7 @@ test("an outdated discussion's expansion button stays focused until activated", 
 test("collapsed selection offers Comment, and Escape preserves a new-comment draft", async ({ page, request }) => {
   const doc = await createReviewDocument(request);
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
-  await expect(page.getByRole("button", { name: "Show comments, 0 comments", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Comments", exact: true, expanded: false })).toBeVisible();
   await selectPassage(page);
   await page.getByRole("button", { name: "Comment on selection" }).click();
   const input = page.getByRole("textbox", { name: "Add comment" });
@@ -338,7 +338,7 @@ test("collapsed selection offers Comment, and Escape preserves a new-comment dra
   await expect(input).toBeFocused();
   await expect(input).toHaveValue("New draft");
   await page.getByRole("button", { name: "Add comment", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Hide comments, 1 comments, 1 open", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Comments (1), 1 open of 1 comment", exact: true, expanded: true })).toBeVisible();
 });
 
 test("a comment starts from a button beside the selection and opens in the rail level with the passage", async ({ page, request }) => {
@@ -431,7 +431,7 @@ test("saved-share actions coexist with comments on mobile without overflow", asy
   const bar = page.locator(".kh-review-entry");
   expect((await bar.boundingBox())!.height).toBeLessThanOrEqual(57);
   const saved = (await page.getByRole("button", { name: "Saved", exact: true }).boundingBox())!;
-  const entry = (await page.getByRole("button", { name: "Show comments" }).boundingBox())!;
+  const entry = (await page.getByRole("button", { name: /^Comments\b/, expanded: false }).boundingBox())!;
   const open = (await bar.getByRole("link", { name: "Open in Knowledge Hub" }).boundingBox())!;
   for (const box of [saved, open]) expect(Math.abs(box.y - entry.y)).toBeLessThanOrEqual(2);
   expect(open.x + open.width).toBeLessThanOrEqual(390);
@@ -440,7 +440,7 @@ test("saved-share actions coexist with comments on mobile without overflow", asy
   await openReviewDiscussions(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.getByRole("button", { name: "Close comments", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Show comments" })).toBeFocused();
+  await expect(page.getByRole("button", { name: /^Comments\b/, expanded: false })).toBeFocused();
   await page.screenshot({ path: "/tmp/document-review-saved-share-mobile.png", fullPage: true });
   } finally {
     const state = await request.get(`${phase3Origin("viewer")}/api/saved-shares/state?token=${doc.links[0].path.split("/").pop()}`);

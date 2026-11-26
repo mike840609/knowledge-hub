@@ -89,7 +89,7 @@ test("share outline: a disclosure on a narrower window, and while comments are o
   // Between 82rem and 88rem the outline has room beside the article but not beside article and comments.
   await page.setViewportSize({ width: 1366, height: 900 });
   await expect(rail(page)).toBeVisible();
-  await page.getByRole("button", { name: /^Show comments/ }).click();
+  await page.getByRole("button", { name: /^Comments\b/, expanded: false }).click();
   await expect(page.getByRole("complementary", { name: "Document comments" })).toBeVisible();
   await expect(rail(page)).toBeHidden();
   await expect(disclosure(page)).toBeVisible();
@@ -100,7 +100,7 @@ test("share outline: from 88rem the outline, the article and the comments stand 
   for (const width of [1408, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(path);
-    await page.getByRole("button", { name: /^Show comments/ }).click();
+    await page.getByRole("button", { name: /^Comments\b/, expanded: false }).click();
     await expect(page.getByRole("complementary", { name: "Document comments" })).toBeVisible();
     await expect(rail(page)).toBeVisible();
     await expect(disclosure(page)).toBeHidden();
