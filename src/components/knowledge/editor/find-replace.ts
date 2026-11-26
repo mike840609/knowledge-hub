@@ -55,12 +55,12 @@ export function findKeyAction(event: KeyboardEvent, open: boolean): FindKeyActio
   if (event.isComposing || event.keyCode === 229) return null;
   const mac = isMac();
   if (!(mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey)) return null;
-  // On a Mac by physical key: Option-F types "ƒ". Elsewhere by the character: Windows reports AltGr as Ctrl+Alt,
-  // and AltGr+F types "[" on some layouts, which must reach the editor.
-  // A non-Latin layout reports a character above 127: then the physical key decides, as ProseMirror's keymap does.
-  const f = event.key.toLowerCase() === "f" || ((mac || event.key.charCodeAt(0) > 127) && event.code === "KeyF");
-  if (event.altKey) return !event.shiftKey && f ? "openReplace" : null;
-  const letter = event.key.toLowerCase();
+  // By the character, except where it is not the letter: on a Mac Option-F types "ƒ", and a non-Latin layout types a
+  // character above 127; then the physical key decides. Windows reports AltGr as Ctrl+Alt, and AltGr+F types "[" on
+  // some layouts (ASCII, so never the physical key), which must reach the editor.
+  const physical = (mac && event.altKey) || (event.key.charCodeAt(0) > 127 && !event.getModifierState?.("AltGraph"));
+  const letter = physical && /^Key[FG]$/.test(event.code) ? event.code.slice(3).toLowerCase() : event.key.toLowerCase();
+  if (event.altKey) return !event.shiftKey && letter === "f" ? "openReplace" : null;
   if (letter === "f" && !event.shiftKey) return "open";
   if (letter === "g" && open) return event.shiftKey ? "previous" : "next";
   return null;
@@ -110,6 +110,8 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
   };
   let snapshot = build();
   const refresh = () => {
+    // The bar's selection stops being ours once the writer (or an edit) moves it.
+    if (view && ours && (view.state.selection.from !== ours.from || view.state.selection.to !== ours.to)) ours = null;
     if (view) { const { open, query, matchCase, matches, current } = stateOf(); kept = { open, query, matchCase, from: matches[current]?.from ?? 0 }; }
     const next = build();
     mount.hidden = !next.open;
@@ -139,7 +141,7 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
     // Nothing found (a typo, a cleared query): an earlier match must not stay selected for the next keystroke to overwrite.
     if (!view || !ours) return;
     const { from, to } = view.state.selection;
-    if (from === ours.from && to === ours.to) view.dispatch(view.state.tr.setSelection(Selection.near(view.state.doc.resolve(from))));
+    if (from === ours.from && to === ours.to) view.dispatch(view.state.tr.setSelection(Selection.near(view.state.doc.resolve(to), -1)));
     ours = null;
   };
   /** The marks at the match's start: replacing never changes what the text around it was written with. */
@@ -184,7 +186,10 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
       if (!view || !stateOf().open) return;
       const match = stateOf().matches[stateOf().current];
       const tr = view.state.tr.setMeta(key, { open: false } satisfies FindMeta);
-      if (match) tr.setSelection(TextSelection.create(view.state.doc, match.to)).scrollIntoView();
+      // The caret goes to the match only while the selection is still the bar's: not after the writer worked elsewhere.
+      const { from, to } = view.state.selection;
+      if (match && ours && from === ours.from && to === ours.to) tr.setSelection(TextSelection.create(view.state.doc, match.to)).scrollIntoView();
+      ours = null;
       notice = "";
       view.dispatch(tr);
       view.focus();
@@ -206,7 +211,9 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
       if (!match) return;
       notice = "";
       commit(tr => { insert(tr, match, text); tr.setMeta(key, { after: match.from + text.length } satisfies FindMeta); });
-      if (stateOf().matches.length) select(stateOf().current);
+      // The replacement is selected now; with no match left it is collapsed, not left for a keystroke to overwrite.
+      ours = { from: view.state.selection.from, to: view.state.selection.to };
+      showCurrent();
       refresh();
     },
     replaceAll(text) {

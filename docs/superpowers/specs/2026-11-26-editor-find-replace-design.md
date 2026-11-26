@@ -14,8 +14,8 @@ read it").
    moves focus to its query. Mod-F again, with the bar open, focuses and selects the query.
    When the bar was closed, the query is pre-filled with the editor's text selection (not a block range) when that is non-empty,
    on one line and at most 200 characters; otherwise it is left as it was. With the bar
-   open the typed query is kept. Mod-Alt-F is matched by the character "f", or by the
-   physical key on a Mac (Option-F types "ƒ") and on a non-Latin layout; AltGr+F, which
+   open the typed query is kept. Mod-F, Mod-G and Mod-Alt-F are matched by the character, or by the
+   physical key on a Mac with Option (Option-F types "ƒ") and on a non-Latin layout; AltGr+F, which
    Windows reports as Ctrl+Alt and which types "[" on some layouts, reaches the editor. A
    whole-document replace (Mod-/, a newer revision) keeps the bar open on its query and
    its current match (the first at or after where it was). When a query finds nothing,
@@ -36,7 +36,8 @@ read it").
    match, wrapping at the ends. Stepping selects the match in the editor and scrolls it
    to the middle of the pane, clear of the pinned header and the bar. Enter always advances; it does not first "select the current one".
    Escape in the bar closes it, removes the decorations and returns focus to the
-   editor with the caret at the end of the current match. Escape in the editor
+   editor with the caret at the end of the current match, while the selection is still
+   the bar's; if the writer has moved it since, it stays where they left it. Escape in the editor
    is the editor's (it selects the block), not the bar's.
 4. **Replace.** A disclosure button in the bar (and Mod-Alt-F, which opens the bar
    with the replace row shown) reveals the replace field with "Replace" and

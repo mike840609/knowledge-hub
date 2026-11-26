@@ -195,6 +195,17 @@ describe("keys", () => {
     expect(find.getSnapshot()).toMatchObject({ open: true, replaceOpen: true });
   });
 
+  it("Ctrl+F and Ctrl+G on a non-Latin layout go by the physical key", async () => {
+    const { find, view } = await open("a a\n");
+    expect(key(view, { key: "а", code: "KeyF", ctrlKey: true }).defaultPrevented).toBe(true);
+    find.setQuery("a");
+    key(view, { key: "п", code: "KeyG", ctrlKey: true });
+    expect(find.getSnapshot()).toMatchObject({ open: true, index: 1 });
+    // A non-Latin character on another physical key is not F.
+    find.close();
+    expect(key(view, { key: "ф", code: "KeyA", ctrlKey: true }).defaultPrevented).toBe(false);
+  });
+
   it("Ctrl+Alt+F on a non-Latin layout opens replace by the physical key", async () => {
     const { find, view } = await open("a\n");
     key(view, { key: "а", code: "KeyF", ctrlKey: true, altKey: true });
@@ -266,6 +277,25 @@ describe("living through the editor", () => {
     expect(find.getSnapshot()).toMatchObject({ open: true, index: 2, total: 5 });
     find.replace("dog");
     expect(view.state.doc.child(2).textContent).toBe("dog c");
+  });
+
+  it("closing leaves the caret where the writer moved it, not at the match", async () => {
+    const { find, view } = await open("one\n\ntwo\n\nthree\n");
+    search(find, "one");
+    const end = view.state.doc.content.size - 1;
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, end)).insertText("!"));
+    const caret = view.state.selection.from;
+    find.close();
+    expect(view.state.selection.from).toBe(caret);
+  });
+
+  it("after replacing the last match the replacement is not left selected", async () => {
+    const { find, view } = await open("cat\n");
+    search(find, "cat");
+    find.replace("dog");
+    expect(view.state.doc.textContent).toBe("dog");
+    expect(view.state.selection.empty).toBe(true);
+    expect(view.state.selection.from).toBe(4);
   });
 
   it("reopening on a kept query selects its current match", async () => {
