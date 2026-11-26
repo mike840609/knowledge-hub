@@ -259,6 +259,10 @@ it("a press on the blank column holding the editor starts the marquee too; one b
     expect(mouse(column, "mousedown", { clientX: 805, clientY: 5 }).defaultPrevented).toBe(false);
     mouse(document, "mouseup", { clientX: 805, clientY: 55 });
     expect(view.state.selection.toJSON()).toEqual(before);
+    // And a horizontal scrollbar along its bottom edge.
+    Object.defineProperty(column, "clientHeight", { configurable: true, value: 100 });
+    expect(mouse(column, "mousedown", { clientX: 700, clientY: 150 }).defaultPrevented).toBe(false);
+    mouse(document, "mouseup", { clientX: 700, clientY: 150 });
     // Below the editor's extent it is not the editor's.
     expect(mouse(column, "mousedown", { clientX: 700, clientY: 250 }).defaultPrevented).toBe(false);
   } finally { restore(); }

@@ -205,7 +205,7 @@ export const blockPointer = $prose(() => {
         const box = element.getBoundingClientRect();
         const left = box.left + element.clientLeft;
         const top = box.top + element.clientTop;
-        if (event.clientX < left || event.clientX >= left + element.clientWidth || event.clientY >= top + element.clientHeight) return;
+        if (event.clientY < top || event.clientX < left || event.clientX >= left + element.clientWidth || event.clientY >= top + element.clientHeight) return;
         const rect = editorView.dom.getBoundingClientRect();
         if (event.clientY < rect.top || event.clientY > rect.bottom) return;
         event.preventDefault();

@@ -170,7 +170,8 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
       // A click that landed before the editor had focus is in the DOM's selection but not yet in the state's (ProseMirror
       // reads it at the next input); the search starts from the caret, so read it now.
       // ponytail: ProseMirror's internal DOMObserver.flush, no public equivalent; harmless if it is ever renamed.
-      (view as unknown as { domObserver?: { flush?: () => void } }).domObserver?.flush?.();
+      const observer = (view as unknown as { domObserver?: { forceFlush?: () => void; flush?: () => void } }).domObserver;
+      observer?.forceFlush?.(); observer?.flush?.();
       const { selection, doc } = view.state;
       let query: string | undefined;
       const wasOpen = stateOf().open;
