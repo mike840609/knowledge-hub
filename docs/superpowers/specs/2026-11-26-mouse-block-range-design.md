@@ -32,7 +32,13 @@ unaffected: no operation here writes Markdown.
    the grip does not open the menu.
 5. **A drag from the margin draws a box.** A mouse press that lands on the
    editor's own surface rather than on any block in it (the 56px gutter, the
-   space between blocks, below the last block) starts a marquee.
+   space between blocks, below the last block) starts a marquee. So does a press
+   on the blank column either side of the editor: an element that holds this
+   editor (and no other), within the editor's vertical extent. Amended
+   2026-11-26 after the browser check: the gutter's own controls cover most of
+   the 56px margin beside a pointed-at block, so the editor's surface alone left
+   only the gaps between blocks to start from. A short press there is a click:
+   the caret goes to the nearest text on that line.
    - It draws a box with `--kh-bg-selected` fill and a `--kh-primary` border
      (no new token), `position: fixed`, `pointer-events: none`, `z-index: 30`
      like the gutter controls.
@@ -74,7 +80,7 @@ unaffected: no operation here writes Markdown.
   sequence; a nested item is reached by Shift-click or the keys.
 - Ctrl/Cmd-click to add separate blocks (a non-contiguous choice): a range is
   contiguous.
-- A marquee started in the page margin outside the editor's box.
+- A marquee started beside the column (the sidebar, the header, a panel).
 - Converting a text selection across blocks into a range (decision 6).
 
 ## Verification

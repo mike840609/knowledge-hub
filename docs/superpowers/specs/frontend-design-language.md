@@ -940,7 +940,7 @@ it tinted. On a device with no hover the controls follow the
 block the caret is in.
 
 **A range chosen with the mouse** (mouse block-range spec): Shift-click on a block or
-its grip extends the chosen block, and a drag from the editor's margin draws a box
+its grip extends the chosen block, and a drag from the editor's margin, or from the blank column beside it, draws a box
 (`.kh-block-marquee`: `kh-bg-selected` fill at 0.7 opacity, a 1px `--kh-primary` border,
 `rounded-sm`, `fixed`, `z-30`, no pointer events) over the blocks it meets, which are
 drawn as any range is. No token was added.

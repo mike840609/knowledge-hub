@@ -133,8 +133,10 @@ export const blockPointer = $prose(() => {
         // A click: the caret goes to the nearest text on that line, as the browser's own press would have put it.
         try {
           const rect = view.dom.getBoundingClientRect();
-          const inset = Number.parseFloat(getComputedStyle(view.dom).paddingLeft) || 0;
-          const at = view.posAtCoords({ left: Math.max(x, rect.left + inset + 1), top: y });
+          const style = getComputedStyle(view.dom);
+          const inset = Number.parseFloat(style.paddingLeft) || 0;
+          const right = rect.right - (Number.parseFloat(style.paddingRight) || 0) - 1;
+          const at = view.posAtCoords({ left: Math.min(Math.max(x, rect.left + inset + 1), right), top: y });
           if (at) view.dispatch(view.state.tr.setSelection(Selection.near(view.state.doc.resolve(at.pos))));
         } catch { /* no layout to ask */ }
       }
@@ -186,6 +188,27 @@ export const blockPointer = $prose(() => {
         },
       },
     },
-    view: () => ({ destroy() { stop?.(); } }),
+    view: (editorView) => {
+      // The blank column either side of the editor starts a marquee too, as Notion's does (decision 1): a press on an
+      // element that holds the editor (never one beside it, like the header or sidebar), within its vertical extent.
+      const outside = (event: MouseEvent) => {
+        const touch = pointerType === "touch";
+        pointerType = "mouse";
+        const target = event.target as Element | null;
+        if (!editorView.editable || touch || event.button !== 0 || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return;
+        if (!target || target === editorView.dom || !target.contains?.(editorView.dom)) return;
+        // Only the column of this one editor: a container that also holds another (a composer) belongs to neither.
+        if (target.querySelectorAll(".ProseMirror").length !== 1) return;
+        const rect = editorView.dom.getBoundingClientRect();
+        if (event.clientY < rect.top || event.clientY > rect.bottom) return;
+        event.preventDefault();
+        stop?.();
+        startMarquee(editorView, event);
+      };
+      const pointer = (event: PointerEvent) => { pointerType = event.pointerType || "mouse"; };
+      document.addEventListener("pointerdown", pointer, true);
+      document.addEventListener("mousedown", outside);
+      return { destroy() { stop?.(); document.removeEventListener("pointerdown", pointer, true); document.removeEventListener("mousedown", outside); } };
+    },
   });
 });

@@ -131,6 +131,7 @@ function layout(view: EditorView) {
   const original = HTMLElement.prototype.getBoundingClientRect;
   HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
     const index = this.parentElement === view.dom ? [...view.dom.children].indexOf(this) : -1;
+    if (this === view.dom) return { ...flat, top: 0, bottom: 200, left: 0, right: 656, width: 656, height: 200 } as DOMRect;
     if (index < 0) return flat;
     return { ...flat, top: index * 30, bottom: index * 30 + 20, left: 56, right: 600, width: 544, height: 20 } as DOMRect;
   };
@@ -231,5 +232,26 @@ it("a release outside the window (no mouseup) ends the drag at the next move", a
     expect(document.querySelector(".kh-block-marquee")).toBeNull();
     mouse(document, "mousemove", { clientX: 10, clientY: 85 });
     expect(inRange(view)).not.toContain("three");
+  } finally { restore(); }
+});
+
+it("a press on the blank column holding the editor starts the marquee too; one beside it does not", async () => {
+  const { view } = await open("one\n\ntwo\n\nthree\n");
+  const restore = layout(view);
+  try {
+    const column = view.dom.parentElement!;
+    const beside = document.body.appendChild(document.createElement("aside"));
+    mouse(beside, "mousedown", { clientX: 700, clientY: 5 });
+    mouse(document, "mousemove", { clientX: 700, clientY: 55 });
+    expect(inRange(view)).toEqual([]);
+    mouse(document, "mouseup", { clientX: 700, clientY: 55 });
+    const down = mouse(column, "mousedown", { clientX: 700, clientY: 5 });
+    expect(down.defaultPrevented).toBe(true);
+    mouse(document, "mousemove", { clientX: 700, clientY: 55 });
+    expect(inRange(view)).toEqual(["one", "two"]);
+    mouse(document, "mouseup", { clientX: 700, clientY: 55 });
+    expect(inRange(view)).toEqual(["one", "two"]);
+    // Below the editor's extent it is not the editor's.
+    expect(mouse(column, "mousedown", { clientX: 700, clientY: 250 }).defaultPrevented).toBe(false);
   } finally { restore(); }
 });

@@ -65,6 +65,25 @@ test.describe("a block range chosen with the mouse", () => {
     expect(markdown).not.toContain("Gamma");
   });
 
+  test("a drag from the blank column right of the text chooses the blocks too, and a click there puts the caret on that line", async ({ page }) => {
+    const { surface } = await openNote(page, "Alpha\n\nBeta\n\nGamma\n\nDelta\n");
+    const editor = await surface.boundingBox();
+    const start = await surface.getByText("Beta", { exact: true }).boundingBox();
+    const end = await surface.getByText("Delta", { exact: true }).boundingBox();
+    if (!editor || !start || !end) throw new Error("no layout");
+    const x = editor.x + editor.width + 40;
+    expect(x).toBeLessThan(1440 - 8);
+    await page.mouse.move(x, start.y + start.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, end.y + end.height / 2, { steps: 8 });
+    await page.mouse.up();
+    await expect(surface.locator(".kh-block-in-range")).toHaveText(["Beta", "Gamma", "Delta"]);
+    await page.keyboard.press("Escape");
+    await page.mouse.click(x, start.y + start.height / 2);
+    await page.keyboard.type("!");
+    await expect(surface.getByText("Beta!", { exact: true })).toBeVisible();
+  });
+
   test("Escape during the drag cancels it", async ({ page }) => {
     const { surface } = await openNote(page, "Alpha\n\nBeta\n\nGamma\n");
     const release = await dragFromMargin(page, surface, "Alpha", "Gamma");
