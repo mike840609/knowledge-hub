@@ -298,6 +298,15 @@ describe("living through the editor", () => {
     expect(view.state.selection.from).toBe(4);
   });
 
+  it("replacing the last match leaves a selection the writer made elsewhere alone", async () => {
+    const { find, view } = await open("cat\n\nhello world\n");
+    search(find, "cat");
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 7, 12)));
+    find.replace("dog");
+    expect(view.state.doc.child(0).textContent).toBe("dog");
+    expect(selected(view)).toBe("ello ");
+  });
+
   it("reopening on a kept query selects its current match", async () => {
     const { find, view } = await open("x\n\nfind me\n");
     search(find, "me");

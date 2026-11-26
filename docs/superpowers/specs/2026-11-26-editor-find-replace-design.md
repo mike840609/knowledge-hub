@@ -37,14 +37,15 @@ read it").
    to the middle of the pane, clear of the pinned header and the bar. Enter always advances; it does not first "select the current one".
    Escape in the bar closes it, removes the decorations and returns focus to the
    editor with the caret at the end of the current match, while the selection is still
-   the bar's; if the writer has moved it since, it stays where they left it. Escape in the editor
+   the bar's; if the writer has moved it since, it stays where they left it. A whole-document
+   replace counts as moving it: the caret stays at the new state's start. Escape in the editor
    is the editor's (it selects the block), not the bar's.
 4. **Replace.** A disclosure button in the bar (and Mod-Alt-F, which opens the bar
    with the replace row shown) reveals the replace field with "Replace" and
    "Replace all". Mod-Alt-F was chosen because nothing in `notion-keys.ts`,
    `block-range.ts`, the slash list or `editable-document.tsx` binds it
-   (Mod-Alt-digits do), and Mod-Shift-H is Chrome's "home" on macOS. It is matched
-   by physical key (`event.code`), because Option-F types "ƒ" on a Mac. Replace
+   (Mod-Alt-digits do), and Mod-Shift-H is Chrome's "home" on macOS. How it is matched
+   (the character, or the physical key) is decision 1. Replace
    changes the current match, then moves to the next one at or after the
    replaced text, so a replacement that contains the query cannot loop. Replace
    all is **one transaction, one undo step**; both close the history group

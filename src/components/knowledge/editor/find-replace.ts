@@ -210,9 +210,11 @@ export function findReplace(): { plugin: ReturnType<typeof $prose>; controller: 
       const match = stateOf().matches[stateOf().current];
       if (!match) return;
       notice = "";
+      const owned = !!ours && view.state.selection.from === ours.from && view.state.selection.to === ours.to;
       commit(tr => { insert(tr, match, text); tr.setMeta(key, { after: match.from + text.length } satisfies FindMeta); });
-      // The replacement is selected now; with no match left it is collapsed, not left for a keystroke to overwrite.
-      ours = { from: view.state.selection.from, to: view.state.selection.to };
+      // The bar's own selection is now the replacement; with no match left it is collapsed, not left for a keystroke
+      // to overwrite. A selection the writer made elsewhere stays theirs.
+      ours = owned ? { from: view.state.selection.from, to: view.state.selection.to } : null;
       showCurrent();
       refresh();
     },
