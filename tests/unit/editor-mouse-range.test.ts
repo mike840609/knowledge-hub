@@ -240,6 +240,9 @@ it("a press on the blank column holding the editor starts the marquee too; one b
   const restore = layout(view);
   try {
     const column = view.dom.parentElement!;
+    // jsdom lays nothing out: the column is 800 wide, and right of that is its scrollbar.
+    Object.defineProperty(column, "clientWidth", { configurable: true, value: 800 });
+    Object.defineProperty(column, "clientHeight", { configurable: true, value: 400 });
     const beside = document.body.appendChild(document.createElement("aside"));
     mouse(beside, "mousedown", { clientX: 700, clientY: 5 });
     mouse(document, "mousemove", { clientX: 700, clientY: 55 });
@@ -251,6 +254,11 @@ it("a press on the blank column holding the editor starts the marquee too; one b
     expect(inRange(view)).toEqual(["one", "two"]);
     mouse(document, "mouseup", { clientX: 700, clientY: 55 });
     expect(inRange(view)).toEqual(["one", "two"]);
+    // A press on the column's scrollbar is the scrollbar's: no marquee, no caret, no focus taken.
+    const before = view.state.selection.toJSON();
+    expect(mouse(column, "mousedown", { clientX: 805, clientY: 5 }).defaultPrevented).toBe(false);
+    mouse(document, "mouseup", { clientX: 805, clientY: 55 });
+    expect(view.state.selection.toJSON()).toEqual(before);
     // Below the editor's extent it is not the editor's.
     expect(mouse(column, "mousedown", { clientX: 700, clientY: 250 }).defaultPrevented).toBe(false);
   } finally { restore(); }

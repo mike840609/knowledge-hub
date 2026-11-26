@@ -190,7 +190,7 @@ export const blockPointer = $prose(() => {
       },
     },
     view: (editorView) => {
-      // The blank column either side of the editor starts a marquee too, as Notion's does (decision 1): a press on an
+      // The blank column either side of the editor starts a marquee too, as Notion's does (decision 5): a press on an
       // element that holds the editor (never one beside it, like the header or sidebar), within its vertical extent.
       const outside = (event: MouseEvent) => {
         const touch = pointerType === "touch";
@@ -200,6 +200,12 @@ export const blockPointer = $prose(() => {
         if (!target || target === editorView.dom || !target.contains?.(editorView.dom)) return;
         // Only the column of this one editor: a container that also holds another (a composer) belongs to neither.
         if (target.querySelectorAll(".ProseMirror").length !== 1) return;
+        // A press on a scrollbar targets the scrolling element itself: it is outside that element's client box.
+        const element = target as HTMLElement;
+        const box = element.getBoundingClientRect();
+        const left = box.left + element.clientLeft;
+        const top = box.top + element.clientTop;
+        if (event.clientX < left || event.clientX >= left + element.clientWidth || event.clientY >= top + element.clientHeight) return;
         const rect = editorView.dom.getBoundingClientRect();
         if (event.clientY < rect.top || event.clientY > rect.bottom) return;
         event.preventDefault();

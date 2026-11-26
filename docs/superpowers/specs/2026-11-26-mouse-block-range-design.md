@@ -34,7 +34,9 @@ unaffected: no operation here writes Markdown.
    editor's own surface rather than on any block in it (the 56px gutter, the
    space between blocks, below the last block) starts a marquee. So does a press
    on the blank column either side of the editor: an element that holds this
-   editor (and no other), within the editor's vertical extent. Amended
+   editor (and no other), within the editor's vertical extent and its client
+   box (a press on its scrollbar stays the scrollbar's). The outline rail beside
+   the column is a panel of its own, not blank column. Amended
    2026-11-26 after the browser check: the gutter's own controls cover most of
    the 56px margin beside a pointed-at block, so the editor's surface alone left
    only the gaps between blocks to start from. A short press there is a click:
