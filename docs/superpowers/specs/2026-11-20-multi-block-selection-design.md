@@ -58,7 +58,8 @@ is one undo step too.)
   the document page (`editable-document.tsx`), and a second meaning would break
   a shortcut people have learned. The block menu stays on the gutter grip and
   `Alt+F10`; Turn into keeps its list.
-- Choosing a range with the mouse (a drag from the margin, Shift-click) and
+- Choosing a range with the mouse (a drag from the margin, Shift-click; since added by
+  `2026-11-26-mouse-block-range-design.md`) and
   Shift-Arrow from a text caret across blocks (ProseMirror's text selection
   already does that, and the toolbar acts on it). A range across list items or
   inside a toggle: the range is top-level blocks, as a block chosen with Escape is.
