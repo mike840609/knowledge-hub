@@ -89,4 +89,15 @@ describe("checkbox", () => {
     expect(rule('.kh-editor li[data-item-type="task"]::before')).toContain("border-kh-border-strong");
     expect(rule('.kh-editor li[data-item-type="task"][data-checked="true"]::before')).toContain("bg-kh-primary");
   });
+
+  it("gives the reader's to-do and the editor's one geometry: no bullet, the box in the gutter", () => {
+    const item = rule('li.task-list-item,\n  .kh-editor li[data-item-type="task"]');
+    expect(item).toContain("list-none");
+    expect(item).toContain("--kh-task-left");
+    expect(css).toMatch(/\.kh-editor li\[data-item-type="task"\]::before \{[^}]*left: var\(--kh-task-left\)/);
+  });
+
+  it("leaves an unresolved link its own look in the editor, as in the reader", () => {
+    expect(css).toContain(".kh-editor a:not([data-unresolved-link], [data-outline-link])");
+  });
 });

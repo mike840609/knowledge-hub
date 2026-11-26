@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type Ref, type ReactNode } from "react";
-import { LockKeyhole, MessageSquare, MoreHorizontal, PanelRight } from "lucide-react";
+import { type Ref, type ReactNode } from "react";
+import { MessageSquare, MoreHorizontal, PanelRight } from "lucide-react";
 import { toggleFullWidth, useFullWidth } from "./use-full-width";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { ActionMenuItems } from "@/components/actions/action-menu";
@@ -11,8 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { MenuCheckboxItem, MenuContent, MenuRoot, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { Tooltip } from "@/components/ui/tooltip";
-import { formatDateTime, formatRelativeTime } from "@/lib/format-date";
-import { useDisplayTimeZone } from "@/components/ui/timestamp";
+import { DocumentMeta } from "./document-meta";
 import { DocumentBreadcrumb, type DocumentBreadcrumbSegment } from "./document-breadcrumb";
 import { useReviewEntry } from "./review-entry";
 
@@ -40,15 +39,18 @@ export function DocumentHeader({
   actions,
   onRunAction,
   beforeTitle,
+  metaAfterTitle = false,
 }: {
   titleControl?: ReactNode;
+  /** The meta line is drawn by `DocumentMetaSlot` under the article's own `#` title; the header leaves it out. */
+  metaAfterTitle?: boolean;
   /** Above the title: the page's icon, when there is one to show. */
   beforeTitle?: ReactNode;
   /** The editor's own: its save status and the Markdown toggle, before Share. */
   editorActions?: ReactNode;
   /** A first-visit cue that the text itself is the editor; kept in the metadata row, not the article. */
   editHint?: ReactNode;
-  /** Words on the page, shown beside when it was updated, once the edit hint has gone (both on one line would wrap a phone-width header, and the layout must not move when the hint goes); omitted where it is not counted. */
+  /** Words on the page, shown beside when it was updated, always, ahead of the edit hint (the hint is not drawn below `sm`, where both would wrap, and its going moves nothing); omitted where it is not counted. */
   wordCount?: number;
   /** The Full width setting; a header drawn beside another document page (the side peek) leaves it to that page. */
   showFullWidth?: boolean;
@@ -79,18 +81,6 @@ export function DocumentHeader({
 }) {
 
   const fullWidth = useFullWidth();
-  const [now, setNow] = useState<number | null>(null);
-  // Before mount there is no "now" and no zone; both arrive in the same tick,
-  // so the first render is the one the server also produced.
-  const zone = useDisplayTimeZone();
-  useEffect(() => {
-    setNow(Date.now());
-    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
-    return () => window.clearInterval(timer);
-  }, []);
-  const elapsed = now === null ? null : Math.max(0, now - new Date(updatedAt).getTime());
-  const relative = elapsed === null ? formatDateTime(updatedAt, zone) : formatRelativeTime(elapsed);
-
   const review = useReviewEntry();
   const hasActions = !!actions?.length && !!onRunAction;
   return (
@@ -110,9 +100,11 @@ export function DocumentHeader({
                 type="button"
                 onClick={onShareClick}
                 aria-label="Share link…"
-                className={buttonClasses({ variant: "ghost", icon: true })}
+                // The page's main action says its name where there is room, and is the icon alone where there is not.
+                className={buttonClasses({ variant: "ghost", icon: true, className: "sm:w-auto sm:gap-1.5 sm:border-kh-border-strong sm:bg-kh-bg sm:px-2.5 sm:text-kh-text sm:hover:bg-kh-bg-hover" })}
               >
                 <ActionIcon name="share" className="h-4 w-4" />
+                <span className="hidden sm:inline">Share</span>
               </button>
             </Tooltip>
           ) : null}
@@ -167,7 +159,7 @@ export function DocumentHeader({
         </div>
       </div>
       </div>
-      <header ref={headerRef}>
+      <header ref={headerRef} className="group/header">
         <div className="kh-reading-column pb-3">
           {beforeTitle}
           {titleControl ? (
@@ -182,47 +174,9 @@ export function DocumentHeader({
           ) : contentOwnsTitle ? null : (
             <h1 className="mt-2 break-words text-page-title font-semibold tracking-tight text-kh-text" title={title}>{title}</h1>
           )}
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">
-            {readOnlyReason}
-            {readOnly ? <span className="inline-flex items-center gap-1"><LockKeyhole className="h-3 w-3" aria-hidden="true" />Read only</span> : null}
-            {readOnly ? (
-              // Source ownership decides who may write: say where the edit happens instead of only refusing it.
-              <span>
-                {syncHref ? <>Edit the file in your folder, then{" "}
-                  <Link href={syncHref} className="kh-focus-ring rounded-md text-kh-link underline-offset-2 hover:underline">update from folder</Link></> : "Managed by its source"}
-              </span>
-            ) : null}
-            {status === "ARCHIVED" ? <Badge variant="warning">Archived</Badge> : null}
-            <time dateTime={new Date(updatedAt).toISOString()} title={formatDateTime(updatedAt, zone)}>Updated {relative}</time>
-            {wordCount && !editHint ? <>
-              <span aria-hidden="true" className="text-kh-text-faint">·</span>
-              <span className="sr-only">, </span>
-              <span className="tabular-nums">{wordCount.toLocaleString("en-US")} {wordCount === 1 ? "word" : "words"}</span>
-            </> : null}
-            {editHint ? <>
-              {/* The meta line is a row of separate facts; without a separator "10 days ago"
-                  and the hint after it read as one sentence. `gap` is not text, so copy/paste
-                  and speech both need a real one: a dot for the eye, a comma for AT. */}
-              <span aria-hidden="true" className="text-kh-text-faint">·</span>
-              <span className="sr-only">, </span>
-              <span>{editHint}</span>
-            </> : null}
-            {linkSummary ? (
-              // The padding makes a 24px target (WCAG 2.5.8) and the negative
-              // margins give it back, so a document with links is not a row taller
-              // than one without and the header does not jump between them.
-              <Tooltip label="Show links in the details panel">
-              <button
-                type="button"
-                onClick={onLinksClick}
-                className="-mx-1.5 -my-1 inline-flex h-6 items-center gap-1 rounded-md px-1.5 tabular-nums hover:bg-kh-bg-hover hover:text-kh-text kh-focus-ring"
-              >
-                <ActionIcon name="graph" className="h-3 w-3 shrink-0" />
-                {linkSummary}
-              </button>
-              </Tooltip>
-            ) : null}
-          </div>
+          {/* Under the title. A page whose own text opens with `# Title` has its title in the article, so the line goes
+              right under that (DocumentMetaSlot) instead of above it. */}
+          {metaAfterTitle ? null : <div className="mt-1.5"><DocumentMeta status={status} updatedAt={updatedAt} readOnly={readOnly} syncHref={syncHref} readOnlyReason={readOnlyReason} wordCount={wordCount} editHint={editHint} linkSummary={linkSummary} onLinksClick={onLinksClick} /></div>}
           {revisionBanner ? (
             <p className="mt-2 rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body-sm text-kh-text">
               Viewing revision {revisionBanner.viewingNo} —{" "}

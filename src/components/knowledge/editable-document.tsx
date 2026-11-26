@@ -606,7 +606,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     }}>
       {!ready && !source && !failed && !recovery ? standIn : null}
       <Article tabIndex={-1} data-review-document={ready && !source && !failed ? "" : undefined} hidden={source || failed || !ready}>
-        {loaded && Editor && !failed && <Editor onNotice={(message) => showToast({ message, tone: "danger" })} reviewMarkdown={ready && !source && !recovery ? content.markdown : undefined} renderCode={renderCode} renderLanguage={renderLanguage} links={links} workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId}
+        {loaded && Editor && !failed && <Editor titleMeta onNotice={(message) => showToast({ message, tone: "danger" })} reviewMarkdown={ready && !source && !recovery ? content.markdown : undefined} renderCode={renderCode} renderLanguage={renderLanguage} links={links} workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId}
           markdown={content.markdown} editable={editable && !source} onReady={(instance, openedWith) => {
             editor.current = instance;
             if (openedWith !== queue.current!.current.markdown) instance.replaceMarkdown(queue.current!.current.markdown);
@@ -632,6 +632,7 @@ export function EditableDocument({ detail, markdown, metadata, revisionId, userI
     inspectorData={{ ...detail.inspectorData, revisions, selectedRevisionNo: revisions.find(item => item.id === savedRevision)?.revisionNo ?? detail.inspectorData.selectedRevisionNo }}
     breadcrumb={[...detail.breadcrumb.slice(0, -1), { label: displayTitle }]} outline={outline}
     contentOwnsTitle={markdownOpensWithHeading(content.markdown)}
+    metaInArticle={markdownOpensWithHeading(content.markdown) && !source && !failed}
     wordCount={words}
     editHint={showEditHint ? "Click anywhere in the text to edit." : undefined}
     editorActions={<><AutosaveIndicator state={status} attention={attention} />{markdownToggle}</>}

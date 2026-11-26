@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { AnchorHTMLAttributes, ComponentProps, ComponentType, DetailedHTMLProps, ImgHTMLAttributes, ReactNode } from "react";
+import { MarkdownTable } from "./markdown-table";
 import ReactMarkdown, { type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { PluggableList } from "unified";
@@ -20,6 +21,10 @@ import { LinkedImageScope, MarkdownImage } from "./markdown-image";
 import { MARKDOWN_PROSE } from "./markdown-prose";
 import type { RenderedLinks } from "./rendered-links";
 import { remarkKnowledgeLinks, WIKILINK_ANCHOR, WIKILINK_FRAGMENT, WIKILINK_TARGET } from "./remark-knowledge-links";
+
+/** At module scope, so a client re-render keeps each table (its sideways scroll, its focus); and without react-markdown's
+ * `node`, so the hast subtree is not serialised into the RSC payload. */
+const ReaderTable = ({ children }: { children?: ReactNode }) => <MarkdownTable>{children}</MarkdownTable>;
 
 function isExternalHref(href: string): boolean {
   return href.startsWith("http://") || href.startsWith("https://") || href.startsWith("//");
@@ -191,14 +196,6 @@ function MarkdownLink(props: DetailedHTMLProps<AnchorHTMLAttributes<HTMLAnchorEl
   );
 }
 
-function ResponsiveTable({ children }: { children?: React.ReactNode }) {
-  return (
-    <div role="region" aria-label="Table" className="kh-markdown-table">
-      <table>{children}</table>
-    </div>
-  );
-}
-
 /**
  * Markdown as this product typesets it, and nothing else: no colour in the code, no copy button.
  *
@@ -254,7 +251,7 @@ export function MarkdownBase({
           img: ({ src, alt }: DetailedHTMLProps<ImgHTMLAttributes<HTMLImageElement>, HTMLImageElement>) => (
             <MarkdownImage src={typeof src === "string" ? src : undefined} alt={alt} />
           ),
-          table: ResponsiveTable,
+          table: ReaderTable,
           blockquote: MarkdownQuote,
           details: MarkdownDetails,
           summary: MarkdownSummary,

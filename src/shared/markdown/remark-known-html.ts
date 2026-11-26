@@ -1,7 +1,9 @@
-import type { Root } from "mdast";
+import type { Paragraph, Root } from "mdast";
 import { SKIP, visit } from "unist-util-visit";
 
 const BR = /^<br\s*\/?>$/i;
+/** Where an `html` node stands as a block of its own rather than inside a line. */
+const BLOCK_PARENTS = new Set(["root", "blockquote", "listItem"]);
 const COMMENT = /^<!--[\s\S]*-->$/;
 /** An opening or closing tag of the inline HTML the reader draws (`remark-html-subset.ts`), written bare. */
 export const INLINE_HTML_TAG = /^<(\/?)(u|sub|sup|kbd|mark)>$/i;
@@ -39,7 +41,11 @@ export function remarkKnownHtml() {
     visit(tree, "html", (node, index, parent) => {
       if (!parent || index === undefined) return;
       const html = node.value.trim();
-      if (BR.test(html)) parent.children[index] = { type: "break" };
+      // A `<br />` standing as a block is the editor's empty paragraph: read it back as one, so the reader
+      // gives it the paragraph's height and the page does not jump when the editor takes over.
+      if (BR.test(html)) parent.children[index] = BLOCK_PARENTS.has(parent.type)
+        ? ({ type: "paragraph", children: [{ type: "break" }] } satisfies Paragraph)
+        : { type: "break" };
       else if (COMMENT.test(html)) {
         parent.children.splice(index, 1);
         return [SKIP, index];

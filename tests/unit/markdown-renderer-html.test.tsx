@@ -24,6 +24,16 @@ describe("the HTML the reader understands", () => {
     expect(html).not.toContain("&lt;br");
   });
 
+  // Editor page polish, decision 1: drawn as the editor draws it, an empty paragraph, so the page keeps its height
+  // when the editor takes over from the reader.
+  it.each([
+    ["at the top level", "before\n\n<br />\n\nafter\n"],
+    ["in a quote", "> before\n>\n> <br />\n"],
+    ["in a list item", "- one\n\n  <br />\n"],
+  ])("draws the editor's empty paragraph as a paragraph: %s", (_name, markdown) => {
+    expect(render(markdown)).toMatch(/<p[^>]*><br\/>\s*<\/p>/);
+  });
+
   it("keeps a break inside its table cell", () => {
     expect(render("| a |\n| - |\n| one<br>two |\n")).toMatch(/<td>one<br\/>\s*two<\/td>/);
   });

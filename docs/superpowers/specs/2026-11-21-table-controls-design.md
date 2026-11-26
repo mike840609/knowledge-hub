@@ -106,6 +106,16 @@ A table no longer scrolls (frontend-design-language, "Images and tables in a
 document"): it is shown whole in the editor too. A column can no longer scroll
 out of the table, so its grip hides only where the document pane clips it.
 
+## Amendment (2026-11-25, reader chrome)
+
+A table scrolls sideways again, in a column narrower than 40rem only
+(`2026-11-25-reader-chrome-polish-design.md`, decision 1): the region is a
+container with `overflow-x: auto`, never a vertical scroll box. On a phone the
+controls are unchanged. They are `position: fixed` and take their place from
+the table's and its cells' rectangles, so the region's containment does not
+reach them; a column scrolled out of the region's view hides its grip by the
+rule that already hides a grip the pane clips.
+
 ## Verification
 
 - `tests/unit/editor-table-actions.test.ts`, through the rendered editor:

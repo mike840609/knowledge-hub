@@ -14,9 +14,11 @@ Notion's. Two of them are decided here. Nothing stored in a document changes.
    not split), and each Han, kana or hangul character counts as one (`src/shared/markdown/word-count.ts`). It is
    counted when the Markdown changes (not on every render), and every scan is
    bounded, so a long line without a closer cannot slow typing. A page with no
-   words says nothing. It waits for the first-use edit hint to go ("Click anywhere
-   in the text to edit"), which shares the line: both together wrap a phone-width
-   header, and focusing the editor must not move the layout (`zz-editor-blocks`).
+   words says nothing. **Amended 2026-11-25:** it no longer waits for the first-use edit hint
+   ("Click anywhere in the text to edit"); the count is on the line from the first render and
+   the hint follows it, from `sm` up only (both together wrap a phone-width header), so the hint
+   going, and the editor replacing the stand-in, move nothing
+   (`2026-11-25-editor-page-polish-design.md`, decision 1; `zz-editor-blocks`).
 2. **Full width is the reader's own arrangement.** A checkbox in Document
    actions (`Full width`, from the `sm` breakpoint up) lets the reading
    column fill the pane. It is kept in this browser (`kh.document-full-width`,
@@ -48,7 +50,9 @@ Notion's. Two of them are decided here. Nothing stored in a document changes.
   (`2026-11-18-editor-source-and-title-design.md`).
 - A hover row above the title (Add icon, Add comment): the icon picker is
   already the page icon, and comments open from the selection toolbar and the
-  header's comment button.
+  header's comment button. **Amended 2026-11-25:** Add icon is now revealed on
+  pointing at the header or focus in it, and a page with no icon shows no generic
+  glyph (`2026-11-25-editor-page-polish-design.md`, decision 2). Add comment is still out.
 - Lock page and a font choice: a lock needs a stored state and an
   authorization rule of its own; neither is decided here.
 

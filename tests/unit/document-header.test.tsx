@@ -129,3 +129,43 @@ it("separates the edit hint from the update time", async () => {
     await act(async () => root.unmount());
   }
 });
+
+// Editor page polish spec, decision 1: the line is the same before and after the editor takes the hint
+// away, so the count is always there and the hint only follows it.
+it("shows the word count with the edit hint, and the hint after it", async () => {
+  const { host, root } = await renderHeader({ editHint: "Click anywhere in the text to edit.", wordCount: 87 });
+  try {
+    const text = host.querySelector("time")!.parentElement!.textContent ?? "";
+    expect(text).toContain("87 words");
+    expect(text.indexOf("87 words")).toBeLessThan(text.indexOf("Click anywhere"));
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
+
+it("puts the meta line under the header's title, and leaves it to the article when the article owns the title", async () => {
+  const props = { readOnly: true, syncHref: "/w/w1/sources/s1/update", linkSummary: "3 backlinks", onLinksClick: vi.fn() };
+  const under = await renderHeader(props);
+  try {
+    expect(under.host.querySelector("h1")?.compareDocumentPosition(under.host.querySelector("[data-document-meta]")!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(under.host.textContent).toContain("Read only");
+  } finally {
+    await act(async () => under.root.unmount());
+  }
+  const owned = await renderHeader({ ...props, contentOwnsTitle: true, metaAfterTitle: true });
+  try {
+    expect(owned.host.querySelector("[data-document-meta]")).toBeNull();
+    expect(owned.host.textContent).not.toContain("Updated");
+  } finally {
+    await act(async () => owned.root.unmount());
+  }
+});
+
+it("labels Share where there is room and keeps its name for assistive tech", async () => {
+  const { host, root } = await renderHeader({ onShareClick: vi.fn() });
+  try {
+    expect(host.querySelector('button[aria-label="Share link…"]')?.textContent).toBe("Share");
+  } finally {
+    await act(async () => root.unmount());
+  }
+});

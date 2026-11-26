@@ -3,16 +3,38 @@ import { personalWorkspaceId as mySpace } from "./fixtures/my-space";
 
 const ROUND_TRIP = { timeout: 15_000 };
 
-async function openNote(page: Page) {
+async function openNote(page: Page, markdown = "Some words.") {
   const workspaceId = await mySpace(page);
   const title = `Icon picker ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-  const response = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title, markdown: "Some words." } });
+  const response = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title, markdown } });
   expect(response.ok()).toBe(true);
   const created = (await response.json()) as { sourceId: string; documentId: string };
   await page.goto(`/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}`);
-  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(title, ROUND_TRIP);
+  if (markdown.startsWith("# ")) await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(ROUND_TRIP);
+  else await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(title, ROUND_TRIP);
   return page.locator("main");
 }
+
+test("a page with no icon shows none until the header is pointed at or focused", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const main = await openNote(page);
+  const trigger = main.getByRole("button", { name: "Add page icon", exact: true });
+  // The control exists (and so is a tab stop) but draws nothing at rest, as the read-only page draws nothing.
+  await expect(trigger).toHaveCount(1);
+  await expect(trigger).toHaveCSS("opacity", "0");
+  await expect(main.locator("[data-page-icon]")).toHaveCount(0);
+  const rest = await main.getByRole("textbox", { name: "Title", exact: true }).boundingBox();
+  await main.locator("header").hover();
+  await expect(trigger).toHaveCSS("opacity", "1");
+  await expect(trigger).toContainText("Add icon");
+  // Showing it moves nothing.
+  expect((await main.getByRole("textbox", { name: "Title", exact: true }).boundingBox())!.y).toBeCloseTo(rest!.y, 0);
+  await page.mouse.move(5, 5);
+  await expect(trigger).toHaveCSS("opacity", "0");
+  // Keyboard: focus alone shows it.
+  await trigger.focus();
+  await expect(trigger).toHaveCSS("opacity", "1");
+});
 
 test("the page icon picker searches in English and Chinese and is driven by keys", async ({ page }) => {
   const main = await openNote(page);
@@ -83,4 +105,17 @@ test("the page icon picker searches in English and Chinese and is driven by keys
   await page.keyboard.press("Enter");
   expect((await second).ok()).toBe(true);
   await expect(main.locator("[data-page-icon]").first()).toHaveText("☕");
+});
+
+test("a note that opens with its own # title reveals Add icon when that title is pointed at", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const main = await openNote(page, "# Heading note\n\nSome words.\n");
+  const trigger = main.getByRole("button", { name: "Add page icon", exact: true });
+  await expect(trigger).toHaveCSS("opacity", "0");
+  await main.getByRole("heading", { level: 1, name: "Heading note" }).hover();
+  await expect(trigger).toHaveCSS("opacity", "1");
+  await expect(trigger).toContainText("Add icon");
+  await trigger.hover();
+  await trigger.click();
+  await expect(page.getByRole("searchbox", { name: "Search emoji" })).toBeVisible();
 });

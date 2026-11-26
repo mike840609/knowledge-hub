@@ -47,6 +47,7 @@ export function OutlineList({
           <li key={entry.slug}>
             <a
               href={`#${encodeURIComponent(entry.slug)}`}
+              data-outline-link=""
               aria-current={active ? "location" : undefined}
               onClick={(event) => goToHeading(event, entry.slug, onNavigate)}
               className={`-ml-px block rounded-r-md border-l py-1 pr-2 text-body-sm transition-colors kh-focus-ring ${
@@ -87,10 +88,10 @@ export function OutlineRail({ entries, activeSlug }: { entries: readonly Outline
   );
 }
 
-export function OutlineDisclosure({ entries, activeSlug }: { entries: readonly OutlineEntry[]; activeSlug: string | null }) {
+export function OutlineDisclosure({ entries, activeSlug, bare = false }: { entries: readonly OutlineEntry[]; activeSlug: string | null; /** Inside the reading column already (under the page's own title), so it brings no column of its own. */ bare?: boolean }) {
   if (entries.length === 0) return null;
   return (
-    <div className="kh-reading-column kh-outline-inline">
+    <div className={`kh-outline-inline ${bare ? "mt-2" : "kh-reading-column"}`}>
       {/* As wide as the text under it, not the column: tables and code may take the column, prose does not (reader-measure spec §1). */}
       <details className="mb-2 max-w-measure rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2">
         <summary className="cursor-pointer rounded-md text-body-sm font-medium text-kh-text-secondary kh-focus-ring">

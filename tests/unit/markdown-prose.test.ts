@@ -24,9 +24,26 @@ describe("the heading scale", () => {
     ["h4", "text-reading"],
     ["h5", "text-reading"],
     ["h6", "text-reading"],
-  ])("sets %s in %s, semibold", (level, size) => {
+  ])("sets %s in %s", (level, size) => {
     expect(classes).toContain(`[&_${level}]:${size}`);
+  });
+
+  // 20px and 17px alone read as one level (editor page polish spec, decision 4): H2 is also set off
+  // by more room above it and H3 is lighter, inside the existing tokens.
+  it.each(["h1", "h2", "h4", "h5", "h6"])("sets %s semibold", (level) => {
     expect(classes).toContain(`[&_${level}]:font-semibold`);
+  });
+
+  it("tells h3 from h2 by weight and by the room above", () => {
+    expect(classes).toContain("[&_h3]:font-medium");
+    expect(classes).not.toContain("[&_h3]:font-semibold");
+    expect(classes).toContain("[&_h2]:mt-6");
+    expect(classes).toContain("[&_h3]:mt-4");
+  });
+
+  it("hangs a to-do's native box in the gutter, as the editor's drawn box is", () => {
+    expect(classes).toContain("[&_li.task-list-item_input]:absolute");
+    expect(classes).toContain("[&_li.task-list-item_input]:left-[var(--kh-task-left)]");
   });
 
   it("sets no heading in a UI size smaller than body text", () => {
@@ -51,4 +68,13 @@ describe("inline code", () => {
     expect(classes.filter((name) => name.startsWith("[&_code]"))).toEqual([]);
     expect(classes).toContain("[&_:not(pre)>code]:px-1");
   });
+});
+
+// The margin and padding scales are replaced (tailwind.config.ts): a step not on the ladder, like `mt-8`, compiles to
+// nothing, and a class-string test alone would not notice (editor page polish, review round 3).
+it("uses only margin and padding steps the replaced scales define", () => {
+  const theme = config.theme as { margin: Record<string, string>; padding: Record<string, string> };
+  const spacing = classes.map(name => name.split(":").pop()!).map(name => /^-?(m|p)[trblxy]?-(.+)$/.exec(name)).filter(match => match !== null);
+  expect(spacing.length).toBeGreaterThan(10);
+  for (const [name, kind, step] of spacing) expect(Object.keys(kind === "m" ? theme.margin : theme.padding), name).toContain(step);
 });
