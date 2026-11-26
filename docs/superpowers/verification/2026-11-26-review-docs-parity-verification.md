@@ -74,3 +74,19 @@ After Copy link to discussion (after only; the menu is still fading out as it cl
   `npx tsx scripts/test/e2e.ts … --trace off`: 170 passed, 1 skipped
   (`user-guide-screenshots.spec.ts`, skipped unless screenshots are asked for), 0 failed.
 - Each new unit test was run with the `src/` change stashed and failed (see the commit messages).
+
+## After review fixes (465faa8 … the E2E locator commit)
+
+Seven fixes from review: a `?thread=` link to an open discussion keeps Open; AltGr is not the
+shortcut; the shortcut is the key that types M (AZERTY); the resolved empty state names the Show
+group; the copied link follows the share's audience; the copy-by-hand field keeps focus; the shared
+Comments button's name starts with its visible text. No screenshot changed visibly. Re-run:
+
+- `npx tsc --noEmit -p .` and `npm run lint`: clean.
+- Full vitest: 5790 passed, 1 failed: the same date-dependent `editor-at-mentions` case that fails
+  on `origin/main`.
+- `review-mentions` integration: 47 passed.
+- All 34 comment-related e2e specs: 171 passed, 1 skipped (`user-guide-screenshots`), 0 failed. A
+  first run, before six shared-page locators were moved to the button's new name, had 10 failures:
+  9 from those locators, and 1 in `zz-list-commands` (a text selection read "eta" for "beta") that
+  passed on the re-run.
