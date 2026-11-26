@@ -18,7 +18,7 @@ import { ReviewPassageMarkers } from "./review-passage-markers";
 import { reviewRailInline, useReviewRailInline, useReviewRailOpen } from "./review-rail-mode";
 import { InlineReviewContext, type CaptureReviewAnchor, type PreparedReviewComment } from "./inline-review-context";
 import { COMMENT_HINT, createReviewRangeResolver, focusReviewAnchor, revealReviewAnchor, selectionAnchorInBlock } from "./review-selection";
-import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewRequest, type ReviewFilter, type ReviewShow } from "./review-thread-list";
+import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewRequest, reviewShows, type ReviewFilter, type ReviewShow } from "./review-thread-list";
 
 /** The owner is never mentioned on their own document (`normalizeMentions`), so Mentions me is not offered. */
 const OWNER_SHOWS: readonly ReviewShow[] = ["ANYONE", "MINE"];
@@ -110,7 +110,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     const found = deep ? result.threads.find(item => item.id === deep) : undefined;
     // A deep link to a settled discussion must not land on a list that hides it.
     if (found?.status === "RESOLVED") setFilter("ALL");
-    if (found) setShow("ANYONE");
+    if (found) setShow(current => reviewShows(found, current) ? current : "ANYONE");
     // From the Inbox only as a rail: a drawer would cover the list the reader is working through.
     if (found) { setActiveThreadId(found.id); if (!thread || reviewRailInline()) setOpen(true); }
     const anchor = thread && result.revisionId === revisionId && found?.currentAnchor.match !== "OUTDATED" ? found?.currentAnchor.anchor : undefined;

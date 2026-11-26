@@ -6,7 +6,7 @@ import { drawnReviewThreads, useReviewDraftHighlight, useReviewHighlights } from
 import { LogIn, RefreshCw, MessageSquare, MessageSquarePlus, X } from "lucide-react";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewDraftKey, reviewRequest, type ReviewFilter, type ReviewShow } from "./review-thread-list";
+import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewDraftKey, reviewRequest, reviewShows, type ReviewFilter, type ReviewShow } from "./review-thread-list";
 import { CommentShortcutTip, ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
 import { ReviewPanelShell } from "./review-panel-shell";
 import { ReviewBlockComment } from "./review-block-comment";
@@ -78,7 +78,9 @@ export function SharedReviewPanel({ token, documentId, revisionId, markdown, sig
     deepLinked.current = true;
     const thread = result.threads.find(candidate => candidate.id === new URLSearchParams(window.location.search).get("thread"));
     if (!thread) return;
-    setFilter("ALL"); setShow("ANYONE"); setActiveThreadId(thread.id); setArrivedThreadId(thread.id); setOpen(true);
+    // Only a list that hides it is changed: an open discussion is listed by the Open it starts on.
+    if (thread.status === "RESOLVED") setFilter("ALL");
+    setShow(current => reviewShows(thread, current) ? current : "ANYONE"); setActiveThreadId(thread.id); setArrivedThreadId(thread.id); setOpen(true);
     const anchor = revisionChanged ? undefined : thread.currentAnchor.anchor;
     const root = document.querySelector<HTMLElement>("[data-review-document]");
     if (anchor && root) requestAnimationFrame(() => requestAnimationFrame(() => focusReviewAnchor(root, markdown, anchor)));

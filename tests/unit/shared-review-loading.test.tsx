@@ -172,6 +172,19 @@ it("shows a resolved discussion a ?thread= link names, whatever the filter start
     await render();
     await answer(json({ threads: [openThread("t1"), resolvedThread("t2")], revisionId: "r1", writesEnabled: true, callerUserId: "u1" }));
     expect(container.textContent).toContain("Settled");
+    expect(filterButton().textContent).toBe("All comments");
+  } finally { window.history.replaceState(null, "", "/"); }
+});
+
+it("leaves the list on Open where a ?thread= link names an open discussion", async () => {
+  window.history.replaceState(null, "", "/s/share-token?thread=t1");
+  try {
+    const answer = pendingFetch();
+    await render();
+    await answer(json({ threads: [openThread("t1"), resolvedThread("t2")], revisionId: "r1", writesEnabled: true, callerUserId: "u1" }));
+    expect(filterButton().textContent).toBe("Open");
+    expect(container.textContent).toContain("Still open");
+    expect(container.textContent).not.toContain("Settled");
   } finally { window.history.replaceState(null, "", "/"); }
 });
 
