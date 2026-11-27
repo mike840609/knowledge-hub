@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { buttonClasses } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import { BarChart3, Bot, Inbox, Settings, Home, type LucideIcon } from "lucide-react";
+import { BarChart3, Inbox, Settings, Home, type LucideIcon } from "lucide-react";
 import { knowledgeDestinations, PageSwitch } from "./knowledge-destinations";
 
 type NavItem = { name: string; href: string; Icon: LucideIcon; badge?: number; label?: string; compactOnly?: boolean };
@@ -77,7 +77,6 @@ export function PrimaryNav({
     ...home,
     ...knowledgeDestinations(workspaceId, access).map((item) => ({ ...item, compactOnly: true })),
     ...(personal ? [
-      { name: "Tasks", href: `/w/${workspaceId}/tasks`, Icon: Bot, compactOnly: true },
       { name: "Insights", href: `/w/${workspaceId}/profile`, Icon: BarChart3, compactOnly: true },
     ] : []),
     ...(access.actions.canOpenSettings ? [{ name: "Settings", href: `/w/${workspaceId}/settings`, Icon: Settings, compactOnly: true }] : []),

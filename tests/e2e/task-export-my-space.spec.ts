@@ -62,7 +62,8 @@ test("task results in My Space: export, browse, version, archive and restore, al
   const hrefs = await page.locator("a[href]").evaluateAll((links) => links.map((link) => link.getAttribute("href") ?? ""));
   for (const href of hrefs) expect(href).not.toMatch(/^\s*(?:javascript|data|vbscript):/i);
 
-  await expect(page.getByRole("link", { name: "Space guide" })).toHaveAttribute("href", new RegExp(`^/w/${ws}/knowledge/[0-9a-f-]+/[0-9a-f-]+$`));
+  // Scoped to the page: the sidebar tree lists the same document once it loads.
+  await expect(page.locator("#kh-workspace-main").getByRole("link", { name: "Space guide" })).toHaveAttribute("href", new RegExp(`^/w/${ws}/knowledge/[0-9a-f-]+/[0-9a-f-]+$`));
   await expect(page.getByText("missing.md")).toBeVisible();
   await expect(page.getByRole("link", { name: "https://github.com/o/r/pull/1" })).toHaveAttribute("target", "_blank");
 
