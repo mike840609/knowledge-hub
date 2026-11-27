@@ -18,17 +18,26 @@ Agents will be able to do more later, such as creating documents. So the place i
   The rail's separate Tasks item is removed, because it used the same icon. A team sees no
   Agents. This amends [the page switch](2026-11-23-knowledge-destination-icons-design.md)
   ("Which items", "Unchanged").
-- **`/w/<ws>/agents`** is one page, in this order:
-  1. **Connect an agent**, as three steps:
-     - Create a binding, one per machine.
-     - Run the setup line it shows once, on that machine.
-     - Type a skill in Claude Code or OpenCode.
-  2. **Skills**: each skill's command, what it does, and whether it reads or adds. It closes
-     with the limits: a skill runs only when typed, and none edits a document. It comes
-     before the controls so that it is in view when the page opens.
-  3. The binding controls from the old setup page, unchanged: create, rotate, revoke and
-     the binding IDs.
-  4. A link to **Task results** (`/tasks`).
+- **`/w/<ws>/agents`** has two layouts, chosen by whether a binding exists. A header action,
+  **Task results**, links to `/tasks`.
+  - **No binding yet** (and while the first binding's setup line is still on screen): the
+    diagram, then three numbered steps, each holding its own control. ① Create a binding
+    (the form). ② Run the setup line on that machine (a muted preview until the binding
+    exists, then the one-time line). ③ Type a skill in your agent (the skills list).
+  - **Bindings exist:** Bindings first (the list, with Rotate token and Revoke, and the
+    form behind **Add a machine**), then Skills, then the diagram, then a collapsed "How to
+    connect another machine". A freshly issued setup line shows above the list.
+- **The diagram** carries the explanation; one caption line is its footnote. Two dashed
+  frames: *On your machine* holds the AI agent (Claude Code, OpenCode) and the
+  `knowledge-hub` command with its binding token; *Knowledge Hub* holds My Space, with
+  Documents (Read) and Task results (Read · Write). Two arrows cross between them, Read and
+  Write. The command is drawn on the machine, not inside the Hub, because it is the CLI the
+  reader installs, which shares only its name with the product. Task results are drawn
+  readable as well as writable because `/hub-search --tasks` and `/hub-read --task` read them.
+  Documents are drawn read-only because agents cannot write one yet; when they can, Documents
+  gains Write. Colours are the page tokens, so it follows light and dark.
+- **Skills** are labelled Read or Write: `/hub-search` and `/hub-read` read, `/hub-export`
+  writes a Task Result.
 - **`/tasks/setup` redirects to `/agents`**, so old links and the CLI's messages still land.
   The Tasks page and its empty state link to Agents. The Tasks page's location reads
   `Agents`.
