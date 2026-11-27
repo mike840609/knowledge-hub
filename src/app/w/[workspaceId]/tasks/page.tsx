@@ -72,10 +72,10 @@ export default async function TaskResultsPage({ params, searchParams }: Props) {
   return (
     <main className="kh-page pb-6">
       <PageHeader
-        location="Agents"
-        locationHref={`/w/${workspaceId}/agents`}
+        location="My Space"
+        locationHref={`/w/${workspaceId}/home`}
         title="Tasks"
-        actions={showSetupAction ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/agents`}>Set up export</Link> : undefined}
+        actions={showSetupAction ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/tasks/setup`}>Set up export</Link> : undefined}
       />
       <div className="mt-6">
         {enabled ? (

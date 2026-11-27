@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Database, Network, Share2, type LucideIcon } from "lucide-react";
+import { Database, Network, Share2, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useState, type MouseEvent } from "react";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -18,7 +18,7 @@ export function knowledgeDestinations(workspaceId: string, access: WorkspaceAcce
     { name: "Graph", href: `${prefix}/graph`, Icon: Network },
     ...(access.actions.canInspectSources ? [{ name: "Sources", href: `${prefix}/sources`, Icon: Database }] : []),
     ...(access.workspace.type === "PERSONAL" && access.actions.canSearch
-      ? [{ name: "Shares", href: `${prefix}/shares`, Icon: Share2 }, { name: "Agents", href: `${prefix}/agents`, Icon: Bot }] : []),
+      ? [{ name: "Shares", href: `${prefix}/shares`, Icon: Share2 }] : []),
   ];
 }
 
@@ -28,7 +28,7 @@ function currentness(pathname: string, href: string): "page" | "location" | unde
 }
 
 /**
- * The expanded sidebar's page switch: Home, Graph, Sources, Shares and Agents in one track under Search. The page the
+ * The expanded sidebar's page switch: Home, Graph, Sources and Shares in one track under Search. The page the
  * reader is on is a raised item with its icon and name; the others are icons, named by tooltip and accessible
  * name. They are links, so on a page that is none of them (a document, Inbox, Settings) nothing is raised
  * (2026-11-23-knowledge-destination-icons-design.md).

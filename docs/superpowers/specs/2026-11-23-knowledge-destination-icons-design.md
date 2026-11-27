@@ -31,8 +31,6 @@ switch of their own under Search, and gives the explorer back a plain heading.
 - **Which items.** Home for a personal workspace; then `knowledgeDestinations` unchanged:
   Graph always, Sources with `canInspectSources`, Shares in a personal workspace with search.
   A team sees Graph and, with the right, Sources.
-  *Amended 2026-11-27:* a personal workspace with search also gets Agents after Shares, and
-  the collapsed rail's Tasks item gives way to it ([Agents destination](2026-11-27-agents-destination-design.md)).
 - **Explorer header.** The tool row starts with a muted `Knowledge` heading, then Favorites,
   Recent, Filter and Options as before.
 - **Unchanged.** The collapsed 48px rail lists Home, Graph, Sources, Shares, Tasks, Insights

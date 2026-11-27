@@ -25,7 +25,7 @@ test("Home help covers first import, repeat sync and recovery in both languages"
   await expect(page.getByText("Search title, summary and findings",{exact:false})).toHaveCount(0);
   await expect(page.getByRole("link",{name:"Open Inbox",exact:true})).toHaveAttribute("href",`/w/${ws}/inbox`);
   await expect(page.getByRole("link",{name:"Open Tasks",exact:true})).toHaveAttribute("href",`/w/${ws}/tasks`);
-  await expect(page.getByRole("link",{name:"Set up export",exact:true})).toHaveAttribute("href",`/w/${ws}/agents`);
+  await expect(page.getByRole("link",{name:"Set up export",exact:true})).toHaveAttribute("href",`/w/${ws}/tasks/setup`);
   await expect(page.getByRole("link",{name:"Try the sample wiki",exact:true})).toHaveAttribute("href",`/w/${ws}/sources/import#sample-wiki`);
   await expect(page.getByRole("link",{name:"Read the import preview guide",exact:true})).toHaveCount(0);
   await page.getByRole("link",{name:"Troubleshooting",exact:true}).click();
@@ -42,7 +42,7 @@ test("Home help covers first import, repeat sync and recovery in both languages"
   await expect(page.getByRole("heading",{name:"收件匣：討論、提及與分享",exact:true})).toBeAttached();
   await expect(page.getByRole("heading",{name:"Tasks：代理完成的任務",exact:true})).toBeAttached();
   await expect(page.getByRole("link",{name:"開啟 Inbox",exact:true})).toHaveAttribute("href",`/w/${ws}/inbox`);
-  await expect(page.getByRole("link",{name:"設定 Task export",exact:true})).toHaveAttribute("href",`/w/${ws}/agents`);
+  await expect(page.getByRole("link",{name:"設定 Task export",exact:true})).toHaveAttribute("href",`/w/${ws}/tasks/setup`);
   await expect(page.getByRole("figure")).toHaveCount(19);
   await expect(page.getByRole("figure",{name:"示意圖 · 每次更新都需要 Apply"})).toContainText("不會在背景自動同步");
   await expect(page.locator("details[open]")).toHaveCount(0);
