@@ -5,8 +5,8 @@ import { bufferTyping, plainClick } from "./typing-ahead";
 import { ReopenGuidanceMenuItem } from "./reopen-guidance-menu-item";
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { RECENT_SHOWN, homeLists, type ContinueDoc, type ContinueDraft, type DraftItem, type RecentItem } from "@/lib/home-continue";
-import { AttentionList, UnreadDiscussions, type HomeNotice } from "./home-attention";
+import { RECENT_SHOWN, homeLists, recentGroups, type ContinueDoc, type ContinueDraft, type DraftItem, type RecentItem } from "@/lib/home-continue";
+import { AttentionList, HomeSection as Section, UnreadDiscussions, type HomeNotice } from "./home-attention";
 import type { FreshnessReminder } from "@/modules/personal/application/knowledge-freshness";
 
 import Link from "next/link";
@@ -19,7 +19,7 @@ import { useDocumentShortcuts, documentShortcutKey } from "./use-document-shortc
 import { toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { PageHeader } from "@/components/shell/page-header";
-import { Timestamp } from "@/components/ui/timestamp";
+import { Timestamp, useDisplayTimeZone } from "@/components/ui/timestamp";
 import { Tooltip } from "@/components/ui/tooltip";
 import { actionsFor, type Action } from "@/components/actions/action-registry";
 import { RowActionsTrigger, RowContextMenu, useActionRunner } from "@/components/actions/action-menu";
@@ -29,24 +29,6 @@ import { useHydrated } from "@/components/shell/use-hydrated";
 import { RowPreviewButton } from "./row-preview-button";
 
 type Doc = ContinueDoc;
-
-function Section({ title, count, action, children }: { title: string; count?: number; action?: { href: string; label: string }; children: React.ReactNode }) {
-  return (
-    <section aria-label={title} className="min-w-0">
-      <div className="flex items-baseline justify-between gap-3 px-3 pb-2">
-        <h2 className="text-body font-semibold text-kh-text">
-          {title}{count ? <span className="ml-1.5 text-kh-selected-text">{count}</span> : null}
-        </h2>
-        {action && (
-          <Link href={action.href} className="kh-control kh-focus-ring inline-flex min-h-8 items-center rounded-md text-body text-kh-link hover:underline">
-            {action.label}
-          </Link>
-        )}
-      </div>
-      {children}
-    </section>
-  );
-}
 
 /** A list's empty state is background, not content: caption size, so it never reads as a row. */
 function EmptyLine({ children }: { children: React.ReactNode }) {
@@ -59,15 +41,15 @@ function EmptyLine({ children }: { children: React.ReactNode }) {
  * it, so it is its own target and a click on it never navigates.
  */
 function EventTime({ timestamp, eventLabel }: { timestamp?: string; eventLabel?: string }) {
-  // A short time ("23h") with the event in its tooltip; untimed, the event is all there is to say.
+  // The event and a short time ("Edited 23h"), the full date in the tooltip; untimed, the event is all there is to say.
   if (!timestamp) return eventLabel ? <span className="text-kh-text-muted">{eventLabel}</span> : null;
   return <>
-    {eventLabel ? <span className="sr-only">{eventLabel} </span> : null}
+    {eventLabel ? `${eventLabel} ` : null}
     <Timestamp value={timestamp} variant="short" label={eventLabel} className="tabular-nums" />
   </>;
 }
 
-function Row({ href, icon, title, timestamp, eventLabel, provenance, stackProvenance = false, trailing, actions = [], onRun = () => {} }: {
+function Row({ href, icon, title, timestamp, eventLabel, provenance, stackProvenance = false, hint, keyShortcuts, trailing, actions = [], onRun = () => {} }: {
   href: string;
   icon: React.ReactNode;
   title: string;
@@ -77,6 +59,9 @@ function Row({ href, icon, title, timestamp, eventLabel, provenance, stackProven
   provenance?:string;
   /** The narrow Favorites column stacks provenance under the title instead of squeezing both onto one line. */
   stackProvenance?: boolean;
+  /** What the row does, before its time: only the latest draft has one. */
+  hint?: React.ReactNode;
+  keyShortcuts?: string;
   trailing?: React.ReactNode;
   actions?: readonly Action[];
   onRun?: (action: Action) => void;
@@ -86,6 +71,7 @@ function Row({ href, icon, title, timestamp, eventLabel, provenance, stackProven
       <Link
         data-list-row
         href={href}
+        aria-keyshortcuts={keyShortcuts}
         className="kh-focus-ring flex min-h-8 min-w-0 flex-1 items-center gap-3 rounded-md px-3"
       >
         <span className="shrink-0 text-kh-text-muted">{icon}</span>
@@ -105,6 +91,7 @@ function Row({ href, icon, title, timestamp, eventLabel, provenance, stackProven
             </span> : null}
           </span>
         )}
+        {hint}
         {!stackProvenance && (timestamp || eventLabel) ? <span className="hidden shrink-0 text-caption text-kh-text-muted sm:block"><EventTime timestamp={timestamp} eventLabel={eventLabel} /></span> : null}
       </Link>
       {trailing}
@@ -115,39 +102,51 @@ function Row({ href, icon, title, timestamp, eventLabel, provenance, stackProven
 }
 
 /**
- * `C` opens a new note — on Home only. Home has no editor, so the key cannot be a character someone
- * meant to type; it is mounted with Home and gone on any other page, where the inline editor keeps
- * every letter (inline-editing spec, "Typing-first keyboard behavior"). Not in a field, menu or
- * dialog, not mid-composition, not with a modifier (`isSingleKeyShortcut`), and not on the search
- * bar, where a key means search.
+ * Home's page keys — `C` opens a new note, `R` resumes the latest draft — on Home only. Home has no
+ * editor, so a key cannot be a character someone meant to type; they are mounted with Home and gone
+ * on any other page, where the inline editor keeps every letter (inline-editing spec, "Typing-first
+ * keyboard behavior"). Not in a field, menu or dialog, not mid-composition, not with a modifier
+ * (`isSingleKeyShortcut`), and not on the search bar, where a key means search.
  */
-export function isNewNoteKey(event: KeyEventLike & { defaultPrevented: boolean }): boolean {
-  if (event.defaultPrevented || event.key.toLowerCase() !== "c" || !isSingleKeyShortcut(event)) return false;
+function isHomeKey(event: KeyEventLike & { defaultPrevented: boolean }, key: "c" | "r"): boolean {
+  if (event.defaultPrevented || event.key.toLowerCase() !== key || !isSingleKeyShortcut(event)) return false;
   const target = event.target as { closest?: (selector: string) => unknown } | null;
   return !(typeof target?.closest === "function" && target.closest("[data-home-search]"));
 }
+export const isNewNoteKey = (event: KeyEventLike & { defaultPrevented: boolean }) => isHomeKey(event, "c");
+export const isResumeDraftKey = (event: KeyEventLike & { defaultPrevented: boolean }) => isHomeKey(event, "r");
 
 export function PersonalHome({ workspaceId, documents, drafts, reminders = [], notices = [], slots, guidanceDismissed = false }: { guidanceDismissed?: boolean; slots?: { guidance?: ReactNode }; workspaceId: string; documents: Doc[]; drafts: ContinueDraft[]; reminders?: FreshnessReminder[]; notices?: HomeNotice[] }) {
   const [dismissed, setDismissed] = useState(guidanceDismissed);
   const router = useRouter();
   const newNoteHref = `/w/${workspaceId}/knowledge/new`;
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!isNewNoteKey(event)) return;
-      event.preventDefault();
-      bufferTyping();
-      router.push(newNoteHref);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [router, newNoteHref]);
   const { shortcuts, update } = useDocumentShortcuts(workspaceId);
   const hydrated = useHydrated();
   const { access, confirmed } = useWorkspaceAuthorization();
   const runAction = useActionRunner({ onToggleFavorite: (sourceId, documentId) => update(state => toggleFavoriteDocument(state, documentShortcutKey(sourceId, documentId))) });
   const keyOf = (doc: Doc) => documentShortcutKey(doc.sourceId, doc.documentId);
   const lists = homeLists({ documents, drafts, recent: shortcuts.recent, openedAt: shortcuts.openedAt });
-  const [latestDraft, ...otherDrafts] = lists.drafts;
+  const resumeHref = lists.drafts[0] ? draftDestination(lists.drafts[0]).href : undefined;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isNewNoteKey(event)) {
+        event.preventDefault();
+        bufferTyping();
+        router.push(newNoteHref);
+      } else if (resumeHref && isResumeDraftKey(event)) {
+        event.preventDefault();
+        router.push(resumeHref);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [router, newNoteHref, resumeHref]);
+  // Recent's day groups need the reader's zone and clock, which the server cannot know: the first paint is the
+  // flat list, as Timestamp's first paint is UTC. ponytail: the clock is read once, so a page left open past
+  // midnight keeps yesterday's groups until it is opened again.
+  const zone = useDisplayTimeZone();
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => setNow(Date.now()), []);
   const activeDocumentCount = documents.filter(doc => doc.status === "ACTIVE" && doc.sourceStatus === "ACTIVE").length;
   const [showAllRecent, setShowAllRecent] = useState(false);
   const hiddenRecent = lists.recent.length - RECENT_SHOWN;
@@ -214,38 +213,38 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
     return undefined;
   }
 
-  function draftRow(item: DraftItem) {
+  function draftRow(item: DraftItem, i: number) {
     // Draft rows omit document actions. Matching slots align their times with Recent.
     const slot = buttonClasses({ variant: "ghost", icon: true, size: "sm", className: "invisible" });
-    return <Row key={item.id} href={draftDestination(item).href} icon={<PenLine size={14} aria-hidden="true" />} title={item.draft.title || "Untitled draft"} timestamp={item.at} provenance={draftProvenance(item)}
+    const destination = draftDestination(item);
+    // The latest draft says what opening it does and the key that does it; the arrow alone on a phone.
+    const hint = i === 0 ? <span className="flex shrink-0 items-center gap-1.5 text-caption text-kh-text-secondary">
+      <span className="hidden sm:inline">{destination.action}</span><Kbd className="hidden sm:inline-flex">R</Kbd><ArrowRight size={14} aria-hidden="true" />
+    </span> : undefined;
+    return <Row key={item.id} href={destination.href} icon={<PenLine size={14} aria-hidden="true" className="text-kh-selected-text" />} title={item.draft.title || "Untitled draft"} timestamp={item.at} provenance={draftProvenance(item)}
+      hint={hint} keyShortcuts={i === 0 ? "R" : undefined}
       trailing={<span aria-hidden="true" className="mr-1 flex shrink-0"><span className={`${slot} hidden lg:inline-flex`} /><span className={slot} /><span className={slot} /></span>} />;
   }
 
-  const destination = latestDraft && draftDestination(latestDraft);
-  const latestDraftLocation = [latestDraft?.doc?.sourceName, latestDraft?.doc?.sourcePath].filter(Boolean).join(" · ");
   const recentDocs = recentShown.map(item => item.doc);
-  const recentRow = (item: RecentItem, i: number) => documentRow(item.doc, { timestamp: item.at, eventLabel: item.label, showSource: sourceChanges(recentDocs, i) });
+  const recentRow = (item: RecentItem) => {
+    const i = recentShown.indexOf(item);
+    return documentRow(item.doc, { timestamp: item.at, eventLabel: item.label, showSource: sourceChanges(recentDocs, i) });
+  };
 
   return (
     <GuidanceVisibilityContext.Provider value={{ dismissed, setDismissed }}>
-    <div className="kh-page-wide space-y-6 pb-6">
+    <div className="kh-page kh-home space-y-6 pb-6">
       <PageHeader
         location="My Space"
         locationHref={`/w/${workspaceId}/home`}
         title="Home"
         actions={<>
-          <button type="button" data-home-search onClick={requestQuickSearch} aria-label="Search articles and notes ⌘K" aria-keyshortcuts="Meta+K Control+K" className={buttonClasses({ variant: "ghost" })}>
-            <Search size={16} aria-hidden="true" />
-            <span className="hidden md:inline">Search articles and notes</span>{" "}
-            <Kbd size="md" className="hidden md:inline-flex">⌘K</Kbd>
-          </button>
-          <Tooltip label="Create document" shortcut="C">
-            <Link className={buttonClasses()} href={newNoteHref} onClick={(event) => { if (!plainClick(event)) return; bufferTyping(); }} aria-keyshortcuts="C"><Plus size={16} aria-hidden="true" />Create document</Link>
-          </Tooltip>
           <MenuRoot>
             <MenuTrigger aria-label="Home actions" className={buttonClasses({ variant: "ghost", icon: true })}><MoreHorizontal size={16} aria-hidden="true" /></MenuTrigger>
             <MenuContent align="end" className="w-72">
-              {/* Only what the primary nav does not already offer: Sources, Tasks, Insights and Knowledge live there. */}
+              {/* Only what the expanded rail does not offer; it lists Tasks only when compact. */}
+              <MenuItem render={<Link href={`/w/${workspaceId}/tasks`} />}>Open Tasks</MenuItem>
               <MenuItem render={<Link href={`/w/${workspaceId}/agent-context`} />}>Copy for Agent</MenuItem>
               <ReopenGuidanceMenuItem workspaceId={workspaceId} />
               <MenuItem render={<a href={`/api/workspaces/${workspaceId}/export`} />}>Export Markdown ZIP</MenuItem>
@@ -254,51 +253,52 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
           </MenuRoot>
         </>}
       />
+      {/* Opens the same ⌘K palette as the rail, so there is still one place to search. */}
+      {/* WCAG 2.5.3: the badge is visible text in the field, so the name carries it too. The space
+          before the badge is real: axe joins visible text nodes without one, and the name has to
+          appear inside that run. A whitespace-only text node is not a flex item, so the field's
+          layout is unchanged. */}
+      <div className="flex items-center gap-3">
+        <button type="button" data-home-search onClick={requestQuickSearch} aria-label="Search articles and notes ⌘K" aria-keyshortcuts="Meta+K Control+K" className="kh-focus-ring flex min-h-8 min-w-0 flex-1 items-center gap-3 rounded-md border border-kh-border px-3 py-1 text-body text-kh-text-muted hover:bg-kh-bg-subtle">
+          <Search size={16} aria-hidden="true" />
+          <span className="flex-1 truncate text-left">Search articles and notes</span>{" "}
+          <Kbd size="md" className="hidden shrink-0 sm:inline-flex">⌘K</Kbd>
+        </button>
+        <Tooltip label="Create document" shortcut="C">
+          <Link className={buttonClasses({ variant: "secondary" })} href={newNoteHref} onClick={(event) => { if (!plainClick(event)) return; bufferTyping(); }} aria-keyshortcuts="C"><Plus size={16} aria-hidden="true" />Create document</Link>
+        </Tooltip>
+      </div>
       {slots?.guidance}
-      {latestDraft && destination && (
-        <section aria-label="Continue working">
-          <h2 className="mb-2 text-heading font-semibold text-kh-text">Continue working</h2>
-          <Link href={destination.href} className="kh-focus-ring flex min-h-20 items-center gap-3 rounded-lg border border-kh-border bg-kh-bg-selected px-4 py-3 hover:bg-kh-highlight">
-            <PenLine size={20} aria-hidden="true" className="hidden shrink-0 text-kh-selected-text sm:block" />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-title font-semibold text-kh-text">{latestDraft.draft.title || "Untitled draft"}</span>
-              <span className="block truncate text-caption text-kh-text-secondary">
-                {draftProvenance(latestDraft) ?? "Draft"} · Edited <Timestamp value={latestDraft.at} variant="relative" />
-                {latestDraftLocation && <span className="block truncate sm:inline"> · {latestDraftLocation}</span>}
-              </span>
-            </span>
-            <span className={buttonClasses({ size: "sm" })}>
-              {destination.action}<ArrowRight size={14} aria-hidden="true" />
-            </span>
-          </Link>
-        </section>
-      )}
-      {/* Wide screens set Discussions and Favorites beside the work lists, so the whole page fits without scrolling. */}
-      <div className="-mx-3 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      {/* Two columns when the page's own box has room (`kh-home-grid`, globals.css), not when the window does.
+          `pt-2` on top of `space-y-6` sets the lists 32px under the search row, more than the 24px between groups. */}
+      <div className="kh-home-grid -mx-3 grid gap-6 pt-2">
         <div className="min-w-0 space-y-6">
+          {lists.drafts.length > 0 && <Section title="Drafts" count={lists.drafts.length}>
+            <ul onKeyDown={navigateListRows} className="space-y-0.5">{lists.drafts.map(draftRow)}</ul>
+          </Section>}
           <Section title="Recent">
-            {lists.recent.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{recentShown.map(recentRow)}</ul>
-              : <EmptyLine>Documents you edit or open will appear here.{activeDocumentCount === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>}
+            {!lists.recent.length ? <EmptyLine>Documents you edit or open will appear here.{activeDocumentCount === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>
+              : now === null ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{recentShown.map(recentRow)}</ul>
+              : <div onKeyDown={navigateListRows}>{recentGroups(recentShown, now, zone).map(group => (
+                <div key={group.label} className="pt-2 first:pt-0">
+                  <h3 className="px-3 pb-1 text-micro text-kh-text-muted">{group.label}</h3>
+                  <ul className="space-y-0.5">{group.items.map(recentRow)}</ul>
+                </div>
+              ))}</div>}
             {hiddenRecent > 0 ? <Button variant="ghost" size="sm" className="mx-3 mt-1 text-kh-text-muted" aria-expanded={showAllRecent} onClick={() => setShowAllRecent(!showAllRecent)}>
               {showAllRecent ? "Show fewer" : `Show ${hiddenRecent} more`}
             </Button> : null}
           </Section>
-          {otherDrafts.length > 0 && <Section title="Other drafts" count={otherDrafts.length}>
-            <ul onKeyDown={navigateListRows} className="space-y-0.5">{otherDrafts.map(draftRow)}</ul>
-          </Section>}
         </div>
         <div className="min-w-0 space-y-6">
-          <Section title="Discussions" count={notices.length} action={{ href: `/w/${workspaceId}/inbox`, label: "Open Inbox" }}>
-            {notices.length ? <UnreadDiscussions notices={notices} /> : <EmptyLine>No new comments or replies.</EmptyLine>}
-          </Section>
+          <AttentionList workspaceId={workspaceId} reminders={reminders} />
           <Section title="Favorites">
             {favorites.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{favorites.map((doc, i) => documentRow(doc, { showSource: sourceChanges(favorites, i), stackProvenance: true }))}</ul>
               : <EmptyLine>Star a document to keep it here.</EmptyLine>}
           </Section>
-          <Section title="Tasks" action={{ href: `/w/${workspaceId}/tasks`, label: "Open Tasks" }}>
-            <p className="px-3 text-caption text-kh-text-muted">Browse results from coding agents.</p>
+          <Section title="Discussions" count={notices.length} action={{ href: `/w/${workspaceId}/inbox`, label: "Open Inbox" }}>
+            {notices.length ? <UnreadDiscussions notices={notices} /> : <EmptyLine>No new comments or replies.</EmptyLine>}
           </Section>
-          <AttentionList workspaceId={workspaceId} reminders={reminders} />
         </div>
       </div>
     </div>

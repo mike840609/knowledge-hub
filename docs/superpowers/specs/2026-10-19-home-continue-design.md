@@ -216,3 +216,62 @@ the only colour Home adds to the neutral ramp.
 - Help copy (`user-guide-content.ts`, `user-guide-illustration.tsx`) names
   Drafts and Recent, keeping the note that recently opened entries are stored
   on this device.
+
+## Amendment 2026-11-27: one row grammar (PR #393)
+
+PR #393 first put the latest draft in a tinted card with a filled button, moved
+the search bar and Create document into the PageHeader, widened the page to
+`kh-page-wide`, and set section labels in `body` semibold. Reviewed against the
+rendered page with the user, that read as a dashboard banner rather than the
+Linear-derived contract: two filled accent buttons, three heading levels, the
+breadcrumb off its shared origin, and times floating mid-row. The user approved
+a mockup of the version below. Where this section and the text above disagree,
+this section is current.
+
+1. **Layout.** The page stays in `kh-page`, so the breadcrumb keeps its origin.
+   The search bar and Create document keep their own row under the PageHeader,
+   as in "Layout, top to bottom" item 1; Create document stays `secondary`.
+   The content begins 32px below that row (`space-y-6` plus `pt-2`: the rhythm
+   scale stops at 24px), more than the 24px between sections, so the row reads
+   as the page's controls rather than as part of Drafts.
+2. **The latest draft is the first row of Drafts**, the same row as the others,
+   not a card. It alone shows a trailing hint in `text-secondary`: its action
+   ("Continue editing", or "Open draft" when it opens draft recovery), the `R`
+   key and an arrow. Below `sm` only the arrow shows. A draft opens the
+   composer (`draft:new`), the editor (an editable document) or draft recovery
+   (an archived document, an archived source, or a reader who cannot write
+   there). Draft rows carry the accent on their pen icon.
+3. **`R` resumes the latest draft**, on Home only, under exactly the rules of
+   `C` ("New note key"): not in a field, editor, menu or dialog, not during
+   composition, not held, no modifier, not on the search bar. With no draft it
+   does nothing. The WCAG 2.1.4 acceptance recorded for `C` covers it too; two
+   page keys on a page with nothing to type into do not change that reasoning.
+   This is not the removed `R` row key: it acts on the page, not on a row.
+4. **Section labels** keep the rail group-label style, and their counts are
+   `text-muted` too. The accent leaves the Drafts and Discussions counts: next
+   to the hint and the links it made a third and fourth accent in the first
+   band of the page. Unread Discussions keep their 6px `bg-kh-primary` dot.
+5. **Recent is grouped by day**: Today, Yesterday and Earlier, by calendar day
+   in the reader's zone; an untimed recent is Earlier. Each row shows its event
+   beside the short time ("Edited 5m", "Opened 2d"); the tooltip keeps the full
+   date and time. The groups appear once the client knows its zone and clock,
+   the moment this device's Opened recents arrive anyway; the first paint is the
+   flat list. "Show N more" still counts rows and is applied before grouping.
+6. **The right column is Needs attention, Favorites, Discussions.** Discussions
+   is still always rendered with its empty copy (the 2026-10-19 decision
+   stands). Needs attention loses its bordered panel and is rows under the
+   label like every other group. A reminder row is its status in `text`, its
+   source in `text-muted`, and its action ("Retry", "Review") trailing in
+   `text-secondary`. A failed import is the warning colour in its icon only;
+   every other reminder has a neutral folder-sync icon.
+7. **Tasks leaves Home's lists.** "Open Tasks" moves into the Home actions
+   menu, because the desktop rail does not list Tasks (it is compact-only).
+   This changes the Tasks row of
+   `2026-11-19-knowledge-sidebar-destinations-design.md`, which now points here.
+8. **The two columns follow the page's own width**, not the window's: a
+   container query on the page box (`kh-home`, from 50rem of content) replaces
+   `xl:`, so collapsing the sidebar can make room for the second column.
+
+Tests: `homeLists`' day grouping (`recentGroups`) in `home-continue.test.ts`;
+Home's order, labels, hint and `R` key in `personal-home-folder-sync.test.tsx`;
+reminder rows in `home-attention.test.tsx`.

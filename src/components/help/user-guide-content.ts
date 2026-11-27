@@ -105,7 +105,7 @@ export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean
         "未讀數只計入有永久變更紀錄的目前同步版本；舊匯入缺少紀錄時會提示，不補造歷史。",
       ]}]),
       section("tasks","Tasks：代理完成的任務",[
-        "在 Claude Code 或 OpenCode 完成任務後執行 /hub-export，再到 Home 選 Open Tasks。",
+        "在 Claude Code 或 OpenCode 完成任務後執行 /hub-export，再到 Home 右上角的 ⋯ 選單選 Open Tasks。",
         "第一次使用：Set up export → 建立 binding → 複製一次性指令，在自己的機器執行。每台機器一個 binding；token 只顯示一次。",
         "清單分 Active／Archived。每列顯示 Agent 與完成時間，超過一個版本時才顯示 revision；點開詳情會標明是哪個 binding 匯出的。",
         "詳情包含 Summary、Verification、Findings／Decisions／Changes、References 與 Revisions。Verification 是代理回報的結果，不是 Hub 的認證。",
@@ -248,7 +248,7 @@ export function userGuideContent(locale:GuideLocale,options:{taskSearch?:boolean
         "Unread counts require recorded changes on the current synced revision. Missing legacy history is explained rather than invented.",
       ]}]),
       section("tasks","Tasks: results from coding agents",[
-        "Finish a task in Claude Code or OpenCode, run /hub-export, then choose Open Tasks on Home.",
+        "Finish a task in Claude Code or OpenCode, run /hub-export, then choose Open Tasks from the ⋯ menu on Home.",
         "First use: Set up export → create a binding → copy the one-time line and run it on your own machine. One binding per machine; the token is shown once.",
         "The list has Active / Archived. Each row shows the agent and completion time, plus the revision when a task has more than one; it opens the detail that names the binding.",
         "The detail shows Summary, Verification, Findings / Decisions / Changes, References and Revisions. Verification is what the agent reported, not a Hub certification.",

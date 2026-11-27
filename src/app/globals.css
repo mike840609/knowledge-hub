@@ -553,6 +553,18 @@ input[type="search"]::-webkit-search-cancel-button:hover {
     @apply mx-auto w-full max-w-wide px-6;
   }
 
+  /* Personal Home sets its side column beside the lists when its own box has room, so collapsing the
+     sidebar can make it, rather than at a window width (home-continue amendment, 2026-11-27). */
+  .kh-home {
+    container: kh-home / inline-size;
+  }
+
+  @container kh-home (min-width: 50rem) {
+    .kh-home-grid {
+      grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    }
+  }
+
   /* Keep route and panel tabs accessible on narrow screens without widening the page.
      The tab's `-mb-px` overlap has to stay inside the clip: with `overflow-y: hidden`
      the bottom row of the 2px active underline and the inset focus ring would be cut. */

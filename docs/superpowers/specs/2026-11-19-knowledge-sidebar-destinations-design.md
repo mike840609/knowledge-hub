@@ -20,7 +20,7 @@ Move the document tree higher in the expanded workspace sidebar without shrinkin
 | Graph | `Knowledge ▾` → `Graph`; same visibility as the existing Graph link | Unchanged |
 | Sources | `Knowledge ▾` → `Sources`; existing `canInspectSources` gate | Unchanged |
 | Shares | `Knowledge ▾` → `Shares`; existing `PERSONAL && canSearch` gate | Unchanged |
-| Tasks | Personal Home → `Open Tasks`; link to the full Tasks page, not a new task preview | Unchanged |
+| Tasks | Personal Home's actions menu → `Open Tasks` (moved from a Home section by the home-continue amendment of 2026-11-27); link to the full Tasks page, not a new task preview | Unchanged |
 | Insights | Personal Account menu → `Insights`; resolve existing `/profile` route | Unchanged |
 | Settings | Workspace switcher → `Settings` for the current team with `canOpenSettings`; add before removing the old row | Unchanged |
 | Document options | Existing `⋯`; keep `Import folder` and `Show archived` with their current rules | Unchanged |

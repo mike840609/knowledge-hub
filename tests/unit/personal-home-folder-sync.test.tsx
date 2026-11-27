@@ -1,6 +1,6 @@
 import { describe, beforeEach, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { PersonalHome, isNewNoteKey } from "@/components/knowledge/personal-home";
+import { PersonalHome, isNewNoteKey, isResumeDraftKey } from "@/components/knowledge/personal-home";
 const shortcuts = vi.hoisted(() => ({ value: { favorites: [] as string[], recent: [] as string[] } as { favorites: string[]; recent: string[]; openedAt?: Record<string, string> } }));
 const authorization = vi.hoisted(() => ({ canWrite: true, lifecycleState: "ACTIVE" }));
 vi.mock("@/components/knowledge/use-document-shortcuts", () => ({
@@ -44,7 +44,8 @@ it("leads with Recent and Favorites, searches through ⌘K and leaves the change
   expect(html).toContain('aria-label="Favorites"');
   expect(html.indexOf('aria-label="Recent"')).toBeLessThan(html.indexOf('aria-label="Favorites"'));
   expect(html).not.toContain('aria-label="Continue working"');
-  expect(html).not.toContain('aria-label="Other drafts"');
+  expect(html).not.toContain('aria-label="Drafts"');
+  expect(html).not.toContain('aria-label="Tasks"');
   expect(html).not.toContain('aria-label="Updates"');
   expect(html).not.toContain('role="tablist"');
   expect(html).not.toContain("Needs attention");
@@ -55,29 +56,32 @@ it("leads with Recent and Favorites, searches through ⌘K and leaves the change
   expect(html).toMatch(/<p class="[^"]*text-caption[^"]*">No new comments or replies\.<\/p>/);
   expect(html).toContain('href="/w/ws/inbox"');
   expect(html).toContain("Open Inbox");
-  expect(html.indexOf('aria-label="Discussions"')).toBeLessThan(html.indexOf('aria-label="Favorites"'));
+  expect(html.indexOf('aria-label="Favorites"')).toBeLessThan(html.indexOf('aria-label="Discussions"'));
+  // The page keeps the shared breadcrumb origin: list pages stay in kh-page.
+  expect(html).toContain('class="kh-page kh-home');
+  expect(html).not.toContain("kh-page-wide");
 });
 
-it("features only the newest draft and puts the remaining drafts below Recent", () => {
+it("lists every draft above Recent and gives only the latest its action and key", () => {
   const drafts = [
     { key: "draft:new", title: "Older note", sourceId: null, updatedAt: "2026-10-01T00:00:00.000Z" },
     { key: "draft:a", title: "Latest note", sourceId: "src", updatedAt: "2026-10-02T00:00:00.000Z" },
   ];
   const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[doc("a"), doc("b", { updatedAt: "2026-10-01T00:00:00.000Z" })]} drafts={drafts} />);
-  const featured = html.slice(html.indexOf('aria-label="Continue working"'), html.indexOf('aria-label="Recent"'));
-  expect(featured).toContain("Latest note");
-  expect(featured).toContain("Continue editing");
-  expect(featured).toContain('href="/w/ws/knowledge/src/a"');
+  const section = html.slice(html.indexOf('aria-label="Drafts"'), html.indexOf('aria-label="Recent"'));
+  expect(section.indexOf("Latest note")).toBeLessThan(section.indexOf("Older note"));
+  expect(section.match(/Continue editing/g)).toHaveLength(1);
+  expect(section.indexOf("Continue editing")).toBeLessThan(section.indexOf("Older note"));
+  expect(section.match(/aria-keyshortcuts="R"/g)).toHaveLength(1);
+  expect(section).toContain('href="/w/ws/knowledge/src/a"');
+  expect(section).toContain('href="/w/ws/knowledge/new?compose"');
+  expect(section).toContain('<span class="ml-1.5">2</span>');
   expect(html.match(/Latest note/g)).toHaveLength(1);
-  const others = html.slice(html.indexOf('aria-label="Other drafts"'), html.indexOf('aria-label="Discussions"'));
-  expect(others).toContain("Older note");
-  expect(others).toContain('href="/w/ws/knowledge/new?compose"');
-  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Other drafts"'));
+  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Favorites"'));
   expect(recent).toContain('href="/w/ws/knowledge/src/b"');
   expect(recent).not.toContain('href="/w/ws/knowledge/src/a"');
-  // The event is read out and shown in the time's tooltip; the column holds only the short time.
-  expect(recent).toContain('<span class="sr-only">Edited </span>');
-  expect(recent).toMatch(/<time [^>]*title="Edited Oct 1, 2026/);
+  // The event is shown beside the short time; the tooltip keeps the full date.
+  expect(recent).toMatch(/Edited <time [^>]*title="Edited Oct 1, 2026/);
 });
 
 it("links an archived document's draft to recovery, not the editor", () => {
@@ -88,11 +92,10 @@ it("links an archived document's draft to recovery, not the editor", () => {
       drafts={[{ key: "draft:a", title: "Doc a", sourceId: "src", updatedAt: "2026-10-02T00:00:00.000Z" }]}
     />,
   );
-  const drafts = html.slice(html.indexOf('aria-label="Continue working"'), html.indexOf('aria-label="Recent"'));
+  const drafts = html.slice(html.indexOf('aria-label="Drafts"'), html.indexOf('aria-label="Recent"'));
   expect(drafts).toContain('href="/w/ws/knowledge/drafts/src/a"');
   expect(drafts).toContain("Original document archived");
   expect(drafts).toContain("Open draft");
-  expect(html).not.toContain('aria-label="Other drafts"');
   expect(drafts).not.toContain("/edit");
 });
 
@@ -137,10 +140,11 @@ it("puts source reminders in the attention strip and unread comments in Discussi
   const withReminders = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} reminders={reminders} />);
   expect(withReminders).toContain('aria-label="Needs attention"');
   const withNotices = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} notices={notices} />);
-  expect(withReminders.indexOf('aria-label="Needs attention"')).toBeGreaterThan(withReminders.indexOf('aria-label="Favorites"'));
+  // Needs attention leads the side column, above Favorites.
+  expect(withReminders.indexOf('aria-label="Needs attention"')).toBeLessThan(withReminders.indexOf('aria-label="Favorites"'));
   expect(withNotices).not.toContain("Needs attention");
   expect(withNotices).not.toContain("No new comments or replies.");
-  const discussions = withNotices.slice(withNotices.indexOf('aria-label="Discussions"'), withNotices.indexOf('aria-label="Favorites"'));
+  const discussions = withNotices.slice(withNotices.indexOf('aria-label="Discussions"'));
   expect(discussions).toContain('aria-label="Unread discussions"');
   expect(discussions).toContain(">1<");
 });
@@ -155,7 +159,7 @@ it("labels an untimed recent as Opened without a time", () => {
 it("shows the document's page icon in Recent and Favorites", () => {
   shortcuts.value = { favorites: ["src:b"], recent: ["src:a"] };
   const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[doc("a", { pageIcon: "📌" }), doc("b", { pageIcon: "🧭" })]} drafts={[]} />);
-  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Discussions"'));
+  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Favorites"'));
   const favorites = html.slice(html.indexOf('aria-label="Favorites"'));
   expect(recent).toContain("📌");
   expect(favorites).toContain("🧭");
@@ -177,7 +181,7 @@ it("names a source only where it changes from the row above", () => {
     doc("c", { sourceId: "team", sourceName: "Team wiki", updatedAt: "2026-10-07T00:00:00.000Z" }),
     doc("d", { sourceName: "Notes", updatedAt: "2026-10-06T00:00:00.000Z" }),
   ]} drafts={[]} />);
-  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Discussions"'));
+  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Favorites"'));
   // a names Notes, b repeats it and stays quiet, c changes to Team wiki, d changes back.
   expect(recent.match(/>Notes</g)).toHaveLength(2);
   expect(recent.match(/>Team wiki</g)).toHaveLength(1);
@@ -236,12 +240,13 @@ describe("C on Home opens a new note", () => {
     expect(html).toMatch(/<button [^>]*data-home-search/);
   });
 
-  it("gives the Inbox and Tasks section links the same 32px target and text style", () => {
-    const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} />);
-    const inbox = html.match(/<a[^>]*class="([^"]*)"[^>]*>Open Inbox</)?.[1];
-    const tasks = html.match(/<a[^>]*class="([^"]*)"[^>]*>Open Tasks</)?.[1];
-    expect(inbox).toContain("min-h-8");
-    expect(tasks).toEqual(inbox);
+  it("answers r for the latest draft under the same rules, and only with a draft to resume", () => {
+    const base = { metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, isComposing: false, repeat: false, defaultPrevented: false, target: inside() };
+    expect(isResumeDraftKey({ ...base, key: "r" })).toBe(true);
+    expect(isResumeDraftKey({ ...base, key: "c" })).toBe(false);
+    expect(isResumeDraftKey({ ...base, key: "r", metaKey: true })).toBe(false);
+    expect(isResumeDraftKey({ ...base, key: "r", target: inside("data-home-search") })).toBe(false);
+    expect(renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} />)).not.toContain('aria-keyshortcuts="R"');
   });
 
   // Launcher audit (axe `label-content-name-mismatch`): the field is announced as "Search

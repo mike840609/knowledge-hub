@@ -20,11 +20,20 @@ describe("AttentionList", () => {
     expect(html).toContain("View all updates");
   });
 
-  it("keeps a failed import in warning tokens, not the accent", () => {
+  it("marks a failed import with the warning colour in its icon only, not the accent", () => {
     const html = render([reminder("failed")]);
-    expect(html).toContain("Import failed · Retry import");
-    expect(html).toContain("text-kh-warning");
+    expect(html).toContain(">Import failed<");
+    expect(html).toContain("Retry");
+    expect(html).toMatch(/<svg[^>]*class="[^"]*text-kh-warning/);
+    expect(html.match(/text-kh-warning/g)).toHaveLength(1);
     expect(html).not.toContain("bg-kh-primary");
+  });
+
+  it("is rows under a label, not a bordered panel, and a stale source stays neutral", () => {
+    const html = render([reminder("old")]);
+    expect(html).not.toContain("border-kh-border");
+    expect(html).toContain(">Check for folder updates<");
+    expect(html).not.toContain("text-kh-warning");
   });
 
   it("sends several reminders to the sources list", () => {

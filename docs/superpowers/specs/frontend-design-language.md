@@ -695,7 +695,8 @@ listbox; not a key repeat; and no Shift, except for `/`, which some layouts
 only type with it. Keys are compared by `event.key`, what the reader sees on
 the keycap, not by position.
 
-Single keys act on the page, not on a row: `C` opens a new note on Home, `D`
+Single keys act on the page, not on a row: `C` opens a new note on Home, `R`
+resumes Home's latest draft (home-continue amendment, 2026-11-27), `D`
 toggles the document's discussions, and `/` opens search. The tree
 (`knowledge-tree.tsx`) binds arrows, `j`/`k`, Home/End and Enter; row actions
 are reached from the row's own menu. The earlier `E`/`F`/`M`/`C`/`R` row-key
