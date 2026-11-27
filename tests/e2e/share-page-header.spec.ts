@@ -34,7 +34,7 @@ for (const width of [1200, 1280, 1440]) {
     await page.setViewportSize({ width, height: 800 });
     await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
     await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
-    const comments = page.getByRole("button", { name: /^(Show|Hide) comments/ });
+    const comments = page.getByRole("button", { name: /^Comments\b/ });
     const download = page.getByRole("button", { name: /^Download/ });
     const brand = page.getByText("Knowledge Hub", { exact: true }).first();
     const text = page.locator("[data-review-document] p").first();
@@ -62,7 +62,7 @@ test("in the Hub's reader the shared page's Download stays where it was when the
   await page.setViewportSize({ width: 1440, height: 800 });
   await page.goto(`${recipient}/w/${workspace}/shares/${token}`);
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
-  const comments = page.getByRole("button", { name: /^(Show|Hide) comments/ });
+  const comments = page.getByRole("button", { name: /^Comments\b/ });
   const download = page.getByRole("button", { name: /^Download/ });
   const [commentsX, downloadX] = [await settledX(comments), await settledX(download)];
   await comments.click();

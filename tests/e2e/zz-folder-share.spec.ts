@@ -120,7 +120,7 @@ test.describe("folder share link", () => {
       // The bar: comments, save and open are there for a reader who is not signed in.
       await expect(reader.getByRole("button", { name: "Save share", exact: true })).toBeVisible();
       await expect(reader.getByRole("link", { name: "Open in Knowledge Hub" })).toBeVisible();
-      await expect(reader.getByRole("button", { name: /^(Show|Hide) comments/ })).toBeVisible();
+      await expect(reader.getByRole("button", { name: /^Comments\b/ })).toBeVisible();
 
       // Hostile URLs read as an unknown token reads.
       const unknown = await notAvailable(reader, `${base}/s/${crypto.randomUUID()}`);

@@ -776,11 +776,13 @@ export class DocumentReviewService {
    * The people each shown comment mentions, as they are now, kept only where the body still names
    * them (`splitMentions`). One read of the rows and one of the users for the whole discussion.
    */
-  private async attachMentions(r:KnowledgeRepositories,shown:readonly {view:ReviewCommentView;body:string}[]) {
+  private async attachMentions(r:KnowledgeRepositories,shown:readonly {view:ReviewCommentView;body:string}[],callerUserId?:string) {
     const rows=await r.reviewMentions.listMentionedUsersByComments(shown.map(s=>s.view.id));
     if(rows.length===0) return;
     const users=await r.users.findByIds([...new Set(rows.map(row=>row.mentionedUserId))]);
     const people=new Map(users.map(u=>[u.id,{name:u.name,nameEn:u.nameEn,empId:u.emp_id} satisfies MentionedPerson]));
+    // The caller's own entry, by identity: `mentionsMe` is a fact about the caller, as `own` is, and names no one.
+    const me=callerUserId ? people.get(callerUserId) : undefined;
     const byComment=new Map<string,MentionedPerson[]>();
     for(const row of rows) {
       const person=people.get(row.mentionedUserId);
@@ -791,6 +793,7 @@ export class DocumentReviewService {
       const occurring=new Set(splitMentions(body,named).flatMap(part=>part.people ?? []));
       const mentions=named.filter(person=>occurring.has(person));
       if(mentions.length) view.mentions=mentions;
+      if(me && occurring.has(me)) view.mentionsMe=true;
     }
   }
   private views(r:KnowledgeRepositories,documentId:string,owner:true,callerUserId?:string):Promise<OwnerReviewThreadView[]>;
@@ -817,7 +820,7 @@ export class DocumentReviewService {
         results.push(view);
       }
     }
-    await this.attachMentions(r,shown);
+    await this.attachMentions(r,shown,callerUserId);
     return results.sort((a,b)=>{
       const left=a.currentAnchor.anchor,right=b.currentAnchor.anchor;
       if(!left || !right) { if(left) return -1; if(right) return 1; }

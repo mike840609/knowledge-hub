@@ -57,16 +57,21 @@ about. Most of that crowd is settled. So the owner's list **starts on Open**
 where anything is open; resolved discussions are under the filter that was
 already there (All comments, Open, Resolved).
 
-- With nothing open the list starts on **All comments**: an empty list would
-  say there was nothing at all.
+- ~~With nothing open the list starts on **All comments**: an empty list would
+  say there was nothing at all.~~ *Amended 2026-11-26 (inline review spec,
+  "open first"): the list always starts on **Open**; with nothing open it says
+  **Every comment is resolved.** and offers **Show resolved**.*
 - The Comments entry still counts every discussion.
 - A mark or a highlight on a passage whose discussion is resolved switches the
-  list to All, as it always did, so it still leads somewhere.
+  list to All, as it always did, so it still leads somewhere. *Amended
+  2026-11-26 (inline review spec, "resolved passages fade"): under Open a
+  resolved passage carries no mark or highlight at all; a mark leading to a
+  discussion the filter lists leaves the filter as it is.*
 - Resolving a discussion while the list is on Open takes its card out of the
   list; Reopen is under Resolved.
 
-The shared page starts on All comments, as before: its readers are shown the
-discussion whole.
+~~The shared page starts on All comments, as before: its readers are shown the
+discussion whole.~~ *Amended 2026-11-26: the shared page starts on Open too.*
 
 Not done, and why: stacking the discussions of one passage into a single card
 is the next step if one passage draws many; a rail with a scroll of its own is

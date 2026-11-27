@@ -75,7 +75,7 @@ export function shortcutLabel(shortcut: string): string {
   const [first = ""] = shortcut.split(" ");
   return first
     .split("+")
-    .map((part) => (part === "Meta" ? "⌘" : part === "Control" ? "Ctrl " : part))
+    .map((part) => (part === "Meta" ? "⌘" : part === "Alt" ? "⌥" : part === "Control" ? "Ctrl " : part))
     .join("");
 }
 

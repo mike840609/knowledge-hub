@@ -261,13 +261,20 @@ test("the owner is shown what is still open; what is resolved is one choice away
   await page.getByRole("menuitemradio", { name: "All comments", exact: true }).click();
   await expect(cards).toHaveCount(2);
 
-  // A mark on a passage whose discussion is resolved still leads to it.
+  // Under Open a resolved passage carries no mark (2026-11-26); under Resolved it does, and the open
+  // one's mark, hidden by that filter, still leads to its discussion.
   await rail.getByRole("button", { name: "Filter comments" }).click();
   await page.getByRole("menuitemradio", { name: "Open", exact: true }).click();
   await expect(cards).toHaveCount(1);
-  await page.getByRole("button", { name: "1 comment on passage: Paragraph 8" }).click();
-  await expect(cards).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "1 comment on passage: Paragraph 8" })).toHaveCount(0);
+  await page.getByRole("button", { name: "1 comment on passage: Paragraph 3" }).click();
+  await expect(rail.getByRole("button", { name: "Filter comments" })).toHaveText("Open");
+  await rail.getByRole("button", { name: "Filter comments" }).click();
+  await page.getByRole("menuitemradio", { name: "Resolved", exact: true }).click();
+  await expect(cards).toHaveCount(1);
   await expect(rail).toContainText("A reviewer's remark");
+  await page.getByRole("button", { name: "1 comment on passage: Paragraph 3" }).click();
+  await expect(cards).toHaveCount(2);
 });
 
 test("discussions that are all resolved do not open by themselves", async ({ page, request }) => {
@@ -286,9 +293,13 @@ test("discussions that are all resolved do not open by themselves", async ({ pag
   const rail = page.getByRole("complementary", { name: "Document comments" });
   await expect(rail).toBeHidden();
   await expect(page.getByRole("complementary", { name: "On this page" })).toBeVisible();
-  // Asked for, they are all there: with nothing open, an empty list would say there was nothing at all.
+  // Asked for, the list is on Open and says everything is resolved, offering the history (2026-11-26 amendment).
   await openReviewDiscussions(page);
-  await expect(rail.getByRole("button", { name: "Filter comments" })).toHaveText("All comments");
+  await expect(rail.getByRole("button", { name: "Filter comments" })).toHaveText("Open");
+  await expect(rail.locator("[data-review-thread]").filter({ visible: true })).toHaveCount(0);
+  await expect(rail).toContainText("Every comment is resolved.");
+  await rail.getByRole("button", { name: "Show resolved", exact: true }).click();
+  await expect(rail.getByRole("button", { name: "Filter comments" })).toHaveText("Resolved");
   await expect(rail.locator("[data-review-thread]").filter({ visible: true })).toHaveCount(1);
 });
 

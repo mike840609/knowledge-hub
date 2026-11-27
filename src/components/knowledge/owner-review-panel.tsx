@@ -9,15 +9,19 @@ import { readStored, removeStored, writeStored } from "@/components/shell/use-pe
 import { awaitingOwner, dismissedKey, opensOnArrival, parseDismissed } from "./review-auto-open";
 import { useShareCommentUnread } from "./share-comment-notifications";
 import { useReviewEntry } from "./review-entry";
-import { useReviewDraftHighlight, useReviewHighlights } from "./review-highlights";
-import { ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
+import { drawnReviewThreads, useReviewDraftHighlight, useReviewHighlights } from "./review-highlights";
+import { CommentShortcutTip, ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
+import { COMMENT_SHORTCUT, useCommentShortcut } from "./review-shortcut";
 import { ReviewPanelShell } from "./review-panel-shell";
 import { ReviewBlockComment } from "./review-block-comment";
 import { ReviewPassageMarkers } from "./review-passage-markers";
 import { reviewRailInline, useReviewRailInline, useReviewRailOpen } from "./review-rail-mode";
 import { InlineReviewContext, type CaptureReviewAnchor, type PreparedReviewComment } from "./inline-review-context";
 import { COMMENT_HINT, createReviewRangeResolver, focusReviewAnchor, revealReviewAnchor, selectionAnchorInBlock } from "./review-selection";
-import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewRequest, type ReviewFilter } from "./review-thread-list";
+import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewRequest, reviewShows, type ReviewFilter, type ReviewShow } from "./review-thread-list";
+
+/** The owner is never mentioned on their own document (`normalizeMentions`), so Mentions me is not offered. */
+const OWNER_SHOWS: readonly ReviewShow[] = ["ANYONE", "MINE"];
 
 /**
  * The owner's discussions, beside the article they are about (`children`).
@@ -28,11 +32,15 @@ import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewRequest, t
  * The owner replies, resolves and hides, and starts a discussion as a reader of a link does: by
  * selecting a passage (docs/superpowers/specs/2026-10-13-review-anchors-and-owner-threads-design.md).
  */
-export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = false, contentPending = false, prepareComment, commentAvailable = false, thread, onChanged, children }: { /** A discussion to open on arrival in place of `?thread=`, with its passage scrolled into view. The Inbox passes it, and marks the entry read itself. */ thread?: string; /** Called after a successful write and this panel's own reload with the discussion that changed, so a host list can settle that row. */ onChanged?: (threadId: string) => void; prepareComment?: (capture: CaptureReviewAnchor) => PreparedReviewComment; commentAvailable?: boolean; documentId: string; revisionId: string; markdown: string; readOnly?: boolean; contentPending?: boolean; children: ReactNode }) {
+export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = false, contentPending = false, prepareComment, commentAvailable = false, thread, onChanged, documentPath, children }: { /** The document's own page, where it is not this page (the Inbox): what a copied link to a discussion opens. */ documentPath?: string; /** A discussion to open on arrival in place of `?thread=`, with its passage scrolled into view. The Inbox passes it, and marks the entry read itself. */ thread?: string; /** Called after a successful write and this panel's own reload with the discussion that changed, so a host list can settle that row. */ onChanged?: (threadId: string) => void; prepareComment?: (capture: CaptureReviewAnchor) => PreparedReviewComment; commentAvailable?: boolean; documentId: string; revisionId: string; markdown: string; readOnly?: boolean; contentPending?: boolean; children: ReactNode }) {
   const [result, setResult] = useState<{ threads: OwnerReviewThreadView[]; writesEnabled: boolean; revisionId: string; callerUserId: string }>();
   const [error, setError] = useState<string>();
   const [activeThreadId, setActiveThreadId] = useState<string>();
-  const [filter, setFilter] = useState<ReviewFilter>("ALL");
+  // The list starts on what is still open: settled discussions would otherwise crowd the ones
+  // that want an answer away from their passages. With nothing open it says every comment is
+  // resolved and offers them (Show resolved), so an empty list never reads as no discussion at all.
+  const [filter, setFilter] = useState<ReviewFilter>("OPEN");
+  const [show, setShow] = useState<ReviewShow>("ANYONE");
   // The way in is the document header's (`review-entry.tsx`), not a row of this panel's.
   const shared = useReviewEntry();
   const publish = shared?.publish;
@@ -43,7 +51,9 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const inline = useReviewRailInline();
   const revisionChanged = !!result && result.revisionId !== revisionId;
   const located = revisionChanged || contentPending ? undefined : result?.threads;
-  useReviewHighlights(markdown, located, activeThreadId);
+  // A resolved passage is not marked under Open, unless it is the one being looked at (2026-11-26).
+  const drawn = useMemo(() => drawnReviewThreads(located, filter, activeThreadId), [located, filter, activeThreadId]);
+  useReviewHighlights(markdown, drawn, activeThreadId);
   const selection = useReviewSelection(readingRef, markdown, prepareComment ? documentId : `${documentId}:${revisionId}`, !!prepareComment);
   const [prepared, setPrepared] = useState<PreparedReviewComment>();
   const [commentRevision, setCommentRevision] = useState<string>();
@@ -94,16 +104,13 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     owner.current = result.callerUserId;
     if (arrived.current) return;
     arrived.current = true;
-    // The list starts on what is still open, where something is: settled discussions would
-    // otherwise crowd the ones that want an answer away from their passages. With nothing open it
-    // starts on everything — an empty list would say there was nothing at all.
-    setFilter(result.threads.some(thread => thread.status === "OPEN") ? "OPEN" : "ALL");
     // A `?thread=` deep link (e.g. from the home discussions list) selects its
     // discussion and opens the rail; an unknown id is ignored, never an error.
     const deep = thread ?? new URLSearchParams(window.location.search).get("thread");
     const found = deep ? result.threads.find(item => item.id === deep) : undefined;
     // A deep link to a settled discussion must not land on a list that hides it.
     if (found?.status === "RESOLVED") setFilter("ALL");
+    if (found) setShow(current => reviewShows(found, current) ? current : "ANYONE");
     // From the Inbox only as a rail: a drawer would cover the list the reader is working through.
     if (found) { setActiveThreadId(found.id); if (!thread || reviewRailInline()) setOpen(true); }
     const anchor = thread && result.revisionId === revisionId && found?.currentAnchor.match !== "OUTDATED" ? found?.currentAnchor.anchor : undefined;
@@ -171,6 +178,12 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     if (!inline) { returnPassage.current = restore; changeOpen(false); }
     else requestAnimationFrame(restore);
   };
+  // ⌘⌥M / Ctrl+Alt+M comments on the selection, as the bubble's Comment does. In the editor the
+  // editor's own toolbar takes the key (`selection-toolbar.ts`), as it takes its Comment button.
+  const commentOnSelection = useCallback(() => { selection.capture(); changeOpen(true); }, [selection.capture, changeOpen]);
+  useCommentShortcut(readingRef, canComment && !prepareComment, commentOnSelection);
+  // A discussion's link reopens it on the document's page (`?thread=`), for the owner; anyone else it is passed to gets what the page gives them.
+  const linkTo = useCallback((threadId: string) => { const url = new URL(documentPath ?? window.location.pathname, window.location.origin); url.search = `?thread=${encodeURIComponent(threadId)}`; return url.href; }, [documentPath]);
   // The owner mentions through one of the document's live links, which the `@` list loads when it first opens.
   const mentionScope = readOnly ? undefined : { documentId };
   const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} onCancel={cancelComment} cancelOnEscape={!!prepared} mentionScope={mentionScope}
@@ -192,7 +205,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
       <div ref={readingRef} className="kh-review-reading">
         {children}
         {/* The editor owns the selection toolbar, including its optional Comment action. */}
-        {canComment && !prepareComment && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={() => { selection.capture(); changeOpen(true); }} />}
+        {canComment && !prepareComment && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={commentOnSelection} />}
         {canComment && <ReviewBlockComment readingRef={readingRef} markdown={markdown} chosen={selection.chosen} onChoose={(anchor, element) => {
           holdAt(element);
           // What is selected inside this paragraph is the comment's passage; without a selection
@@ -216,7 +229,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
           changeOpen(true);
           return resolved === anchor;
         }} />}
-        <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={located} />
+        <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={drawn} />
       </div>
       <aside id="owner-document-discussions" className="kh-review-panel" aria-label="Document comments" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && reviewRailInline()) { if (selection.chosen) cancelComment(); else changeOpen(false); } }}>
         <ReviewPanelShell open={open} inline={inline} onOpenChange={changeOpen} returnFocus={() => {
@@ -232,18 +245,18 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
                 drawer names itself and closes itself, so the name and the cross are the rail's alone.
                 A cross, not a panel glyph: Details, just above, is the panel glyph. */}
             <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-1"><h2 className="kh-review-rail-only text-body font-medium">Comments</h2>{count > 0 && <ReviewFilterMenu value={filter} onChange={setFilter} />}</div>
+              <div className="flex min-w-0 items-center gap-1"><h2 className="kh-review-rail-only text-body font-medium">Comments</h2>{count > 0 && <ReviewFilterMenu value={filter} onChange={setFilter} show={show} shows={OWNER_SHOWS} onShowChange={setShow} />}</div>
               <div className="flex shrink-0 items-center gap-1">{unreadCount > 0 && <Tooltip label="Mark all read"><Button type="button" variant="ghost" icon aria-label="Mark all read" onClick={() => void markRead()}><CheckCheck className="size-4" aria-hidden="true" /></Button></Tooltip>}{refresh}<span className="kh-review-rail-only"><Tooltip label="Close comments"><Button type="button" variant="ghost" icon aria-label="Close comments" onClick={() => changeOpen(false)}><X className="size-4" aria-hidden="true" /></Button></Tooltip></span></div>
             </div>
-            {result && result.threads.length > 0 && <ReviewNextButtons threads={result.threads} activeThreadId={activeThreadId} onActivate={setActiveThreadId} filter={filter} onFilterChange={setFilter} unreadThreadIds={unreadThreadIds} />}
+            {result && result.threads.length > 0 && <ReviewNextButtons threads={result.threads} activeThreadId={activeThreadId} onActivate={setActiveThreadId} filter={filter} onFilterChange={setFilter} unreadThreadIds={unreadThreadIds} show={show} onShowChange={setShow} />}
             {error && <p role="alert" className="mt-3 text-body-sm">{error}</p>}
             {refreshing && result && <p role="status" className="mt-3 text-caption text-kh-text-muted">Updating…</p>}
             {selection.refusal && <p role="status" className="mt-3 text-body-sm">{selection.refusal}</p>}
             {revisionChanged && !prepared && <p role="status" className="mt-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage.</p>}
-            {canComment && !selection.chosen && (count > 0 || selection.ready || !inline) && <div className="mt-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={() => { if (!inline) { focusArticleAfterClose.current = true; changeOpen(false); return; } if (prepareComment) requestComment(() => selection.capture()); else selection.capture(); }} ><MessageSquarePlus className="size-4" aria-hidden="true" />{inline ? "Comment on selected text" : "Close comments and select text"}</Button>{inline && !selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
+            {canComment && !selection.chosen && (count > 0 || selection.ready || !inline) && <div className="mt-3"><CommentShortcutTip inline={inline}><Button type="button" variant="soft" aria-keyshortcuts={inline ? COMMENT_SHORTCUT : undefined} onPointerDown={event => event.preventDefault()} onClick={() => { if (!inline) { focusArticleAfterClose.current = true; changeOpen(false); return; } if (prepareComment) requestComment(() => selection.capture()); else selection.capture(); }} ><MessageSquarePlus className="size-4" aria-hidden="true" />{inline ? "Comment on selected text" : "Close comments and select text"}</Button></CommentShortcutTip>{inline && !selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
           </div>
           {composer && !draft && <div className="mt-3">{composer}</div>}
-          {result && <div className="mt-3"><ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={prepared?.markdown ?? (revisionChanged || contentPending ? undefined : markdown)} activeThreadId={activeThreadId} onActivate={setActiveThreadId} unreadThreadIds={unreadThreadIds}
+          {result && <div className="mt-3"><ReviewThreadList linkTo={linkTo} draft={draft} filter={filter} onFilterChange={setFilter} show={show} onShowChange={setShow} railMarkdown={prepared?.markdown ?? (revisionChanged || contentPending ? undefined : markdown)} activeThreadId={activeThreadId} onActivate={setActiveThreadId} unreadThreadIds={unreadThreadIds}
             focusAnchor={revisionChanged || contentPending ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }}
             threads={result.threads} writesEnabled={result.writesEnabled && !readOnly} canResolve={!readOnly}
             emptyHint={canStartDiscussion ? "Select text or use a block’s comment action to start a discussion." : undefined}

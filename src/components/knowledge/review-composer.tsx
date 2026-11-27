@@ -1,12 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactElement, type RefObject } from "react";
 import { LogIn, MessageSquarePlus } from "lucide-react";
 import type { ReviewAnchor } from "@/modules/knowledge/domain/document-review";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { readReviewSelection, REVIEW_SELECTION_HINTS } from "./review-selection";
 import { ReviewReplyForm } from "./review-thread-list";
 import type { MentionScope } from "./mention-autocomplete";
+import { Tooltip } from "@/components/ui/tooltip";
+import { COMMENT_SHORTCUT } from "./review-shortcut";
+
+/** The panel's **Comment on selected text**, named with its key where it is that button (a rail); the drawer's says something else. */
+export function CommentShortcutTip({ inline, children }: { inline: boolean; children: ReactElement<Record<string, unknown>> }) {
+  return inline ? <Tooltip label="Comment on selected text" shortcut={COMMENT_SHORTCUT}>{children}</Tooltip> : children;
+}
 
 /** How long a selection must rest before it is remarked on: one being dragged out passes through many that cannot take a comment. */
 const HINT_DELAY_MS = 400;
@@ -95,7 +102,7 @@ export function ReviewSelectionBubble({ place, ready, hint, onComment, signInHre
     {ready && signInHref
       ? <a href={signInHref} className={buttonClasses({ variant: "ghost" })} onPointerDown={event => event.preventDefault()} onClick={onComment}><LogIn className="size-4" aria-hidden="true" />Sign in to comment</a>
       : ready
-      ? <Button type="button" variant="ghost" aria-label="Comment on selection" onPointerDown={event => event.preventDefault()} onClick={onComment}><MessageSquarePlus className="size-4" aria-hidden="true" />Comment</Button>
+      ? <Button type="button" variant="ghost" aria-label="Comment on selection" aria-keyshortcuts={COMMENT_SHORTCUT} onPointerDown={event => event.preventDefault()} onClick={onComment}><MessageSquarePlus className="size-4" aria-hidden="true" />Comment</Button>
       : <p role="status" className="max-w-xs px-3 py-2 text-body-sm text-kh-text-muted">{hint}</p>}
   </div>;
 }

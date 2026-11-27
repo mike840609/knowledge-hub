@@ -5,8 +5,9 @@ import type { OwnerReviewThreadView, ReviewAnchor, ReviewThreadView } from "@/mo
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Timestamp } from "@/components/ui/timestamp";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Bell, BellDot, BellOff, Check, ChevronDown, CircleAlert, CircleArrowDown, MoreHorizontal } from "lucide-react";
-import { MenuRoot, MenuTrigger, MenuContent, MenuItem, MenuRadioGroup, MenuRadioItem } from "@/components/ui/menu";
+import { MenuRoot, MenuTrigger, MenuContent, MenuGroup, MenuGroupLabel, MenuItem, MenuRadioGroup, MenuRadioItem, MenuSeparator } from "@/components/ui/menu";
 import { buttonClasses } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -134,9 +135,31 @@ const DRAFT_ID = "draft";
 const GROUP_THRESHOLD = 3;
 const FILTER_NAMES: Record<ReviewFilter, string> = { ALL: "All comments", OPEN: "Open", RESOLVED: "Resolved" };
 
-/** Which discussions are listed. The list draws it above itself unless a panel takes it for its heading. */
-export function ReviewFilterMenu({ value, onChange }: { value: ReviewFilter; onChange: (value: ReviewFilter) => void }) {
-  return <MenuRoot><MenuTrigger className={buttonClasses({ variant: "ghost" })} aria-label="Filter comments">{FILTER_NAMES[value]}<ChevronDown className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent><MenuRadioGroup value={value} onValueChange={next => onChange(next as ReviewFilter)}>{(Object.keys(FILTER_NAMES) as ReviewFilter[]).map(option => <MenuRadioItem key={option} value={option}>{FILTER_NAMES[option]}</MenuRadioItem>)}</MenuRadioGroup></MenuContent></MenuRoot>;
+/** Whose discussions are listed, for a signed-in caller: everyone's, those they wrote in, those that mention them. */
+export type ReviewShow = "ANYONE" | "MINE" | "MENTIONS";
+const SHOW_NAMES: Record<ReviewShow, string> = { ANYONE: "Everyone", MINE: "Mine", MENTIONS: "Mentions me" };
+/** What Open says when everything the Show group lists is resolved: about that group, not about every discussion. */
+const RESOLVED_EMPTY: Record<ReviewShow, string> = { ANYONE: "Every comment is resolved.", MINE: "Every comment of yours is resolved.", MENTIONS: "Every comment that mentions you is resolved." };
+type ShownComment = { own: boolean; mentionsMe?: true };
+/** Whether `show` lists a discussion: Mine is one the caller wrote any comment in; Mentions me, one a comment of which names them. */
+export function reviewShows(thread: { comments: readonly ShownComment[] }, show: ReviewShow): boolean {
+  return show === "ANYONE" || thread.comments.some(comment => show === "MINE" ? comment.own : !!comment.mentionsMe);
+}
+
+/**
+ * Which discussions are listed. The list draws it above itself unless a panel takes it for its heading.
+ * Given `shows`, a second group narrows them to whose (signed-in callers only); the trigger names both.
+ */
+export function ReviewFilterMenu({ value, onChange, show = "ANYONE", shows, onShowChange }: { value: ReviewFilter; onChange: (value: ReviewFilter) => void; show?: ReviewShow; shows?: readonly ReviewShow[]; onShowChange?: (show: ReviewShow) => void }) {
+  const whose = shows && onShowChange;
+  const statuses = <MenuRadioGroup value={value} onValueChange={next => onChange(next as ReviewFilter)}>{(Object.keys(FILTER_NAMES) as ReviewFilter[]).map(option => <MenuRadioItem key={option} value={option}>{FILTER_NAMES[option]}</MenuRadioItem>)}</MenuRadioGroup>;
+  return <MenuRoot><MenuTrigger className={buttonClasses({ variant: "ghost" })} aria-label="Filter comments">{FILTER_NAMES[value]}{show !== "ANYONE" ? ` · ${SHOW_NAMES[show]}` : ""}<ChevronDown className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent>
+    {whose ? <>
+      <MenuGroup><MenuGroupLabel>Status</MenuGroupLabel>{statuses}</MenuGroup>
+      <MenuSeparator />
+      <MenuGroup><MenuGroupLabel>Show</MenuGroupLabel><MenuRadioGroup value={show} onValueChange={next => onShowChange(next as ReviewShow)}>{shows.map(option => <MenuRadioItem key={option} value={option}>{SHOW_NAMES[option]}</MenuRadioItem>)}</MenuRadioGroup></MenuGroup>
+    </> : statuses}
+  </MenuContent></MenuRoot>;
 }
 
 /** The first discussion after the active one, in passage order and round again, that `matches`; never the active one itself. */
@@ -150,12 +173,15 @@ export function nextReviewThreadId(threads: readonly RailCard[], activeThreadId:
  * Steps through what wants attention: discussions with unread notices (the owner's) and open ones.
  * Focus stays on the button, so pressing again goes on to the next.
  */
-export function ReviewNextButtons({ threads, activeThreadId, onActivate, filter, onFilterChange, unreadThreadIds }: { threads: readonly ReviewThreadView[]; activeThreadId?: string; onActivate: (threadId: string) => void; filter: ReviewFilter; onFilterChange: (filter: ReviewFilter) => void; unreadThreadIds?: ReadonlySet<string> }) {
+export function ReviewNextButtons({ threads, activeThreadId, onActivate, filter, onFilterChange, unreadThreadIds, show = "ANYONE", onShowChange }: { threads: readonly ReviewThreadView[]; activeThreadId?: string; onActivate: (threadId: string) => void; filter: ReviewFilter; onFilterChange: (filter: ReviewFilter) => void; unreadThreadIds?: ReadonlySet<string>; show?: ReviewShow; onShowChange?: (show: ReviewShow) => void }) {
   const status = new Map(threads.map(thread => [thread.id, thread.status]));
+  // Next open steps through the open ones of whose are shown (Mine, Mentions me), so it never leaves that list.
+  const shown = new Set(threads.filter(thread => reviewShows(thread, show)).map(thread => thread.id));
   const nextUnread = unreadThreadIds && nextReviewThreadId(threads, activeThreadId, id => unreadThreadIds.has(id));
-  const nextOpen = nextReviewThreadId(threads, activeThreadId, id => status.get(id) === "OPEN");
+  const nextOpen = nextReviewThreadId(threads, activeThreadId, id => status.get(id) === "OPEN" && shown.has(id));
   function go(threadId: string) {
     if (filter !== "ALL" && status.get(threadId) !== filter) onFilterChange("ALL");
+    if (!shown.has(threadId)) onShowChange?.("ANYONE");
     onActivate(threadId);
     // The card is drawn, and placed beside its passage, after this render.
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -170,7 +196,7 @@ export function ReviewNextButtons({ threads, activeThreadId, onActivate, filter,
   </div>;
 }
 
-export function ReviewThreadList({ threads, writesEnabled, reply, moderate, author, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange, draft, signInHref, reauthHref, unreadThreadIds, follow, mentionScope, emptyHint = "Select text in the document to start a comment." }: {
+export function ReviewThreadList({ threads, writesEnabled, reply, moderate, author, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange, draft, signInHref, reauthHref, unreadThreadIds, follow, mentionScope, linkTo, show = "ANYONE", onShowChange, emptyHint = "Select text in the document to start a comment." }: {
   /** Where a signed-in reader whose sign-in expired signs in again (a reply or edit offers it on that failure). */
   reauthHref?: string;
   threads: (ReviewThreadView | OwnerReviewThreadView)[];
@@ -198,12 +224,31 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
   follow?: (threadId: string, following: boolean) => Promise<void>;
   /** Offers the `@` list in replies (never in edits). */
   mentionScope?: MentionScope;
+  /** The absolute address that reopens a discussion where this list is read; offers **Copy link to discussion**. */
+  linkTo?: (threadId: string) => string;
+  /** Whose discussions are listed (the panel's filter); a mark leading to one it hides shows everyone's. */
+  show?: ReviewShow;
+  onShowChange?: (show: ReviewShow) => void;
 }) {
   // Which previews cut their remark short: only those have more to show when opened.
   const [clamped, setClamped] = useState<Record<string, boolean>>({});
   const [pendingHide, setPendingHide] = useState<{ threadId: string; commentId?: string }>();
   const [pendingDelete, setPendingDelete] = useState<{ threadId: string; commentId: string }>();
   const [editing, setEditing] = useState<string>();
+  // A copied link says so on its card for a moment; where the clipboard refuses, the card shows the link to copy by hand.
+  const [copied, setCopied] = useState<{ threadId: string; manual?: string }>();
+  useEffect(() => { if (!copied || copied.manual) return; const timer = window.setTimeout(() => setCopied(undefined), 3000); return () => window.clearTimeout(timer); }, [copied]);
+  // The field to copy by hand takes focus when it appears, and once more when the menu that asked for
+  // it finishes closing (a closing menu hands focus back to its trigger). Only that menu: a refusal
+  // is remembered for a moment, so a later menu closing elsewhere never pulls focus to the field.
+  const manualInput = useRef<HTMLInputElement>(null);
+  const refusedAt = useRef(0);
+  const focusManual = () => { manualInput.current?.focus(); manualInput.current?.select(); };
+  useEffect(() => { if (copied?.manual) focusManual(); }, [copied]);
+  async function copyLink(threadId: string) {
+    const url = linkTo!(threadId);
+    try { await navigator.clipboard.writeText(url); setCopied({ threadId }); } catch { refusedAt.current = Date.now(); setCopied({ threadId, manual: url }); }
+  }
   async function remove(target: { threadId: string; commentId: string }) {
     setBusy(true); setError(undefined);
     try { await author?.remove(target.threadId, target.commentId); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not delete comment."); } finally { setBusy(false); setPendingDelete(undefined); }
@@ -211,8 +256,15 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
   const [own, setOwn] = useState<ReviewFilter>("ALL");
   const filter = controlled ?? own;
   const setFilter = onFilterChange ?? setOwn;
-  // A mark or a highlight may lead to a discussion the filter is hiding.
-  useEffect(() => { const show = () => setFilter("ALL"); document.addEventListener("review-focus-thread",show); return () => document.removeEventListener("review-focus-thread",show); }, [setFilter]);
+  // A mark or a highlight may lead to a discussion the filter is hiding; one the filter lists leaves it as it is.
+  useEffect(() => {
+    const reveal = (event: Event) => {
+      const target = threads.find(thread => thread.id === (event as CustomEvent<string>).detail);
+      if (!target || (filter !== "ALL" && target.status !== filter)) setFilter("ALL");
+      if (!target || !reviewShows(target, show)) onShowChange?.("ANYONE");
+    };
+    document.addEventListener("review-focus-thread", reveal); return () => document.removeEventListener("review-focus-thread", reveal);
+  }, [setFilter, threads, filter, show, onShowChange]);
   // The card whose own Reply was pressed, and a count so that pressing it again asks again.
   const [replyRequest, setReplyRequest] = useState<{ threadId: string; nonce: number }>();
   const [error, setError] = useState<string>();
@@ -223,9 +275,10 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
     try { await moderate?.(threadId, action, value, commentId); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not update comment."); } finally { setBusy(false); setPendingHide(undefined); }
   }
   const visible = useMemo(() => {
-    const filtered = threads.filter(thread => filter === "ALL" || thread.status === filter);
+    const filtered = threads.filter(thread => (filter === "ALL" || thread.status === filter) && reviewShows(thread, show));
     return railMarkdown === undefined ? filtered : filtered.sort(compareReviewPassages);
-  }, [threads, filter, railMarkdown]);
+  }, [threads, filter, show, railMarkdown]);
+  const whose = useMemo(() => threads.filter(thread => reviewShows(thread, show)), [threads, show]);
   // Keyed on the anchor: the composer element is new on every render, the place it needs is not.
   const draftAnchor = draft?.anchor;
   const placed = useMemo<RailCard[]>(() => !draftAnchor ? visible
@@ -251,7 +304,10 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
     <ConfirmDialog open={!!pendingDelete} onOpenChange={open => { if (!open) setPendingDelete(undefined); }} title="Delete comment?" description="Your comment will be removed for everyone. This cannot be undone." confirmLabel="Delete comment" onConfirm={() => { if (pendingDelete) void remove(pendingDelete); }} />
     {threads.length > 0 && !onFilterChange && <ReviewFilterMenu value={filter} onChange={setFilter} />}
     {error && <p role="alert" className="text-body-sm">{error}</p>}
-    {visible.length === 0 && !draft && <p className="py-6 text-body-sm text-kh-text-muted">{threads.length === 0 ? `No comments yet.${writesEnabled ? ` ${emptyHint}` : ""}` : filter === "OPEN" && threads.every(thread => thread.status === "RESOLVED") ? "Every comment is resolved." : "No comments here."}</p>}
+    {/* The list starts on Open, so a document whose discussions are all settled says so, and offers them. */}
+    {visible.length === 0 && !draft && (filter === "OPEN" && whose.length > 0 && whose.every(thread => thread.status === "RESOLVED")
+      ? <div className="py-6"><p className="text-body-sm text-kh-text-muted">{RESOLVED_EMPTY[show]}</p><Button type="button" variant="ghost" className="-ml-3 mt-1" onClick={() => setFilter("RESOLVED")}>Show resolved</Button></div>
+      : <p className="py-6 text-body-sm text-kh-text-muted">{threads.length === 0 ? `No comments yet.${writesEnabled ? ` ${emptyHint}` : ""}` : whose.length === 0 ? (show === "MINE" ? "You haven’t commented here." : "No comment mentions you.") : "No comments here."}</p>)}
     <div ref={railRef} data-review-rail={railMarkdown !== undefined ? "" : undefined} data-positioned={layout ? "" : undefined} className="kh-review-thread-list" style={layout ? { "--review-list-height": `${layout.height}px` } as CSSProperties : undefined}>
     {/* The box is placed before its field mounts: the field takes focus on mounting, and focused at the rail's top it scrolls the page away from the passage. */}
     {draft && <section data-review-draft={DRAFT_ID} aria-label="New comment" style={layout ? { "--review-thread-top": `${layout.positions[DRAFT_ID] ?? 0}px` } as CSSProperties : undefined} className={layout?.positions[DRAFT_ID] !== undefined ? "kh-pop-in" : undefined}>{layout?.positions[DRAFT_ID] !== undefined && draft.composer}</section>}
@@ -263,6 +319,8 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
       const active = activeThreadId === thread.id;
       const compact = !!onActivate && !active;
       const canReply = thread.status === "OPEN" && owner?.visibility !== "HIDDEN" && writesEnabled;
+      // A read, so offered to every reader, anonymous included; on the open card, as a preview keeps its one button.
+      const copies = !!linkTo && (!compact || !!moderate);
       return <section key={thread.id} data-review-thread={thread.id} data-active={active ? "" : undefined} tabIndex={-1} aria-label="Comment thread" aria-current={active ? "true" : undefined} onFocus={event => {
         // A pointer focuses on mousedown. Moving the card then would move the button
         // out from under mouseup and swallow its click. Keyboard focus can activate now.
@@ -293,7 +351,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
             {/* The row keeps the name's 24px: its 32px buttons overhang it rather than push the remark down. */}
             <div className="-my-1 flex">
             {moderate && index === 0 && <Tooltip label={thread.status === "OPEN" ? "Resolve" : "Reopen"}><Button type="button" variant="ghost" icon aria-label={thread.status === "OPEN" ? "Resolve" : "Reopen"} disabled={busy || !canResolve} onClick={() => void act(thread.id, "resolution", thread.status === "OPEN" ? "RESOLVED" : "OPEN")}><Check className="size-4" aria-hidden="true" /></Button></Tooltip>}
-            {(hides || mine) && <MenuRoot><MenuTrigger aria-label={index === 0 ? "Comment options" : "Reply options"} className={buttonClasses({variant:"ghost",icon:true})}><MoreHorizontal className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent align="end">{canEdit && <MenuItem disabled={busy} onClick={() => setEditing(comment.id)}>Edit</MenuItem>}{mine && <MenuItem disabled={busy} onClick={() => setPendingDelete({ threadId: thread.id, commentId: comment.id })}>Delete</MenuItem>}{hides && <MenuItem disabled={busy} onClick={() => void act(thread.id, "visibility", index === 0 ? (owner?.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN") : (comment.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN"), index === 0 ? undefined : comment.id)}>{index === 0 ? (owner?.visibility === "HIDDEN" ? "Unhide thread" : "Hide thread") : comment.visibility === "HIDDEN" ? "Unhide reply" : "Hide reply"}</MenuItem>}</MenuContent></MenuRoot>}
+            {(hides || mine || (copies && index === 0)) && <MenuRoot onOpenChangeComplete={open => { if (open || index !== 0 || Date.now() - refusedAt.current > 1000) return; refusedAt.current = 0; focusManual(); }}><MenuTrigger aria-label={index === 0 ? "Comment options" : "Reply options"} className={buttonClasses({variant:"ghost",icon:true})}><MoreHorizontal className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent align="end">{copies && index === 0 && <MenuItem onClick={() => void copyLink(thread.id)}>Copy link to discussion</MenuItem>}{canEdit && <MenuItem disabled={busy} onClick={() => setEditing(comment.id)}>Edit</MenuItem>}{mine && <MenuItem disabled={busy} onClick={() => setPendingDelete({ threadId: thread.id, commentId: comment.id })}>Delete</MenuItem>}{hides && <MenuItem disabled={busy} onClick={() => void act(thread.id, "visibility", index === 0 ? (owner?.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN") : (comment.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN"), index === 0 ? undefined : comment.id)}>{index === 0 ? (owner?.visibility === "HIDDEN" ? "Unhide thread" : "Hide thread") : comment.visibility === "HIDDEN" ? "Unhide reply" : "Hide reply"}</MenuItem>}</MenuContent></MenuRoot>}
             </div>
           </div>
           {comment.deleted
@@ -320,6 +378,11 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
           event.stopPropagation(); setBusy(true); setError(undefined);
           try { await follow(thread.id, !thread.following); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not update following."); } finally { setBusy(false); }
         }}>{thread.following ? <BellOff className="size-4" aria-hidden="true" /> : <Bell className="size-4" aria-hidden="true" />}{thread.following ? "Unfollow" : "Follow replies"}</Button></div>}
+        {/* Mounted with the card, so what it says is announced. */}
+        {copies && <div role="status" className="text-caption text-kh-text-muted">{copied?.threadId === thread.id && (copied.manual
+          ? <p className="mt-2">Couldn’t copy the link. Copy it from the box below.</p>
+          : <p className="mt-2 flex items-center gap-1"><Check className="size-4" aria-hidden="true" />Link copied</p>)}</div>}
+        {copies && copied?.threadId === thread.id && copied.manual && <Input ref={manualInput} readOnly size="sm" aria-label="Link to discussion" value={copied.manual} onFocus={event => event.currentTarget.select()} className="mt-1" />}
         {canReply && <div hidden={compact}><ReviewReplyForm signInHref={reauthHref} draftKey={reviewDraftKey("reply", thread.id)} openRequest={replyRequest?.threadId === thread.id ? replyRequest.nonce : 0} mentionScope={mentionScope} onSubmit={(body, key, mentions, mentionLinkId) => reply(thread.id, body, key, mentions, mentionLinkId)} /></div>}
         </div></div>
       </section>;

@@ -111,7 +111,7 @@ async function openSharedPage(page: Page, width: number) {
   await expect(page.locator('.kh-review-document')).toHaveAttribute('data-review-ready', '');
 }
 const PINNED_BAR = 57;
-const openDiscussions = (page: Page) => page.getByRole('button', { name: /^Show comments/ });
+const openDiscussions = (page: Page) => page.getByRole('button', { name: /^Comments\b/, expanded: false });
 
 for (const width of [1280, 1600])
   test(`on a shared page at ${width}px, commenting on a selection keeps the passage in place`, async ({ page }) => {

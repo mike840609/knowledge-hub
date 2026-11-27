@@ -50,7 +50,7 @@ test("D leaves discussions unchanged; explicit buttons open and close them", asy
   expect((await request.post(`${viewer}/api/share-review/threads`, { headers: { Origin: viewer }, data: { token, expectedRevisionId: doc.revisionId, anchor, body: "Reader question", idempotencyKey: crypto.randomUUID() } })).status()).toBe(201);
 
   await page.goto(`${viewer}${doc.links[0].path}`);
-  const entry = page.getByRole("button", { name: /^(Show|Hide) comments/ });
+  const entry = page.getByRole("button", { name: /^Comments\b/ });
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
   await expect(entry).not.toHaveAttribute("aria-keyshortcuts");
   // The reader's own discussion is not waiting for them, so it starts closed; D changes nothing.

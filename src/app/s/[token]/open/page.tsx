@@ -6,7 +6,7 @@ import { sharePlatformDestination } from "@/server/share-platform-destination";
 
 export const dynamic = "force-dynamic";
 
-type OpenSharedProps = { params: Promise<{ token: string }>; searchParams?: Promise<{ d?: string | string[] }> };
+type OpenSharedProps = { params: Promise<{ token: string }>; searchParams?: Promise<{ d?: string | string[]; thread?: string | string[] }> };
 
 /**
  * Identity is resolved only after an explicit click; the public reader stays caller-less. A folder
@@ -20,7 +20,11 @@ type OpenSharedProps = { params: Promise<{ token: string }>; searchParams?: Prom
  */
 export default async function OpenSharedDocument({ params, searchParams }: OpenSharedProps) {
   const { token } = await params;
-  const requested = sharedDocumentParam((await searchParams)?.d);
+  const query = await searchParams;
+  const requested = sharedDocumentParam(query?.d);
+  // A discussion to open (a copied "link to discussion"): navigation only, carried to the Hub reader,
+  // which shows it only where the reader's own read lists it. A malformed one is dropped, never an error.
+  const thread = sharedDocumentParam(query?.thread) ?? undefined;
   if (requested === null) notFound();
   const services = applicationServices();
   // One read judges the link, the requested document and the landing fallback together.
@@ -29,7 +33,8 @@ export default async function OpenSharedDocument({ params, searchParams }: OpenS
   target ??= await sharedOpenTarget(token, requested, caller.identity.id);
   if (!target) notFound();
   if (target.audience === "NAMED") {
-    redirect(`${hubSharePath(personalWorkspace.id, token)}${target.kind !== "DOCUMENT" && target.documentId ? `?d=${target.documentId}` : ""}`);
+    const search = new URLSearchParams([...(target.kind !== "DOCUMENT" && target.documentId ? [["d", target.documentId]] : []), ...(thread ? [["thread", thread]] : [])]).toString();
+    redirect(`${hubSharePath(personalWorkspace.id, token)}${search ? `?${search}` : ""}`);
   }
   // An empty folder has nothing to open in the Hub; the reader lands in their own home.
   redirect(target.documentId ? await sharePlatformDestination(caller, target.documentId, personalWorkspace.id, services.queries) : `/w/${personalWorkspace.id}/home`);
