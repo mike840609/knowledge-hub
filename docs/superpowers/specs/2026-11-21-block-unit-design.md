@@ -139,7 +139,8 @@ editor, and the wikilink rule holds.
 ## Out of scope, recorded
 
 - **Choosing a range with the mouse:** a drag from the margin, or
-  Shift-click. This is the next step. It reuses decision 3's sequence.
+  Shift-click. Done in `2026-11-26-mouse-block-range-design.md`, which reuses
+  decision 3's sequence.
 - **Blocks inside a toggle, quote or callout as their own blocks.** Escape
   there still selects the container, as today. Notion treats a toggle's
   children as blocks; the Hub's `details` body is one Markdown region.

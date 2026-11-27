@@ -1280,10 +1280,31 @@ body:has(.kh-selection-toolbar [role="menu"]:not([hidden])) :is(.kh-block-gutter
 .kh-at-option[aria-selected="true"] { @apply bg-kh-bg-selected text-kh-selected-text; }
 .kh-slash-option { @apply flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-body-sm text-kh-text hover:bg-kh-bg-hover; }
 .kh-slash-option[aria-selected="true"] { @apply bg-kh-bg-selected text-kh-selected-text; }
+/* Find and replace (2026-11-26 spec). The anchor is a zero-height sticky strip at the top of the editor's host;
+   the bar hangs from its right edge, so it neither takes room from the page nor covers its toolbar. */
+/* Below lg the pane has no pinned header; from lg up the document header is 3rem, and the bar sits 1.5rem under it. */
+.kh-find-anchor { position: sticky; top: 0.75rem; z-index: 20; height: 0; }
+@media (min-width: theme("screens.lg")) { .kh-find-anchor { top: 4.5rem; } }
+.kh-find-anchor[hidden] { display: none; }
+.kh-find-bar { position: absolute; top: 0; right: 0; max-width: 100%; @apply flex flex-col gap-1 rounded-lg border border-kh-border bg-kh-bg-raised p-1.5 shadow-popover; }
+.kh-find-row { @apply flex flex-wrap items-center gap-1; }
+.kh-find-bar .kh-find-field { width: auto; flex: 1 1 8rem; min-width: 0; }
+.kh-find-count { @apply min-w-[4.5rem] text-caption text-kh-text-muted; }
+.kh-editor .kh-find-match { background-color: var(--kh-highlight); color: var(--kh-text); text-decoration: underline 2px var(--kh-primary); border-radius: theme("borderRadius.sm"); }
+.kh-editor .kh-find-current { background-color: var(--kh-primary); color: var(--kh-on-primary); text-decoration: none; }
+@media print { .kh-find-anchor { display: none; } }
 .kh-tree-drop-line, .kh-block-drop-line { position: fixed; z-index: 50; height: 2px; background: var(--kh-primary); pointer-events: none; }
 .kh-block-is-dragging { cursor: grabbing; }
 @media print { .kh-block-gutter, .kh-block-move-menu, .kh-slash-menu, .kh-block-drop-line, .kh-tree-drop-line, .kh-table-grip, .kh-table-col-grip, .kh-table-add { display: none; } }
 
+/* The box a drag from the margin draws to choose blocks (mouse block-range spec): the selected fill and the primary line. */
+.kh-block-marquee {
+  position: fixed; z-index: 30; pointer-events: none;
+  background-color: var(--kh-bg-selected);
+  border: 1px solid var(--kh-primary);
+  border-radius: theme("borderRadius.sm");
+  opacity: 0.7;
+}
 /* The whole block stays marked while it moves, nested content included. */
 .kh-editor .kh-block-drag-source {
   background-color: var(--kh-bg-selected);

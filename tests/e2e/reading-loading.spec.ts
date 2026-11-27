@@ -46,6 +46,16 @@ for (const scenario of [
     page.on("response", (response) => {
       if (new URL(response.url()).pathname === destination && response.request().headers()["next-router-prefetch"]) destinationPrefetched = true;
     });
+    // The prefetched loading boundary can render while the document response
+    // waits. Hold only navigation data, leaving that boundary available.
+    // Route before the page loads: a prefetch issued while interception is
+    // being switched on can stall unanswered, and Next never retries it.
+    await page.route(`**${destination}?*`, async (route) => {
+      if (route.request().headers()["next-router-prefetch"]) return route.continue();
+      const response = await route.fetch();
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      await route.fulfill({ response });
+    });
     await page.goto(start);
     const content = page.getByRole("region", { name: "Document content", exact: true });
     const readingColumn = content.locator(".kh-reading-column").filter({
@@ -59,14 +69,6 @@ for (const scenario of [
     const before = await readingColumn.boundingBox();
     expect(before).not.toBeNull();
 
-    // The prefetched loading boundary can render while the document response
-    // waits. Hold only navigation data, leaving that boundary available.
-    await page.route(`**${destination}?*`, async (route) => {
-      if (route.request().headers()["next-router-prefetch"]) return route.continue();
-      const response = await route.fetch();
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      await route.fulfill({ response });
-    });
     const mobile = scenario.width < 1024;
     if (mobile) {
       await page.getByRole("button", { name: "Open menu", exact: true }).click();

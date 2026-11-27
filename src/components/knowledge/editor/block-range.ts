@@ -67,6 +67,46 @@ export function setBlockRange(view: EditorView, tr: Transaction, range: BlockRan
   setRange(view, tr, range, scroll);
 }
 
+/** The range as the plugin holds it (an anchor and a head, maybe the same block), or null. */
+export function blockRangeOf(state: EditorState): BlockRange | null {
+  return key.getState(state) ?? null;
+}
+
+/**
+ * Chooses `anchor` as the node selection and the run to `head` as the range (null or the same block: that block alone).
+ * The mouse makes ranges through this (2026-11-26 spec); nothing is scrolled.
+ */
+export function chooseRange(view: EditorView, anchor: number, head: number | null): void {
+  const tr = view.state.tr.setSelection(NodeSelection.create(view.state.doc, anchor));
+  setRange(view, tr, head === null || head === anchor ? null : { anchor, head }, false);
+}
+
+/** Puts the selection and range back as `selection` and `range` were (a marquee cancelled by Escape). */
+export function restoreRange(view: EditorView, selection: Selection, range: BlockRange | null): void {
+  setRange(view, view.state.tr.setSelection(selection.map(view.state.doc, view.state.tr.mapping)), range, false);
+}
+
+/**
+ * Shift-click on the block at `target` (2026-11-26 spec, decisions 1, 2 and 4): the range runs from the chosen block (or, for
+ * a grip, `fromCaret`, the block the caret is in) to it, in the anchor's sequence; a block of another sequence is chosen
+ * alone. False when there is nothing to extend from and `target` is no block of a sequence.
+ */
+export function extendRangeTo(view: EditorView, target: number, fromCaret: boolean): boolean {
+  const { state } = view;
+  const own = sequenceOf(state.doc, target);
+  if (!own.some((block) => block.pos === target)) return false;
+  let anchor = chosenBlock(state);
+  if (anchor === null && fromCaret) {
+    const { $from } = state.selection;
+    for (let depth = $from.depth; depth >= 1 && anchor === null; depth--) if ($from.node(depth).type.name === "list_item") anchor = $from.before(depth);
+    if (anchor === null && $from.depth > 0) anchor = $from.before(1);
+  }
+  if (anchor === null) return false;
+  const inSequence = sequenceOf(state.doc, anchor).some((block) => block.pos === target) && sequenceOf(state.doc, anchor).some((block) => block.pos === anchor);
+  chooseRange(view, inSequence ? anchor : target, inSequence ? target : null);
+  return true;
+}
+
 /** The range's blocks, when it holds two or more; else null. */
 export function rangeBlocks(state: EditorState): EditorBlock[] | null {
   const range = key.getState(state);

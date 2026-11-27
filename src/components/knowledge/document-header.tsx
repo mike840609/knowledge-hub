@@ -100,11 +100,9 @@ export function DocumentHeader({
                 type="button"
                 onClick={onShareClick}
                 aria-label="Share link…"
-                // The page's main action says its name where there is room, and is the icon alone where there is not.
-                className={buttonClasses({ variant: "ghost", icon: true, className: "sm:w-auto sm:gap-1.5 sm:border-kh-border-strong sm:bg-kh-bg sm:px-2.5 sm:text-kh-text sm:hover:bg-kh-bg-hover" })}
+                className={buttonClasses({ variant: "ghost", icon: true })}
               >
                 <ActionIcon name="share" className="h-4 w-4" />
-                <span className="hidden sm:inline">Share</span>
               </button>
             </Tooltip>
           ) : null}

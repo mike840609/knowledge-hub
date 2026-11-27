@@ -282,11 +282,13 @@ Where the build differs from the text above, this section is the record.
    `x-hub-path`. The redirect judges nothing; the page judges the share after
    it, so a reader the link does not name still ends at the dead link's 404.
    Every other foreign `/w/<id>/…` path stays a 404.
-9. **The unread "shared with you" list reads only unread rows**, and a row
-   judged dead there is marked read (as an unread mention is), so dead rows
-   cannot fill the window and hide an older live share, and are not judged
-   again on every poll. A document archived and later restored therefore
-   loses its share's unread mark.
+9. **The unread "shared with you" list reads only unread rows**, and only a row
+   that is permanently dead there is marked read (as an unread mention is): the
+   link is revoked or expired, or its target document, folder or Source row is
+   gone. Such rows cannot fill the window and hide an older live share, and are
+   not judged again on every poll. A temporarily unreachable share (its target
+   archived, or no longer reachable) keeps its unread mark and is paged past, so
+   a document archived and later restored brings its share back unread.
 10. **`/s/<token>/open` carries `?thread=` to the Hub reader** (2026-11-26, inline review
    spec "Copy link to discussion"). A discussion's copied link on a NAMED share is
    `/s/<token>/open?thread=<id>` (with `d=` on a folder), never the copier's own

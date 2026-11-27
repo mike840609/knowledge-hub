@@ -13,6 +13,8 @@ import { slashCommands } from "./slash-commands";
 import { atMentionSuggest } from "./at-mention-suggest";
 import { emojiSuggest } from "./emoji-suggest";
 import { taskCheckbox } from "./task-checkbox";
+import { FindBar } from "./find-bar";
+import { findReplace, type FindController } from "./find-replace";
 import type { LinkTargetsView } from "@/modules/knowledge/application/knowledge-link-service";
 import { createMarkdownEditor, type MarkdownEditor } from "./editor-core";
 import { selectionToolbar, storedLinkTarget } from "./selection-toolbar";
@@ -80,6 +82,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
   const [wikiViews, setWikiViews] = useState<{ dom: HTMLElement; raw: string }[]>([]);
   const [codeViews, setCodeViews] = useState<{ dom: HTMLElement; preview: HTMLElement; pre: HTMLElement; code: string; language: string; editing: boolean; setEditing: (value: boolean) => void; setLanguage: (language: string) => void }[]>([]);
   const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null);
+  const [finder, setFinder] = useState<FindController | null>(null);
   const latest = useRef(props);
   latest.current = props;
 
@@ -149,6 +152,8 @@ export function RenderedEditor(props: RenderedEditorProps) {
       const documentId = latest.current.documentId;
       return documentId && documentIdInPath(pathname) === documentId ? pathname : undefined;
     });
+    const find = findReplace();
+    queueMicrotask(() => { if (!cancelled) setFinder(find.controller); });
     const emoji = emojiSuggest();
     const mention = atMentionSuggest({ targets: suggest.targets, excludeDocumentId: () => latest.current.documentId });
     const links = $prose(() => new Plugin({ props: { nodeViews: {
@@ -275,7 +280,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
       onUserEdit: () => latest.current.onUserEdit(),
       onMarkdown: (markdown) => latest.current.onMarkdown(markdown),
       allowImage: (src) => isAllowedMarkdownImageSrc(src, { origin: window.location.origin }),
-      extraPlugins: [editorReviewPathsPlugin, ...toolbar.plugins, ...suggest.plugins, ...slash.plugins, ...emoji.plugins, ...mention.plugins, ...(latest.current.titleMeta ? [titleMeta] : []), ...(latest.current.links ? [links] : []), ...(latest.current.renderCode ? [codes] : []), gutter, tableActions(), taskCheckbox()],
+      extraPlugins: [editorReviewPathsPlugin, ...toolbar.plugins, ...suggest.plugins, ...slash.plugins, ...emoji.plugins, ...mention.plugins, ...(latest.current.titleMeta ? [titleMeta] : []), ...(latest.current.links ? [links] : []), ...(latest.current.renderCode ? [codes] : []), find.plugin, gutter, tableActions(), taskCheckbox()],
       configure: (ctx) => {
         toolbar.configure(ctx);
         suggest.configure(ctx);
@@ -344,7 +349,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
     const parts = parseWikiLinkParts(raw.slice(2, -2));
     const attributes = parts.target ? { [WIKILINK_TARGET]: parts.target, ...(parts.fragment ? { [WIKILINK_FRAGMENT]: parts.fragment } : {}) } : { [WIKILINK_ANCHOR]: headingSlug(parts.fragment ?? "") };
     return createPortal(<MarkdownAnchor links={props.links} {...attributes}>{parts.alias ?? (parts.target || parts.fragment)}</MarkdownAnchor>, dom, String(index));
-  })}{titleSlot ? createPortal(<DocumentMetaSlot />, titleSlot) : null}{codeViews.map(entry => createPortal(<>
+  })}{titleSlot ? createPortal(<DocumentMetaSlot />, titleSlot) : null}{finder ? createPortal(<FindBar controller={finder} />, finder.mount) : null}{codeViews.map(entry => createPortal(<>
     <div data-inline-code-preview hidden={entry.editing}>{props.renderCode?.(entry.code, entry.language)}</div>
     {/* Under every block it was a line of chrome read past on each scroll, and room the saved page does not
         have. Over the block's lower corner instead, taking none, shown on pointing, on keyboard focus and

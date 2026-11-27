@@ -208,4 +208,17 @@ describe("the unread named shares", () => {
     expect(await readAt()).not.toBeNull();
     expect(await badge(f)).toBe(0);
   });
+
+  it("keeps a named share unread across the document being archived and restored", async () => {
+    const f = await setup();
+    const view = await f.shares.create(f.caller, { documentId: f.documentId, recipients: [f.alice.id] });
+    const readAt = async () => (await pool.query("SELECT read_at FROM document_share_link_recipients WHERE share_link_id = ? AND user_id = ?", [view.id, f.alice.id]))[0].read_at;
+    await f.hub.archiveDocument(f.caller, f.documentId);
+    expect(await shared(f)).toEqual([]);
+    expect(await badge(f)).toBe(0);
+    expect(await readAt()).toBeNull();
+    await f.hub.restoreDocument(f.caller, f.documentId);
+    expect(await shared(f)).toEqual([expect.objectContaining({ id: `shared:${view.id}`, readAt: null, linkAvailable: true })]);
+    expect(await badge(f)).toBe(1);
+  });
 });
