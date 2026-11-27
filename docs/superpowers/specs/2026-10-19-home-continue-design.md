@@ -252,14 +252,21 @@ this section is current.
    to the hint and the links it made a third and fourth accent in the first
    band of the page. Unread Discussions keep their 6px `bg-kh-primary` dot.
 5. **Recent is grouped by day**: Today, Yesterday and Earlier, by calendar day
-   in the reader's zone; an untimed recent is Earlier. Each row shows its event
+   in the reader's zone; an untimed recent is Earlier. The day belongs to the
+   time column, not the titles: a group after the first opens with a hairline
+   (`bg-kh-border`) and its day in `micro` `text-faint` at the right, and a
+   first group of Today has no visible label (a visually hidden heading keeps
+   it for screen readers). Seen rendered, left-aligned day labels read as
+   headings between the titles. `text-faint` is allowed here because the label
+   can be ignored without losing anything: every row shows its own time. Each row shows its event
    beside the short time ("Edited 5m", "Opened 2d"); the tooltip keeps the full
    date and time. The groups appear once the client knows its zone and clock,
    the moment this device's Opened recents arrive anyway; the first paint is the
    flat list. "Show N more" still counts rows and is applied before grouping.
-6. **The right column is Needs attention, Favorites, Discussions.** Discussions
-   is still always rendered with its empty copy (the 2026-10-19 decision
-   stands). Needs attention loses its bordered panel and is rows under the
+6. **The right column is Needs attention, Discussions, Favorites**: what waits
+   for the reader (a source to fix, a reply to answer) before the standing
+   shortcuts. Discussions is still always rendered with its empty copy (the
+   2026-10-19 decision stands). Needs attention loses its bordered panel and is rows under the
    label like every other group. A reminder row is its status in `text`, its
    source in `text-muted`, and its action ("Retry", "Review") trailing in
    `text-secondary`. A failed import is the warning colour in its icon only;

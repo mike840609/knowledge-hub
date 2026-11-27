@@ -213,9 +213,13 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
     return undefined;
   }
 
+  // Invisible copies of a document row's preview, star and menu buttons, so what stands in their place lines up with
+  // Recent's times at every control size.
+  const slot = buttonClasses({ variant: "ghost", icon: true, size: "sm", className: "invisible" });
+  const rowSlots = <span aria-hidden="true" className="mr-1 flex shrink-0"><span className={`${slot} hidden lg:inline-flex`} /><span className={slot} /><span className={slot} /></span>;
+
   function draftRow(item: DraftItem, i: number) {
-    // Draft rows omit document actions. Matching slots align their times with Recent.
-    const slot = buttonClasses({ variant: "ghost", icon: true, size: "sm", className: "invisible" });
+    // Draft rows omit document actions; the slots align their times with Recent.
     const destination = draftDestination(item);
     // The latest draft says what opening it does and the key that does it; the arrow alone on a phone.
     const hint = i === 0 ? <span className="flex shrink-0 items-center gap-1.5 text-caption text-kh-text-secondary">
@@ -223,7 +227,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
     </span> : undefined;
     return <Row key={item.id} href={destination.href} icon={<PenLine size={14} aria-hidden="true" className="text-kh-selected-text" />} title={item.draft.title || "Untitled draft"} timestamp={item.at} provenance={draftProvenance(item)}
       hint={hint} keyShortcuts={i === 0 ? "R" : undefined}
-      trailing={<span aria-hidden="true" className="mr-1 flex shrink-0"><span className={`${slot} hidden lg:inline-flex`} /><span className={slot} /><span className={slot} /></span>} />;
+      trailing={rowSlots} />;
   }
 
   const recentDocs = recentShown.map(item => item.doc);
@@ -279,9 +283,14 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
           <Section title="Recent">
             {!lists.recent.length ? <EmptyLine>Documents you edit or open will appear here.{activeDocumentCount === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>
               : now === null ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{recentShown.map(recentRow)}</ul>
-              : <div onKeyDown={navigateListRows}>{recentGroups(recentShown, now, zone).map(group => (
-                <div key={group.label} className="pt-2 first:pt-0">
-                  <h3 className="px-3 pb-1 text-micro text-kh-text-muted">{group.label}</h3>
+              : <div onKeyDown={navigateListRows}>{recentGroups(recentShown, now, zone).map((group, g) => (
+                <div key={group.label}>
+                  {/* The day belongs to the time column, not the titles: a hairline with a faint label at the right, so
+                      it never reads as a heading. Today needs none at the top; every row already carries its time. */}
+                  {g === 0 && group.label === "Today" ? <h3 className="sr-only">Today</h3>
+                    : <h3 className="flex items-center pr-1 text-micro text-kh-text-faint">
+                      <span className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1"><span aria-hidden="true" className="h-px flex-1 bg-kh-border" />{group.label}</span>{rowSlots}
+                    </h3>}
                   <ul className="space-y-0.5">{group.items.map(recentRow)}</ul>
                 </div>
               ))}</div>}
@@ -291,13 +300,14 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
           </Section>
         </div>
         <div className="min-w-0 space-y-6">
+          {/* What waits for the reader first: reminders, then replies; Favorites are standing shortcuts. */}
           <AttentionList workspaceId={workspaceId} reminders={reminders} />
+          <Section title="Discussions" count={notices.length} action={{ href: `/w/${workspaceId}/inbox`, label: "Open Inbox" }}>
+            {notices.length ? <UnreadDiscussions notices={notices} /> : <EmptyLine>No new comments or replies.</EmptyLine>}
+          </Section>
           <Section title="Favorites">
             {favorites.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{favorites.map((doc, i) => documentRow(doc, { showSource: sourceChanges(favorites, i), stackProvenance: true }))}</ul>
               : <EmptyLine>Star a document to keep it here.</EmptyLine>}
-          </Section>
-          <Section title="Discussions" count={notices.length} action={{ href: `/w/${workspaceId}/inbox`, label: "Open Inbox" }}>
-            {notices.length ? <UnreadDiscussions notices={notices} /> : <EmptyLine>No new comments or replies.</EmptyLine>}
           </Section>
         </div>
       </div>

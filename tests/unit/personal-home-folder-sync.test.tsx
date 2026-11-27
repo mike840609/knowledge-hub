@@ -56,7 +56,7 @@ it("leads with Recent and Favorites, searches through ⌘K and leaves the change
   expect(html).toMatch(/<p class="[^"]*text-caption[^"]*">No new comments or replies\.<\/p>/);
   expect(html).toContain('href="/w/ws/inbox"');
   expect(html).toContain("Open Inbox");
-  expect(html.indexOf('aria-label="Favorites"')).toBeLessThan(html.indexOf('aria-label="Discussions"'));
+  expect(html.indexOf('aria-label="Discussions"')).toBeLessThan(html.indexOf('aria-label="Favorites"'));
   // The page keeps the shared breadcrumb origin: list pages stay in kh-page.
   expect(html).toContain('class="kh-page kh-home');
   expect(html).not.toContain("kh-page-wide");
@@ -77,7 +77,7 @@ it("lists every draft above Recent and gives only the latest its action and key"
   expect(section).toContain('href="/w/ws/knowledge/new?compose"');
   expect(section).toContain('<span class="ml-1.5">2</span>');
   expect(html.match(/Latest note/g)).toHaveLength(1);
-  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Favorites"'));
+  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Discussions"'));
   expect(recent).toContain('href="/w/ws/knowledge/src/b"');
   expect(recent).not.toContain('href="/w/ws/knowledge/src/a"');
   // The event is shown beside the short time; the tooltip keeps the full date.
@@ -140,11 +140,11 @@ it("puts source reminders in the attention strip and unread comments in Discussi
   const withReminders = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} reminders={reminders} />);
   expect(withReminders).toContain('aria-label="Needs attention"');
   const withNotices = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} notices={notices} />);
-  // Needs attention leads the side column, above Favorites.
-  expect(withReminders.indexOf('aria-label="Needs attention"')).toBeLessThan(withReminders.indexOf('aria-label="Favorites"'));
+  // Needs attention leads the side column, above Discussions.
+  expect(withReminders.indexOf('aria-label="Needs attention"')).toBeLessThan(withReminders.indexOf('aria-label="Discussions"'));
   expect(withNotices).not.toContain("Needs attention");
   expect(withNotices).not.toContain("No new comments or replies.");
-  const discussions = withNotices.slice(withNotices.indexOf('aria-label="Discussions"'));
+  const discussions = withNotices.slice(withNotices.indexOf('aria-label="Discussions"'), withNotices.indexOf('aria-label="Favorites"'));
   expect(discussions).toContain('aria-label="Unread discussions"');
   expect(discussions).toContain(">1<");
 });
@@ -159,7 +159,7 @@ it("labels an untimed recent as Opened without a time", () => {
 it("shows the document's page icon in Recent and Favorites", () => {
   shortcuts.value = { favorites: ["src:b"], recent: ["src:a"] };
   const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[doc("a", { pageIcon: "📌" }), doc("b", { pageIcon: "🧭" })]} drafts={[]} />);
-  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Favorites"'));
+  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Discussions"'));
   const favorites = html.slice(html.indexOf('aria-label="Favorites"'));
   expect(recent).toContain("📌");
   expect(favorites).toContain("🧭");
@@ -181,7 +181,7 @@ it("names a source only where it changes from the row above", () => {
     doc("c", { sourceId: "team", sourceName: "Team wiki", updatedAt: "2026-10-07T00:00:00.000Z" }),
     doc("d", { sourceName: "Notes", updatedAt: "2026-10-06T00:00:00.000Z" }),
   ]} drafts={[]} />);
-  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Favorites"'));
+  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Discussions"'));
   // a names Notes, b repeats it and stays quiet, c changes to Team wiki, d changes back.
   expect(recent.match(/>Notes</g)).toHaveLength(2);
   expect(recent.match(/>Team wiki</g)).toHaveLength(1);
@@ -190,7 +190,7 @@ it("names a source only where it changes from the row above", () => {
 it("shows the first eight recent rows and offers the rest behind Show more", () => {
   const many = Array.from({ length: 11 }, (_, n) => doc(`d${n}`, { updatedAt: `2026-10-${String(n + 1).padStart(2, "0")}T00:00:00.000Z` }));
   const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={many} drafts={[]} />);
-  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Favorites"'));
+  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Discussions"'));
   expect(recent.match(/data-list-row/g)).toHaveLength(8);
   expect(recent).toContain(">Show 3 more<");
   const few = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={many.slice(0, 8)} drafts={[]} />);
