@@ -18,6 +18,7 @@ Agents will be able to do more later, such as creating documents. So the place i
   The rail's separate Tasks item is removed, because it used the same icon. A team sees no
   Agents. This amends [the page switch](2026-11-23-knowledge-destination-icons-design.md)
   ("Which items", "Unchanged").
+- **Width.** Five items leave the current page's label too little room at `px-2`, so each switch item's side padding is `px-1.5`. `zz-explorer-collapse.spec.ts` checks that each of Graph, Sources, Shares and Agents fits when it is the current page, in both densities.
 - **`/w/<ws>/agents`** has two layouts, chosen by whether a binding exists. A header action,
   **Task results**, links to `/tasks`.
   - **No binding yet** (and while the first binding's setup line is still on screen): the

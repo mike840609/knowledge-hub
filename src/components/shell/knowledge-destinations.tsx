@@ -60,7 +60,7 @@ export function PageSwitch({ items, pathname }: { items: readonly Destination[];
               aria-current={current}
               onClick={choose(href)}
               style={{ flexGrow: raised ? 3 : 1 }}
-              className={`kh-control kh-focus-ring flex h-7 min-w-0 basis-0 items-center justify-center rounded-md px-2 text-body-sm font-medium transition-[flex-grow,background-color,color] duration-160 ease-out ${
+              className={`kh-control kh-focus-ring flex h-7 min-w-0 basis-0 items-center justify-center rounded-md px-1.5 text-body-sm font-medium transition-[flex-grow,background-color,color] duration-160 ease-out ${
                 raised ? "bg-kh-switch-thumb text-kh-text" : "text-kh-text-muted hover:text-kh-text"
               }`}
             >
