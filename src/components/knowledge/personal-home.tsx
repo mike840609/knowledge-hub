@@ -5,7 +5,7 @@ import { bufferTyping, plainClick } from "./typing-ahead";
 import { ReopenGuidanceMenuItem } from "./reopen-guidance-menu-item";
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { RECENT_SHOWN, homeLists, recentGroups, type ContinueDoc, type ContinueDraft, type DraftItem, type RecentItem } from "@/lib/home-continue";
+import { RECENT_SHOWN, homeLists, type ContinueDoc, type ContinueDraft, type DraftItem, type RecentItem } from "@/lib/home-continue";
 import { AttentionList, HomeSection as Section, UnreadDiscussions, type HomeNotice } from "./home-attention";
 import type { FreshnessReminder } from "@/modules/personal/application/knowledge-freshness";
 
@@ -19,7 +19,7 @@ import { useDocumentShortcuts, documentShortcutKey } from "./use-document-shortc
 import { toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { PageHeader } from "@/components/shell/page-header";
-import { Timestamp, useDisplayTimeZone } from "@/components/ui/timestamp";
+import { Timestamp } from "@/components/ui/timestamp";
 import { Tooltip } from "@/components/ui/tooltip";
 import { actionsFor, type Action } from "@/components/actions/action-registry";
 import { RowActionsTrigger, RowContextMenu, useActionRunner } from "@/components/actions/action-menu";
@@ -141,12 +141,6 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [router, newNoteHref, resumeHref]);
-  // Recent's day groups need the reader's zone and clock, which the server cannot know: the first paint is the
-  // flat list, as Timestamp's first paint is UTC. ponytail: the clock is read once, so a page left open past
-  // midnight keeps yesterday's groups until it is opened again.
-  const zone = useDisplayTimeZone();
-  const [now, setNow] = useState<number | null>(null);
-  useEffect(() => setNow(Date.now()), []);
   const activeDocumentCount = documents.filter(doc => doc.status === "ACTIVE" && doc.sourceStatus === "ACTIVE").length;
   const [showAllRecent, setShowAllRecent] = useState(false);
   const hiddenRecent = lists.recent.length - RECENT_SHOWN;
@@ -213,7 +207,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
     return undefined;
   }
 
-  // Invisible copies of a document row's preview, star and menu buttons, so what stands in their place lines up with
+  // Invisible copies of a document row's preview, star and menu buttons, so a draft's time lines up with
   // Recent's times at every control size.
   const slot = buttonClasses({ variant: "ghost", icon: true, size: "sm", className: "invisible" });
   const rowSlots = <span aria-hidden="true" className="mr-1 flex shrink-0"><span className={`${slot} hidden lg:inline-flex`} /><span className={slot} /><span className={slot} /></span>;
@@ -282,18 +276,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
           </Section>}
           <Section title="Recent">
             {!lists.recent.length ? <EmptyLine>Documents you edit or open will appear here.{activeDocumentCount === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>
-              : now === null ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{recentShown.map(recentRow)}</ul>
-              : <div onKeyDown={navigateListRows}>{recentGroups(recentShown, now, zone).map((group, g) => (
-                <div key={group.label}>
-                  {/* The day belongs to the time column, not the titles: a hairline with a faint label at the right, so
-                      it never reads as a heading. Today needs none at the top; every row already carries its time. */}
-                  {g === 0 && group.label === "Today" ? <h3 className="sr-only">Today</h3>
-                    : <h3 className="flex items-center pr-1 text-micro text-kh-text-faint">
-                      <span className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1"><span aria-hidden="true" className="h-px flex-1 bg-kh-border" />{group.label}</span>{rowSlots}
-                    </h3>}
-                  <ul className="space-y-0.5">{group.items.map(recentRow)}</ul>
-                </div>
-              ))}</div>}
+              : <ul onKeyDown={navigateListRows} className="space-y-0.5">{recentShown.map(recentRow)}</ul>}
             {hiddenRecent > 0 ? <Button variant="ghost" size="sm" className="mx-3 mt-1 text-kh-text-muted" aria-expanded={showAllRecent} onClick={() => setShowAllRecent(!showAllRecent)}>
               {showAllRecent ? "Show fewer" : `Show ${hiddenRecent} more`}
             </Button> : null}

@@ -66,22 +66,3 @@ export function homeLists({ documents, drafts, recent, openedAt = {} }: {
 
   return { drafts: draftItems, recent: recentItems };
 }
-
-export type RecentGroup<T> = { label: "Today" | "Yesterday" | "Earlier"; items: T[] };
-
-/**
- * Splits Recent into calendar days in the reader's zone, keeping each item's order. An untimed item is
- * Earlier; an empty group is dropped.
- */
-export function recentGroups<T extends { at?: string }>(items: readonly T[], now: number, timeZone: string): RecentGroup<T>[] {
-  const day = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
-  const today = day.format(now);
-  // ponytail: yesterday is the day 24h ago, so a DST change can misfile its edge hour; step by calendar if that matters.
-  const yesterday = day.format(now - 86_400_000);
-  const groups: RecentGroup<T>[] = [{ label: "Today", items: [] }, { label: "Yesterday", items: [] }, { label: "Earlier", items: [] }];
-  for (const item of items) {
-    const key = item.at ? day.format(new Date(item.at)) : undefined;
-    groups[key === today ? 0 : key === yesterday ? 1 : 2].items.push(item);
-  }
-  return groups.filter(group => group.items.length > 0);
-}

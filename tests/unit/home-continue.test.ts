@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RECENT_LIMIT, documentsForHome, homeLists, recentGroups, type ContinueDoc, type ContinueDraft } from "@/lib/home-continue";
+import { RECENT_LIMIT, documentsForHome, homeLists, type ContinueDoc, type ContinueDraft } from "@/lib/home-continue";
 
 const doc = (id: string, over: Partial<ContinueDoc> = {}): ContinueDoc => ({
   documentId: id, sourceId: "src", title: id, updatedAt: "2026-10-01T00:00:00.000Z",
@@ -98,27 +98,5 @@ describe("documentsForHome", () => {
       "archived-draft",
       "source-archived-draft",
     ]);
-  });
-});
-
-describe("recentGroups", () => {
-  const now = Date.parse("2026-11-27T02:00:00.000Z"); // 10:00 on the 27th in Taipei, 21:00 on the 26th in New York
-  const items = [
-    { id: "a", at: "2026-11-27T01:00:00.000Z" },
-    { id: "b", at: "2026-11-26T17:00:00.000Z" },
-    { id: "c", at: "2026-11-26T06:00:00.000Z" },
-    { id: "d", at: "2026-11-20T00:00:00.000Z" },
-    { id: "e" },
-  ];
-  const shape = (timeZone: string) => recentGroups(items, now, timeZone).map(g => `${g.label}:${g.items.map(i => i.id).join("")}`);
-
-  it("files items by calendar day in the reader's zone, untimed ones last", () => {
-    expect(shape("Asia/Taipei")).toEqual(["Today:ab", "Yesterday:c", "Earlier:de"]);
-    expect(shape("America/New_York")).toEqual(["Today:abc", "Earlier:de"]);
-  });
-
-  it("drops empty groups", () => {
-    expect(recentGroups([], now, "UTC")).toEqual([]);
-    expect(recentGroups([{ at: "2026-11-01T00:00:00.000Z" }], now, "UTC").map(g => g.label)).toEqual(["Earlier"]);
   });
 });

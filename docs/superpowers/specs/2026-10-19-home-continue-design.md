@@ -251,18 +251,12 @@ this section is current.
    `text-muted` too. The accent leaves the Drafts and Discussions counts: next
    to the hint and the links it made a third and fourth accent in the first
    band of the page. Unread Discussions keep their 6px `bg-kh-primary` dot.
-5. **Recent is grouped by day**: Today, Yesterday and Earlier, by calendar day
-   in the reader's zone; an untimed recent is Earlier. The day belongs to the
-   time column, not the titles: a group after the first opens with a hairline
-   (`bg-kh-border`) and its day in `micro` `text-faint` at the right, and a
-   first group of Today has no visible label (a visually hidden heading keeps
-   it for screen readers). Seen rendered, left-aligned day labels read as
-   headings between the titles. `text-faint` is allowed here because the label
-   can be ignored without losing anything: every row shows its own time. Each row shows its event
-   beside the short time ("Edited 5m", "Opened 2d"); the tooltip keeps the full
-   date and time. The groups appear once the client knows its zone and clock,
-   the moment this device's Opened recents arrive anyway; the first paint is the
-   flat list. "Show N more" still counts rows and is applied before grouping.
+5. **Recent is one list, newest first, with no day groups.** Each row shows
+   its event beside the short time ("Edited 5m", "Opened 2d"); the tooltip
+   keeps the full date and time. Day groups (Today, Yesterday, Earlier) were
+   tried and dropped: the time column already says how recent a row is, so a
+   day label repeated it, and every separator split a short list into uneven
+   pieces, often of one row.
 6. **The right column is Needs attention, Discussions, Favorites**: what waits
    for the reader (a source to fix, a reply to answer) before the standing
    shortcuts. Discussions is still always rendered with its empty copy (the
@@ -279,6 +273,5 @@ this section is current.
    container query on the page box (`kh-home`, from 50rem of content) replaces
    `xl:`, so collapsing the sidebar can make room for the second column.
 
-Tests: `homeLists`' day grouping (`recentGroups`) in `home-continue.test.ts`;
-Home's order, labels, hint and `R` key in `personal-home-folder-sync.test.tsx`;
+Tests: Home's order, labels, hint and `R` key in `personal-home-folder-sync.test.tsx`;
 reminder rows in `home-attention.test.tsx`.
