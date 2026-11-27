@@ -34,7 +34,7 @@ export function TaskList({ workspaceId, archived, items, nextCursor }: { workspa
           icon={ListChecks}
           title={archived ? "No archived tasks" : "No tasks yet"}
           description={archived ? "Tasks you archive appear here and stay readable." : "Finish a task in Claude Code or OpenCode, then run /hub-export to save it here."}
-          action={archived ? undefined : <Link className={buttonClasses({ variant: "primary" })} href={`${base}/setup`}>Set up export</Link>}
+          action={archived ? undefined : <Link className={buttonClasses({ variant: "primary" })} href={`/w/${workspaceId}/agents`}>Set up export</Link>}
         />
       ) : (
         <ul className="-mx-3 flex flex-col" onKeyDown={navigateListRows}>
