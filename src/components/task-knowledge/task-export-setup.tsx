@@ -119,6 +119,7 @@ export function TaskExportSetup({ workspaceId, bindings, diagram, skills }: { wo
         <h2 className="text-body font-medium text-kh-text">Bindings</h2>
         {!adding ? <Button variant="secondary" onClick={() => setAdding(true)}>Add a machine</Button> : null}
       </div>
+      <p className="text-caption text-kh-text-muted">Bind each machine once. After that, type a skill in any project; bind again only if you rotate the token or revoke the binding.</p>
       {adding ? <div className="rounded-md border border-kh-border p-4">{form}</div> : null}
       <ul className="divide-y divide-kh-border border-y border-kh-border">
         {bindings.map((binding) => (
@@ -177,12 +178,12 @@ export function TaskExportSetup({ workspaceId, bindings, diagram, skills }: { wo
             <Step n={2} title="Run the setup line on that machine">
               {issued ? <Commands {...issued} /> : (
                 <>
-                  <p className="text-caption text-kh-text-muted">It appears here once you create the binding. It installs the command and the skills, and saves the token.</p>
+                  <p className="text-caption text-kh-text-muted">Once per machine. It appears here when you create the binding, installs the command and the skills, and saves the token. After this, type a skill in any project.</p>
                   <div aria-hidden="true" className="rounded-md bg-kh-bg-subtle p-3 text-body-sm text-kh-text-faint">npm install -g …/cli/knowledge-hub.tgz && knowledge-hub install-agent …</div>
                 </>
               )}
             </Step>
-            <Step n={3} title="Type a skill in your agent">{skills}</Step>
+            <Step n={3} title="Type a skill in your agent">{skills}<p className="text-caption text-kh-text-muted">No need to bind again, unless you rotate the token or revoke the binding.</p></Step>
           </ol>
           {bindings.length > 0 ? bindingList : null}
         </>

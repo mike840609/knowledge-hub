@@ -82,6 +82,8 @@ describe("the Task export setup page", () => {
     expect(container.querySelector('li [data-slot="skills"]')).not.toBeNull();
     expect(container.querySelector('[data-slot="diagram"]')).not.toBeNull();
     expect(container.textContent).not.toContain("Add a machine");
+    expect(container.textContent).toContain("Once per machine");
+    expect(container.textContent).toContain("No need to bind again");
   });
 
   it("is a management page once there is a binding: the list first, the form behind Add a machine", async () => {
@@ -89,6 +91,7 @@ describe("the Task export setup page", () => {
     expect(container.querySelector("ol > li h2")).toBeNull();
     expect(container.querySelector("form")).toBeNull();
     expect([...container.querySelectorAll("h2")].map((h) => h.textContent)).toEqual(["Bindings", "Skills"]);
+    expect(container.textContent).toContain("Bind each machine once");
     const add = [...container.querySelectorAll("button")].find((b) => b.textContent === "Add a machine")!;
     await act(async () => { add.click(); });
     expect(container.querySelector("form")).not.toBeNull();

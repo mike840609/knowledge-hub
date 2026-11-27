@@ -36,6 +36,7 @@ Agents will be able to do more later, such as creating documents. So the place i
   readable as well as writable because `/hub-search --tasks` and `/hub-read --task` read them.
   Documents are drawn read-only because agents cannot write one yet; when they can, Documents
   gains Write. Colours are the page tokens, so it follows light and dark.
+- **A binding is once per machine.** The page says so where a reader would wonder: step 2 ("Once per machine ... in any project"), a note under step 3 (no need to bind again unless the token is rotated or the binding revoked), and a line under Bindings.
 - **Skills** are labelled Read or Write: `/hub-search` and `/hub-read` read, `/hub-export`
   writes a Task Result.
 - **`/tasks/setup` redirects to `/agents`**, so old links and the CLI's messages still land.
