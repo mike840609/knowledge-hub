@@ -141,35 +141,65 @@ export function hashImportPlan(plan: FolderImportPlan): string {
  * broken by each entry's own canonical digest payload, so the order depends
  * only on hashed content — two entries that tie on both keys are byte-identical
  * in the digest and their relative order cannot change the result.
+ *
+ * The serialized payload is expensive (it walks the whole entry), so it is
+ * computed lazily only to break a tie and cached in the `WeakMap` just for the
+ * entries that tie on `sourcePath`. Non-tied entries are never serialized
+ * during sorting; each is serialized once, immediately before it is streamed
+ * into the hash, so payloads are never all collected into an array. Peak
+ * memory is the entries, any tie-group payloads during sort, plus one entry
+ * payload at a time while streaming — not every payload plus the concatenated
+ * canonical JSON document.
  */
-function compareDigestOrder(left: DigestInput, right: DigestInput): number {
-  if (left.sourcePath !== right.sourcePath) {
-    if (left.sourcePath === null) return 1;
-    if (right.sourcePath === null) return -1;
-    return compareImportText(left.sourcePath, right.sourcePath);
-  }
-  return compareImportText(left.serialized, right.serialized);
-}
-
-type DigestInput = { sourcePath: string | null; serialized: string };
-
 export function hashReadyImportSnapshot(
   snapshot: Pick<ImportSnapshot, "adapterType" | "adapterVersion" | "planVersion" | "workspaceId" | "sourceId" | "basedOnVersion" | "importScope">,
   entries: readonly ImportSnapshotEntry[],
 ): string {
-  const orderedEntries = entries
-    .map((entry): DigestInput => ({ sourcePath: entry.sourcePath, serialized: stableStringify(hashableEntry(entry)) }))
-    .sort(compareDigestOrder);
-  return sha256(stableStringify({
-    adapterType: snapshot.adapterType,
-    adapterVersion: snapshot.adapterVersion,
-    planVersion: snapshot.planVersion,
-    sourceBinding: {
+  const tieCache = new WeakMap<ImportSnapshotEntry, string>();
+  const serializedOf = (entry: ImportSnapshotEntry): string => {
+    const cached = tieCache.get(entry);
+    if (cached !== undefined) return cached;
+    const serialized = stableStringify(hashableEntry(entry));
+    tieCache.set(entry, serialized);
+    return serialized;
+  };
+
+  const orderedEntries = [...entries].sort((left, right) => {
+    if (left.sourcePath !== right.sourcePath) {
+      if (left.sourcePath === null) return 1;
+      if (right.sourcePath === null) return -1;
+      return compareImportText(left.sourcePath, right.sourcePath);
+    }
+    return compareImportText(serializedOf(left), serializedOf(right));
+  });
+
+  // The byte stream below is exactly `stableStringify({...})` of the old
+  // object literal: canonical key order (alphabetical), entries as an array of
+  // pre-serialized strings, and the optional importScope between them. Only
+  // the tokens are materialized, never the whole document.
+  const hash = createHash("sha256");
+  hash.update(
+    `{"adapterType":${stableStringify(snapshot.adapterType)},"adapterVersion":${stableStringify(snapshot.adapterVersion)},"entries":[`,
+    "utf8",
+  );
+  for (let index = 0; index < orderedEntries.length; index += 1) {
+    if (index > 0) hash.update(",", "utf8");
+    const entry = orderedEntries[index];
+    const serialized = tieCache.get(entry) ?? stableStringify(hashableEntry(entry));
+    tieCache.delete(entry);
+    hash.update(JSON.stringify(serialized), "utf8");
+  }
+  hash.update("]", "utf8");
+  if (snapshot.importScope !== undefined) {
+    hash.update(`,"importScope":${stableStringify(snapshot.importScope)}`, "utf8");
+  }
+  hash.update(
+    `,"planVersion":${stableStringify(snapshot.planVersion)},"sourceBinding":${stableStringify({
       workspaceId: snapshot.workspaceId,
       sourceId: snapshot.sourceId,
       basedOnVersion: snapshot.basedOnVersion,
-    },
-    ...(snapshot.importScope === undefined ? {} : { importScope: snapshot.importScope }),
-    entries: orderedEntries.map((entry) => entry.serialized),
-  }));
+    })}}`,
+    "utf8",
+  );
+  return hash.digest("hex");
 }
