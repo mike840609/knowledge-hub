@@ -63,6 +63,9 @@ test("manual task export from the CLI, through timeout, revisions, archive, rota
 
   // Browser creates the binding; the token is shown once.
   await page.goto(`/w/${ws}/tasks/setup`);
+  // With a binding already there the form sits behind "Add a machine".
+  await expect(page.getByLabel("Label").or(page.getByRole("button", { name: "Add a machine" }))).toBeVisible();
+  if (await page.getByRole("button", { name: "Add a machine" }).isVisible()) await page.getByRole("button", { name: "Add a machine" }).click();
   await page.getByLabel("Label").fill(label);
   await page.getByRole("button", { name: "Create binding" }).click();
   const setupLine = await page.locator("pre").innerText();

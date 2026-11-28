@@ -19,7 +19,7 @@ function testDestinations() {
     const home = primary.getByRole("link", { name: "Home", exact: true });
     await expect(home).toHaveAttribute("aria-current", "page");
     await expect(home).toHaveText("Home");
-    for (const name of ["Graph", "Sources", "Shares"]) {
+    for (const name of ["Graph", "Sources", "Shares", "Agents"]) {
       const link = primary.getByRole("link", { name, exact: true });
       await expect(link).toBeVisible();
       await expect(link.locator("span[aria-hidden]")).toHaveCSS("opacity", "0");
@@ -49,14 +49,17 @@ function testDestinations() {
       await page.setViewportSize({ width: 1440, height: 900 });
       const workspace = `/w/${await personalWorkspaceId(page)}`;
       await page.addInitScript((value) => localStorage.setItem("kh:density", value), density);
-      await page.goto(`${workspace}/sources`);
-      const primary = page.getByRole("navigation", { name: "Primary", exact: true });
-      const sources = primary.getByRole("link", { name: "Sources", exact: true });
-      await expect(sources).toHaveText("Sources");
-      // The label grows in over 160ms; read it once settled.
-      await expect.poll(() => sources.locator("span.truncate").evaluate((span) => span.scrollWidth <= span.clientWidth)).toBe(true);
-      const boxes = await Promise.all(["Home", "Graph", "Sources", "Shares"].map((name) => primary.getByRole("link", { name, exact: true }).boundingBox()));
-      for (const box of boxes) expect(Math.abs(box!.y - boxes[0]!.y)).toBeLessThan(1);
+      // Whichever page is current takes the room, so each name must fit there beside four icons.
+      for (const [name, path] of [["Graph", "graph"], ["Sources", "sources"], ["Shares", "shares"], ["Agents", "agents"]]) {
+        await page.goto(`${workspace}/${path}`);
+        const primary = page.getByRole("navigation", { name: "Primary", exact: true });
+        const current = primary.getByRole("link", { name, exact: true });
+        await expect(current).toHaveText(name);
+        // The label grows in over 160ms; read it once settled.
+        await expect.poll(() => current.locator("span.truncate").evaluate((span) => span.scrollWidth <= span.clientWidth), { message: name }).toBe(true);
+        const boxes = await Promise.all(["Home", "Graph", "Sources", "Shares", "Agents"].map((label) => primary.getByRole("link", { name: label, exact: true }).boundingBox()));
+        for (const box of boxes) expect(Math.abs(box!.y - boxes[0]!.y)).toBeLessThan(1);
+      }
     });
   }
 

@@ -50,6 +50,9 @@ test("flag-on Tasks search: field hits, filter URLs, invalid cursor and 390px", 
   const ws = nav.items.find((w: { type: string }) => w.type === "PERSONAL").id;
   const base = "/w/" + ws + "/tasks";
   await page.goto(base + "/setup");
+  // With a binding already there the form sits behind "Add a machine".
+  await expect(page.getByLabel("Label").or(page.getByRole("button", { name: "Add a machine" }))).toBeVisible();
+  if (await page.getByRole("button", { name: "Add a machine" }).isVisible()) await page.getByRole("button", { name: "Add a machine" }).click();
   await page.getByLabel("Label").fill("search e2e laptop " + randomUUID().slice(0, 8));
   await page.getByRole("button", { name: "Create binding" }).click();
   const token = /--token (\S+)/.exec(await page.locator("pre").innerText())?.[1];
